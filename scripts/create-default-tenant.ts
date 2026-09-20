@@ -16,6 +16,7 @@ import { randomUUID } from 'crypto';
 import bcrypt from 'bcryptjs';
 import prisma from '../lib/db';
 import { getDefaultTenantSettings } from '../lib/currency';
+import { applyBusinessTypeDefaults, omitFeatureFlagDefaults } from '../lib/business-types';
 import { flattenSettingsForPrisma } from '../lib/tenant-settings-flatten';
 
 async function createDefaultTenant() {
@@ -29,14 +30,19 @@ async function createDefaultTenant() {
 
     // Get default settings and customize (following tenant signup route pattern)
     const defaultSettings = getDefaultTenantSettings();
-    const settings = flattenSettingsForPrisma({
-      ...defaultSettings,
-      currency: defaultSettings.currency || 'PHP',
-      language: (defaultSettings.language || 'en') as 'en' | 'es',
-      companyName: 'Default Store',
-      email: 'admin@default.local',
-      phone: '+1-555-0000',
-    });
+    const settings = flattenSettingsForPrisma(
+      applyBusinessTypeDefaults(
+        {
+          ...omitFeatureFlagDefaults(defaultSettings as unknown as Record<string, unknown>),
+          currency: defaultSettings.currency || 'PHP',
+          language: (defaultSettings.language || 'en') as 'en' | 'es',
+          companyName: 'Default Store',
+          email: 'admin@default.local',
+          phone: '+1-555-0000',
+        },
+        defaultSettings.businessType || 'general'
+      )
+    );
 
     const adminEmail = 'admin@default.local';
     const adminPassword = 'Admindefault123!';

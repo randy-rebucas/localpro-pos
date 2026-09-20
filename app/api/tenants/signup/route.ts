@@ -5,7 +5,7 @@ import prisma, { dbTransaction } from '@/lib/db';
 import { getDefaultTenantSettings } from '@/lib/currency';
 import { validateEmail, validatePassword, validateTenant } from '@/lib/validation';
 import { getValidationTranslator } from '@/lib/validation-translations';
-import { applyBusinessTypeDefaults } from '@/lib/business-types';
+import { applyBusinessTypeDefaults, omitFeatureFlagDefaults } from '@/lib/business-types';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { SubscriptionService } from '@/lib/subscription';
 import { getPublicAppUrl } from '@/lib/ecommerce/public-url';
@@ -117,22 +117,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get default settings and customize
+    // Get default settings and customize. Feature-flag keys are stripped
+    // before merging so applyBusinessTypeDefaults() fills them from the
+    // business type's config instead of these generic placeholders.
     const defaultSettings = getDefaultTenantSettings();
     const baseSettings: Record<string, unknown> = {
-      ...defaultSettings,
+      ...omitFeatureFlagDefaults(defaultSettings as unknown as Record<string, unknown>),
       currency: currency || defaultSettings.currency,
       language: (language === 'es' ? 'es' : 'en') as 'en' | 'es',
       ...(contactEmail && { email: contactEmail }),
       ...(phone && { phone }),
       ...(companyName && { companyName }),
-      ...(businessType && { businessType }),
+      businessType: businessType || defaultSettings.businessType || 'general',
     };
 
-    // Apply business type defaults if business type is provided
-    const mergedSettings = businessType
-      ? applyBusinessTypeDefaults(baseSettings, businessType)
-      : baseSettings;
+    // Always apply business type defaults so feature flags match the
+    // tenant's business type (falls back to "general" when none is chosen).
+    const mergedSettings = applyBusinessTypeDefaults(baseSettings, baseSettings.businessType as string);
     // getDefaultTenantSettings()/applyBusinessTypeDefaults() produce the
     // app-facing nested settings shape (e.g. settings.numberFormat); the
     // TenantSettings table is flat, so this must be flattened before Prisma

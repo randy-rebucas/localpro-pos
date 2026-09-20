@@ -44,6 +44,12 @@ export const getFeatureFlagLabel = (flagKey: string, dict: any): string => {
     enableBundling: dict?.admin?.enableBundling || 'Product Bundles',
     enableHardwareIntegration: dict?.admin?.enableHardwareIntegration || 'Hardware Integration',
     enableBIR: dict?.admin?.enableBIR || 'BIR Compliance',
+    enableSuppliers: dict?.admin?.enableSuppliers || 'Suppliers & Purchasing',
+    enableDelivery: dict?.admin?.enableDelivery || 'Pickup & Delivery',
+    enableWorkOrders: dict?.admin?.enableWorkOrders || 'Job / Work Orders',
+    enableLaundryOrders: dict?.admin?.enableLaundryOrders || 'Laundry Workflow',
+    enableKitchenDisplay: dict?.admin?.enableKitchenDisplay || 'Kitchen Display (KDS)',
+    enableEmployees: dict?.admin?.enableEmployees || 'Employees / Staff',
   };
   return labelMap[flagKey] || flagKey;
 };
@@ -63,10 +69,26 @@ export const getFeatureFlagDescription = (flagKey: string, dict: any): string =>
     enableTableManagement:
       dict?.admin?.enableTableManagementDesc ||
       'Enable table management for restaurants and service businesses',
+    enableSuppliers:
+      dict?.admin?.enableSuppliersDesc || 'Enable supplier records and purchase orders',
+    enableDelivery:
+      dict?.admin?.enableDeliveryDesc || 'Enable pickup and delivery order handling',
+    enableWorkOrders:
+      dict?.admin?.enableWorkOrdersDesc || 'Enable job/work order tracking for service businesses',
+    enableLaundryOrders:
+      dict?.admin?.enableLaundryOrdersDesc || 'Enable laundry-specific order workflow (drop-off, tagging, pickup)',
+    enableKitchenDisplay:
+      dict?.admin?.enableKitchenDisplayDesc || 'Enable the kitchen display system (KDS) for food service',
+    enableEmployees:
+      dict?.admin?.enableEmployeesDesc || 'Enable employee/staff management features',
   };
   return descriptionMap[flagKey] || '';
 };
 
+// Every toggle here must have a matching default in every entry of
+// BUSINESS_TYPE_CONFIGS.defaultFeatures (lib/business-types.ts) — that is
+// the source of truth for which modules are on/off per business type.
+// This list only controls which toggles the tenant admin UI exposes.
 export const FEATURE_FLAGS = [
   'enableInventory',
   'enableCategories',
@@ -75,6 +97,13 @@ export const FEATURE_FLAGS = [
   'enableCustomerManagement',
   'enableBookingScheduling',
   'enableTableManagement',
+  'enableSuppliers',
+  'enableDelivery',
+  'enableWorkOrders',
+  'enableLaundryOrders',
+  'enableKitchenDisplay',
+  'enableEmployees',
+  'enableExpenses',
 ] as const;
 
 export type FeatureFlagKey = (typeof FEATURE_FLAGS)[number];
@@ -88,6 +117,13 @@ export const getFeatureFlagDefault = (flagKey: FeatureFlagKey): boolean => {
     enableCustomerManagement: false,
     enableBookingScheduling: false,
     enableTableManagement: false,
+    enableSuppliers: false,
+    enableDelivery: false,
+    enableWorkOrders: false,
+    enableLaundryOrders: false,
+    enableKitchenDisplay: false,
+    enableEmployees: false,
+    enableExpenses: false,
   };
   return defaults[flagKey];
 };

@@ -527,7 +527,7 @@ model TenantSettings {
   taxLabel                 String  @default("Tax")
 
   // Business
-  businessType       String?
+  businessType       String? @default("general")
   taxId              String?
   registrationNumber String?
 
@@ -622,6 +622,7 @@ model TenantSettings {
   ecommerceWooCommerceEnabled Boolean  @default(false)
   enableDelivery              Boolean?
   enableWorkOrders            Boolean?
+  enableLaundryOrders         Boolean?
   enableKitchenDisplay        Boolean?
   enableAccounting            Boolean?
   enableSuppliers             Boolean?

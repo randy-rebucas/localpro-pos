@@ -126,6 +126,7 @@ export function parseCurrency(
  */
 export function getDefaultTenantSettings(): ITenantSettings {
   return {
+    businessType: 'general',
     currency: 'PHP',
     currencyPosition: 'before',
     dateFormat: 'MM/DD/YYYY',

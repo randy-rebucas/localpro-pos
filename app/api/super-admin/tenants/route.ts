@@ -5,7 +5,7 @@ import { requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { handleApiError } from '@/lib/error-handler';
 import { getDefaultTenantSettings } from '@/lib/currency';
-import { applyBusinessTypeDefaults } from '@/lib/business-types';
+import { applyBusinessTypeDefaults, omitFeatureFlagDefaults } from '@/lib/business-types';
 import { flattenSettingsForPrisma } from '@/lib/tenant-settings-flatten';
 import crypto from 'crypto';
 
@@ -107,11 +107,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    let settings = getDefaultTenantSettings();
+    // Feature-flag keys are stripped before merging so
+    // applyBusinessTypeDefaults() fills them from the business type's
+    // config instead of these generic placeholders.
+    let settings: Record<string, unknown> = omitFeatureFlagDefaults(getDefaultTenantSettings() as unknown as Record<string, unknown>);
     if (currency) settings = { ...settings, currency };
     if (language) settings = { ...settings, language };
     if (email) settings = { ...settings, email };
-    if (businessType) settings = applyBusinessTypeDefaults(settings, businessType);
+    // Always apply business type defaults so feature flags match the
+    // tenant's business type (falls back to "general" when none is chosen).
+    settings = applyBusinessTypeDefaults(settings, businessType || 'general');
 
     // Tenant + trial subscription + billing event + owner user must all land
     // together or not at all — a partial provision (e.g. tenant created but

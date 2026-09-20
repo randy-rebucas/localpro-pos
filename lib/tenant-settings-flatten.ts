@@ -156,7 +156,7 @@ const KNOWN_SCALAR_KEYS = new Set([
   'ecommerceWooCommerceEnabled', 'birTin', 'birPtuNumber', 'birPtuIssuedDate', 'birPtuExpiryDate',
   'birMinNumber', 'birBusinessStyle', 'birSystemProvider', 'birTerminalSN', 'birAccreditationNo',
   'birAccreditationDate', 'birAccreditationValidUntil', 'birEsalesPushUrl',
-  'enableDelivery', 'enableWorkOrders', 'enableKitchenDisplay', 'enableAccounting',
+  'enableDelivery', 'enableWorkOrders', 'enableLaundryOrders', 'enableKitchenDisplay', 'enableAccounting',
   'enableSuppliers', 'enableExpenses', 'enableEmployees',
 ]);
 

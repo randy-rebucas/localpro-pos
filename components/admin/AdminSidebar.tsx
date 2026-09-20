@@ -28,7 +28,7 @@ interface NavItem {
   /** Permission key (see lib/permissions.ts) gating this item. Owner/admin/super_admin always see everything regardless. Omit for items visible to any admin-panel user. */
   permission?: string;
   /** Business-type feature flag (see lib/business-type-helpers.ts supportsFeature) gating this item's visibility. Omit for items visible regardless of business type. */
-  feature?: 'delivery' | 'workOrders' | 'laundryOrders' | 'kitchenDisplay' | 'tableManagement' | 'suppliers' | 'expenses' | 'employees';
+  feature?: 'inventory' | 'booking' | 'delivery' | 'workOrders' | 'laundryOrders' | 'kitchenDisplay' | 'tableManagement' | 'suppliers' | 'expenses' | 'employees' | 'accounting';
 }
 
 interface NavGroup {
@@ -79,11 +79,11 @@ export default function AdminSidebar() {
         { label: 'Products', href: `${base}/admin/products`, icon: Package, permission: 'products.manage' },
         { label: 'Categories', href: `${base}/admin/categories`, icon: Tag, permission: 'categories.manage' },
         { label: 'Bundles', href: `${base}/admin/bundles`, icon: Layers, permission: 'bundles.manage' },
-        { label: 'Inventory', href: `${base}/admin/inventory`, icon: Boxes, permission: 'inventory.manage' },
-        { label: 'Stock Movements', href: `${base}/admin/stock-movements`, icon: ArrowUpDown, permission: 'stock_movements.manage' },
+        { label: 'Inventory', href: `${base}/admin/inventory`, icon: Boxes, permission: 'inventory.manage', feature: 'inventory' },
+        { label: 'Stock Movements', href: `${base}/admin/stock-movements`, icon: ArrowUpDown, permission: 'stock_movements.manage', feature: 'inventory' },
         { label: 'Suppliers', href: `${base}/admin/suppliers`, icon: Contact, permission: 'suppliers.manage', feature: 'suppliers' },
-        { label: 'Purchase Orders', href: `${base}/admin/purchase-orders`, icon: FileBox, permission: 'purchase_orders.manage' },
-        { label: 'Stock Transfers', href: `${base}/admin/stock-transfers`, icon: ArrowRightLeft, permission: 'stock_transfers.manage' },
+        { label: 'Purchase Orders', href: `${base}/admin/purchase-orders`, icon: FileBox, permission: 'purchase_orders.manage', feature: 'suppliers' },
+        { label: 'Stock Transfers', href: `${base}/admin/stock-transfers`, icon: ArrowRightLeft, permission: 'stock_transfers.manage', feature: 'inventory' },
       ],
     },
     {
@@ -96,7 +96,7 @@ export default function AdminSidebar() {
         { label: 'Cash Drawer', href: `${base}/admin/cash-drawer`, icon: DollarSign, permission: 'cash_drawer.manage' },
         { label: 'Expenses', href: `${base}/admin/expenses`, icon: TrendingDown, permission: 'expenses.manage', feature: 'expenses' },
         { label: 'Invoices', href: `${base}/admin/invoices`, icon: ReceiptText, permission: 'invoices.manage' },
-        { label: 'Ledger', href: `${base}/admin/ledger`, icon: BookOpen, permission: 'ledger.manage' },
+        { label: 'Ledger', href: `${base}/admin/ledger`, icon: BookOpen, permission: 'ledger.manage', feature: 'accounting' },
       ],
     },
     {
@@ -115,14 +115,14 @@ export default function AdminSidebar() {
       title: 'Operations',
       defaultOpen: false,
       items: [
-        { label: 'Bookings', href: `${base}/admin/bookings`, icon: CalendarDays, permission: 'bookings.manage' },
+        { label: 'Bookings', href: `${base}/admin/bookings`, icon: CalendarDays, permission: 'bookings.manage', feature: 'booking' },
         { label: 'Delivery', href: `${base}/admin/delivery`, icon: Truck, permission: 'delivery.manage', feature: 'delivery' },
         { label: 'Work Orders', href: `${base}/admin/work-orders`, icon: ClipboardList, permission: 'work_orders.manage', feature: 'workOrders' },
         { label: 'Deposits', href: `${base}/admin/deposits`, icon: DollarSign, permission: 'deposits.manage' },
         { label: 'Laundry Orders', href: `${base}/admin/laundry`, icon: WashingMachine, permission: 'laundry_orders.manage', feature: 'laundryOrders' },
         { label: 'Kitchen Display', href: `${base}/admin/kitchen-display`, icon: ChefHat, permission: 'kitchen_display.manage', feature: 'kitchenDisplay' },
         { label: 'Tables', href: `${base}/admin/tables`, icon: LayoutGrid, permission: 'tables.manage', feature: 'tableManagement' },
-        { label: 'Attendance', href: `${base}/admin/attendance`, icon: UserCheck, permission: 'attendance.manage' },
+        { label: 'Attendance', href: `${base}/admin/attendance`, icon: UserCheck, permission: 'attendance.manage', feature: 'employees' },
         { label: 'Channel Orders', href: `${base}/admin/channel-orders`, icon: ShoppingCart, permission: 'channel_orders.manage' },
       ],
     },

@@ -27,6 +27,7 @@ export interface BusinessTypeConfig {
     enableSuppliers: boolean;
     enableExpenses: boolean;
     enableEmployees: boolean;
+    enableOnAccountSales: boolean;
   };
   productTypes: ('regular' | 'bundle' | 'service')[];
   requiredFields: string[];
@@ -53,8 +54,9 @@ export const BUSINESS_TYPE_CONFIGS: Record<BusinessType, BusinessTypeConfig> = {
       enableAccounting: true,
       enableTableManagement: false,
       enableSuppliers: true,
-      enableExpenses: true,
-      enableEmployees: true,
+      enableExpenses: false,
+      enableEmployees: false,
+      enableOnAccountSales: true,
     },
     productTypes: ['regular', 'bundle'],
     requiredFields: ['name', 'price', 'sku'],
@@ -70,13 +72,13 @@ export const BUSINESS_TYPE_CONFIGS: Record<BusinessType, BusinessTypeConfig> = {
     name: 'Restaurant / Food Service',
     description: 'Restaurant, cafe, or food service establishment',
     defaultFeatures: {
-      enableInventory: true,
+      enableInventory: false,
       enableCategories: true,
       enableDiscounts: true,
       enableLoyaltyProgram: true,
       enableCustomerManagement: true,
-      enableBookingScheduling: true,
-      enableDelivery: true,
+      enableBookingScheduling: false,
+      enableDelivery: false,
       enableWorkOrders: false,
       enableLaundryOrders: false,
       enableKitchenDisplay: true,
@@ -85,15 +87,14 @@ export const BUSINESS_TYPE_CONFIGS: Record<BusinessType, BusinessTypeConfig> = {
       enableSuppliers: true,
       enableExpenses: true,
       enableEmployees: true,
+      enableOnAccountSales: false,
     },
     productTypes: ['regular', 'bundle', 'service'],
     requiredFields: ['name', 'price'],
     optionalFields: ['description', 'image', 'modifiers', 'allergens', 'nutritionInfo'],
     defaultSettings: {
       businessType: 'restaurant',
-      enableInventory: true,
       enableCategories: true,
-      enableBookingScheduling: true,
     },
   },
   laundry: {
@@ -116,6 +117,7 @@ export const BUSINESS_TYPE_CONFIGS: Record<BusinessType, BusinessTypeConfig> = {
       enableSuppliers: false,
       enableExpenses: true,
       enableEmployees: true,
+      enableOnAccountSales: true,
     },
     productTypes: ['service'],
     requiredFields: ['name', 'price'],
@@ -138,7 +140,7 @@ export const BUSINESS_TYPE_CONFIGS: Record<BusinessType, BusinessTypeConfig> = {
       enableLoyaltyProgram: true,
       enableCustomerManagement: true,
       enableBookingScheduling: true,
-      enableDelivery: true,
+      enableDelivery: false,
       enableWorkOrders: true,
       enableLaundryOrders: false,
       enableKitchenDisplay: false,
@@ -147,6 +149,7 @@ export const BUSINESS_TYPE_CONFIGS: Record<BusinessType, BusinessTypeConfig> = {
       enableSuppliers: false,
       enableExpenses: true,
       enableEmployees: true,
+      enableOnAccountSales: true,
     },
     productTypes: ['service'],
     requiredFields: ['name', 'price'],
@@ -163,28 +166,28 @@ export const BUSINESS_TYPE_CONFIGS: Record<BusinessType, BusinessTypeConfig> = {
     name: 'General Business',
     description: 'General purpose POS for any business type',
     defaultFeatures: {
-      enableInventory: true,
+      enableInventory: false,
       enableCategories: true,
       enableDiscounts: true,
       enableLoyaltyProgram: false,
       enableCustomerManagement: true,
       enableBookingScheduling: false,
       enableDelivery: false,
-      enableWorkOrders: true,
+      enableWorkOrders: false,
       enableLaundryOrders: false,
       enableKitchenDisplay: false,
       enableAccounting: true,
-      enableTableManagement: true,
-      enableSuppliers: true,
+      enableTableManagement: false,
+      enableSuppliers: false,
       enableExpenses: true,
       enableEmployees: true,
+      enableOnAccountSales: false,
     },
     productTypes: ['regular', 'bundle', 'service'],
     requiredFields: ['name', 'price'],
     optionalFields: ['description', 'image', 'sku'],
     defaultSettings: {
       businessType: 'general',
-      enableInventory: true,
       enableCategories: true,
     },
   },
@@ -208,6 +211,7 @@ export const BUSINESS_TYPE_CONFIGS: Record<BusinessType, BusinessTypeConfig> = {
       enableSuppliers: true,
       enableExpenses: true,
       enableEmployees: true,
+      enableOnAccountSales: true,
     },
     productTypes: ['regular'],
     requiredFields: ['name', 'price', 'sku', 'prn', 'expiryDate', 'batchNumber'],
@@ -292,6 +296,32 @@ export function validateProductForBusinessType(
 }
 
 /**
+ * Every key inside BusinessTypeConfig['defaultFeatures']. Used to strip
+ * generic placeholder values (e.g. from getDefaultTenantSettings()) out of
+ * a settings object before it's passed to applyBusinessTypeDefaults() —
+ * otherwise those hardcoded placeholders (being non-null) would win over
+ * the business-type config in the `??` merge below, for every new tenant.
+ */
+export const FEATURE_FLAG_KEYS = [
+  'enableInventory', 'enableCategories', 'enableDiscounts', 'enableLoyaltyProgram',
+  'enableCustomerManagement', 'enableBookingScheduling', 'enableDelivery', 'enableWorkOrders',
+  'enableLaundryOrders', 'enableKitchenDisplay', 'enableAccounting', 'enableTableManagement',
+  'enableSuppliers', 'enableExpenses', 'enableEmployees', 'enableOnAccountSales',
+] as const;
+
+/**
+ * Remove feature-flag keys from a settings object so applyBusinessTypeDefaults()
+ * can fill them in from the business type's config instead of inheriting
+ * generic placeholder values. Call this on any settings object built from
+ * getDefaultTenantSettings() before merging in a business type.
+ */
+export function omitFeatureFlagDefaults<T extends Record<string, unknown>>(settings: T): T {
+  const clone = { ...settings };
+  for (const key of FEATURE_FLAG_KEYS) delete (clone as Record<string, unknown>)[key];
+  return clone;
+}
+
+/**
  * Apply business type defaults to tenant settings
  */
 export function applyBusinessTypeDefaults(settings: any, businessType?: string): any { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -317,6 +347,7 @@ export function applyBusinessTypeDefaults(settings: any, businessType?: string):
     enableSuppliers: settings.enableSuppliers ?? config.defaultFeatures.enableSuppliers,
     enableExpenses: settings.enableExpenses ?? config.defaultFeatures.enableExpenses,
     enableEmployees: settings.enableEmployees ?? config.defaultFeatures.enableEmployees,
+    enableOnAccountSales: settings.enableOnAccountSales ?? config.defaultFeatures.enableOnAccountSales,
   };
 }
 

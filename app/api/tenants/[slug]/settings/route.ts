@@ -5,7 +5,7 @@ import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getDefaultTenantSettings } from '@/lib/currency';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
-import { applyBusinessTypeDefaults } from '@/lib/business-types';
+import { applyBusinessTypeDefaults, FEATURE_FLAG_KEYS } from '@/lib/business-types';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { flattenSettingsForPrisma } from '@/lib/tenant-settings-flatten';
@@ -103,10 +103,23 @@ export async function PUT(
     const currentBusinessType = existingSettings.businessType as string | undefined;
     const newBusinessType = settings.businessType;
 
-    // Apply business type defaults if business type is being set or changed
+    // Apply business type defaults if business type is being set or changed.
+    // Feature flags the caller didn't explicitly send in this request are
+    // reset (not just gap-filled) so switching business type actually
+    // adopts that type's module set, instead of carrying over whatever the
+    // previous business type had persisted (applyBusinessTypeDefaults only
+    // fills nulls, and every flag is always persisted as a concrete boolean
+    // post-creation, so without this reset a type switch would be a no-op
+    // for every flag the request didn't explicitly touch).
     let updatedSettings = mergedSettings;
     if (newBusinessType && newBusinessType !== currentBusinessType) {
-      updatedSettings = applyBusinessTypeDefaults(mergedSettings, newBusinessType) as Record<string, unknown>;
+      const resetBase = { ...mergedSettings };
+      for (const key of FEATURE_FLAG_KEYS) {
+        if (!Object.prototype.hasOwnProperty.call(settings, key)) {
+          delete resetBase[key];
+        }
+      }
+      updatedSettings = applyBusinessTypeDefaults(resetBase, newBusinessType) as Record<string, unknown>;
     }
 
     // Validate currency code (basic check)

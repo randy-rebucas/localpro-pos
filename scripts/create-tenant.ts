@@ -37,6 +37,7 @@ import { randomUUID } from 'crypto';
 import bcrypt from 'bcryptjs';
 import prisma, { dbTransaction } from '../lib/db';
 import { getDefaultTenantSettings } from '../lib/currency';
+import { applyBusinessTypeDefaults, omitFeatureFlagDefaults } from '../lib/business-types';
 import { flattenSettingsForPrisma } from '../lib/tenant-settings-flatten';
 import * as readline from 'readline';
 
@@ -50,6 +51,7 @@ interface TenantInput {
   email?: string;
   phone?: string;
   companyName?: string;
+  businessType?: string;
 }
 
 // Create readline interface for interactive mode
@@ -121,6 +123,9 @@ async function interactiveMode(): Promise<TenantInput> {
   const companyName = await question(rl, 'Company name (optional, press Enter to skip): ');
   if (companyName.trim()) input.companyName = companyName.trim();
 
+  const businessType = await question(rl, 'Business type (retail/restaurant/laundry/service/pharmacy/general, default: general): ');
+  input.businessType = businessType.trim().toLowerCase() || 'general';
+
   rl.close();
   return input;
 }
@@ -183,6 +188,11 @@ function parseArgs(): { input: TenantInput | null; interactive: boolean } {
         if (nextArg) input.companyName = nextArg;
         i++;
         break;
+      case '--business-type':
+      case '-b':
+        if (nextArg) input.businessType = nextArg.toLowerCase();
+        i++;
+        break;
     }
   }
 
@@ -217,16 +227,22 @@ async function createTenant(input: TenantInput) {
       process.exit(1);
     }
 
-    // Get default settings and customize
+    // Get default settings and customize. Business type always defaults to
+    // "general" and its feature-flag defaults are always applied so a
+    // tenant's enabled modules match its business type from the start.
     const defaultSettings = getDefaultTenantSettings();
-    const settings = flattenSettingsForPrisma({
-      ...defaultSettings,
+    const baseSettings = {
+      ...omitFeatureFlagDefaults(defaultSettings as unknown as Record<string, unknown>),
       currency: input.currency || defaultSettings.currency,
       language: input.language || defaultSettings.language,
       ...(input.email && { email: input.email }),
       ...(input.phone && { phone: input.phone }),
       ...(input.companyName && { companyName: input.companyName }),
-    });
+      businessType: input.businessType || 'general',
+    };
+    const settings = flattenSettingsForPrisma(
+      applyBusinessTypeDefaults(baseSettings, baseSettings.businessType)
+    );
 
     // Create tenant + admin user together
     const adminEmail = `admin@${input.slug}.local`;
@@ -285,6 +301,7 @@ async function createTenant(input: TenantInput) {
     if (tenant.subdomain) console.log(`  Subdomain:   ${tenant.subdomain}`);
     console.log(`  Currency:    ${settings.currency}`);
     console.log(`  Language:    ${settings.language}`);
+    console.log(`  Business:    ${settings.businessType}`);
     if (settings.email) console.log(`  Email:       ${settings.email}`);
     if (settings.phone) console.log(`  Phone:       ${settings.phone}`);
     console.log(`  Active:      ${tenant.isActive ? 'Yes' : 'No'}`);

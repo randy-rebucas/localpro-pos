@@ -4,7 +4,7 @@ import prisma from '@/lib/db';
 import { requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { handleApiError } from '@/lib/error-handler';
-import { applyBusinessTypeDefaults } from '@/lib/business-types';
+import { applyBusinessTypeDefaults, FEATURE_FLAG_KEYS } from '@/lib/business-types';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   try {
@@ -59,9 +59,20 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (settings !== undefined) {
       const currentBusinessType = oldTenant.settings?.businessType;
       const newBusinessType = settings.businessType;
-      mergedSettings = { ...(oldTenant.settings || {}), ...settings };
+      const combined: Record<string, unknown> = { ...(oldTenant.settings || {}), ...settings };
       if (newBusinessType && newBusinessType !== currentBusinessType) {
-        mergedSettings = applyBusinessTypeDefaults(mergedSettings, newBusinessType);
+        // Reset flags this request didn't explicitly send so switching
+        // business type actually adopts that type's module set, instead of
+        // carrying over the previous type's persisted values (see the
+        // matching fix/comment in app/api/tenants/[slug]/settings/route.ts).
+        for (const key of FEATURE_FLAG_KEYS) {
+          if (!Object.prototype.hasOwnProperty.call(settings, key)) {
+            delete combined[key];
+          }
+        }
+        mergedSettings = applyBusinessTypeDefaults(combined, newBusinessType);
+      } else {
+        mergedSettings = combined;
       }
       // tenantId is the settings table's own PK/FK, not an updatable field
       delete (mergedSettings as Record<string, unknown>).tenantId;
