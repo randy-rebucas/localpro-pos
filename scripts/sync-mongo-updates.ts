@@ -62,10 +62,17 @@ function makeUpsertingPrisma(client: typeof prismaClient) {
           }
           return async ({ data }: { data: Array<Record<string, unknown>> }) => {
             for (const row of data) {
-              const { id, ...rest } = row;
+              // Most models use `id` (the Mongo ObjectId hex string) as PK.
+              // A few 1:1 "detail" tables (TenantSettings, ProductRestaurantDetails,
+              // ProductLaundryDetails, ProductServiceDetails, ProductPharmacyDetails)
+              // have no `id` column at all — their @id is tenantId/productId instead.
+              const keyField =
+                row.id !== undefined ? 'id' : row.tenantId !== undefined ? 'tenantId' : 'productId';
+              const keyValue = row[keyField];
+              const { [keyField]: _unused, ...rest } = row;
               const existing = await (
                 delegateTarget as { findUnique: (args: unknown) => Promise<unknown> }
-              ).findUnique({ where: { id } });
+              ).findUnique({ where: { [keyField]: keyValue } });
               if (existing) {
                 upsertCount++;
               } else {
@@ -75,7 +82,7 @@ function makeUpsertingPrisma(client: typeof prismaClient) {
                 delegateTarget as {
                   upsert: (args: unknown) => Promise<unknown>;
                 }
-              ).upsert({ where: { id }, create: row, update: rest });
+              ).upsert({ where: { [keyField]: keyValue }, create: row, update: rest });
             }
             return { count: data.length };
           };
@@ -2139,6 +2146,12 @@ async function main() {
   await runStep('FeatureFlagOverride', migrateFeatureFlagOverrides);
 
   // 6. Operations
+  // Transaction moved ahead of Payment/StockMovement/BillingEvent (all reference
+  // transactionId via FK) — the original migration's Payment/StockMovement/Operations
+  // step ran before Transaction, which only worked because no Payment/StockMovement/
+  // BillingEvent row referenced a transactionId at that time. New Mongo data does.
+  await runStep('Transaction', migrateTransactions);
+
   await runStep('CashDrawerSession', migrateCashDrawerSessions);
   await runStep('Discount', migrateDiscounts);
   await runStep('Expense', migrateExpenses);
@@ -2157,9 +2170,6 @@ async function main() {
   await runStep('ZReading', migrateZReadings);
   await runStep('Attendance', migrateAttendance);
   await runStep('Booking', migrateBookings);
-
-  // 7. Transactions (core sale record + child tables)
-  await runStep('Transaction', migrateTransactions);
 
   // 8. Audit logs / super-admin / billing — last, they reference many entities
   await runStep('AuditLog', migrateAuditLogs);

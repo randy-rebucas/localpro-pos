@@ -131,6 +131,10 @@ const PAGE_TITLES: Record<string, string> = {
   '/super-admin/analytics': 'Analytics',
   '/super-admin/logs': 'Audit Logs',
   '/super-admin/admin-logs': 'Admin Action Log',
+  '/super-admin/backups': 'Backups',
+  '/super-admin/settings': 'Settings',
+  '/super-admin/users': 'Users',
+  '/super-admin/business-types': 'Business Types',
 };
 
 // Cached across client-side navigations so the shell never blanks out to a

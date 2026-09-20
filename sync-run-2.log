@@ -1,0 +1,710 @@
+[dotenv@17.2.3] injecting env (68) from .env.local -- tip: ⚙️  suppress all logs with { quiet: true }
+[dotenv@17.2.3] injecting env (0) from .env -- tip: ⚙️  load multiple .env files with { path: ['.env.local', '.env'] }
+1POS — MongoDB -> PostgreSQL ETL
+(live run: writing to Postgres)
+
+Connecting to MongoDB...
+(node:24464) [MONGOOSE] Warning: Duplicate schema index on {"code":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Connected.
+
+=== SubscriptionPlan ===
+  subscription_plans: 4/4
+
+=== Coupon ===
+  coupons: 0 rows (nothing to migrate)
+  coupon_plans: 0 rows (nothing to migrate)
+
+=== Tenant ===
+  tenants: 8/8
+[2026-09-19T15:56:16.683Z] ERROR Postgres error {"errorValue":"[object Object]"}
+  FAILED: Tenant: 
+Invalid `prisma.tenantSettings.createMany()` invocation in
+C:\Users\corew\localpro-pos\scripts\sync-mongo-updates.ts:527:27
+
+  524   };
+  525 });
+  526 await batchCreate('tenant_settings', tenantSettingsRows, batch =>
+→ 527   prisma.tenantSettings.createMany({
+          where: {
+            id: undefined,
+        ?   tenantId?: String,
+        ?   AND?: TenantSettingsWhereInput | TenantSettingsWhereInput[],
+        ?   OR?: TenantSettingsWhereInput[],
+        ?   NOT?: TenantSettingsWhereInput | TenantSettingsWhereInput[],
+        ?   currency?: StringFilter | String,
+        ?   currencySymbol?: StringNullableFilter | String | Null,
+        ?   currencyPosition?: StringFilter | String,
+        ?   dateFormat?: StringFilter | String,
+        ?   timeFormat?: StringFilter | String,
+        ?   timezone?: StringFilter | String,
+        ?   language?: StringFilter | String,
+        ?   decimalSeparator?: StringFilter | String,
+        ?   thousandsSeparator?: StringFilter | String,
+        ?   decimalPlaces?: IntFilter | Int,
+        ?   companyName?: StringNullableFilter | String | Null,
+        ?   logo?: StringNullableFilter | String | Null,
+        ?   favicon?: StringNullableFilter | String | Null,
+        ?   primaryColor?: StringNullableFilter | String | Null,
+        ?   secondaryColor?: StringNullableFilter | String | Null,
+        ?   accentColor?: StringNullableFilter | String | Null,
+        ?   backgroundColor?: StringNullableFilter | String | Null,
+        ?   textColor?: StringNullableFilter | String | Null,
+        ?   email?: StringNullableFilter | String | Null,
+        ?   phone?: StringNullableFilter | String | Null,
+        ?   addressStreet?: StringNullableFilter | String | Null,
+        ?   addressCity?: StringNullableFilter | String | Null,
+        ?   addressState?: StringNullableFilter | String | Null,
+        ?   addressZipCode?: StringNullableFilter | String | Null,
+        ?   addressCountry?: StringNullableFilter | String | Null,
+        ?   website?: StringNullableFilter | String | Null,
+        ?   receiptHeader?: StringNullableFilter | String | Null,
+        ?   receiptFooter?: StringNullableFilter | String | Null,
+        ?   receiptShowLogo?: BoolFilter | Boolean,
+        ?   receiptShowAddress?: BoolFilter | Boolean,
+        ?   receiptShowPhone?: BoolFilter | Boolean,
+        ?   receiptShowEmail?: BoolFilter | Boolean,
+        ?   receiptDefaultTemplateId?: StringNullableFilter | String | Null,
+        ?   taxEnabled?: BoolFilter | Boolean,
+        ?   taxRate?: DecimalFilter | Decimal,
+        ?   taxLabel?: StringFilter | String,
+        ?   businessType?: StringNullableFilter | String | Null,
+        ?   taxId?: StringNullableFilter | String | Null,
+        ?   registrationNumber?: StringNullableFilter | String | Null,
+        ?   birTin?: StringNullableFilter | String | Null,
+        ?   birPtuNumber?: StringNullableFilter | String | Null,
+        ?   birPtuIssuedDate?: DateTimeNullableFilter | DateTime | Null,
+        ?   birPtuExpiryDate?: DateTimeNullableFilter | DateTime | Null,
+        ?   birMinNumber?: StringNullableFilter | String | Null,
+        ?   birBusinessStyle?: StringNullableFilter | String | Null,
+        ?   birSystemProvider?: StringNullableFilter | String | Null,
+        ?   birTerminalSN?: StringNullableFilter | String | Null,
+        ?   birAccreditationNo?: StringNullableFilter | String | Null,
+        ?   birAccreditationDate?: DateTimeNullableFilter | DateTime | Null,
+        ?   birAccreditationValidUntil?: DateTimeNullableFilter | DateTime | Null,
+        ?   birEsalesPushUrl?: StringNullableFilter | String | Null,
+        ?   mayorsPermitNumber?: StringNullableFilter | String | Null,
+        ?   mayorsPermitExpiry?: DateTimeNullableFilter | DateTime | Null,
+        ?   barangayClearanceNumber?: StringNullableFilter | String | Null,
+        ?   barangayClearanceExpiry?: DateTimeNullableFilter | DateTime | Null,
+        ?   dtiSecRegistration?: StringNullableFilter | String | Null,
+        ?   birCertificateOfRegistration?: StringNullableFilter | String | Null,
+        ?   fireSafetyInspectionCertificate?: StringNullableFilter | String | Null,
+        ?   fsicExpiry?: DateTimeNullableFilter | DateTime | Null,
+        ?   sanitaryPermitNumber?: StringNullableFilter | String | Null,
+        ?   sanitaryPermitExpiry?: DateTimeNullableFilter | DateTime | Null,
+        ?   fdaFoodBusinessLicense?: StringNullableFilter | String | Null,
+        ?   fdaFblExpiry?: DateTimeNullableFilter | DateTime | Null,
+        ?   foodSafetyCertificateNumber?: StringNullableFilter | String | Null,
+        ?   foodSafetyCertificateExpiry?: DateTimeNullableFilter | DateTime | Null,
+        ?   foodHandlersCertified?: BoolFilter | Boolean,
+        ?   numberOfCertifiedHandlers?: IntNullableFilter | Int | Null,
+        ?   healthCertificateExpiry?: DateTimeNullableFilter | DateTime | Null,
+        ?   kitchenSanitationCompliant?: BoolFilter | Boolean,
+        ?   dtiBusinessNameRegistration?: StringNullableFilter | String | Null,
+        ?   priceTaggingCompliant?: BoolFilter | Boolean,
+        ?   weightsAndMeasuresCompliant?: BoolFilter | Boolean,
+        ?   btiAccreditation?: StringNullableFilter | String | Null,
+        ?   productLabelsCompliant?: BoolFilter | Boolean,
+        ?   environmentalComplianceCertificate?: StringNullableFilter | String | Null,
+        ?   eccExpiry?: DateTimeNullableFilter | DateTime | Null,
+        ?   wastewaterDischargePermit?: StringNullableFilter | String | Null,
+        ?   wastewaterPermitExpiry?: DateTimeNullableFilter | DateTime | Null,
+        ?   solidWasteManagementPlan?: BoolFilter | Boolean,
+        ?   serviceDohAccreditation?: StringNullableFilter | String | Null,
+        ?   serviceDohAccreditationExpiry?: DateTimeNullableFilter | DateTime | Null,
+        ?   pharmacistName?: StringNullableFilter | String | Null,
+        ?   pharmacistPRCNumber?: StringNullableFilter | String | Null,
+        ?   pharmacistPTRNumber?: StringNullableFilter | String | Null,
+        ?   fdaLTO?: StringNullableFilter | String | Null,
+        ?   fdaLTOExpiryDate?: DateTimeNullableFilter | DateTime | Null,
+        ?   pharmacyDohAccreditation?: StringNullableFilter | String | Null,
+        ?   pdeaLicense?: StringNullableFilter | String | Null,
+        ?   pdeaLicenseExpiry?: DateTimeNullableFilter | DateTime | Null,
+        ?   requirePrescriptionForRx?: BoolFilter | Boolean,
+        ?   trackExpiryDates?: BoolFilter | Boolean,
+        ?   expiryAlertDays?: IntFilter | Int,
+        ?   lowStockThreshold?: IntFilter | Int,
+        ?   lowStockAlert?: BoolFilter | Boolean,
+        ?   emailNotifications?: BoolFilter | Boolean,
+        ?   smsNotifications?: BoolFilter | Boolean,
+        ?   attendanceNotificationsEnabled?: BoolFilter | Boolean,
+        ?   attendanceExpectedStartTime?: StringFilter | String,
+        ?   attendanceMaxHoursWithoutClockOut?: IntFilter | Int,
+        ?   enableInventory?: BoolFilter | Boolean,
+        ?   enableCategories?: BoolFilter | Boolean,
+        ?   enableDiscounts?: BoolFilter | Boolean,
+        ?   enableLoyaltyProgram?: BoolFilter | Boolean,
+        ?   enableCustomerManagement?: BoolFilter | Boolean,
+        ?   enableOnAccountSales?: BoolFilter | Boolean,
+        ?   autoOpenDrawerOnShiftStart?: BoolFilter | Boolean,
+        ?   autoOpenDrawerOnShiftEnd?: BoolFilter | Boolean,
+        ?   enableBookingScheduling?: BoolFilter | Boolean,
+        ?   enableTableManagement?: BoolFilter | Boolean,
+        ?   ecommerceShopifyEnabled?: BoolFilter | Boolean,
+        ?   ecommerceWooCommerceEnabled?: BoolFilter | Boolean,
+        ?   printerType?: StringNullableFilter | String | Null,
+        ?   printerProfile?: StringNullableFilter | String | Null,
+        ?   printerVendorId?: IntNullableFilter | Int | Null,
+        ?   printerProductId?: IntNullableFilter | Int | Null,
+        ?   printerIpAddress?: StringNullableFilter | String | Null,
+        ?   printerPortNumber?: IntNullableFilter | Int | Null,
+        ?   barcodeScannerType?: StringNullableFilter | String | Null,
+        ?   barcodeScannerEnabled?: BoolNullableFilter | Boolean | Null,
+        ?   qrReaderEnabled?: BoolNullableFilter | Boolean | Null,
+        ?   qrReaderCameraId?: StringNullableFilter | String | Null,
+        ?   cashDrawerEnabled?: BoolNullableFilter | Boolean | Null,
+        ?   cashDrawerConnectedToPrinter?: BoolNullableFilter | Boolean | Null,
+        ?   touchscreenEnabled?: BoolNullableFilter | Boolean | Null,
+        ?   multiCurrencyEnabled?: BoolFilter | Boolean,
+        ?   displayCurrencies?: StringNullableListFilter,
+        ?   exchangeRateSource?: StringFilter | String,
+        ?   exchangeRateApiKey?: StringNullableFilter | String | Null,
+        ?   exchangeRateLastUpdated?: DateTimeNullableFilter | DateTime | Null,
+        ?   emailBookingConfirmationTemplate?: StringNullableFilter | String | Null,
+        ?   emailBookingReminderTemplate?: StringNullableFilter | String | Null,
+        ?   emailBookingCancellationTemplate?: StringNullableFilter | String | Null,
+        ?   emailLowStockAlertTemplate?: StringNullableFilter | String | Null,
+        ?   emailAttendanceAlertTemplate?: StringNullableFilter | String | Null,
+        ?   smsBookingConfirmationTemplate?: StringNullableFilter | String | Null,
+        ?   smsBookingReminderTemplate?: StringNullableFilter | String | Null,
+        ?   smsBookingCancellationTemplate?: StringNullableFilter | String | Null,
+        ?   smsLowStockAlertTemplate?: StringNullableFilter | String | Null,
+        ?   fontFamily?: StringNullableFilter | String | Null,
+        ?   fontSource?: StringFilter | String,
+        ?   googleFontUrl?: StringNullableFilter | String | Null,
+        ?   customFontUrl?: StringNullableFilter | String | Null,
+        ?   theme?: StringFilter | String,
+        ?   customThemeCss?: StringNullableFilter | String | Null,
+        ?   borderRadius?: StringFilter | String,
+        ?   customBorderRadius?: StringNullableFilter | String | Null,
+        ?   businessHoursTimezone?: StringNullableFilter | String | Null,
+        ?   updatedAt?: DateTimeFilter | DateTime,
+        ?   tenant?: TenantScalarRelationFilter | TenantWhereInput
+          }
+        })
+
+Argument `where` of type TenantSettingsWhereUniqueInput needs at least one of `tenantId` arguments. Available options are marked with ?.
+
+=== Branch ===
+  branches: 0 rows (nothing to migrate)
+
+=== User ===
+  users: 15/15
+
+=== Address ===
+  addresses: 0 rows (nothing to migrate)
+
+=== Device ===
+  devices: 0 rows (nothing to migrate)
+
+=== Category ===
+  categories: 37/37
+
+=== Product ===
+  SKIPPED Product 691b9241f201beed00d97553 ("test"): no tenantId (orphaned record, not migrated)
+  WARN: Product 69d107c137b08d7239e7568a ("focus led") has duplicate barcode "4806525565675" for its tenant — barcode cleared, product still migrated
+  WARN: Product 69d26f9bd66e38e0a6e02b85 ("eastguard padlock hasp") has duplicate barcode "6920129224801" for its tenant — barcode cleared, product still migrated
+  WARN: Product 69df8ee7103670a5612b1eb1 ("C2") has duplicate barcode "4800016068010" for its tenant — barcode cleared, product still migrated
+  WARN: Product 6a2a2c46b68954f5578acd96 ("JOHNSON'S BABY COLOGNE POWDER MIST 125ML") has duplicate barcode "4801010125303" for its tenant — barcode cleared, product still migrated
+  WARN: Product.stock 69254d57679cdc7cf3ac47d5 has out-of-range value 10000000000, clamped to 2147483647
+  WARN: Product.stock 69571bb3a34f5b67c4ff27ec has out-of-range value 500000000000000, clamped to 2147483647
+  WARN: Product.stock 695f680121df856847f67587 has out-of-range value 100000000000, clamped to 2147483647
+  WARN: Product.stock 695f687a21df856847f675de has out-of-range value 10000000000, clamped to 2147483647
+  WARN: Product.stock 69ab8ccb02c5f123a5a578a0 has out-of-range value 10000000000, clamped to 2147483647
+  WARN: Product.stock 69c4ef369da7d626b989d1f8 has out-of-range value 20000000000, clamped to 2147483647
+  products: 500/2410
+  WARN: Product.stock 69cdc6b4343fe47b36d97abd has out-of-range value 10000000000000, clamped to 2147483647
+  WARN: Product.stock 69ddb8e2257ec8af0d33ccdc has out-of-range value 1000000000000, clamped to 2147483647
+  WARN: Product.stock 69e2e502cdd81714ac8be71a has out-of-range value 10000000000000, clamped to 2147483647
+  WARN: Product.stock 69fab7756852be2427159005 has out-of-range value 100000000000, clamped to 2147483647
+  WARN: Product.stock 6a0411f8463768ea779096cb has out-of-range value 1000000000000, clamped to 2147483647
+  WARN: Product.stock 6a190ad0ab2fc4a44aca59b2 has out-of-range value 100000000000, clamped to 2147483647
+  WARN: Product.stock 6a190af9ab2fc4a44aca5a00 has out-of-range value 100000000000, clamped to 2147483647
+  products: 1000/2410
+  products: 1500/2410
+  WARN: Product.stock 6a3361cd7b257877cfe4a8ef has out-of-range value 1000000000000, clamped to 2147483647
+  WARN: Product.stock 6a3e16857d504b678ab00964 has out-of-range value 100000000000000, clamped to 2147483647
+  products: 2000/2410
+  WARN: Product.stock 6a5831c364d9569dfb865a98 has out-of-range value 100000000000, clamped to 2147483647
+  WARN: Product.stock 6a5831eb64d9569dfb865b24 has out-of-range value 1000000000000, clamped to 2147483647
+  WARN: Product.stock 6a62f16953f1b1af859d6c7a has out-of-range value 100000000000, clamped to 2147483647
+  WARN: Product.stock 6a63230f938b6346a573ea15 has out-of-range value 10000000000, clamped to 2147483647
+  WARN: Product.stock 6a683cc37ddc2d6c36d1560f has out-of-range value 100000000000, clamped to 2147483647
+  WARN: Product.stock 6a71356e4ae703955b79d1c5 has out-of-range value 10000000000000000, clamped to 2147483647
+  WARN: Product.stock 6a7ab43a16d02908fdb84d7a has out-of-range value 100000000000, clamped to 2147483647
+  WARN: Product.stock 6a7ab464cdff620584b03f18 has out-of-range value 100000000000, clamped to 2147483647
+  WARN: Product.stock 6a7ac2e04b9bc05b9d2c8281 has out-of-range value 10000000000, clamped to 2147483647
+  WARN: Product.stock 6a7d7db175443b292e2dd225 has out-of-range value 100000000000, clamped to 2147483647
+  WARN: Product.stock 6a87bb4a678f32ce4605b655 has out-of-range value 10000000000, clamped to 2147483647
+  WARN: Product.stock 6a9e64b47818169f5c65401a has out-of-range value 100000000000000, clamped to 2147483647
+  WARN: Product.stock 6aa8bbbc495dc33afb622d76 has out-of-range value 10000000000, clamped to 2147483647
+  products: 2410/2410
+  product_variations: 0 rows (nothing to migrate)
+  product_branch_stock: 0 rows (nothing to migrate)
+  product_modifiers: 1/1
+  product_modifier_options: 2/2
+[2026-09-19T16:16:13.964Z] ERROR Postgres error {"errorValue":"[object Object]"}
+  FAILED: Product: 
+Invalid `prisma.productRestaurantDetails.createMany()` invocation in
+C:\Users\corew\localpro-pos\scripts\sync-mongo-updates.ts:948:37
+
+  945     fat: (p as any).nutritionInfo?.fat ?? null,
+  946   }));
+  947 await batchCreate('product_restaurant_details', restaurantRows, batch =>
+→ 948   prisma.productRestaurantDetails.createMany({
+          where: {
+            id: undefined,
+        ?   productId?: String,
+        ?   AND?: ProductRestaurantDetailsWhereInput | ProductRestaurantDetailsWhereInput[],
+        ?   OR?: ProductRestaurantDetailsWhereInput[],
+        ?   NOT?: ProductRestaurantDetailsWhereInput | ProductRestaurantDetailsWhereInput[],
+        ?   allergens?: StringNullableListFilter,
+        ?   calories?: IntNullableFilter | Int | Null,
+        ?   protein?: DecimalNullableFilter | Decimal | Null,
+        ?   carbs?: DecimalNullableFilter | Decimal | Null,
+        ?   fat?: DecimalNullableFilter | Decimal | Null,
+        ?   product?: ProductScalarRelationFilter | ProductWhereInput
+          }
+        })
+
+Argument `where` of type ProductRestaurantDetailsWhereUniqueInput needs at least one of `productId` arguments. Available options are marked with ?.
+
+=== ProductBundle ===
+  product_bundles: 2/2
+  product_bundle_items: 2/2
+
+=== ProductChannelListing ===
+  product_channel_listings: 0 rows (nothing to migrate)
+
+=== TenantEcommerceIntegration ===
+  tenant_ecommerce_integrations: 0 rows (nothing to migrate)
+
+=== Customer ===
+  customers: 4/4
+  customer_addresses: 0 rows (nothing to migrate)
+
+=== CustomerOTP ===
+  customer_otps: 0 rows (nothing to migrate)
+
+=== CustomerBalancePayment ===
+  customer_balance_payments: 0 rows (nothing to migrate)
+
+=== Campaign ===
+  campaigns: 0 rows (nothing to migrate)
+
+=== Subscription ===
+  subscriptions: 7/7
+  subscription_billing_history: 10/10
+
+=== FeatureFlagOverride ===
+  feature_flag_overrides: 0 rows (nothing to migrate)
+
+=== CashDrawerSession ===
+  cash_drawer_sessions: 204/204
+
+=== Discount ===
+  discounts: 13/13
+
+=== Expense ===
+  expenses: 9/9
+
+=== File ===
+  files: 14/14
+
+=== Invoice ===
+  invoices: 6/6
+  invoice_items: 6/6
+
+=== LoyaltyConfig ===
+  loyalty_configs: 0 rows (nothing to migrate)
+
+=== LoyaltyTransaction ===
+  loyalty_transactions: 0 rows (nothing to migrate)
+
+=== OfflineTransaction ===
+  offline_transactions: 0 rows (nothing to migrate)
+  offline_transaction_items: 0 rows (nothing to migrate)
+
+=== Payment ===
+  payments: 500/4694
+  payments: 1000/4694
+  payments: 1500/4694
+  payments: 2000/4694
+  payments: 2500/4694
+  payments: 3000/4694
+  payments: 3500/4694
+  payments: 4000/4694
+  payments: 4500/4694
+[2026-09-19T16:54:11.999Z] ERROR Postgres error {"errorValue":"[object Object]"}
+  FAILED: Payment: 
+Invalid `prisma.payment.upsert()` invocation:
+
+
+Foreign key constraint violated on the constraint: `payments_transactionId_fkey`
+
+=== Prescription ===
+  prescriptions: 0 rows (nothing to migrate)
+  prescription_items: 0 rows (nothing to migrate)
+
+=== RecurringBookingTemplate ===
+  recurring_booking_templates: 0 rows (nothing to migrate)
+
+=== SavedCart ===
+  saved_carts: 8/8
+  saved_cart_items: 18/18
+
+=== StockMovement ===
+  SKIPPED StockMovement 6aaa3c133b997ca3b4161318: references product 6a24de687ef6a3c5361bffd2 which no longer exists (deleted product, orphaned history record)
+  SKIPPED StockMovement 6aaa3c153b997ca3b4161339: references product 6a24de697ef6a3c5361bffd8 which no longer exists (deleted product, orphaned history record)
+  SKIPPED StockMovement 6aaa3c1c3b997ca3b4161406: references product 6a256a9fc7a3faf75746004c which no longer exists (deleted product, orphaned history record)
+  SKIPPED StockMovement 6aaa3c1c3b997ca3b4161418: references product 6a256aa6c7a3faf757460090 which no longer exists (deleted product, orphaned history record)
+  SKIPPED StockMovement 6aaa3c1e3b997ca3b4161439: references product 6a256aaec7a3faf7574600e2 which no longer exists (deleted product, orphaned history record)
+  SKIPPED StockMovement 6aaa3c1f3b997ca3b416145a: references product 6a256aafc7a3faf7574600ee which no longer exists (deleted product, orphaned history record)
+  SKIPPED StockMovement 6aaa3c203b997ca3b416146c: references product 6a256ab0c7a3faf7574600f2 which no longer exists (deleted product, orphaned history record)
+  SKIPPED StockMovement 6aaa3c203b997ca3b416147e: references product 6a256ac1c7a3faf75746019c which no longer exists (deleted product, orphaned history record)
+  SKIPPED StockMovement 6aaa3c213b997ca3b4161490: references product 6a256ac1c7a3faf7574601a2 which no longer exists (deleted product, orphaned history record)
+  SKIPPED StockMovement 6aaa3c233b997ca3b41614b1: references product 6a256ac5c7a3faf7574601c8 which no longer exists (deleted product, orphaned history record)
+  SKIPPED StockMovement 6aaa3c243b997ca3b41614c6: references product 6a256ac5c7a3faf7574601cc which no longer exists (deleted product, orphaned history record)
+  SKIPPED StockMovement 6aaa3c253b997ca3b41614d2: references product 6a256ac6c7a3faf7574601ce which no longer exists (deleted product, orphaned history record)
+  SKIPPED StockMovement 6aaa3c253b997ca3b41614e4: references product 6a256ac8c7a3faf7574601e8 which no longer exists (deleted product, orphaned history record)
+  SKIPPED StockMovement 6aaa3c263b997ca3b41614f6: references product 6a256ac9c7a3faf7574601ee which no longer exists (deleted product, orphaned history record)
+  SKIPPED StockMovement 6aaa3c273b997ca3b4161508: references product 6a256acbc7a3faf757460204 which no longer exists (deleted product, orphaned history record)
+  SKIPPED StockMovement 6aaa3c293b997ca3b416151d: references product 6a256accc7a3faf75746020c which no longer exists (deleted product, orphaned history record)
+  SKIPPED StockMovement 6aaa3c2a3b997ca3b4161529: references product 6a256accc7a3faf75746020e which no longer exists (deleted product, orphaned history record)
+  SKIPPED StockMovement 6aaa3c2a3b997ca3b416153b: references product 6a256acdc7a3faf757460216 which no longer exists (deleted product, orphaned history record)
+  SKIPPED StockMovement 6aaa3c2b3b997ca3b416154d: references product 6a256ad1c7a3faf757460240 which no longer exists (deleted product, orphaned history record)
+  SKIPPED StockMovement 6aaa3c2c3b997ca3b416155f: references product 6a256ad6c7a3faf757460270 which no longer exists (deleted product, orphaned history record)
+  SKIPPED StockMovement 6aaa3c2d3b997ca3b4161571: references product 6a256adac7a3faf75746029a which no longer exists (deleted product, orphaned history record)
+  SKIPPED StockMovement 6aaa3c2d3b997ca3b4161583: references product 6a256ae6c7a3faf757460310 which no longer exists (deleted product, orphaned history record)
+  SKIPPED StockMovement 6aaa3c2e3b997ca3b4161595: references product 6a256aebc7a3faf757460346 which no longer exists (deleted product, orphaned history record)
+  SKIPPED StockMovement 6aaa3c2f3b997ca3b41615a7: references product 6a256aedc7a3faf757460352 which no longer exists (deleted product, orphaned history record)
+  SKIPPED StockMovement 6aaa3c303b997ca3b41615b9: references product 6a256af3c7a3faf757460390 which no longer exists (deleted product, orphaned history record)
+  SKIPPED StockMovement 6aaa3c313b997ca3b41615cb: references product 6a256b2ec7a3faf757460400 which no longer exists (deleted product, orphaned history record)
+  SKIPPED StockMovement 6aaa3c323b997ca3b41615ec: references product 6a256b3ec7a3faf75746049e which no longer exists (deleted product, orphaned history record)
+  SKIPPED StockMovement 6aaa3c333b997ca3b41615fe: references product 6a256b43c7a3faf7574604ca which no longer exists (deleted product, orphaned history record)
+  SKIPPED StockMovement 6aaa3c343b997ca3b4161610: references product 6a256b47c7a3faf7574604fa which no longer exists (deleted product, orphaned history record)
+  SKIPPED StockMovement 6aaa3c343b997ca3b4161622: references product 6a256b4bc7a3faf757460522 which no longer exists (deleted product, orphaned history record)
+  SKIPPED StockMovement 6aaa3c353b997ca3b4161634: references product 6a256b4cc7a3faf757460528 which no longer exists (deleted product, orphaned history record)
+  SKIPPED StockMovement 6aaa3c373b997ca3b4161650: references product 6a2614d0476c98ce414e188e which no longer exists (deleted product, orphaned history record)
+  SKIPPED StockMovement 6aaa3c373b997ca3b4161662: references product 6a69a70cbbcc4a998ea9a6fb which no longer exists (deleted product, orphaned history record)
+  SKIPPED StockMovement 6aaa3c383b997ca3b4161674: references product 6a6d7102f9bd63d1cd5c70b7 which no longer exists (deleted product, orphaned history record)
+  stock_movements: 500/9481
+  stock_movements: 1000/9481
+  stock_movements: 1500/9481
+  stock_movements: 2000/9481
+  stock_movements: 2500/9481
+  stock_movements: 3000/9481
+  stock_movements: 3500/9481
+  stock_movements: 4000/9481
+  stock_movements: 4500/9481
+  stock_movements: 5000/9481
+  stock_movements: 5500/9481
+  stock_movements: 6000/9481
+  stock_movements: 6500/9481
+  stock_movements: 7000/9481
+  stock_movements: 7500/9481
+  stock_movements: 8000/9481
+  stock_movements: 8500/9481
+  stock_movements: 9000/9481
+[2026-09-19T18:07:51.099Z] ERROR Postgres error {"errorValue":"[object Object]"}
+  FAILED: StockMovement: 
+Invalid `prisma.stockMovement.upsert()` invocation:
+
+
+Foreign key constraint violated on the constraint: `stock_movements_transactionId_fkey`
+
+=== TaxRule ===
+  tax_rules (standalone TaxRule collection): 0 rows (nothing to migrate)
+  tax_rule_categories: 0 rows (nothing to migrate)
+  tax_rule_products: 0 rows (nothing to migrate)
+
+=== Table ===
+  pos_tables: 2/2
+
+=== ZReading ===
+  z_readings: 2/2
+
+=== Attendance ===
+  attendances: 0 rows (nothing to migrate)
+
+=== Booking ===
+  bookings: 0 rows (nothing to migrate)
+
+=== Transaction ===
+  SKIPPED Transaction 691b9250f201beed00d9755a: no tenantId (orphaned record, not migrated)
+  transactions: 500/4703
+  transactions: 1000/4703
+  transactions: 1500/4703
+  transactions: 2000/4703
+  transactions: 2500/4703
+  transactions: 3000/4703
+  transactions: 3500/4703
+  transactions: 4000/4703
+  transactions: 4500/4703
+  transactions: 4703/4703
+  WARN: TransactionItem 691d594736bf851836e46b20 references product 691d593136bf851836e46af9 which no longer exists — productId cleared, line item still migrated
+  WARN: TransactionItem 691d594736bf851836e46b21 references product 691d58ad8e6b75efb44216e4 which no longer exists — productId cleared, line item still migrated
+  WARN: TransactionItem 691ea2fb863e76b615374754 references product 691d593136bf851836e46af9 which no longer exists — productId cleared, line item still migrated
+  WARN: TransactionItem 691ea2fb863e76b615374755 references product 691d58ad8e6b75efb44216e4 which no longer exists — productId cleared, line item still migrated
+  transaction_items: 500/9358
+  transaction_items: 1000/9358
+  transaction_items: 1500/9358
+  transaction_items: 2000/9358
+  transaction_items: 2500/9358
+  transaction_items: 3000/9358
+  transaction_items: 3500/9358
+  transaction_items: 4000/9358
+  transaction_items: 4500/9358
+  transaction_items: 5000/9358
+  transaction_items: 5500/9358
+  transaction_items: 6000/9358
+  transaction_items: 6500/9358
+  transaction_items: 7000/9358
+  transaction_items: 7500/9358
+  transaction_items: 8000/9358
+  transaction_items: 8500/9358
+  transaction_items: 9000/9358
+  transaction_items: 9358/9358
+  transaction_item_modifiers: 0 rows (nothing to migrate)
+  transaction_split_payments: 0 rows (nothing to migrate)
+
+=== AuditLog ===
+  audit_logs: 500/6978
+  audit_logs: 1000/6978
+  audit_logs: 1500/6978
+  audit_logs: 2000/6978
+  audit_logs: 2500/6978
+  audit_logs: 3000/6978
+  audit_logs: 3500/6978
+  audit_logs: 4000/6978
+  audit_logs: 4500/6978
+  audit_logs: 5000/6978
+  audit_logs: 5500/6978
+  audit_logs: 6000/6978
+  audit_logs: 6500/6978
+  audit_logs: 6978/6978
+
+=== ArchivedAuditLog ===
+  archived_audit_logs: 0 rows (nothing to migrate)
+
+=== SuperAdminAction ===
+  super_admin_actions: 24/24
+
+=== BillingEvent ===
+[2026-09-19T20:51:58.813Z] ERROR Postgres error {"errorValue":"[object Object]"}
+  FAILED: BillingEvent: 
+Invalid `prisma.billingEvent.upsert()` invocation:
+
+
+Unique constraint failed on the fields: (`tenantId`,`transactionId`)
+
+=== Summary ===
+Inserted: 312, Updated: 37574
+Completed with 5 failure(s):
+  - Tenant: 
+Invalid `prisma.tenantSettings.createMany()` invocation in
+C:\Users\corew\localpro-pos\scripts\sync-mongo-updates.ts:527:27
+
+  524   };
+  525 });
+  526 await batchCreate('tenant_settings', tenantSettingsRows, batch =>
+→ 527   prisma.tenantSettings.createMany({
+          where: {
+            id: undefined,
+        ?   tenantId?: String,
+        ?   AND?: TenantSettingsWhereInput | TenantSettingsWhereInput[],
+        ?   OR?: TenantSettingsWhereInput[],
+        ?   NOT?: TenantSettingsWhereInput | TenantSettingsWhereInput[],
+        ?   currency?: StringFilter | String,
+        ?   currencySymbol?: StringNullableFilter | String | Null,
+        ?   currencyPosition?: StringFilter | String,
+        ?   dateFormat?: StringFilter | String,
+        ?   timeFormat?: StringFilter | String,
+        ?   timezone?: StringFilter | String,
+        ?   language?: StringFilter | String,
+        ?   decimalSeparator?: StringFilter | String,
+        ?   thousandsSeparator?: StringFilter | String,
+        ?   decimalPlaces?: IntFilter | Int,
+        ?   companyName?: StringNullableFilter | String | Null,
+        ?   logo?: StringNullableFilter | String | Null,
+        ?   favicon?: StringNullableFilter | String | Null,
+        ?   primaryColor?: StringNullableFilter | String | Null,
+        ?   secondaryColor?: StringNullableFilter | String | Null,
+        ?   accentColor?: StringNullableFilter | String | Null,
+        ?   backgroundColor?: StringNullableFilter | String | Null,
+        ?   textColor?: StringNullableFilter | String | Null,
+        ?   email?: StringNullableFilter | String | Null,
+        ?   phone?: StringNullableFilter | String | Null,
+        ?   addressStreet?: StringNullableFilter | String | Null,
+        ?   addressCity?: StringNullableFilter | String | Null,
+        ?   addressState?: StringNullableFilter | String | Null,
+        ?   addressZipCode?: StringNullableFilter | String | Null,
+        ?   addressCountry?: StringNullableFilter | String | Null,
+        ?   website?: StringNullableFilter | String | Null,
+        ?   receiptHeader?: StringNullableFilter | String | Null,
+        ?   receiptFooter?: StringNullableFilter | String | Null,
+        ?   receiptShowLogo?: BoolFilter | Boolean,
+        ?   receiptShowAddress?: BoolFilter | Boolean,
+        ?   receiptShowPhone?: BoolFilter | Boolean,
+        ?   receiptShowEmail?: BoolFilter | Boolean,
+        ?   receiptDefaultTemplateId?: StringNullableFilter | String | Null,
+        ?   taxEnabled?: BoolFilter | Boolean,
+        ?   taxRate?: DecimalFilter | Decimal,
+        ?   taxLabel?: StringFilter | String,
+        ?   businessType?: StringNullableFilter | String | Null,
+        ?   taxId?: StringNullableFilter | String | Null,
+        ?   registrationNumber?: StringNullableFilter | String | Null,
+        ?   birTin?: StringNullableFilter | String | Null,
+        ?   birPtuNumber?: StringNullableFilter | String | Null,
+        ?   birPtuIssuedDate?: DateTimeNullableFilter | DateTime | Null,
+        ?   birPtuExpiryDate?: DateTimeNullableFilter | DateTime | Null,
+        ?   birMinNumber?: StringNullableFilter | String | Null,
+        ?   birBusinessStyle?: StringNullableFilter | String | Null,
+        ?   birSystemProvider?: StringNullableFilter | String | Null,
+        ?   birTerminalSN?: StringNullableFilter | String | Null,
+        ?   birAccreditationNo?: StringNullableFilter | String | Null,
+        ?   birAccreditationDate?: DateTimeNullableFilter | DateTime | Null,
+        ?   birAccreditationValidUntil?: DateTimeNullableFilter | DateTime | Null,
+        ?   birEsalesPushUrl?: StringNullableFilter | String | Null,
+        ?   mayorsPermitNumber?: StringNullableFilter | String | Null,
+        ?   mayorsPermitExpiry?: DateTimeNullableFilter | DateTime | Null,
+        ?   barangayClearanceNumber?: StringNullableFilter | String | Null,
+        ?   barangayClearanceExpiry?: DateTimeNullableFilter | DateTime | Null,
+        ?   dtiSecRegistration?: StringNullableFilter | String | Null,
+        ?   birCertificateOfRegistration?: StringNullableFilter | String | Null,
+        ?   fireSafetyInspectionCertificate?: StringNullableFilter | String | Null,
+        ?   fsicExpiry?: DateTimeNullableFilter | DateTime | Null,
+        ?   sanitaryPermitNumber?: StringNullableFilter | String | Null,
+        ?   sanitaryPermitExpiry?: DateTimeNullableFilter | DateTime | Null,
+        ?   fdaFoodBusinessLicense?: StringNullableFilter | String | Null,
+        ?   fdaFblExpiry?: DateTimeNullableFilter | DateTime | Null,
+        ?   foodSafetyCertificateNumber?: StringNullableFilter | String | Null,
+        ?   foodSafetyCertificateExpiry?: DateTimeNullableFilter | DateTime | Null,
+        ?   foodHandlersCertified?: BoolFilter | Boolean,
+        ?   numberOfCertifiedHandlers?: IntNullableFilter | Int | Null,
+        ?   healthCertificateExpiry?: DateTimeNullableFilter | DateTime | Null,
+        ?   kitchenSanitationCompliant?: BoolFilter | Boolean,
+        ?   dtiBusinessNameRegistration?: StringNullableFilter | String | Null,
+        ?   priceTaggingCompliant?: BoolFilter | Boolean,
+        ?   weightsAndMeasuresCompliant?: BoolFilter | Boolean,
+        ?   btiAccreditation?: StringNullableFilter | String | Null,
+        ?   productLabelsCompliant?: BoolFilter | Boolean,
+        ?   environmentalComplianceCertificate?: StringNullableFilter | String | Null,
+        ?   eccExpiry?: DateTimeNullableFilter | DateTime | Null,
+        ?   wastewaterDischargePermit?: StringNullableFilter | String | Null,
+        ?   wastewaterPermitExpiry?: DateTimeNullableFilter | DateTime | Null,
+        ?   solidWasteManagementPlan?: BoolFilter | Boolean,
+        ?   serviceDohAccreditation?: StringNullableFilter | String | Null,
+        ?   serviceDohAccreditationExpiry?: DateTimeNullableFilter | DateTime | Null,
+        ?   pharmacistName?: StringNullableFilter | String | Null,
+        ?   pharmacistPRCNumber?: StringNullableFilter | String | Null,
+        ?   pharmacistPTRNumber?: StringNullableFilter | String | Null,
+        ?   fdaLTO?: StringNullableFilter | String | Null,
+        ?   fdaLTOExpiryDate?: DateTimeNullableFilter | DateTime | Null,
+        ?   pharmacyDohAccreditation?: StringNullableFilter | String | Null,
+        ?   pdeaLicense?: StringNullableFilter | String | Null,
+        ?   pdeaLicenseExpiry?: DateTimeNullableFilter | DateTime | Null,
+        ?   requirePrescriptionForRx?: BoolFilter | Boolean,
+        ?   trackExpiryDates?: BoolFilter | Boolean,
+        ?   expiryAlertDays?: IntFilter | Int,
+        ?   lowStockThreshold?: IntFilter | Int,
+        ?   lowStockAlert?: BoolFilter | Boolean,
+        ?   emailNotifications?: BoolFilter | Boolean,
+        ?   smsNotifications?: BoolFilter | Boolean,
+        ?   attendanceNotificationsEnabled?: BoolFilter | Boolean,
+        ?   attendanceExpectedStartTime?: StringFilter | String,
+        ?   attendanceMaxHoursWithoutClockOut?: IntFilter | Int,
+        ?   enableInventory?: BoolFilter | Boolean,
+        ?   enableCategories?: BoolFilter | Boolean,
+        ?   enableDiscounts?: BoolFilter | Boolean,
+        ?   enableLoyaltyProgram?: BoolFilter | Boolean,
+        ?   enableCustomerManagement?: BoolFilter | Boolean,
+        ?   enableOnAccountSales?: BoolFilter | Boolean,
+        ?   autoOpenDrawerOnShiftStart?: BoolFilter | Boolean,
+        ?   autoOpenDrawerOnShiftEnd?: BoolFilter | Boolean,
+        ?   enableBookingScheduling?: BoolFilter | Boolean,
+        ?   enableTableManagement?: BoolFilter | Boolean,
+        ?   ecommerceShopifyEnabled?: BoolFilter | Boolean,
+        ?   ecommerceWooCommerceEnabled?: BoolFilter | Boolean,
+        ?   printerType?: StringNullableFilter | String | Null,
+        ?   printerProfile?: StringNullableFilter | String | Null,
+        ?   printerVendorId?: IntNullableFilter | Int | Null,
+        ?   printerProductId?: IntNullableFilter | Int | Null,
+        ?   printerIpAddress?: StringNullableFilter | String | Null,
+        ?   printerPortNumber?: IntNullableFilter | Int | Null,
+        ?   barcodeScannerType?: StringNullableFilter | String | Null,
+        ?   barcodeScannerEnabled?: BoolNullableFilter | Boolean | Null,
+        ?   qrReaderEnabled?: BoolNullableFilter | Boolean | Null,
+        ?   qrReaderCameraId?: StringNullableFilter | String | Null,
+        ?   cashDrawerEnabled?: BoolNullableFilter | Boolean | Null,
+        ?   cashDrawerConnectedToPrinter?: BoolNullableFilter | Boolean | Null,
+        ?   touchscreenEnabled?: BoolNullableFilter | Boolean | Null,
+        ?   multiCurrencyEnabled?: BoolFilter | Boolean,
+        ?   displayCurrencies?: StringNullableListFilter,
+        ?   exchangeRateSource?: StringFilter | String,
+        ?   exchangeRateApiKey?: StringNullableFilter | String | Null,
+        ?   exchangeRateLastUpdated?: DateTimeNullableFilter | DateTime | Null,
+        ?   emailBookingConfirmationTemplate?: StringNullableFilter | String | Null,
+        ?   emailBookingReminderTemplate?: StringNullableFilter | String | Null,
+        ?   emailBookingCancellationTemplate?: StringNullableFilter | String | Null,
+        ?   emailLowStockAlertTemplate?: StringNullableFilter | String | Null,
+        ?   emailAttendanceAlertTemplate?: StringNullableFilter | String | Null,
+        ?   smsBookingConfirmationTemplate?: StringNullableFilter | String | Null,
+        ?   smsBookingReminderTemplate?: StringNullableFilter | String | Null,
+        ?   smsBookingCancellationTemplate?: StringNullableFilter | String | Null,
+        ?   smsLowStockAlertTemplate?: StringNullableFilter | String | Null,
+        ?   fontFamily?: StringNullableFilter | String | Null,
+        ?   fontSource?: StringFilter | String,
+        ?   googleFontUrl?: StringNullableFilter | String | Null,
+        ?   customFontUrl?: StringNullableFilter | String | Null,
+        ?   theme?: StringFilter | String,
+        ?   customThemeCss?: StringNullableFilter | String | Null,
+        ?   borderRadius?: StringFilter | String,
+        ?   customBorderRadius?: StringNullableFilter | String | Null,
+        ?   businessHoursTimezone?: StringNullableFilter | String | Null,
+        ?   updatedAt?: DateTimeFilter | DateTime,
+        ?   tenant?: TenantScalarRelationFilter | TenantWhereInput
+          }
+        })
+
+Argument `where` of type TenantSettingsWhereUniqueInput needs at least one of `tenantId` arguments. Available options are marked with ?.
+  - Product: 
+Invalid `prisma.productRestaurantDetails.createMany()` invocation in
+C:\Users\corew\localpro-pos\scripts\sync-mongo-updates.ts:948:37
+
+  945     fat: (p as any).nutritionInfo?.fat ?? null,
+  946   }));
+  947 await batchCreate('product_restaurant_details', restaurantRows, batch =>
+→ 948   prisma.productRestaurantDetails.createMany({
+          where: {
+            id: undefined,
+        ?   productId?: String,
+        ?   AND?: ProductRestaurantDetailsWhereInput | ProductRestaurantDetailsWhereInput[],
+        ?   OR?: ProductRestaurantDetailsWhereInput[],
+        ?   NOT?: ProductRestaurantDetailsWhereInput | ProductRestaurantDetailsWhereInput[],
+        ?   allergens?: StringNullableListFilter,
+        ?   calories?: IntNullableFilter | Int | Null,
+        ?   protein?: DecimalNullableFilter | Decimal | Null,
+        ?   carbs?: DecimalNullableFilter | Decimal | Null,
+        ?   fat?: DecimalNullableFilter | Decimal | Null,
+        ?   product?: ProductScalarRelationFilter | ProductWhereInput
+          }
+        })
+
+Argument `where` of type ProductRestaurantDetailsWhereUniqueInput needs at least one of `productId` arguments. Available options are marked with ?.
+  - Payment: 
+Invalid `prisma.payment.upsert()` invocation:
+
+
+Foreign key constraint violated on the constraint: `payments_transactionId_fkey`
+  - StockMovement: 
+Invalid `prisma.stockMovement.upsert()` invocation:
+
+
+Foreign key constraint violated on the constraint: `stock_movements_transactionId_fkey`
+  - BillingEvent: 
+Invalid `prisma.billingEvent.upsert()` invocation:
+
+
+Unique constraint failed on the fields: (`tenantId`,`transactionId`)

@@ -1,0 +1,70 @@
+[dotenv@17.2.3] injecting env (68) from .env.local -- tip: 🛠️  run anywhere with `dotenvx run -- yourcommand`
+[dotenv@17.2.3] injecting env (0) from .env -- tip: ⚙️  override existing env vars with { override: true }
+1POS — MongoDB -> PostgreSQL ETL
+(live run: writing to Postgres)
+
+Connecting to MongoDB...
+(node:19860) [MONGOOSE] Warning: Duplicate schema index on {"code":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Connected.
+
+=== SubscriptionPlan ===
+  subscription_plans: 4/4
+
+=== Coupon ===
+  coupons: 0 rows (nothing to migrate)
+  coupon_plans: 0 rows (nothing to migrate)
+
+=== Tenant ===
+  tenants: 8/8
+  tenant_settings: 8/8
+  tenant_role_permission_overrides: 1/1
+  tenant_practitioner_licenses: 0 rows (nothing to migrate)
+  tenant_exchange_rates: 0 rows (nothing to migrate)
+  tenant_theme_variables: 0 rows (nothing to migrate)
+  tenant_receipt_templates: 0 rows (nothing to migrate)
+  tenant_business_hours: 0 rows (nothing to migrate)
+  tenant_business_hour_breaks: 0 rows (nothing to migrate)
+  tenant_special_hours: 0 rows (nothing to migrate)
+  tenant_holidays: 0 rows (nothing to migrate)
+  tax_rules (from tenant.settings.taxRules[]): 0 rows (nothing to migrate)
+
+=== Branch ===
+  branches: 0 rows (nothing to migrate)
+
+=== User ===
+  users: 15/15
+
+=== Address ===
+  addresses: 0 rows (nothing to migrate)
+
+=== Device ===
+  devices: 0 rows (nothing to migrate)
+
+=== Category ===
+  categories: 37/37
+
+=== Product ===
+  SKIPPED Product 691b9241f201beed00d97553 ("test"): no tenantId (orphaned record, not migrated)
+  WARN: Product 69d107c137b08d7239e7568a ("focus led") has duplicate barcode "4806525565675" for its tenant — barcode cleared, product still migrated
+  WARN: Product 69d26f9bd66e38e0a6e02b85 ("eastguard padlock hasp") has duplicate barcode "6920129224801" for its tenant — barcode cleared, product still migrated
+  WARN: Product 69df8ee7103670a5612b1eb1 ("C2") has duplicate barcode "4800016068010" for its tenant — barcode cleared, product still migrated
+  WARN: Product 6a2a2c46b68954f5578acd96 ("JOHNSON'S BABY COLOGNE POWDER MIST 125ML") has duplicate barcode "4801010125303" for its tenant — barcode cleared, product still migrated
+  WARN: Product.stock 69254d57679cdc7cf3ac47d5 has out-of-range value 10000000000, clamped to 2147483647
+  WARN: Product.stock 69571bb3a34f5b67c4ff27ec has out-of-range value 500000000000000, clamped to 2147483647
+  WARN: Product.stock 695f680121df856847f67587 has out-of-range value 100000000000, clamped to 2147483647
+  WARN: Product.stock 695f687a21df856847f675de has out-of-range value 10000000000, clamped to 2147483647
+  WARN: Product.stock 69ab8ccb02c5f123a5a578a0 has out-of-range value 10000000000, clamped to 2147483647
+  WARN: Product.stock 69c4ef369da7d626b989d1f8 has out-of-range value 20000000000, clamped to 2147483647
+  products: 500/2410
+  WARN: Product.stock 69cdc6b4343fe47b36d97abd has out-of-range value 10000000000000, clamped to 2147483647
+  WARN: Product.stock 69ddb8e2257ec8af0d33ccdc has out-of-range value 1000000000000, clamped to 2147483647
+  WARN: Product.stock 69e2e502cdd81714ac8be71a has out-of-range value 10000000000000, clamped to 2147483647
+  WARN: Product.stock 69fab7756852be2427159005 has out-of-range value 100000000000, clamped to 2147483647
+  WARN: Product.stock 6a0411f8463768ea779096cb has out-of-range value 1000000000000, clamped to 2147483647
+  WARN: Product.stock 6a190ad0ab2fc4a44aca59b2 has out-of-range value 100000000000, clamped to 2147483647
+  WARN: Product.stock 6a190af9ab2fc4a44aca5a00 has out-of-range value 100000000000, clamped to 2147483647
+  products: 1000/2410
+  products: 1500/2410
+  WARN: Product.stock 6a3361cd7b257877cfe4a8ef has out-of-range value 1000000000000, clamped to 2147483647
+  WARN: Product.stock 6a3e16857d504b678ab00964 has out-of-range value 100000000000000, clamped to 2147483647

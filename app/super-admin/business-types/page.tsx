@@ -35,27 +35,22 @@ export default function BusinessTypesPage() {
   }, []);
 
   return (
-      <div className="p-6 w-full">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">Business Types</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Industry-specific configurations available to tenants during onboarding.
-            Business types are defined in <code className="text-xs bg-gray-100 px-1 py-0.5">lib/business-types.ts</code>.
-          </p>
-        </div>
-
-        <div className="bg-brand-soft border border-brand p-4 mb-6 text-sm text-brand-navy">
+      <div className="space-y-4">
+        <div className="bg-brand-soft border border-brand p-4 text-sm text-brand-navy">
           <strong>Note:</strong> Business type definitions are code-configured. To add a new vertical, update{' '}
           <code className="text-xs bg-brand-soft px-1">lib/business-types.ts</code> and deploy.
           This page is a reference view of the current configuration.
         </div>
 
         {loading ? (
-          <div className="p-12 text-center">
+          <div className="text-center py-12 bg-white border border-gray-300">
             <div className="win8-spinner text-brand mx-auto">
               <span /><span /><span /><span /><span />
             </div>
+            <p className="mt-3 text-gray-400 text-sm">Loading business types…</p>
           </div>
+        ) : types.length === 0 ? (
+          <div className="text-center py-12 text-gray-400 bg-white border border-gray-300">No business types configured.</div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {types.map(bt => (

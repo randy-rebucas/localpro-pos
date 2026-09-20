@@ -15,16 +15,16 @@ interface AdminLog {
 }
 
 const ACTION_COLORS: Record<string, string> = {
-  create: '#0f9d58',
-  update: '#1e70bf',
-  delete: '#d93025',
-  login: '#7a3fc9',
-  logout: '#7a3fc9',
+  create: 'bg-win8-success',
+  update: 'bg-win8-info',
+  delete: 'bg-win8-danger',
+  login: 'bg-win8-accent',
+  logout: 'bg-win8-accent',
 };
 
 function actionColor(action: string) {
   const key = Object.keys(ACTION_COLORS).find((k) => action.toLowerCase().includes(k));
-  return key ? ACTION_COLORS[key] : '#6b7280';
+  return key ? ACTION_COLORS[key] : 'bg-gray-500';
 }
 
 const PRESETS = [
@@ -128,9 +128,9 @@ export default function AdminLogsPage() {
         ) : logs.length === 0 ? (
           <div className="text-center py-12 text-gray-500 bg-white border border-gray-300">No admin actions found.</div>
         ) : (
-          <div className="overflow-x-auto border border-gray-300 bg-white">
+          <div className="overflow-x-auto border border-gray-300 bg-white max-h-[70vh] overflow-y-auto">
             <table className="w-full text-sm">
-              <thead className="bg-brand-navy text-white text-xs uppercase tracking-wide">
+              <thead className="bg-brand-navy text-white text-xs uppercase tracking-wide sticky top-0 z-10">
                 <tr>
                   {['Timestamp', 'Admin', 'Action', 'Target', 'Description', 'IP', ''].map((h) => (
                     <th key={h} className="px-4 py-3 text-left font-medium">{h}</th>
@@ -153,10 +153,7 @@ export default function AdminLogsPage() {
                         ) : <span className="text-gray-400 text-xs">System</span>}
                       </td>
                       <td className="px-4 py-3">
-                        <span
-                          className="font-mono text-xs text-white px-2 py-0.5"
-                          style={{ backgroundColor: actionColor(log.action) }}
-                        >
+                        <span className={`font-mono text-xs text-white px-2 py-0.5 ${actionColor(log.action)}`}>
                           {log.action}
                         </span>
                       </td>
@@ -190,17 +187,19 @@ export default function AdminLogsPage() {
                 ))}
               </tbody>
             </table>
-          </div>
-        )}
 
-        {/* Pagination */}
-        {pages > 1 && (
-          <div className="flex justify-center gap-2">
-            <button disabled={page === 1} onClick={() => setPage(p => p - 1)}
-              className="px-4 py-2 text-sm font-medium text-gray-600 border border-gray-300 bg-white disabled:opacity-40 hover:bg-gray-50 transition-colors">← Prev</button>
-            <span className="px-3 py-2 text-sm text-gray-600">Page {page} of {pages}</span>
-            <button disabled={page === pages} onClick={() => setPage(p => p + 1)}
-              className="px-4 py-2 text-sm font-medium text-gray-600 border border-gray-300 bg-white disabled:opacity-40 hover:bg-gray-50 transition-colors">Next →</button>
+            {/* Pagination */}
+            {pages > 1 && (
+              <div className="border-t border-gray-300 px-4 py-3 flex items-center justify-between text-sm text-gray-500">
+                <span>Page {page} of {pages}</span>
+                <div className="flex gap-2">
+                  <button disabled={page === 1} onClick={() => setPage(p => p - 1)}
+                    className="px-3 py-1 border border-gray-300 bg-white disabled:opacity-40 hover:bg-gray-50 transition-colors">← Prev</button>
+                  <button disabled={page === pages} onClick={() => setPage(p => p + 1)}
+                    className="px-3 py-1 border border-gray-300 bg-white disabled:opacity-40 hover:bg-gray-50 transition-colors">Next →</button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

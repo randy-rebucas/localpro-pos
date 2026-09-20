@@ -185,17 +185,10 @@ export default function BackupsPage() {
   };
 
   return (
-      <div className="p-6 w-full space-y-8">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Database Backups</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Full database backups — scheduled daily at 2 AM UTC. Last 7 backups are kept automatically.
-          </p>
-        </div>
-
+      <div className="space-y-6">
         {/* Create Backup */}
-        <section className="bg-white border border-gray-200">
-          <div className="px-6 py-4 border-b border-gray-200">
+        <section className="bg-white border border-gray-300">
+          <div className="px-6 py-4 border-b border-gray-300">
             <h2 className="text-base font-bold text-gray-900">Create Backup</h2>
             <p className="text-sm text-gray-500">Trigger a full database backup immediately</p>
           </div>
@@ -204,20 +197,20 @@ export default function BackupsPage() {
               <button
                 onClick={() => triggerBackup(false)}
                 disabled={triggering}
-                className="px-4 py-2 bg-brand text-white text-sm font-medium border border-brand-hover hover:bg-brand-hover disabled:opacity-50 transition-colors"
+                className="px-4 py-2 bg-brand text-white text-sm font-medium hover:bg-brand-hover disabled:opacity-50 transition-colors"
               >
                 {triggering ? 'Creating...' : 'Create Backup'}
               </button>
               <button
                 onClick={() => triggerBackup(true)}
                 disabled={triggering}
-                className="px-4 py-2 bg-gray-900 text-white text-sm font-medium border border-gray-900 hover:bg-gray-700 disabled:opacity-50 transition-colors"
+                className="px-4 py-2 bg-brand-navy text-white text-sm font-medium hover:brightness-110 disabled:opacity-50 transition-colors"
               >
                 {triggering ? 'Creating...' : 'Create & Upload to Cloud'}
               </button>
             </div>
             {triggerMsg && (
-              <p className={`mt-3 text-sm ${triggerMsg.startsWith('Error') ? 'text-red-700' : 'text-green-700'}`}>
+              <p className={`mt-3 text-sm font-medium ${triggerMsg.startsWith('Error') ? 'text-win8-danger' : 'text-win8-success'}`}>
                 {triggerMsg}
               </p>
             )}
@@ -225,8 +218,8 @@ export default function BackupsPage() {
         </section>
 
         {/* Backup Files */}
-        <section className="bg-white border border-gray-200">
-          <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+        <section className="bg-white border border-gray-300">
+          <div className="px-6 py-4 border-b border-gray-300 flex items-center justify-between">
             <div>
               <h2 className="text-base font-bold text-gray-900">Backup Files</h2>
               <p className="text-sm text-gray-500">Local backups stored on the server</p>
@@ -234,54 +227,54 @@ export default function BackupsPage() {
             <button
               onClick={fetchBackups}
               disabled={loading}
-              className="px-3 py-1.5 text-sm border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+              className="px-3 py-1.5 text-sm border border-gray-300 text-gray-700 hover:bg-gray-50 bg-white disabled:opacity-50 transition-colors"
             >
               {loading ? 'Loading...' : 'Refresh'}
             </button>
           </div>
           <div className="p-6">
             {listError && (
-              <div className="mb-4 p-3 bg-red-50 border border-red-300 text-red-800 text-sm">{listError}</div>
+              <div className="mb-4 p-3 bg-white border border-win8-danger text-win8-danger text-sm">{listError}</div>
             )}
             {loading ? (
               <p className="text-sm text-gray-400 italic">Loading backups...</p>
             ) : backups.length === 0 ? (
               <p className="text-sm text-gray-400 italic">No backup files found. Create your first backup above.</p>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200 text-sm">
-                  <thead className="bg-gray-50">
+              <div className="overflow-x-auto border border-gray-300">
+                <table className="w-full text-sm">
+                  <thead className="bg-brand-navy text-white text-xs uppercase tracking-wide">
                     <tr>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Filename</th>
-                      <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Size</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Created</th>
-                      <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+                      <th className="px-4 py-3 text-left font-medium">Filename</th>
+                      <th className="px-4 py-3 text-right font-medium">Size</th>
+                      <th className="px-4 py-3 text-left font-medium">Created</th>
+                      <th className="px-4 py-3 text-right font-medium">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="bg-white divide-y divide-gray-100">
+                  <tbody className="bg-white divide-y divide-gray-200">
                     {backups.map(backup => (
-                      <tr key={backup.name} className={`hover:bg-gray-50 ${restoreFilename === backup.name ? 'bg-blue-50' : ''}`}>
-                        <td className="px-4 py-2.5 font-mono text-gray-700">{backup.name}</td>
-                        <td className="px-4 py-2.5 text-right text-gray-600">{formatBytes(backup.size)}</td>
-                        <td className="px-4 py-2.5 text-gray-600">{new Date(backup.createdAt).toLocaleString(undefined, { hour12: true })}</td>
-                        <td className="px-4 py-2.5 text-right">
-                          <div className="flex gap-2 justify-end">
+                      <tr key={backup.name} className={`hover:bg-gray-100 transition-colors ${restoreFilename === backup.name ? 'bg-brand-soft' : ''}`}>
+                        <td className="px-4 py-3 font-mono text-xs text-gray-700">{backup.name}</td>
+                        <td className="px-4 py-3 text-right text-gray-600">{formatBytes(backup.size)}</td>
+                        <td className="px-4 py-3 text-gray-600">{new Date(backup.createdAt).toLocaleString(undefined, { hour12: true })}</td>
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex gap-1.5 justify-end">
                             <button
                               onClick={() => { setRestoreFilename(backup.name); setRestoreResult(null); setRestoreError(''); }}
-                              className={`px-3 py-1 text-xs font-medium border transition-colors ${restoreFilename === backup.name ? 'bg-blue-600 text-white border-blue-700' : 'bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-200'}`}
+                              className={`px-3 py-1 text-xs font-semibold transition-colors ${restoreFilename === backup.name ? 'bg-win8-info text-white hover:brightness-110' : 'bg-gray-500 text-white hover:brightness-110'}`}
                             >
                               Restore
                             </button>
                             <button
                               onClick={() => downloadBackup(backup.name)}
-                              className="px-3 py-1 text-xs bg-brand text-white border border-brand-hover hover:bg-brand-hover transition-colors font-medium"
+                              className="px-3 py-1 text-xs bg-brand text-white hover:brightness-110 transition-[filter] font-semibold"
                             >
                               Download
                             </button>
                             <button
                               onClick={() => deleteBackup(backup.name)}
                               disabled={deletingFile === backup.name}
-                              className="px-3 py-1 text-xs bg-red-600 text-white border border-red-700 hover:bg-red-700 disabled:opacity-50 transition-colors font-medium"
+                              className="px-3 py-1 text-xs bg-win8-danger text-white hover:brightness-110 disabled:opacity-50 transition-[filter] font-semibold"
                             >
                               {deletingFile === backup.name ? 'Deleting...' : 'Delete'}
                             </button>
@@ -297,8 +290,8 @@ export default function BackupsPage() {
         </section>
 
         {/* Restore from server file */}
-        <section className="bg-white border border-gray-200">
-          <div className="px-6 py-4 border-b border-gray-200">
+        <section className="bg-white border border-gray-300">
+          <div className="px-6 py-4 border-b border-gray-300">
             <h2 className="text-base font-bold text-gray-900">Restore from Server Backup</h2>
             <p className="text-sm text-gray-500">Restore a backup file already on the server. Click "Restore" on a file above to select it.</p>
           </div>
@@ -306,7 +299,7 @@ export default function BackupsPage() {
             <div>
               <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Selected file</label>
               {restoreFilename ? (
-                <p className="font-mono text-sm text-gray-800 bg-gray-50 border border-gray-200 px-3 py-2">{restoreFilename}</p>
+                <p className="font-mono text-sm text-gray-800 bg-gray-100 border border-gray-300 px-3 py-2">{restoreFilename}</p>
               ) : (
                 <p className="text-sm text-gray-400 italic">No file selected — click "Restore" in the table above.</p>
               )}
@@ -324,7 +317,7 @@ export default function BackupsPage() {
             </div>
 
             {restoreClear && !restoreDry && (
-              <div className="p-3 bg-red-50 border border-red-300 text-red-800 text-sm">
+              <div className="p-3 bg-white border border-win8-danger text-win8-danger text-sm">
                 The entire database will be <strong>permanently deleted</strong> and replaced with the backup's contents before restore.
               </div>
             )}
@@ -332,21 +325,21 @@ export default function BackupsPage() {
             <button
               onClick={restoreFromServer}
               disabled={!restoreFilename || restoring}
-              className="px-4 py-2 bg-blue-600 text-white text-sm font-medium border border-blue-700 hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              className="px-4 py-2 bg-brand text-white text-sm font-medium hover:bg-brand-hover disabled:opacity-50 transition-colors"
             >
               {restoring ? 'Restoring...' : restoreDry ? 'Run Dry Run' : 'Restore'}
             </button>
 
             {restoreError && (
-              <div className="p-3 bg-red-50 border border-red-300 text-red-800 text-sm">{restoreError}</div>
+              <div className="p-3 bg-white border border-win8-danger text-win8-danger text-sm">{restoreError}</div>
             )}
             {restoreResult && <RestoreResultPanel result={restoreResult} />}
           </div>
         </section>
 
         {/* Restore from uploaded file */}
-        <section className="bg-white border border-gray-200">
-          <div className="px-6 py-4 border-b border-gray-200">
+        <section className="bg-white border border-gray-300">
+          <div className="px-6 py-4 border-b border-gray-300">
             <h2 className="text-base font-bold text-gray-900">Restore from Uploaded File</h2>
             <p className="text-sm text-gray-500">Upload a pg_dump (.dump) backup file from your computer to restore into the database.</p>
           </div>
@@ -357,7 +350,7 @@ export default function BackupsPage() {
                 type="file"
                 accept=".dump"
                 onChange={e => { setUploadFile(e.target.files?.[0] ?? null); setUploadResult(null); setUploadError(''); }}
-                className="block w-full text-sm text-gray-700 border border-gray-300 px-3 py-2 focus:outline-none focus:border-blue-500"
+                className="block w-full text-sm text-gray-700 border border-gray-300 px-3 py-2 focus:outline-none focus:border-brand"
               />
               {uploadFile && (
                 <p className="mt-1 text-xs text-gray-500">{uploadFile.name} — {formatBytes(uploadFile.size)}</p>
@@ -376,7 +369,7 @@ export default function BackupsPage() {
             </div>
 
             {uploadClear && !uploadDry && (
-              <div className="p-3 bg-red-50 border border-red-300 text-red-800 text-sm">
+              <div className="p-3 bg-white border border-win8-danger text-win8-danger text-sm">
                 The entire database will be <strong>permanently deleted</strong> and replaced with the backup's contents before restore.
               </div>
             )}
@@ -384,21 +377,21 @@ export default function BackupsPage() {
             <button
               onClick={restoreFromUpload}
               disabled={!uploadFile || uploading}
-              className="px-4 py-2 bg-blue-600 text-white text-sm font-medium border border-blue-700 hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              className="px-4 py-2 bg-brand text-white text-sm font-medium hover:bg-brand-hover disabled:opacity-50 transition-colors"
             >
               {uploading ? 'Restoring...' : uploadDry ? 'Run Dry Run' : 'Restore'}
             </button>
 
             {uploadError && (
-              <div className="p-3 bg-red-50 border border-red-300 text-red-800 text-sm">{uploadError}</div>
+              <div className="p-3 bg-white border border-win8-danger text-win8-danger text-sm">{uploadError}</div>
             )}
             {uploadResult && <RestoreResultPanel result={uploadResult} />}
           </div>
         </section>
 
         {/* Schedule info */}
-        <section className="bg-white border border-gray-200">
-          <div className="px-6 py-4 border-b border-gray-200">
+        <section className="bg-white border border-gray-300">
+          <div className="px-6 py-4 border-b border-gray-300">
             <h2 className="text-base font-bold text-gray-900">Backup Schedule</h2>
           </div>
           <div className="p-6 text-sm text-gray-700">
@@ -422,16 +415,16 @@ function RestoreResultPanel({ result }: { result: RestoreResult }) {
   // pg_restore operates on the whole dump — there's no per-table breakdown
   // like the old Mongo per-collection JSON restore returned.
   return (
-    <div className={`p-4 border text-sm ${result.dryRun ? 'bg-gray-50 border-gray-300' : result.success ? 'bg-green-50 border-green-300' : 'bg-red-50 border-red-300'}`}>
-      <p className={`font-semibold ${result.dryRun ? 'text-gray-800' : result.success ? 'text-green-800' : 'text-red-800'}`}>
+    <div className={`p-4 border text-sm ${result.dryRun ? 'bg-gray-100 border-gray-300' : result.success ? 'bg-white border-win8-success' : 'bg-white border-win8-danger'}`}>
+      <p className={`font-semibold ${result.dryRun ? 'text-gray-800' : result.success ? 'text-win8-success' : 'text-win8-danger'}`}>
         {result.dryRun && '[DRY RUN] '}{result.message}
       </p>
       {result.errors.length > 0 && (
         <div className="mt-3">
-          <p className="font-medium text-red-700 mb-1">Warnings ({result.errors.length})</p>
+          <p className="font-medium text-win8-danger mb-1">Warnings ({result.errors.length})</p>
           <ul className="space-y-0.5">
             {result.errors.map((e, i) => (
-              <li key={i} className="text-red-600">— {e}</li>
+              <li key={i} className="text-win8-danger">— {e}</li>
             ))}
           </ul>
         </div>

@@ -15,7 +15,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { getDictionaryClient } from '../dictionaries-client';
 
 interface RecentTx {
-  _id: string;
+  id: string;
   receiptNumber?: string;
   total: number;
   paymentMethod: string;
@@ -285,9 +285,9 @@ export default function AdminDashboard() {
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {data.recentTransactions.map(tx => (
-                  <tr key={tx._id} className="hover:bg-gray-50 transition-colors">
+                  <tr key={tx.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-5 py-3 font-mono text-xs text-gray-700">
-                      {tx.receiptNumber || tx._id.slice(-6).toUpperCase()}
+                      {tx.receiptNumber || tx.id.slice(-6).toUpperCase()}
                     </td>
                     <td className="px-3 py-3 text-gray-700 truncate max-w-[120px]">
                       {(typeof tx.customerId === 'object' && tx.customerId

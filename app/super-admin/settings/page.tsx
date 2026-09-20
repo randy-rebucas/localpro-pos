@@ -127,27 +127,22 @@ export default function SettingsPage() {
   }, []);
 
   return (
-      <div className="p-6 w-full space-y-8">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
-          <p className="text-sm text-gray-500 mt-1">Database health, automation jobs, and maintenance mode</p>
-        </div>
-
+      <div className="space-y-6">
         {/* Maintenance Mode */}
-        <section className="bg-white border border-gray-200">
-          <div className="px-6 py-4 border-b border-gray-200">
+        <section className="bg-white border border-gray-300">
+          <div className="px-6 py-4 border-b border-gray-300">
             <h2 className="text-base font-bold text-gray-900">Maintenance Mode</h2>
             <p className="text-sm text-gray-500">Block all tenant-facing traffic platform-wide</p>
           </div>
 
           <div className="p-6">
             {maintenanceError && (
-              <div className="mb-4 p-3 bg-red-50 border border-red-300 text-red-800 text-sm">{maintenanceError}</div>
+              <div className="mb-4 p-3 bg-white border border-win8-danger text-win8-danger text-sm">{maintenanceError}</div>
             )}
 
             <div className="flex items-center gap-3 mb-4">
-              <span className={`inline-block w-2.5 h-2.5 ${maintenance?.maintenanceMode ? 'bg-red-500' : 'bg-green-500'}`} />
-              <span className={`text-sm font-semibold ${maintenance?.maintenanceMode ? 'text-red-700' : 'text-green-700'}`}>
+              <span className={`inline-block w-2.5 h-2.5 ${maintenance?.maintenanceMode ? 'bg-win8-danger' : 'bg-win8-success'}`} />
+              <span className={`text-sm font-semibold ${maintenance?.maintenanceMode ? 'text-win8-danger' : 'text-win8-success'}`}>
                 {maintenance?.maintenanceMode ? 'Maintenance mode is ON' : 'Live'}
               </span>
             </div>
@@ -167,14 +162,14 @@ export default function SettingsPage() {
               <button
                 onClick={() => toggleMaintenance(true)}
                 disabled={maintenanceLoading || maintenance?.maintenanceMode === true}
-                className="px-4 py-2 bg-red-600 text-white text-sm font-medium border border-red-700 hover:bg-red-700 disabled:opacity-50 transition-colors"
+                className="px-4 py-2 bg-win8-danger text-white text-sm font-medium hover:brightness-110 disabled:opacity-50 transition-[filter]"
               >
                 {maintenanceLoading ? 'Saving...' : 'Enable Maintenance Mode'}
               </button>
               <button
                 onClick={() => toggleMaintenance(false)}
                 disabled={maintenanceLoading || maintenance?.maintenanceMode === false}
-                className="px-4 py-2 bg-gray-900 text-white text-sm font-medium border border-gray-900 hover:bg-gray-700 disabled:opacity-50 transition-colors"
+                className="px-4 py-2 bg-brand-navy text-white text-sm font-medium hover:brightness-110 disabled:opacity-50 transition-[filter]"
               >
                 {maintenanceLoading ? 'Saving...' : 'Disable Maintenance Mode'}
               </button>
@@ -183,8 +178,8 @@ export default function SettingsPage() {
         </section>
 
         {/* Cron Jobs */}
-        <section className="bg-white border border-gray-200">
-          <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+        <section className="bg-white border border-gray-300">
+          <div className="px-6 py-4 border-b border-gray-300 flex items-center justify-between">
             <div>
               <h2 className="text-base font-bold text-gray-900">Automation Jobs</h2>
               <p className="text-sm text-gray-500">Scheduled cron job status</p>
@@ -192,7 +187,7 @@ export default function SettingsPage() {
             <button
               onClick={checkCronStatus}
               disabled={cronLoading}
-              className="px-4 py-2 bg-brand text-white text-sm font-medium border border-brand-hover hover:bg-brand-hover disabled:opacity-50 transition-colors"
+              className="px-4 py-2 bg-brand text-white text-sm font-medium hover:bg-brand-hover disabled:opacity-50 transition-colors"
             >
               {cronLoading ? 'Checking...' : 'Check Status'}
             </button>
@@ -200,15 +195,15 @@ export default function SettingsPage() {
 
           <div className="p-6">
             {cronError && (
-              <div className="mb-4 p-3 bg-red-50 border border-red-300 text-red-800 text-sm">{cronError}</div>
+              <div className="mb-4 p-3 bg-white border border-win8-danger text-win8-danger text-sm">{cronError}</div>
             )}
 
             {cronStatus ? (
               <div>
                 <div className="flex items-center gap-6 mb-4">
                   <div className="flex items-center gap-2">
-                    <span className={`inline-block w-2.5 h-2.5 ${cronStatus.enabled ? 'bg-green-500' : 'bg-gray-400'}`} />
-                    <span className={`text-sm font-semibold ${cronStatus.enabled ? 'text-green-700' : 'text-gray-500'}`}>
+                    <span className={`inline-block w-2.5 h-2.5 ${cronStatus.enabled ? 'bg-win8-success' : 'bg-gray-400'}`} />
+                    <span className={`text-sm font-semibold ${cronStatus.enabled ? 'text-win8-success' : 'text-gray-500'}`}>
                       {cronStatus.enabled ? 'Cron enabled' : 'Cron disabled (ENABLE_CRON_JOBS not set)'}
                     </span>
                   </div>
@@ -218,22 +213,22 @@ export default function SettingsPage() {
                 </div>
 
                 {cronStatus.jobs.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200 text-sm">
-                      <thead className="bg-gray-50">
+                  <div className="overflow-x-auto border border-gray-300">
+                    <table className="w-full text-sm">
+                      <thead className="bg-brand-navy text-white text-xs uppercase tracking-wide">
                         <tr>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Job</th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Schedule</th>
-                          <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Status</th>
+                          <th className="px-4 py-3 text-left font-medium">Job</th>
+                          <th className="px-4 py-3 text-left font-medium">Schedule</th>
+                          <th className="px-4 py-3 text-right font-medium">Status</th>
                         </tr>
                       </thead>
-                      <tbody className="bg-white divide-y divide-gray-100">
+                      <tbody className="bg-white divide-y divide-gray-200">
                         {cronStatus.jobs.map(job => (
-                          <tr key={job.name} className="hover:bg-gray-50">
-                            <td className="px-4 py-2.5 text-gray-700">{job.name}</td>
-                            <td className="px-4 py-2.5 font-mono text-xs text-gray-500">{job.schedule}</td>
-                            <td className="px-4 py-2.5 text-right">
-                              <span className={job.running ? 'text-green-700 font-medium' : 'text-gray-400'}>
+                          <tr key={job.name} className="hover:bg-gray-100 transition-colors">
+                            <td className="px-4 py-3 text-gray-700">{job.name}</td>
+                            <td className="px-4 py-3 font-mono text-xs text-gray-500">{job.schedule}</td>
+                            <td className="px-4 py-3 text-right">
+                              <span className={job.running ? 'text-win8-success font-medium' : 'text-gray-400'}>
                                 {job.running ? 'Running' : 'Stopped'}
                               </span>
                             </td>
@@ -253,8 +248,8 @@ export default function SettingsPage() {
         </section>
 
         {/* DB Health */}
-        <section className="bg-white border border-gray-200">
-          <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+        <section className="bg-white border border-gray-300">
+          <div className="px-6 py-4 border-b border-gray-300 flex items-center justify-between">
             <div>
               <h2 className="text-base font-bold text-gray-900">Database Health</h2>
               <p className="text-sm text-gray-500">Check PostgreSQL connection and table stats</p>
@@ -262,7 +257,7 @@ export default function SettingsPage() {
             <button
               onClick={checkHealth}
               disabled={healthLoading}
-              className="px-4 py-2 bg-brand text-white text-sm font-medium border border-brand-hover hover:bg-brand-hover disabled:opacity-50 transition-colors"
+              className="px-4 py-2 bg-brand text-white text-sm font-medium hover:bg-brand-hover disabled:opacity-50 transition-colors"
             >
               {healthLoading ? 'Checking...' : 'Check Health'}
             </button>
@@ -270,15 +265,15 @@ export default function SettingsPage() {
 
           <div className="p-6">
             {healthError && (
-              <div className="mb-4 p-3 bg-red-50 border border-red-300 text-red-800 text-sm">{healthError}</div>
+              <div className="mb-4 p-3 bg-white border border-win8-danger text-win8-danger text-sm">{healthError}</div>
             )}
 
             {health ? (
               <div>
                 <div className="flex items-center gap-6 mb-4">
                   <div className="flex items-center gap-2">
-                    <span className={`inline-block w-2.5 h-2.5 ${health.status === 'ok' ? 'bg-green-500' : 'bg-red-500'}`} />
-                    <span className={`text-sm font-semibold ${health.status === 'ok' ? 'text-green-700' : 'text-red-700'}`}>
+                    <span className={`inline-block w-2.5 h-2.5 ${health.status === 'ok' ? 'bg-win8-success' : 'bg-win8-danger'}`} />
+                    <span className={`text-sm font-semibold ${health.status === 'ok' ? 'text-win8-success' : 'text-win8-danger'}`}>
                       {health.status === 'ok' ? 'Connected' : 'Error'}
                     </span>
                   </div>
@@ -290,19 +285,19 @@ export default function SettingsPage() {
                   </div>
                 </div>
 
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200 text-sm">
-                    <thead className="bg-gray-50">
+                <div className="overflow-x-auto border border-gray-300">
+                  <table className="w-full text-sm">
+                    <thead className="bg-brand-navy text-white text-xs uppercase tracking-wide">
                       <tr>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Collection</th>
-                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Documents</th>
+                        <th className="px-4 py-3 text-left font-medium">Collection</th>
+                        <th className="px-4 py-3 text-right font-medium">Documents</th>
                       </tr>
                     </thead>
-                    <tbody className="bg-white divide-y divide-gray-100">
+                    <tbody className="bg-white divide-y divide-gray-200">
                       {health.collections.map(col => (
-                        <tr key={col.name} className="hover:bg-gray-50">
-                          <td className="px-4 py-2.5 font-mono text-gray-700">{col.name}</td>
-                          <td className="px-4 py-2.5 text-right text-gray-600">
+                        <tr key={col.name} className="hover:bg-gray-100 transition-colors">
+                          <td className="px-4 py-3 font-mono text-xs text-gray-700">{col.name}</td>
+                          <td className="px-4 py-3 text-right text-gray-600">
                             {col.count === -1 ? 'N/A' : col.count.toLocaleString()}
                           </td>
                         </tr>

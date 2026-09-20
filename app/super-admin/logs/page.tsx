@@ -159,9 +159,9 @@ export default function LogsPage() {
         ) : logs.length === 0 ? (
           <div className="text-center py-12 text-gray-500 bg-white border border-gray-300">No audit logs found.</div>
         ) : (
-          <div className="overflow-x-auto border border-gray-300 bg-white">
+          <div className="overflow-x-auto border border-gray-300 bg-white max-h-[70vh] overflow-y-auto">
             <table className="w-full text-sm">
-              <thead className="bg-brand-navy text-white text-xs uppercase tracking-wide">
+              <thead className="bg-brand-navy text-white text-xs uppercase tracking-wide sticky top-0 z-10">
                 <tr>
                   {['Timestamp', 'Tenant', 'Action', 'Entity', 'User', 'IP', ''].map(h => (
                     <th key={h} className="px-4 py-3 text-left font-medium">{h}</th>
@@ -235,7 +235,7 @@ export default function LogsPage() {
             </table>
 
             {/* Pagination */}
-            <div className="border-t border-gray-200 px-4 py-3 flex items-center justify-between text-sm text-gray-500">
+            <div className="border-t border-gray-300 px-4 py-3 flex items-center justify-between text-sm text-gray-500">
               <span>Page {pagination.page} of {pagination.pages}</span>
               <div className="flex gap-2">
                 <button disabled={page <= 1} onClick={() => setPage(p => p - 1)}
