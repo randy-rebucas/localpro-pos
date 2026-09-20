@@ -7,13 +7,10 @@ import { Prisma } from '@prisma/client';
 import { verifyToken } from '@/lib/auth';
 import { cookies, headers } from 'next/headers';
 
-export async function generateStaticParams() {
-  // For static generation, you can return common tenants
-  // In production, you might want to fetch from database
-  return [
-    { tenant: 'default' },
-  ];
-}
+// This layout reads per-request headers/cookies for tenant domain and auth
+// resolution, so it can never be statically prerendered — declaring it dynamic
+// avoids Next.js attempting a static pass that conflicts with those dynamic reads.
+export const dynamic = 'force-dynamic';
 
 async function ensureDefaultTenant() {
   const existing = await prisma.tenant.findFirst({ where: { slug: 'default' } });

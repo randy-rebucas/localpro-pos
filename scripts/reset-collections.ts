@@ -42,6 +42,7 @@ import { randomUUID } from 'crypto';
 import bcrypt from 'bcryptjs';
 import prisma from '../lib/db';
 import { getDefaultTenantSettings } from '../lib/currency';
+import { flattenSettingsForPrisma } from '../lib/tenant-settings-flatten';
 
 // Table mapping: collection name (Mongo-era) -> Prisma delegate, all tenant-scoped
 // except `tenants` and `users` (users are scoped indirectly via tenantId, kept
@@ -194,14 +195,14 @@ async function createDefaultStore(createAdmin = false) {
 
     // Get default settings and customize (following tenant signup route pattern)
     const defaultSettings = getDefaultTenantSettings();
-    const settings: Record<string, unknown> = {
+    const settings = flattenSettingsForPrisma({
       ...defaultSettings,
       currency: defaultSettings.currency || 'PHP',
       language: (defaultSettings.language || 'en') as 'en' | 'es',
       companyName: 'Default Store',
       email: 'admin@default.local',
       phone: '+1-555-0000',
-    };
+    });
 
     // Create tenant first (following tenant signup route hierarchy)
     const tenant = await prisma.tenant.create({
@@ -288,17 +289,19 @@ async function createDemoTenant() {
         name: 'Demo Store',
         isActive: true,
         settings: {
-          create: {
+          create: flattenSettingsForPrisma({
             ...defaultSettings,
             companyName: 'Demo Store',
             email: 'demo@store.local',
             phone: '+1-555-0123',
-            addressStreet: '123 Demo Street',
-            addressCity: 'Demo City',
-            addressState: 'DC',
-            addressZipCode: '12345',
-            addressCountry: 'USA',
-          },
+            address: {
+              street: '123 Demo Street',
+              city: 'Demo City',
+              state: 'DC',
+              zipCode: '12345',
+              country: 'USA',
+            },
+          }),
         },
       },
     });

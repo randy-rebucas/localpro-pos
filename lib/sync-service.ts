@@ -4,7 +4,7 @@
  * Includes exponential backoff retry for failed syncs
  */
 
-import { getOfflineStorage } from './offline-storage';
+import { getOfflineStorage, type OfflineTransaction } from './offline-storage';
 
 export interface SyncResult {
   success: boolean;
@@ -76,7 +76,7 @@ class SyncService {
   }
 
   private async syncWithRetry(
-    transaction: any, // eslint-disable-line @typescript-eslint/no-explicit-any
+    transaction: OfflineTransaction,
     tenant: string,
     storage: Awaited<ReturnType<typeof getOfflineStorage>>
   ): Promise<boolean> {
@@ -86,10 +86,31 @@ class SyncService {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            idempotencyKey: transaction.idempotencyKey,
             items: transaction.items,
             paymentMethod: transaction.paymentMethod,
             cashReceived: transaction.cashReceived,
             discountCode: transaction.discountCode,
+            paymentProvider: transaction.paymentProvider,
+            paymentReference: transaction.paymentReference,
+            bnplInstallments: transaction.bnplInstallments,
+            customerId: transaction.customerId,
+            branchId: transaction.branchId,
+            orderType: transaction.orderType,
+            tableNumber: transaction.tableNumber,
+            tableId: transaction.tableId,
+            splitCount: transaction.splitCount,
+            splitPayments: transaction.splitPayments,
+            payments: transaction.splitPayments?.map((s) => ({
+              method: s.method,
+              amount: s.amount,
+              notes: s.reference,
+            })),
+            scPwdName: transaction.scPwdName,
+            scPwdId: transaction.scPwdId,
+            deviceId: transaction.deviceId,
+            notes: transaction.notes,
+            tipAmount: transaction.tipAmount,
           }),
         });
 

@@ -47,6 +47,7 @@ interface PaymentInputData {
   scPwdName?: string;
   scPwdId?: string;
   deviceId?: string;
+  tipAmount?: number;
 }
 
 export interface PaymentResult {
@@ -54,6 +55,11 @@ export interface PaymentResult {
   error?: string;
   errors?: Array<{ field: string; message: string }>;
   data?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+  // Set when the request never reached the server (offline, DNS/connection
+  // failure, or timeout/abort) as opposed to a server-returned validation or
+  // business-rule error. Callers use this to decide whether to queue the
+  // sale for offline sync instead of just showing an error toast.
+  networkError?: boolean;
 }
 
 interface UsePaymentReturn {
@@ -79,7 +85,8 @@ interface UsePaymentReturn {
     restaurantMeta?: RestaurantMeta,
     splitPayments?: SplitPaymentEntry[],
     scPwd?: { name?: string; id?: string },
-    deviceId?: string
+    deviceId?: string,
+    tipAmount?: number
   ) => Promise<PaymentResult | null>;
 }
 
@@ -182,7 +189,8 @@ export function usePayment(): UsePaymentReturn {
       restaurantMeta?: RestaurantMeta,
       splitPayments?: SplitPaymentEntry[],
       scPwd?: { name?: string; id?: string },
-      deviceId?: string
+      deviceId?: string,
+      tipAmount?: number
     ): Promise<PaymentResult | null> => {
       // For split payments, use the first guest's method for validation; skip cash check
       const methodForValidation = splitPayments ? (splitPayments[0]?.method as PaymentMethodType ?? paymentMethod) : paymentMethod;
@@ -230,6 +238,7 @@ export function usePayment(): UsePaymentReturn {
           scPwdName: scPwd?.name || undefined,
           scPwdId: scPwd?.id || undefined,
           deviceId: deviceId || undefined,
+          tipAmount: tipAmount && tipAmount > 0 ? tipAmount : undefined,
         };
 
         const idempotencySignature = JSON.stringify({
@@ -238,6 +247,7 @@ export function usePayment(): UsePaymentReturn {
           primaryMethod,
           customerId: customerId || null,
           splitPayments: splitPayments || null,
+          tipAmount: tipAmount || null,
         });
 
         const bodyPayload: Record<string, unknown> = {
@@ -279,6 +289,7 @@ export function usePayment(): UsePaymentReturn {
         return {
           success: false,
           error: error instanceof Error ? error.message : 'Failed to process payment',
+          networkError: true,
         };
       } finally {
         setProcessing(false);

@@ -6,6 +6,7 @@
 export * from './booking-reminders';
 export * from './booking-confirmations';
 export * from './booking-no-show';
+export * from './laundry-reminders';
 export * from './low-stock-alerts';
 export * from './transaction-receipts';
 export * from './report-delivery';

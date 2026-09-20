@@ -6,16 +6,48 @@
 const DB_NAME = 'pos-offline-db';
 const DB_VERSION = 2;
 
+interface OfflineTransactionItem {
+  productId: string;
+  quantity: number;
+  variation?: { size?: string; color?: string; type?: string };
+  modifiers?: Array<{ name: string; chosenOption: string; price: number }>;
+}
+
+interface OfflineSplitPaymentEntry {
+  guestIndex: number;
+  method: string;
+  amount: number;
+  reference?: string;
+}
+
 interface OfflineTransaction {
   id: string;
   tenant: string;
-  items: Array<{
-    productId: string;
-    quantity: number;
-  }>;
-  paymentMethod: 'cash' | 'card' | 'digital';
+  // Idempotency key sent to POST /api/transactions on sync, so a retried
+  // sync after a dropped response replays the original result instead of
+  // creating a duplicate Transaction (same convention as the online
+  // checkout path in hooks/usePayment.ts and the Transaction.idempotencyKey
+  // / CustomerBalancePayment.idempotencyKey unique constraints).
+  idempotencyKey: string;
+  items: OfflineTransactionItem[];
+  paymentMethod: 'cash' | 'card' | 'tap_to_pay' | 'wallet' | 'qr_code' | 'bnpl' | 'digital' | 'on_account';
   cashReceived?: number;
   discountCode?: string;
+  paymentProvider?: string;
+  paymentReference?: string;
+  bnplInstallments?: number;
+  customerId?: string;
+  branchId?: string;
+  orderType?: string;
+  tableNumber?: string;
+  tableId?: string;
+  splitCount?: number;
+  splitPayments?: OfflineSplitPaymentEntry[];
+  scPwdName?: string;
+  scPwdId?: string;
+  deviceId?: string;
+  notes?: string;
+  tipAmount?: number;
   timestamp: number;
   synced: boolean;
   syncError?: string;
@@ -103,11 +135,18 @@ class OfflineStorage {
   }
 
   // Transaction methods
-  async saveTransaction(transaction: Omit<OfflineTransaction, 'id' | 'timestamp' | 'synced'>): Promise<string> {
+  async saveTransaction(
+    transaction: Omit<OfflineTransaction, 'id' | 'timestamp' | 'synced' | 'idempotencyKey'>
+  ): Promise<string> {
     const id = `offline_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const idempotencyKey =
+      typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : `${id}-${Math.random().toString(36).slice(2)}`;
     const fullTransaction: OfflineTransaction = {
       ...transaction,
       id,
+      idempotencyKey,
       timestamp: Date.now(),
       synced: false,
     };
@@ -348,5 +387,12 @@ export async function getOfflineStorage(): Promise<OfflineStorage> {
   return storageInstance;
 }
 
-export type { OfflineTransaction, CachedProduct, CachedDiscount, ProductCacheInput };
+export type {
+  OfflineTransaction,
+  OfflineTransactionItem,
+  OfflineSplitPaymentEntry,
+  CachedProduct,
+  CachedDiscount,
+  ProductCacheInput,
+};
 

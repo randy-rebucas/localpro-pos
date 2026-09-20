@@ -89,6 +89,11 @@ export interface ITenantSettings {
   enableLoyaltyProgram?: boolean;
   enableCustomerManagement?: boolean;
   enableBookingScheduling?: boolean;
+  enableDelivery?: boolean;
+  enableWorkOrders?: boolean;
+  enableLaundryOrders?: boolean;
+  enableKitchenDisplay?: boolean;
+  enableAccounting?: boolean;
   enableTableManagement?: boolean;
   /** When true, POS may sell on account (customer balance / pay later). */
   enableOnAccountSales?: boolean;

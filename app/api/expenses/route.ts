@@ -7,6 +7,7 @@ import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
+import { postExpenseToLedger } from '@/lib/accounting/auto-post';
 
 export async function GET(request: NextRequest) {
   try {
@@ -62,7 +63,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { name, description, amount, date, paymentMethod, receipt, notes } = body;
+    const { name, description, amount, date, paymentMethod, receipt, notes, ledgerAccountId } = body;
 
     // Validate required fields
     if (!name || !name.trim()) {
@@ -105,6 +106,7 @@ export async function POST(request: NextRequest) {
         paymentMethod: paymentMethod || 'cash',
         receipt: receipt?.trim() || undefined,
         notes: notes?.trim() || undefined,
+        ledgerAccountId: ledgerAccountId || undefined,
         userId,
       },
     });
@@ -117,6 +119,9 @@ export async function POST(request: NextRequest) {
       entityId: expense.id,
       changes: { name, description, amount },
     });
+
+    // Fire-and-forget: post this expense to the general ledger.
+    void postExpenseToLedger(expense.id);
 
     return NextResponse.json({ success: true, data: expense }, { status: 201 });
   } catch (error) {

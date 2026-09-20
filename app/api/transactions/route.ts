@@ -15,6 +15,7 @@ import { logger } from '@/lib/logger';
 import { calculateTax } from '@/lib/tax-calculation';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { wouldExceedCreditLimit } from '@/lib/customer-credit';
+import { postTransactionToLedger } from '@/lib/accounting/auto-post';
 
 // Postgres ids here are still Mongo-ObjectId-hex-shaped during the migration
 // (see prisma/schema.prisma header comment) — keep the same 24-hex-char shape
@@ -268,6 +269,7 @@ export async function POST(request: NextRequest) {
     const tableId = typeof body.tableId === 'string' ? body.tableId : undefined;
     const splitCount = typeof body.splitCount === 'number' ? body.splitCount : undefined;
     const splitPayments = Array.isArray(body.splitPayments) ? body.splitPayments : undefined;
+    const tipAmount = typeof body.tipAmount === 'number' && body.tipAmount > 0 ? body.tipAmount : undefined;
 
     // Check subscription transaction limits
     const currentTransactionCount = await prisma.transaction.count({
@@ -711,8 +713,8 @@ export async function POST(request: NextRequest) {
       taxAmount = taxResult.taxAmount;
     }
 
-    // Calculate total after discount, tax, and loyalty redemption
-    const total = Math.max(0, subtotalAfterDiscount + taxAmount - loyaltyDiscountAmount);
+    // Calculate total after discount, tax, loyalty redemption, and tip
+    const total = Math.max(0, subtotalAfterDiscount + taxAmount - loyaltyDiscountAmount + (tipAmount || 0));
 
     // Resolve the registered device/terminal (if any) and snapshot its identity onto the
     // transaction, so receipts remain accurate even if the device is later renamed/deactivated.
@@ -882,6 +884,7 @@ export async function POST(request: NextRequest) {
           tableNumber: tableNumber || undefined,
           tableId: tableId || undefined,
           splitCount: splitCount || undefined,
+          tipAmount: tipAmount || undefined,
           ...(idempotencyKey ? { idempotencyKey } : {}),
         };
 
@@ -1212,6 +1215,11 @@ export async function POST(request: NextRequest) {
         onAccountCreditChange,
       },
     });
+
+    // Fire-and-forget: post this completed sale to the general ledger.
+    // Never awaited into the response path — a ledger-posting failure must
+    // not fail the checkout that already committed.
+    void postTransactionToLedger(transaction.id);
 
     // Update subscription usage
     try {

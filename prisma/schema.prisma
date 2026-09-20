@@ -39,6 +39,7 @@ enum UserRole {
   cashier
   viewer
   super_admin
+  rider
 }
 
 enum OnboardingStatus {
@@ -112,6 +113,38 @@ enum RecurrenceType {
   daily
   weekly
   monthly
+}
+
+enum DeliveryStatus {
+  pending
+  assigned
+  picked_up
+  in_transit
+  delivered
+  failed
+  cancelled
+}
+
+enum KitchenTicketItemStatus {
+  queued
+  preparing
+  ready
+  served
+  cancelled
+}
+
+enum DeliveryType {
+  pickup
+  delivery
+}
+
+enum WorkOrderStatus {
+  pending
+  assigned
+  in_progress
+  on_hold
+  completed
+  cancelled
 }
 
 enum CashDrawerStatus {
@@ -225,6 +258,25 @@ enum PtuStatus {
   approved
 }
 
+enum LaundryOrderStatus {
+  booked
+  picked_up
+  received
+  sorting
+  washing
+  drying
+  folding
+  ready
+  out_for_delivery
+  completed
+  cancelled
+}
+
+enum LaundryPricingMethod {
+  weight
+  item
+}
+
 enum PrescriptionStatus {
   pending
   partially_dispensed
@@ -240,6 +292,22 @@ enum StockMovementType {
   return
   damage
   transfer
+}
+
+enum PurchaseOrderStatus {
+  draft
+  ordered
+  partially_received
+  received
+  cancelled
+}
+
+enum StockTransferStatus {
+  pending
+  in_transit
+  partially_received
+  received
+  cancelled
 }
 
 enum LoyaltyTransactionType {
@@ -351,7 +419,9 @@ model Tenant {
   productChannelListings    ProductChannelListing[]
   ecommerceIntegrations     TenantEcommerceIntegration[]
   customers                 Customer[]
+  customerGroups            CustomerGroup[]
   customerOTPs              CustomerOTP[]
+  notifications             Notification[]
   customerBalancePayments   CustomerBalancePayment[]
   campaigns                 Campaign[]
   cashDrawerSessions        CashDrawerSession[]
@@ -378,6 +448,15 @@ model Tenant {
   bookings                  Booking[]
   transactions              Transaction[]
   counters                  Counter[]
+  deliveryOrders            DeliveryOrder[]
+  workOrders                WorkOrder[]
+  laundryOrders             LaundryOrder[]
+  suppliers                 Supplier[]
+  purchaseOrders            PurchaseOrder[]
+  stockTransfers            StockTransfer[]
+  kitchenTickets            KitchenTicket[]
+  ledgerAccounts            LedgerAccount[]
+  journalEntries            JournalEntry[]
 
   dailySalesSummaries   DailySalesSummary[]
   monthlySalesSummaries MonthlySalesSummary[]
@@ -518,18 +597,22 @@ model TenantSettings {
   attendanceMaxHoursWithoutClockOut Int     @default(12)
 
   // Feature flags
-  enableInventory             Boolean @default(true)
-  enableCategories            Boolean @default(true)
-  enableDiscounts             Boolean @default(false)
-  enableLoyaltyProgram        Boolean @default(false)
-  enableCustomerManagement    Boolean @default(false)
-  enableOnAccountSales        Boolean @default(false)
-  autoOpenDrawerOnShiftStart  Boolean @default(false)
-  autoOpenDrawerOnShiftEnd    Boolean @default(false)
-  enableBookingScheduling     Boolean @default(false)
-  enableTableManagement       Boolean @default(false)
-  ecommerceShopifyEnabled     Boolean @default(false)
-  ecommerceWooCommerceEnabled Boolean @default(false)
+  enableInventory             Boolean  @default(true)
+  enableCategories            Boolean  @default(true)
+  enableDiscounts             Boolean  @default(false)
+  enableLoyaltyProgram        Boolean  @default(false)
+  enableCustomerManagement    Boolean  @default(false)
+  enableOnAccountSales        Boolean  @default(false)
+  autoOpenDrawerOnShiftStart  Boolean  @default(false)
+  autoOpenDrawerOnShiftEnd    Boolean  @default(false)
+  enableBookingScheduling     Boolean  @default(false)
+  enableTableManagement       Boolean  @default(false)
+  ecommerceShopifyEnabled     Boolean  @default(false)
+  ecommerceWooCommerceEnabled Boolean  @default(false)
+  enableDelivery              Boolean?
+  enableWorkOrders            Boolean?
+  enableKitchenDisplay        Boolean?
+  enableAccounting            Boolean?
 
   // Hardware config (single nested object)
   printerType                  String?
@@ -728,6 +811,15 @@ model User {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
+  // Rider/driver profile fields — reused directly on User (role = rider)
+  // rather than a separate join table, consistent with how Attendance
+  // stores lat/lng for a 1:1-style profile extension.
+  riderVehicleType       String?
+  riderLicenseNumber     String?
+  riderCurrentLatitude   Decimal?  @db.Decimal(9, 6)
+  riderCurrentLongitude  Decimal?  @db.Decimal(9, 6)
+  riderLocationUpdatedAt DateTime?
+
   tenant Tenant? @relation(fields: [tenantId], references: [id])
   branch Branch? @relation(fields: [branchId], references: [id])
 
@@ -742,6 +834,7 @@ model User {
   filesUploaded               File[]
   loyaltyTransactionsCreated  LoyaltyTransaction[]
   offlineTransactions         OfflineTransaction[]
+  notifications               Notification[]
   paymentsProcessed           Payment[]
   prescriptionsCreated        Prescription[]
   prescriptionItemsDispensed  PrescriptionItem[]
@@ -756,6 +849,11 @@ model User {
   attendances                 Attendance[]
   bookingsStaff               Booking[]                  @relation("BookingStaff")
   recurringBookingTemplates   RecurringBookingTemplate[] @relation("RecurringBookingStaff")
+  deliveryOrdersAsRider       DeliveryOrder[]            @relation("DeliveryRider")
+  workOrdersAssigned          WorkOrder[]                @relation("WorkOrderTechnician")
+  purchaseOrdersCreated       PurchaseOrder[]            @relation("PurchaseOrderCreatedBy")
+  stockTransfersCreated       StockTransfer[]            @relation("StockTransferCreatedBy")
+  journalEntriesCreated       JournalEntry[]
   couponsCreated              Coupon[]
   featureFlagOverridesGranted FeatureFlagOverride[]
   systemSettingsUpdated       SystemSettings[]
@@ -817,6 +915,14 @@ model Branch {
   zReadings                    ZReading[]
   transactions                 Transaction[]
   ecommerceIntegrationsDefault TenantEcommerceIntegration[]
+  deliveryOrders               DeliveryOrder[]
+  workOrders                   WorkOrder[]
+  laundryOrders                LaundryOrder[]
+  purchaseOrders               PurchaseOrder[]
+  stockTransfersFrom           StockTransfer[]              @relation("StockTransferFrom")
+  stockTransfersTo             StockTransfer[]              @relation("StockTransferTo")
+  kitchenTickets               KitchenTicket[]
+  journalEntries               JournalEntry[]
 
   dailySalesSummaries   DailySalesSummary[]
   monthlySalesSummaries MonthlySalesSummary[]
@@ -899,11 +1005,13 @@ model Product {
   lowStockThreshold    Int?
   pinned               Boolean     @default(false)
   isActive             Boolean     @default(true)
+  preferredSupplierId  String?
   createdAt            DateTime    @default(now())
   updatedAt            DateTime    @updatedAt
 
-  tenant      Tenant    @relation(fields: [tenantId], references: [id])
-  categoryRef Category? @relation(fields: [categoryId], references: [id])
+  tenant            Tenant    @relation(fields: [tenantId], references: [id])
+  categoryRef       Category? @relation(fields: [categoryId], references: [id])
+  preferredSupplier Supplier? @relation(fields: [preferredSupplierId], references: [id])
 
   variations              ProductVariation[]
   branchStock             ProductBranchStock[]
@@ -914,6 +1022,10 @@ model Product {
   pharmacyDetails         ProductPharmacyDetails?
   channelListings         ProductChannelListing[]
   transactionItems        TransactionItem[]
+  workOrderItems          WorkOrderItem[]
+  laundryOrderItems       LaundryOrderItem[]
+  purchaseOrderItems      PurchaseOrderItem[]
+  stockTransferItems      StockTransferItem[]
   offlineTransactionItems OfflineTransactionItem[]
   savedCartItems          SavedCartItem[]
   stockMovements          StockMovement[]
@@ -1004,6 +1116,8 @@ model ProductLaundryDetails {
   weightBased       Boolean             @default(false)
   pickupDelivery    Boolean             @default(false)
   estimatedDuration Int?
+  pricePerUnit      Decimal?            @db.Decimal(18, 2)
+  weightUnit        String?
 
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
@@ -1164,6 +1278,10 @@ model Customer {
   loyaltyTransactions LoyaltyTransaction[]
   offlineTransactions OfflineTransaction[]
   transactions        Transaction[]
+  deliveryOrders      DeliveryOrder[]
+  workOrders          WorkOrder[]
+  laundryOrders       LaundryOrder[]
+  groups              CustomerGroupMember[]
 
   @@unique([tenantId, email])
   @@index([tenantId, phone])
@@ -1171,6 +1289,56 @@ model Customer {
   @@index([tenantId, shopifyCustomerId])
   @@index([tenantId, tags])
   @@map("customers")
+}
+
+model CustomerGroup {
+  id          String   @id
+  tenantId    String
+  name        String
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant  Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  members CustomerGroupMember[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId, isActive])
+  @@map("customer_groups")
+}
+
+model CustomerGroupMember {
+  id         String   @id
+  groupId    String
+  customerId String
+  createdAt  DateTime @default(now())
+
+  group    CustomerGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  customer Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, customerId])
+  @@index([customerId])
+  @@map("customer_group_members")
+}
+
+model Notification {
+  id        String   @id
+  tenantId  String
+  userId    String? // null = broadcast to all users of the tenant
+  type      String // 'low_stock' | 'booking_reminder' | 'no_show' | 'system' | ...
+  title     String
+  message   String
+  link      String?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User?  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, userId, isRead])
+  @@index([tenantId, createdAt])
+  @@map("notifications")
 }
 
 model CustomerAddress {
@@ -1581,6 +1749,8 @@ model Expense {
   createdAt     DateTime             @default(now())
   updatedAt     DateTime             @updatedAt
 
+  ledgerAccountId String?
+
   tenant Tenant @relation(fields: [tenantId], references: [id])
   user   User   @relation(fields: [userId], references: [id])
 
@@ -1588,6 +1758,77 @@ model Expense {
   @@index([tenantId, name])
   @@index([tenantId, isActive])
   @@map("expenses")
+}
+
+enum AccountType {
+  asset
+  liability
+  equity
+  revenue
+  expense
+}
+
+model LedgerAccount {
+  id              String      @id
+  tenantId        String
+  code            String
+  name            String
+  type            AccountType
+  parentId        String?
+  isSystemAccount Boolean     @default(false)
+  isActive        Boolean     @default(true)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  tenant   Tenant          @relation(fields: [tenantId], references: [id])
+  parent   LedgerAccount?  @relation("AccountHierarchy", fields: [parentId], references: [id])
+  children LedgerAccount[] @relation("AccountHierarchy")
+
+  journalLines JournalLine[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, type])
+  @@map("ledger_accounts")
+}
+
+model JournalEntry {
+  id          String   @id
+  tenantId    String
+  branchId    String?
+  entryDate   DateTime
+  memo        String?
+  source      String
+  sourceId    String?
+  createdById String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant    Tenant  @relation(fields: [tenantId], references: [id])
+  branch    Branch? @relation(fields: [branchId], references: [id])
+  createdBy User?   @relation(fields: [createdById], references: [id])
+
+  lines JournalLine[]
+
+  @@index([tenantId, entryDate])
+  @@index([tenantId, source, sourceId])
+  @@map("journal_entries")
+}
+
+model JournalLine {
+  id             String  @id
+  journalEntryId String
+  accountId      String
+  debit          Decimal @default(0) @db.Decimal(18, 2)
+  credit         Decimal @default(0) @db.Decimal(18, 2)
+  description    String?
+
+  journalEntry JournalEntry  @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  account      LedgerAccount @relation(fields: [accountId], references: [id])
+
+  @@index([journalEntryId])
+  @@index([accountId])
+  @@map("journal_lines")
 }
 
 model File {
@@ -2218,6 +2459,360 @@ model Booking {
 }
 
 // ----------------------------------------------------------------------------
+// Delivery orders / rider assignment (Pickup & Delivery module)
+// ----------------------------------------------------------------------------
+
+model DeliveryOrder {
+  id            String  @id
+  tenantId      String
+  branchId      String?
+  transactionId String?
+  customerId    String?
+
+  // Address snapshot — captured at order time, not a live FK to Customer's
+  // address book, so historical deliveries stay accurate even if the
+  // customer's saved address later changes (mirrors Transaction's snapshot
+  // pattern elsewhere in this schema).
+  addressStreet    String
+  addressCity      String
+  addressState     String?
+  addressZipCode   String?
+  addressCountry   String
+  addressLatitude  Decimal? @db.Decimal(9, 6)
+  addressLongitude Decimal? @db.Decimal(9, 6)
+
+  riderId String?
+
+  status DeliveryStatus @default(pending)
+  type   DeliveryType
+
+  scheduledAt DateTime?
+  assignedAt  DateTime?
+  pickedUpAt  DateTime?
+  deliveredAt DateTime?
+
+  notes         String?
+  failureReason String?
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant      Tenant       @relation(fields: [tenantId], references: [id])
+  branch      Branch?      @relation(fields: [branchId], references: [id])
+  transaction Transaction? @relation(fields: [transactionId], references: [id])
+  customer    Customer?    @relation(fields: [customerId], references: [id])
+  rider       User?        @relation("DeliveryRider", fields: [riderId], references: [id])
+
+  laundryOrdersAsPickup  LaundryOrder[] @relation("LaundryOrderPickup")
+  laundryOrdersAsDropoff LaundryOrder[] @relation("LaundryOrderDropoff")
+
+  @@index([tenantId, status])
+  @@index([tenantId, riderId, status])
+  @@index([tenantId, branchId])
+  @@map("delivery_orders")
+}
+
+model Supplier {
+  id          String  @id
+  tenantId    String
+  name        String
+  contactName String?
+  phone       String?
+  email       String?
+  address     String?
+  notes       String?
+  isActive    Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant              Tenant          @relation(fields: [tenantId], references: [id])
+  purchaseOrders      PurchaseOrder[]
+  preferredByProducts Product[]
+
+  @@index([tenantId, isActive])
+  @@map("suppliers")
+}
+
+model PurchaseOrder {
+  id           String              @id
+  tenantId     String
+  supplierId   String
+  branchId     String?
+  orderNumber  String
+  status       PurchaseOrderStatus @default(draft)
+  notes        String?
+  expectedDate DateTime?
+  receivedAt   DateTime?
+  createdById  String?
+  totalAmount  Decimal             @default(0) @db.Decimal(18, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant    Tenant              @relation(fields: [tenantId], references: [id])
+  supplier  Supplier            @relation(fields: [supplierId], references: [id])
+  branch    Branch?             @relation(fields: [branchId], references: [id])
+  createdBy User?               @relation("PurchaseOrderCreatedBy", fields: [createdById], references: [id])
+  items     PurchaseOrderItem[]
+
+  @@unique([tenantId, orderNumber])
+  @@index([tenantId, status])
+  @@index([tenantId, supplierId])
+  @@index([tenantId, branchId])
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderItem {
+  id               String  @id
+  purchaseOrderId  String
+  productId        String
+  quantityOrdered  Int
+  quantityReceived Int     @default(0)
+  unitCost         Decimal @db.Decimal(18, 2)
+  subtotal         Decimal @db.Decimal(18, 2)
+
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  product       Product       @relation(fields: [productId], references: [id])
+
+  @@index([purchaseOrderId])
+  @@index([productId])
+  @@map("purchase_order_items")
+}
+
+model StockTransfer {
+  id             String              @id
+  tenantId       String
+  fromBranchId   String
+  toBranchId     String
+  transferNumber String
+  status         StockTransferStatus @default(pending)
+  notes          String?
+  sentAt         DateTime?
+  receivedAt     DateTime?
+  createdById    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant     Tenant              @relation(fields: [tenantId], references: [id])
+  fromBranch Branch              @relation("StockTransferFrom", fields: [fromBranchId], references: [id])
+  toBranch   Branch              @relation("StockTransferTo", fields: [toBranchId], references: [id])
+  createdBy  User?               @relation("StockTransferCreatedBy", fields: [createdById], references: [id])
+  items      StockTransferItem[]
+
+  @@unique([tenantId, transferNumber])
+  @@index([tenantId, status])
+  @@index([tenantId, fromBranchId])
+  @@index([tenantId, toBranchId])
+  @@map("stock_transfers")
+}
+
+model StockTransferItem {
+  id                String @id
+  stockTransferId   String
+  productId         String
+  quantityRequested Int
+  quantitySent      Int    @default(0)
+  quantityReceived  Int    @default(0)
+
+  stockTransfer StockTransfer @relation(fields: [stockTransferId], references: [id], onDelete: Cascade)
+  product       Product       @relation(fields: [productId], references: [id])
+
+  @@index([stockTransferId])
+  @@index([productId])
+  @@map("stock_transfer_items")
+}
+
+model WorkOrder {
+  id            String  @id
+  tenantId      String
+  branchId      String?
+  transactionId String?
+  customerId    String?
+
+  title       String
+  description String?
+
+  assignedToId String?
+
+  status WorkOrderStatus @default(pending)
+
+  scheduledAt DateTime?
+  assignedAt  DateTime?
+  startedAt   DateTime?
+  completedAt DateTime?
+
+  notes              String?
+  cancellationReason String?
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant      Tenant       @relation(fields: [tenantId], references: [id])
+  branch      Branch?      @relation(fields: [branchId], references: [id])
+  transaction Transaction? @relation(fields: [transactionId], references: [id])
+  customer    Customer?    @relation(fields: [customerId], references: [id])
+  assignedTo  User?        @relation("WorkOrderTechnician", fields: [assignedToId], references: [id])
+
+  items WorkOrderItem[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, assignedToId, status])
+  @@index([tenantId, branchId])
+  @@map("work_orders")
+}
+
+model WorkOrderItem {
+  id          String  @id
+  workOrderId String
+  productId   String?
+  name        String
+  itemType    String
+  price       Decimal @db.Decimal(18, 2)
+  quantity    Int
+  subtotal    Decimal @db.Decimal(18, 2)
+
+  workOrder WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  product   Product?  @relation(fields: [productId], references: [id])
+
+  @@index([workOrderId])
+  @@map("work_order_items")
+}
+
+// ----------------------------------------------------------------------------
+// Laundry orders (Laundry Mode vertical)
+// ----------------------------------------------------------------------------
+
+model LaundryOrder {
+  id            String  @id
+  tenantId      String
+  branchId      String?
+  transactionId String?
+  customerId    String?
+
+  status        LaundryOrderStatus   @default(booked)
+  pricingMethod LaundryPricingMethod @default(item)
+
+  totalWeightKg Decimal? @db.Decimal(10, 2)
+  totalAmount   Decimal  @default(0) @db.Decimal(18, 2)
+
+  pickupDeliveryOrderId  String?
+  dropoffDeliveryOrderId String?
+
+  receivedAt  DateTime?
+  sortedAt    DateTime?
+  washedAt    DateTime?
+  driedAt     DateTime?
+  foldedAt    DateTime?
+  readyAt     DateTime?
+  completedAt DateTime?
+  cancelledAt DateTime?
+
+  notes String?
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant               Tenant         @relation(fields: [tenantId], references: [id])
+  branch               Branch?        @relation(fields: [branchId], references: [id])
+  transaction          Transaction?   @relation(fields: [transactionId], references: [id])
+  customer             Customer?      @relation(fields: [customerId], references: [id])
+  pickupDeliveryOrder  DeliveryOrder? @relation("LaundryOrderPickup", fields: [pickupDeliveryOrderId], references: [id])
+  dropoffDeliveryOrder DeliveryOrder? @relation("LaundryOrderDropoff", fields: [dropoffDeliveryOrderId], references: [id])
+
+  items LaundryOrderItem[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, branchId])
+  @@index([tenantId, customerId])
+  @@map("laundry_orders")
+}
+
+model LaundryOrderItem {
+  id             String  @id
+  laundryOrderId String
+  productId      String?
+
+  name      String
+  tagNumber String?
+  qrCode    String?
+
+  weightKg  Decimal? @db.Decimal(10, 2)
+  quantity  Int      @default(1)
+  unitPrice Decimal  @db.Decimal(18, 2)
+  subtotal  Decimal  @db.Decimal(18, 2)
+
+  condition String?
+  notes     String?
+
+  laundryOrder LaundryOrder @relation(fields: [laundryOrderId], references: [id], onDelete: Cascade)
+  product      Product?     @relation(fields: [productId], references: [id])
+
+  @@index([laundryOrderId])
+  @@index([productId])
+  @@index([tagNumber])
+  @@map("laundry_order_items")
+}
+
+// ----------------------------------------------------------------------------
+// Kitchen tickets (Kitchen Display System / KDS module)
+// ----------------------------------------------------------------------------
+
+model KitchenTicket {
+  id            String  @id
+  tenantId      String
+  branchId      String?
+  transactionId String
+
+  tableId   String?
+  orderType OrderType?
+
+  notes    String?
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant      Tenant      @relation(fields: [tenantId], references: [id])
+  branch      Branch?     @relation(fields: [branchId], references: [id])
+  transaction Transaction @relation(fields: [transactionId], references: [id])
+
+  items KitchenTicketItem[]
+
+  @@index([tenantId, isActive])
+  @@index([tenantId, branchId])
+  @@map("kitchen_tickets")
+}
+
+model KitchenTicketItem {
+  id                String @id
+  kitchenTicketId   String
+  tenantId          String
+  transactionItemId String
+
+  station String?
+  status  KitchenTicketItemStatus @default(queued)
+
+  startedAt DateTime?
+  readyAt   DateTime?
+  servedAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  kitchenTicket   KitchenTicket   @relation(fields: [kitchenTicketId], references: [id], onDelete: Cascade)
+  transactionItem TransactionItem @relation(fields: [transactionItemId], references: [id])
+
+  @@index([kitchenTicketId])
+  @@index([tenantId, status])
+  @@map("kitchen_ticket_items")
+}
+
+// ----------------------------------------------------------------------------
 // Transactions (the core POS sale record)
 // ----------------------------------------------------------------------------
 
@@ -2263,6 +2858,7 @@ model Transaction {
   tableId     String?
 
   splitCount Int?
+  tipAmount  Decimal? @default(0) @db.Decimal(18, 2)
 
   salesChannel         SalesChannel?
   externalOrderId      String?
@@ -2292,6 +2888,10 @@ model Transaction {
   prescriptionItemsDispensed PrescriptionItem[]
   stockMovements             StockMovement[]
   tablesCurrentOrder         PosTable[]                @relation("TableCurrentOrder")
+  deliveryOrders             DeliveryOrder[]
+  workOrders                 WorkOrder[]
+  kitchenTickets             KitchenTicket[]
+  laundryOrders              LaundryOrder[]
 
   @@unique([tenantId, receiptNumber])
   // idempotencyKey / channelSyncKey are legacy Mongo *partial* unique indexes
@@ -2449,7 +3049,8 @@ model TransactionItem {
   product     Product?          @relation(fields: [productId], references: [id])
   variation   ProductVariation? @relation("ItemVariation", fields: [variationId], references: [id])
 
-  modifiers TransactionItemModifier[]
+  modifiers          TransactionItemModifier[]
+  kitchenTicketItems KitchenTicketItem[]
 
   @@index([transactionId])
   @@index([productId])

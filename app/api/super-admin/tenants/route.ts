@@ -6,6 +6,7 @@ import { createAuditLog, AuditActions } from '@/lib/audit';
 import { handleApiError } from '@/lib/error-handler';
 import { getDefaultTenantSettings } from '@/lib/currency';
 import { applyBusinessTypeDefaults } from '@/lib/business-types';
+import { flattenSettingsForPrisma } from '@/lib/tenant-settings-flatten';
 import crypto from 'crypto';
 
 export async function GET(request: NextRequest) {
@@ -130,7 +131,7 @@ export async function POST(request: NextRequest) {
           isActive: true,
           onboardingStatus: 'in_progress',
           createdById: user.userId,
-          settings: { create: settings as any }, // eslint-disable-line @typescript-eslint/no-explicit-any
+          settings: { create: flattenSettingsForPrisma(settings as unknown as Record<string, unknown>) },
         },
       });
 

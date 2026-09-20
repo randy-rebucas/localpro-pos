@@ -25,6 +25,10 @@ export interface PosPaymentModalProps {
   processing: boolean;
   onClose: () => void;
   onCompletePayment: () => void | Promise<void>;
+  /** Total already includes tipAmount; pass both so the modal can show a pre-tip base and a tip picker. Restaurant-only UI. */
+  businessType?: string;
+  tipAmount?: number;
+  setTipAmount?: (value: number) => void;
 }
 
 export default function PosPaymentModal({
@@ -47,6 +51,9 @@ export default function PosPaymentModal({
   processing,
   onClose,
   onCompletePayment,
+  businessType,
+  tipAmount = 0,
+  setTipAmount,
 }: PosPaymentModalProps) {
   const resetPaymentFields = () => {
     setCashReceived('');
@@ -54,9 +61,13 @@ export default function PosPaymentModal({
     setPaymentReference('');
   };
 
+  const preTipTotal = Math.max(0, Math.round((total - tipAmount) * 100) / 100);
+  const showTipPicker = businessType === 'restaurant' && !!setTipAmount;
+
   const handleClose = () => {
     onClose();
     resetPaymentFields();
+    setTipAmount?.(0);
   };
 
   return (
@@ -81,9 +92,64 @@ export default function PosPaymentModal({
         </div>
         <div className="flex-1 overflow-y-auto p-5 sm:p-6">
           <div className="mb-5">
-            <div className="text-lg font-semibold text-gray-900 mb-5">
-              {dict.common.total}: <Currency amount={total} />
-            </div>
+            {showTipPicker ? (
+              <div className="mb-5">
+                <div className="text-sm text-gray-600 mb-1 flex justify-between">
+                  <span>{dictValue('pos.subtotal', 'Subtotal')}</span>
+                  <Currency amount={preTipTotal} />
+                </div>
+                <div className="text-lg font-semibold text-gray-900">
+                  {dict.common.total}: <Currency amount={total} />
+                </div>
+              </div>
+            ) : (
+              <div className="text-lg font-semibold text-gray-900 mb-5">
+                {dict.common.total}: <Currency amount={total} />
+              </div>
+            )}
+
+            {showTipPicker && (
+              <div className="mb-5">
+                <label className="block text-sm font-bold text-gray-900 mb-2">
+                  {dictValue('pos.tip', 'Tip')}
+                </label>
+                <div className="grid grid-cols-4 gap-2">
+                  {[0, 10, 15, 20].map((pct) => {
+                    const pctAmount = Math.round(preTipTotal * (pct / 100) * 100) / 100;
+                    const isSelected = pct === 0 ? tipAmount === 0 : Math.abs(tipAmount - pctAmount) < 0.005;
+                    return (
+                      <button
+                        key={pct}
+                        type="button"
+                        onClick={() => setTipAmount!(pctAmount)}
+                        className={`py-2 text-xs font-semibold border-2 transition-all ${isSelected
+                          ? 'text-white border-transparent'
+                          : 'bg-gray-50 border-gray-200 text-gray-600 hover:border-gray-300'
+                          }`}
+                        style={isSelected ? { backgroundColor: primaryColor, borderColor: primaryColor } : undefined}
+                      >
+                        {pct === 0 ? dictValue('pos.noTip', 'No tip') : `${pct}%`}
+                      </button>
+                    );
+                  })}
+                </div>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={tipAmount || ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setTipAmount!(val === '' ? 0 : Math.max(0, parseFloat(val) || 0));
+                  }}
+                  placeholder={dictValue('pos.customTipAmount', 'Custom tip amount')}
+                  className="w-full mt-2 px-3 py-2.5 text-sm border-2 border-gray-300 transition-all"
+                  onFocus={(e) => { e.currentTarget.style.borderColor = primaryColor; }}
+                  onBlur={(e) => { e.currentTarget.style.borderColor = '#d1d5db'; }}
+                />
+              </div>
+            )}
+
             <div className="space-y-5">
               <label className="block text-sm font-bold text-gray-900">
                 {dict.pos.paymentMethod}

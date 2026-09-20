@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 
-export type ReportTab = 'sales' | 'trends' | 'products' | 'vat' | 'profit-loss' | 'cash-drawer' | 'sales-journal' | 'x-reading' | 'z-reading';
+export type ReportTab = 'sales' | 'trends' | 'products' | 'vat' | 'profit-loss' | 'cash-drawer' | 'sales-journal' | 'x-reading' | 'z-reading' | 'laundry';
 export type ReportsStatus = 'loading' | 'ready' | 'error';
 
 export interface SalesReport {
@@ -87,6 +87,20 @@ export interface CashDrawerReport {
   cashSales: number;
   cashExpenses: number;
   netCash: number;
+}
+
+export interface LaundryReport {
+  period: string;
+  startDate: string;
+  endDate: string;
+  totalOrders: number;
+  totalRevenue: number;
+  ordersByStatus: Record<string, number>;
+  revenueByPricingMethod: {
+    weight: number;
+    item: number;
+  };
+  averageTurnaroundHours: number | null;
 }
 
 export interface SalesJournalEntry {
@@ -184,6 +198,7 @@ export function useReportsData({
   const [xReading, setXReading] = useState<XReadingData | null>(null);
   const [zReadings, setZReadings] = useState<ZReadingRecord[]>([]);
   const [generatingZReading, setGeneratingZReading] = useState(false);
+  const [laundryReport, setLaundryReport] = useState<LaundryReport | null>(null);
 
   const refetch = useCallback(async () => {
     if (!enabled || !startDate || !endDate) return;
@@ -311,6 +326,19 @@ export function useReportsData({
           }
           break;
         }
+        case 'laundry': {
+          const params = new URLSearchParams({ ...Object.fromEntries(dateParams), period });
+          const data = await fetchJson(`/api/reports/laundry?${params}`);
+          if (data.success) {
+            setLaundryReport(data.data as LaundryReport);
+            setStatus('ready');
+          } else {
+            setLaundryReport(null);
+            setError(data.error || 'Failed to load laundry report');
+            setStatus('error');
+          }
+          break;
+        }
       }
     } catch (err) {
       console.error('Error loading reports:', err);
@@ -362,5 +390,6 @@ export function useReportsData({
     zReadings,
     generateZReading,
     generatingZReading,
+    laundryReport,
   };
 }

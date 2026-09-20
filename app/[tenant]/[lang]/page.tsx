@@ -14,7 +14,7 @@ import { useDiscount, type Discount } from '@/hooks/useDiscount';
 import { usePayment } from '@/hooks/usePayment';
 import { useRefund } from '@/hooks/useRefund';
 import { useCashDrawer } from '@/hooks/useCashDrawer';
-import { getOfflineStorage } from '@/lib/offline-storage';
+import { getOfflineStorage, type OfflineTransaction } from '@/lib/offline-storage';
 import { TranslationDict } from '@/types/dictionary';
 import dynamic from 'next/dynamic';
 import PageLoading from '@/components/ui/PageLoading';
@@ -97,7 +97,7 @@ import CartSummaryFooter from '@/components/pos/CartSummaryFooter';
 import CartUpsellSuggestions from '@/components/pos/CartUpsellSuggestions';
 import ProductGrid from '@/components/pos/ProductGrid';
 import { usePosProducts, type PosProduct } from '@/hooks/usePosProducts';
-import { CartVariant, CartItemModifier } from '@/hooks/useCart';
+import { CartVariant, CartItemModifier, type CartItem as HookCartItem } from '@/hooks/useCart';
 import { RestaurantMeta, SplitPaymentEntry } from '@/hooks/usePayment';
 import type { SplitGuestPayment } from '@/components/pos/modals/PosSplitCheckModal';
 import type { RefundTransaction as PosRefundTransaction } from '@/components/pos/modals/PosRefundModal';
@@ -155,6 +155,7 @@ export default function Dashboard() {
 
   // Restaurant-specific state
   const [orderType, setOrderType] = useState<'dine-in' | 'takeout' | 'delivery'>('dine-in');
+  const [tipAmount, setTipAmount] = useState(0);
   const [tableNumber, setTableNumber] = useState('');
   // Service/laundry: scheduling
   const [scheduledFor, setScheduledFor] = useState('');
@@ -298,8 +299,8 @@ export default function Dashboard() {
     const afterDiscount = Math.max(0, subtotal - discount);
     // Tax is calculated on the discounted amount (taxable base)
     const taxAmount = getTaxAmount({ taxEnabled: settings?.taxEnabled, taxRate: settings?.taxRate }, afterDiscount);
-    return Math.round((afterDiscount + taxAmount) * 100) / 100;
-  }, [getSubtotal, getTaxAmount, appliedDiscount, settings]);
+    return Math.round((afterDiscount + taxAmount + tipAmount) * 100) / 100;
+  }, [getSubtotal, getTaxAmount, appliedDiscount, settings, tipAmount]);
 
   useEffect(() => {
     if (appliedDiscount) {
@@ -1013,6 +1014,88 @@ export default function Dashboard() {
     }
   };
 
+  // Persists the current sale to the local offline queue when it can't reach
+  // the server (either because we're already offline, or a checkout attempt
+  // failed with a network error). It's synced to /api/transactions later by
+  // lib/sync-service.ts once connectivity returns.
+  const queueSaleOffline = useCallback(
+    async (
+      currentCart: HookCartItem[],
+      primaryMethod: string,
+      splitPayments?: SplitPaymentEntry[],
+      restaurantMeta?: RestaurantMeta,
+      customerId?: string,
+      deviceId?: string
+    ) => {
+      const storage = await getOfflineStorage();
+      await storage.saveTransaction({
+        tenant,
+        items: currentCart.map((item) => ({
+          productId: item.productId,
+          quantity: item.quantity,
+          variation: item.variation,
+          modifiers: item.selectedModifiers,
+        })),
+        paymentMethod: primaryMethod as OfflineTransaction['paymentMethod'],
+        cashReceived: primaryMethod === 'cash' && !splitPayments ? parseFloat(cashReceived) : undefined,
+        discountCode: appliedDiscount?.code,
+        paymentProvider: paymentProvider || undefined,
+        paymentReference: paymentReference || undefined,
+        bnplInstallments: primaryMethod === 'bnpl' ? bnplInstallments : undefined,
+        customerId: customerId || undefined,
+        orderType: restaurantMeta?.orderType,
+        tableNumber: restaurantMeta?.tableNumber,
+        tableId: restaurantMeta?.tableId,
+        splitCount: splitPayments ? splitPayments.length : undefined,
+        splitPayments,
+        scPwdName: scPwdName || undefined,
+        scPwdId: scPwdId || undefined,
+        deviceId,
+        tipAmount: tipAmount || undefined,
+      });
+
+      showToast.success(
+        dictValue('pos.paymentSavedOffline', 'Saved offline — will sync automatically when back online')
+      );
+      const soldItems = [...currentCart];
+      setProducts((prev) =>
+        prev.map((p) => {
+          const soldItem = soldItems.find((i) => i.productId === p._id);
+          if (!soldItem || p.trackInventory === false) return p;
+          return { ...p, stock: Math.max(0, p.stock - soldItem.quantity) };
+        })
+      );
+      clearCart();
+      setAppliedDiscount(null);
+      setCashReceived('');
+      setPaymentProvider('');
+      setPaymentReference('');
+      setTipAmount(0);
+      if (businessType === 'restaurant' && orderType === 'dine-in' && selectedTableId) {
+        setSelectedTableId('');
+        setTableNumber('');
+      }
+    },
+    [
+      tenant,
+      cashReceived,
+      appliedDiscount,
+      paymentProvider,
+      paymentReference,
+      bnplInstallments,
+      scPwdName,
+      scPwdId,
+      tipAmount,
+      clearCart,
+      setAppliedDiscount,
+      businessType,
+      orderType,
+      selectedTableId,
+      dictValue,
+      setProducts,
+    ]
+  );
+
   if (!dict) {
     return <PageLoading label="Loading..." />;
   }
@@ -1022,6 +1105,14 @@ export default function Dashboard() {
       businessType === 'restaurant'
         ? { orderType, tableNumber: tableNumber || undefined, tableId: selectedTableId || undefined }
         : undefined;
+    const deviceId = getAssignedDeviceId(tenant) || undefined;
+
+    if (!isOnline) {
+      await queueSaleOffline(cart, paymentMethod, undefined, restaurantMeta, selectedCustomer?._id, deviceId);
+      setShowPaymentModal(false);
+      return;
+    }
+
     const result = await processPayment(
       cart,
       appliedDiscount,
@@ -1033,7 +1124,8 @@ export default function Dashboard() {
       restaurantMeta,
       undefined,
       { name: scPwdName || undefined, id: scPwdId || undefined },
-      getAssignedDeviceId(tenant) || undefined
+      deviceId,
+      tipAmount
     );
     if (result?.success) {
       showToast.success(dict.pos.paymentCompleted || 'Payment completed');
@@ -1051,6 +1143,7 @@ export default function Dashboard() {
       setCashReceived('');
       setPaymentProvider('');
       setPaymentReference('');
+      setTipAmount(0);
       if (businessType === 'restaurant' && orderType === 'dine-in' && selectedTableId) {
         setSelectedTableId('');
         setTableNumber('');
@@ -1069,6 +1162,9 @@ export default function Dashboard() {
           }),
         }).catch((err) => console.error('Failed to sync transaction:', err));
       }
+    } else if (result?.networkError) {
+      await queueSaleOffline(cart, paymentMethod, undefined, restaurantMeta, selectedCustomer?._id, deviceId);
+      setShowPaymentModal(false);
     } else if (result) {
       const message =
         result.error ||
@@ -1121,6 +1217,17 @@ export default function Dashboard() {
       amount,
       reference,
     }));
+    const deviceId = getAssignedDeviceId(tenant) || undefined;
+    const primarySplitMethod = splitEntries[0]?.method || paymentMethod;
+
+    if (!isOnline) {
+      await queueSaleOffline(cart, primarySplitMethod, splitEntries, restaurantMeta, selectedCustomer?._id, deviceId);
+      setShowSplitCheckModal(false);
+      setSplitStep('guests');
+      setGuestPayments([]);
+      return;
+    }
+
     const result = await processPayment(
       cart,
       appliedDiscount,
@@ -1132,7 +1239,8 @@ export default function Dashboard() {
       restaurantMeta,
       splitEntries,
       { name: scPwdName || undefined, id: scPwdId || undefined },
-      getAssignedDeviceId(tenant) || undefined
+      deviceId,
+      tipAmount
     );
     if (result?.success) {
       showToast.success(
@@ -1151,11 +1259,17 @@ export default function Dashboard() {
       setShowSplitCheckModal(false);
       setSplitStep('guests');
       setGuestPayments([]);
+      setTipAmount(0);
       if (businessType === 'restaurant' && orderType === 'dine-in' && selectedTableId) {
         setSelectedTableId('');
         setTableNumber('');
       }
       if (result.data) printReceipt(result.data);
+    } else if (result?.networkError) {
+      await queueSaleOffline(cart, primarySplitMethod, splitEntries, restaurantMeta, selectedCustomer?._id, deviceId);
+      setShowSplitCheckModal(false);
+      setSplitStep('guests');
+      setGuestPayments([]);
     } else if (result) {
       const message =
         result.error ||
@@ -1795,39 +1909,30 @@ export default function Dashboard() {
             </div>
 
 
-            {debouncedSearch.trim() ? (
-              <ProductGrid
-                products={products}
-                status={productsStatus}
-                source={productsSource}
-                error={productsError}
-                search={search}
-                gridClassName={productGridClass}
-                listClassName={productListClass}
-                cardHeightClass={productCardHeightClass}
-                displayMode={displayMode}
-                primaryColor={primaryColor}
-                businessType={businessType}
-                cart={cart}
-                dict={dict}
-                addLabel={dict.common?.add || 'Add'}
-                onAdd={handleAddToCart}
-                onTogglePin={handleTogglePin}
-                onClearSearch={() => setSearch('')}
-                onRetry={refetchProducts}
-                hasMore={productsHasMore}
-                loadingMore={productsLoadingMore}
-                onLoadMore={loadMoreProducts}
-                scrollRootRef={productsScrollRef}
-              />
-            ) : (
-              <div className="flex flex-col items-center justify-center py-24 gap-4 text-center select-none">
-                <svg className="w-16 h-16 opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
-                </svg>
-                <p className="text-lg font-medium opacity-40">{dict.pos?.searchPrompt || 'Search for a product to begin'}</p>
-              </div>
-            )}
+            <ProductGrid
+              products={products}
+              status={productsStatus}
+              source={productsSource}
+              error={productsError}
+              search={search}
+              gridClassName={productGridClass}
+              listClassName={productListClass}
+              cardHeightClass={productCardHeightClass}
+              displayMode={displayMode}
+              primaryColor={primaryColor}
+              businessType={businessType}
+              cart={cart}
+              dict={dict}
+              addLabel={dict.common?.add || 'Add'}
+              onAdd={handleAddToCart}
+              onTogglePin={handleTogglePin}
+              onClearSearch={() => setSearch('')}
+              onRetry={refetchProducts}
+              hasMore={productsHasMore}
+              loadingMore={productsLoadingMore}
+              onLoadMore={loadMoreProducts}
+              scrollRootRef={productsScrollRef}
+            />
           </div>
         </div>
       </div>
@@ -1939,6 +2044,9 @@ export default function Dashboard() {
           processing={processing}
           onClose={() => setShowPaymentModal(false)}
           onCompletePayment={completePayment}
+          businessType={businessType}
+          tipAmount={tipAmount}
+          setTipAmount={setTipAmount}
         />
       )}
 

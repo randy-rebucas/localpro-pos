@@ -6,7 +6,7 @@ import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
-import { getTenantSettingsById } from '@/lib/tenant';
+import { requireTableManagementAccess } from '@/lib/table-management-access';
 
 export async function GET(
   request: NextRequest,
@@ -53,12 +53,11 @@ export async function PATCH(
     }
 
     if (isConfigChange) {
-      const tenantSettings = await getTenantSettingsById(tenantId);
-      if (tenantSettings?.enableTableManagement === false) {
-        return NextResponse.json(
-          { success: false, error: 'Table management is turned off for this store. Enable it under Settings → Feature Flags.' },
-          { status: 403 }
-        );
+      try {
+        await requireTableManagementAccess(tenantId);
+      } catch (featureError: unknown) {
+        const msg = featureError instanceof Error ? featureError.message : 'Forbidden';
+        return NextResponse.json({ success: false, error: msg }, { status: 403 });
       }
     }
 

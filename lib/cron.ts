@@ -13,6 +13,7 @@ import {
   sendBookingReminders,
   autoConfirmBookings,
   detectNoShows,
+  sendLaundryPickupReminders,
   sendLowStockAlerts,
   sendSalesReport,
   sendPendingReceipts,
@@ -249,6 +250,20 @@ export function initializeCronJobs() {
       logger.info('✅ No-show detection:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       logger.error('❌ No-show detection error:' + error.message);
+    }
+  }, {
+    timezone: 'UTC',
+  });
+
+  // 11b. Laundry Pickup Reminders - Every 30 minutes
+  const laundryReminderJob = cron.schedule('*/30 * * * *', async () => {
+    logger.info('🧺 Running laundry pickup reminders automation...');
+    try {
+      setBypassContext();
+      const result = await sendLaundryPickupReminders({ readyHoursThreshold: 24 });
+      logger.info('✅ Laundry pickup reminders:' + result.message);
+    } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+      logger.error('❌ Laundry pickup reminders error:' + error.message);
     }
   }, {
     timezone: 'UTC',
@@ -586,6 +601,7 @@ export function initializeCronJobs() {
     { name: 'Booking Reminders', schedule: '0 * * * *', task: bookingRemindersJob },
     { name: 'Booking Confirmations', schedule: '*/15 * * * *', task: bookingConfirmJob },
     { name: 'No-Show Detection', schedule: '*/30 * * * *', task: noShowJob },
+    { name: 'Laundry Pickup Reminders', schedule: '*/30 * * * *', task: laundryReminderJob },
     { name: 'Low Stock Alerts', schedule: '0 * * * *', task: lowStockJob },
     { name: 'Purchase Order Generation', schedule: '0 9 * * *', task: purchaseOrderJob },
     { name: 'Daily Sales Report', schedule: '0 22 * * *', task: dailyReportJob },

@@ -7,6 +7,7 @@ import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
+import { postCashDrawerVarianceToLedger } from '@/lib/accounting/auto-post';
 
 export async function GET(request: NextRequest) {
   try {
@@ -243,6 +244,9 @@ export async function POST(request: NextRequest) {
           transactionCount: cashTransactions.length,
         },
       });
+
+      // Fire-and-forget: post any cash shortage/overage to the general ledger.
+      void postCashDrawerVarianceToLedger(openSession.id);
 
       return NextResponse.json({ success: true, data: openSession });
 

@@ -3,10 +3,13 @@
  * Supports multiple providers via environment variables
  */
 
+import { randomUUID } from 'crypto';
 import { ITenantSettings } from '@/types/tenant';
 import { formatDate, formatTime } from '@/lib/formatting';
 import { getDefaultTenantSettings } from '@/lib/currency';
 import { renderNotificationTemplate, getDefaultTemplate } from '@/lib/notification-templates';
+import { getTenantSettingsById } from '@/lib/tenant';
+import prisma from '@/lib/db';
 import { logger } from '@/lib/logger';
 
 export interface NotificationOptions {
@@ -628,4 +631,73 @@ export async function sendBookingCancellation(
   }
 
   return results;
+}
+
+/**
+ * Generic order-status-change notifier shared by verticals (laundry, work
+ * orders, etc.) that don't yet have their own templated notification flow
+ * like bookings do. Fires a tenant-wide in-app bell notification (staff) and,
+ * best-effort, an email/SMS to the customer when contact info + tenant
+ * notification settings allow it. Callers should treat this as best-effort
+ * and swallow/log failures rather than fail the status-change itself.
+ */
+export interface OrderStatusChangeData {
+  orderType: string; // e.g. 'laundry'
+  orderId: string;
+  status: string;
+}
+
+export async function notifyOrderStatusChange(
+  tenantId: string,
+  customerId: string | null | undefined,
+  order: OrderStatusChangeData
+): Promise<void> {
+  const statusLabel = order.status.replace(/_/g, ' ');
+  const title = `${order.orderType.charAt(0).toUpperCase() + order.orderType.slice(1)} order ${statusLabel}`;
+  const message = `Order ${order.orderId} is now ${statusLabel}.`;
+
+  // Tenant-wide staff bell notification.
+  await prisma.notification.create({
+    data: {
+      id: randomUUID(),
+      tenantId,
+      userId: null,
+      type: `${order.orderType}_status_change`,
+      title,
+      message,
+    },
+  }).catch((error) => logger.error('Failed to create in-app order status notification:', error));
+
+  if (!customerId) return;
+
+  const [customer, rawSettings] = await Promise.all([
+    prisma.customer.findFirst({
+      where: { id: customerId, tenantId },
+      select: { firstName: true, lastName: true, email: true, phone: true },
+    }),
+    getTenantSettingsById(tenantId),
+  ]);
+
+  if (!customer) return;
+
+  const tenantSettings2: ITenantSettings = { ...getDefaultTenantSettings(), ...(rawSettings || {}) };
+  const customerName = [customer.firstName, customer.lastName].filter(Boolean).join(' ') || 'Customer';
+  const customerMessage = `Hi ${customerName}, your ${order.orderType} order is now ${statusLabel}.`;
+
+  if (customer.email && tenantSettings2.emailNotifications) {
+    await sendEmail({
+      to: customer.email,
+      subject: title,
+      message: customerMessage,
+      type: 'email',
+    }).catch(() => {});
+  }
+
+  if (customer.phone && tenantSettings2.smsNotifications) {
+    await sendSMS({
+      to: customer.phone,
+      message: customerMessage,
+      type: 'sms',
+    }).catch(() => {});
+  }
 }

@@ -56,13 +56,13 @@ export function getBusinessType(settings?: ITenantSettings): BusinessType {
  */
 export function supportsFeature(
   settings: ITenantSettings | undefined,
-  feature: 'inventory' | 'categories' | 'discounts' | 'loyalty' | 'customers' | 'booking'
+  feature: 'inventory' | 'categories' | 'discounts' | 'loyalty' | 'customers' | 'booking' | 'delivery' | 'workOrders' | 'laundryOrders' | 'kitchenDisplay' | 'accounting' | 'tableManagement'
 ): boolean {
   if (!settings) return false;
-  
+
   const businessType = getBusinessType(settings);
   const config = getBusinessTypeConfig(businessType);
-  
+
   switch (feature) {
     case 'inventory':
       return settings.enableInventory ?? config.defaultFeatures.enableInventory;
@@ -76,6 +76,18 @@ export function supportsFeature(
       return settings.enableCustomerManagement ?? config.defaultFeatures.enableCustomerManagement;
     case 'booking':
       return settings.enableBookingScheduling ?? config.defaultFeatures.enableBookingScheduling;
+    case 'delivery':
+      return settings.enableDelivery ?? config.defaultFeatures.enableDelivery;
+    case 'workOrders':
+      return settings.enableWorkOrders ?? config.defaultFeatures.enableWorkOrders;
+    case 'laundryOrders':
+      return settings.enableLaundryOrders ?? config.defaultFeatures.enableLaundryOrders;
+    case 'kitchenDisplay':
+      return settings.enableKitchenDisplay ?? config.defaultFeatures.enableKitchenDisplay;
+    case 'accounting':
+      return settings.enableAccounting ?? config.defaultFeatures.enableAccounting;
+    case 'tableManagement':
+      return settings.enableTableManagement ?? config.defaultFeatures.enableTableManagement;
     default:
       return false;
   }

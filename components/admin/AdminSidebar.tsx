@@ -6,17 +6,19 @@ import { useState, useEffect } from 'react';
 import {
   LayoutDashboard, BarChart2, Package, Tag, Layers, Boxes, ArrowUpDown,
   Receipt, Percent, DollarSign, TrendingDown, Users, Heart, Megaphone,
-  CalendarDays, LayoutGrid, UserCheck, ShieldCheck, Building2, FileText,
+  CalendarDays, LayoutGrid, UserCheck, ShieldCheck, Building2, FileText, Truck,
   UtensilsCrossed, ShoppingBag, WashingMachine, Briefcase, Pill, CalendarClock,
   Settings, Clock, Users2, GitBranch, Calculator, CreditCard, Monitor, Bell,
   Palette, ToggleLeft, ClipboardList, Database, ChevronDown, ChevronRight,
-  LogOut, Store, ShoppingCart, Code2, Sparkles, Lock, Smartphone
+  LogOut, Store, ShoppingCart, Code2, Sparkles, Lock, Smartphone, ChefHat, BookOpen,
+  Contact, FileBox, ArrowRightLeft
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { getDefaultTenantSettings } from '@/lib/currency';
 import { useAdminLayout } from '@/contexts/AdminLayoutContext';
 import { usePermissions } from '@/hooks/usePermissions';
+import { supportsFeature } from '@/lib/business-type-helpers';
 
 interface NavItem {
   label: string;
@@ -25,6 +27,8 @@ interface NavItem {
   exact?: boolean;
   /** Permission key (see lib/permissions.ts) gating this item. Owner/admin/super_admin always see everything regardless. Omit for items visible to any admin-panel user. */
   permission?: string;
+  /** Business-type feature flag (see lib/business-type-helpers.ts supportsFeature) gating this item's visibility. Omit for items visible regardless of business type. */
+  feature?: 'delivery' | 'workOrders' | 'laundryOrders' | 'kitchenDisplay' | 'tableManagement';
 }
 
 interface NavGroup {
@@ -42,12 +46,15 @@ export default function AdminSidebar() {
   const { user, logout } = useAuth();
   const { canAccess } = usePermissions();
 
-  // Owner/admin/super_admin always see every nav item, regardless of permission.
+  const { settings } = useTenantSettings();
+
+  // Owner/admin/super_admin always see every nav item, regardless of permission;
+  // business-type feature gating (e.g. Kitchen Display only for restaurant) applies to everyone.
   const canSeeItem = (item: NavItem) => {
+    if (item.feature && !supportsFeature(settings ?? undefined, item.feature)) return false;
     if (!item.permission) return true;
     return canAccess(item.permission);
   };
-  const { settings } = useTenantSettings();
   const { sidebarOpen, sidebarCollapsed, closeMobileSidebar } = useAdminLayout();
 
   const primaryColor = (settings || getDefaultTenantSettings()).primaryColor || '#35979c';
@@ -74,6 +81,9 @@ export default function AdminSidebar() {
         { label: 'Bundles', href: `${base}/admin/bundles`, icon: Layers, permission: 'bundles.manage' },
         { label: 'Inventory', href: `${base}/admin/inventory`, icon: Boxes, permission: 'inventory.manage' },
         { label: 'Stock Movements', href: `${base}/admin/stock-movements`, icon: ArrowUpDown, permission: 'stock_movements.manage' },
+        { label: 'Suppliers', href: `${base}/admin/suppliers`, icon: Contact, permission: 'suppliers.manage' },
+        { label: 'Purchase Orders', href: `${base}/admin/purchase-orders`, icon: FileBox, permission: 'purchase_orders.manage' },
+        { label: 'Stock Transfers', href: `${base}/admin/stock-transfers`, icon: ArrowRightLeft, permission: 'stock_transfers.manage' },
       ],
     },
     {
@@ -85,6 +95,7 @@ export default function AdminSidebar() {
         { label: 'Discounts', href: `${base}/admin/discounts`, icon: Percent, permission: 'discounts.manage' },
         { label: 'Cash Drawer', href: `${base}/admin/cash-drawer`, icon: DollarSign, permission: 'cash_drawer.manage' },
         { label: 'Expenses', href: `${base}/admin/expenses`, icon: TrendingDown, permission: 'expenses.manage' },
+        { label: 'Ledger', href: `${base}/admin/ledger`, icon: BookOpen, permission: 'ledger.manage' },
       ],
     },
     {
@@ -93,6 +104,7 @@ export default function AdminSidebar() {
       defaultOpen: false,
       items: [
         { label: 'Customers', href: `${base}/admin/customers`, icon: Users, permission: 'customers.manage' },
+        { label: 'Customer Groups', href: `${base}/admin/customer-groups`, icon: Users2, permission: 'customer_groups.manage' },
         { label: 'Loyalty', href: `${base}/admin/loyalty`, icon: Heart, permission: 'loyalty.manage' },
         { label: 'CRM', href: `${base}/admin/crm`, icon: Megaphone, permission: 'crm.manage' },
       ],
@@ -103,7 +115,11 @@ export default function AdminSidebar() {
       defaultOpen: false,
       items: [
         { label: 'Bookings', href: `${base}/admin/bookings`, icon: CalendarDays, permission: 'bookings.manage' },
-        { label: 'Tables', href: `${base}/admin/tables`, icon: LayoutGrid, permission: 'tables.manage' },
+        { label: 'Delivery', href: `${base}/admin/delivery`, icon: Truck, permission: 'delivery.manage', feature: 'delivery' },
+        { label: 'Work Orders', href: `${base}/admin/work-orders`, icon: ClipboardList, permission: 'work_orders.manage', feature: 'workOrders' },
+        { label: 'Laundry Orders', href: `${base}/admin/laundry`, icon: WashingMachine, permission: 'laundry_orders.manage', feature: 'laundryOrders' },
+        { label: 'Kitchen Display', href: `${base}/admin/kitchen-display`, icon: ChefHat, permission: 'kitchen_display.manage', feature: 'kitchenDisplay' },
+        { label: 'Tables', href: `${base}/admin/tables`, icon: LayoutGrid, permission: 'tables.manage', feature: 'tableManagement' },
         { label: 'Attendance', href: `${base}/admin/attendance`, icon: UserCheck, permission: 'attendance.manage' },
         { label: 'Channel Orders', href: `${base}/admin/channel-orders`, icon: ShoppingCart, permission: 'channel_orders.manage' },
       ],

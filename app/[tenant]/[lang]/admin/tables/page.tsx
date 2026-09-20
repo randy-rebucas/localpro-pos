@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { supportsFeature } from '@/lib/business-type-helpers';
 import { getDictionaryClient } from '../../dictionaries-client';
 import { usePermissions } from '@/hooks/usePermissions';
 
@@ -37,7 +38,7 @@ export default function TablesPage() {
   const primaryColor = settings?.primaryColor || '#35979c';
   const { canAccess } = usePermissions();
   const canManage = canAccess('tables.configure');
-  const tableManagementEnabled = settings?.enableTableManagement !== false;
+  const tableManagementEnabled = supportsFeature(settings ?? undefined, 'tableManagement');
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);

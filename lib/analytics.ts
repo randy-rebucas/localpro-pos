@@ -424,3 +424,98 @@ export async function getCashDrawerReports(
 
   return reports;
 }
+
+export interface LaundryReport {
+  period: string;
+  startDate: Date;
+  endDate: Date;
+  totalOrders: number;
+  totalRevenue: number;
+  ordersByStatus: Record<string, number>;
+  revenueByPricingMethod: {
+    weight: number;
+    item: number;
+  };
+  averageTurnaroundHours: number | null;
+}
+
+/**
+ * Laundry order report: orders by status, turnaround time (booked -> completed),
+ * and revenue split by pricing method. Follows getSalesReport's period/date-range
+ * convention.
+ */
+export async function getLaundryReport(
+  tenantId: string,
+  period: 'daily' | 'weekly' | 'monthly',
+  startDate?: Date,
+  endDate?: Date
+): Promise<LaundryReport> {
+  const now = new Date();
+  let start: Date;
+  let end: Date = now;
+
+  if (startDate && endDate) {
+    start = startDate;
+    end = endDate;
+  } else {
+    switch (period) {
+      case 'daily':
+        start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        break;
+      case 'weekly': {
+        const dayOfWeek = now.getDay();
+        start = new Date(now);
+        start.setDate(now.getDate() - dayOfWeek);
+        start.setHours(0, 0, 0, 0);
+        break;
+      }
+      case 'monthly':
+        start = new Date(now.getFullYear(), now.getMonth(), 1);
+        break;
+    }
+  }
+
+  const orders = await prisma.laundryOrder.findMany({
+    where: {
+      tenantId,
+      createdAt: { gte: start, lte: end },
+      isActive: { not: false },
+    },
+    select: {
+      status: true,
+      totalAmount: true,
+      pricingMethod: true,
+      createdAt: true,
+      completedAt: true,
+    },
+  });
+
+  const ordersByStatus: Record<string, number> = {};
+  const revenueByPricingMethod = { weight: 0, item: 0 };
+  let totalRevenue = 0;
+  let turnaroundTotalMs = 0;
+  let turnaroundCount = 0;
+
+  for (const order of orders) {
+    ordersByStatus[order.status] = (ordersByStatus[order.status] || 0) + 1;
+    const amount = Number(order.totalAmount);
+    totalRevenue += amount;
+    revenueByPricingMethod[order.pricingMethod] += amount;
+
+    if (order.completedAt) {
+      turnaroundTotalMs += order.completedAt.getTime() - order.createdAt.getTime();
+      turnaroundCount++;
+    }
+  }
+
+  return {
+    period,
+    startDate: start,
+    endDate: end,
+    totalOrders: orders.length,
+    totalRevenue,
+    ordersByStatus,
+    revenueByPricingMethod,
+    averageTurnaroundHours: turnaroundCount > 0 ? turnaroundTotalMs / turnaroundCount / (1000 * 60 * 60) : null,
+  };
+}

@@ -35,8 +35,9 @@ dotenv.config({ path: resolve(process.cwd(), '.env') });
 
 import { randomUUID } from 'crypto';
 import bcrypt from 'bcryptjs';
-import prisma from '../lib/db';
+import prisma, { dbTransaction } from '../lib/db';
 import { getDefaultTenantSettings } from '../lib/currency';
+import { flattenSettingsForPrisma } from '../lib/tenant-settings-flatten';
 import * as readline from 'readline';
 
 interface TenantInput {
@@ -218,14 +219,14 @@ async function createTenant(input: TenantInput) {
 
     // Get default settings and customize
     const defaultSettings = getDefaultTenantSettings();
-    const settings: Record<string, unknown> = {
+    const settings = flattenSettingsForPrisma({
       ...defaultSettings,
       currency: input.currency || defaultSettings.currency,
       language: input.language || defaultSettings.language,
       ...(input.email && { email: input.email }),
       ...(input.phone && { phone: input.phone }),
       ...(input.companyName && { companyName: input.companyName }),
-    };
+    });
 
     // Create tenant + admin user together
     const adminEmail = `admin@${input.slug}.local`;
@@ -233,7 +234,7 @@ async function createTenant(input: TenantInput) {
     const hashedPassword = await bcrypt.hash(adminPassword, 10);
 
     let adminUserCreated = false;
-    const tenant = await prisma.$transaction(async (tx) => {
+    const tenant = await dbTransaction(async (tx) => {
       const newTenant = await tx.tenant.create({
         data: {
           id: randomUUID(),
@@ -265,7 +266,15 @@ async function createTenant(input: TenantInput) {
       }
 
       return newTenant;
-    });
+    }, { timeout: 20000 });
+
+
+    try {
+      const { seedChartOfAccounts } = await import('../lib/accounting/seed-chart-of-accounts');
+      await seedChartOfAccounts(tenant.id);
+    } catch (coaError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+      console.log('\n⚠️  Warning: Failed to seed chart of accounts:', coaError.message);
+    }
 
     console.log('\n✅ Tenant created successfully!\n');
     console.log('Tenant Details:');

@@ -8,10 +8,11 @@ import { SubscriptionGuard } from '@/components/SubscriptionGuard';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { AdminLayoutProvider, useAdminLayout } from '@/contexts/AdminLayoutContext';
 import AdminSidebar from '@/components/admin/AdminSidebar';
+import NotificationBell from '@/components/admin/NotificationBell';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { getDefaultTenantSettings } from '@/lib/currency';
-import { Menu, PanelLeftClose, PanelLeftOpen, Bell } from 'lucide-react';
+import { Menu, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 
 function AdminShell({ children }: { children: ReactNode }) {
   const params = useParams();
@@ -67,9 +68,7 @@ function AdminShell({ children }: { children: ReactNode }) {
 
         {/* Right: notifications + user chip */}
         <div className="flex items-center gap-2">
-          <button className="p-2 hover:bg-gray-100 text-gray-500 relative" aria-label="Notifications">
-            <Bell className="w-5 h-5" />
-          </button>
+          <NotificationBell />
           <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200">
             <div
               className="w-6 h-6 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0"

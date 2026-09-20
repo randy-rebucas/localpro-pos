@@ -108,14 +108,6 @@ export function usePosProducts({
 
   const fetchProducts = useCallback(
     async (page: number, append: boolean) => {
-      if (!debouncedSearch.trim()) {
-        setProducts([]);
-        setStatus('idle');
-        setError(null);
-        setHasMore(false);
-        return;
-      }
-
       const fetchId = ++fetchIdRef.current;
 
       if (append) {

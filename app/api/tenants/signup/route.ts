@@ -12,6 +12,7 @@ import { getPublicAppUrl } from '@/lib/ecommerce/public-url';
 import { sendEmail } from '@/lib/notifications';
 import { logger } from '@/lib/logger';
 import { setBypassContext } from '@/lib/tenant-context';
+import { flattenSettingsForPrisma } from '@/lib/tenant-settings-flatten';
 
 /**
  * Public endpoint for tenant signup
@@ -129,9 +130,14 @@ export async function POST(request: NextRequest) {
     };
 
     // Apply business type defaults if business type is provided
-    const settings = businessType
+    const mergedSettings = businessType
       ? applyBusinessTypeDefaults(baseSettings, businessType)
       : baseSettings;
+    // getDefaultTenantSettings()/applyBusinessTypeDefaults() produce the
+    // app-facing nested settings shape (e.g. settings.numberFormat); the
+    // TenantSettings table is flat, so this must be flattened before Prisma
+    // sees it or `tenant.create` throws on the first unrecognized key.
+    const settings = flattenSettingsForPrisma(mergedSettings);
 
     const hashedPassword = await bcrypt.hash(adminPassword, 10);
 

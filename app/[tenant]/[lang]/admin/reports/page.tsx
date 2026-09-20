@@ -14,6 +14,7 @@ import { formatDateTime, formatDate as formatTenantDate } from '@/lib/formatting
 import { getDefaultTenantSettings } from '@/lib/currency';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { supportsFeature } from '@/lib/business-type-helpers';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
   useReportsData,
@@ -26,6 +27,7 @@ import {
   type SalesJournalData,
   type XReadingData,
   type ZReadingRecord,
+  type LaundryReport,
 } from '@/hooks/useReportsData';
 import type { TranslationDict } from '@/types/dictionary';
 
@@ -60,6 +62,7 @@ export default function AdminReportsPage() {
     zReadings,
     generateZReading,
     generatingZReading,
+    laundryReport,
   } = useReportsData({
     tenant,
     activeTab,
@@ -211,10 +214,22 @@ export default function AdminReportsPage() {
             canGenerate={canGenerateZReading}
           />
         );
+      case 'laundry':
+        return laundryReport ? (
+          <LaundryReportView report={laundryReport} dict={dict} primaryColor={primaryColor} colors={COLORS} />
+        ) : (
+          renderEmptyState(reportsDict.noData || 'No laundry data available for the selected period')
+        );
       default:
         return null;
     }
   };
+
+  const laundryEnabled = supportsFeature(settings ?? undefined, 'laundryOrders');
+  const reportTabs: ReportTab[] = [
+    'sales', 'products', 'vat', 'profit-loss', 'cash-drawer', 'sales-journal', 'x-reading', 'z-reading',
+    ...(laundryEnabled ? (['laundry'] as const) : []),
+  ];
 
   return (
     <div className="px-4 sm:px-6 py-6">
@@ -271,7 +286,7 @@ export default function AdminReportsPage() {
                   }}
                 />
               </div>
-              {activeTab === 'sales' && (
+              {(activeTab === 'sales' || activeTab === 'laundry') && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     {dict.reports?.period || 'Period'}
@@ -304,7 +319,7 @@ export default function AdminReportsPage() {
           <div className="bg-white border border-gray-300 overflow-hidden">
             <div className="border-b border-gray-200">
               <nav className="flex overflow-x-auto" aria-label={dict?.common?.tabs || 'Tabs'}>
-                {(['sales', 'products', 'vat', 'profit-loss', 'cash-drawer', 'sales-journal', 'x-reading', 'z-reading'] as const).map((tab) => (
+                {reportTabs.map((tab) => (
                   <button
                     key={tab}
                     onClick={() => setActiveTab(tab)}
@@ -453,6 +468,86 @@ function ProductPerformanceView({ data, dict, primaryColor }: { data: ProductPer
             ))}
           </tbody>
         </table>
+      </div>
+    </div>
+  );
+}
+
+function LaundryReportView({ report, dict, primaryColor, colors }: { report: LaundryReport; dict: any; primaryColor: string; colors: string[] }) { // eslint-disable-line @typescript-eslint/no-explicit-any
+  const statusData = Object.entries(report.ordersByStatus).map(([status, count]) => ({
+    name: (dict.admin?.[status] as string) || status.replace(/_/g, ' '),
+    value: count,
+  }));
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
+        <div className="p-5 sm:p-6 text-white" style={{ backgroundColor: primaryColor }}>
+          <div className="font-semibold mb-2 uppercase tracking-wide text-xs sm:text-sm text-white/80">
+            {dict.reports?.totalOrders || 'Total Orders'}
+          </div>
+          <div className="text-2xl sm:text-3xl font-bold">{report.totalOrders}</div>
+        </div>
+        <div className="p-5 sm:p-6 text-white" style={{ backgroundColor: '#0f9d58' }}>
+          <div className="text-xs sm:text-sm text-white/80 font-semibold mb-2 uppercase tracking-wide">
+            {dict.reports?.totalRevenue || 'Total Revenue'}
+          </div>
+          <div className="text-2xl sm:text-3xl font-bold">
+            <Currency amount={report.totalRevenue} />
+          </div>
+        </div>
+        <div className="p-5 sm:p-6 text-white" style={{ backgroundColor: '#7a3fc9' }}>
+          <div className="text-xs sm:text-sm text-white/80 font-semibold mb-2 uppercase tracking-wide">
+            {dict.reports?.averageTurnaround || 'Average Turnaround'}
+          </div>
+          <div className="text-2xl sm:text-3xl font-bold">
+            {report.averageTurnaroundHours !== null ? `${report.averageTurnaroundHours.toFixed(1)}h` : '—'}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+        <div className="bg-white border border-gray-300 p-5 sm:p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-5">
+            {dict.reports?.ordersByStatus || 'Orders by Status'}
+          </h3>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={statusData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+              <XAxis dataKey="name" stroke="#6b7280" style={{ fontSize: '12px' }} />
+              <YAxis stroke="#6b7280" style={{ fontSize: '12px' }} />
+              <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: 0 }} />
+              <Bar dataKey="value" fill={primaryColor} name={dict.reports?.orders || 'Orders'} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="bg-white border border-gray-300 p-5 sm:p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-5">
+            {dict.reports?.revenueByPricingMethod || 'Revenue by Pricing Method'}
+          </h3>
+          <ResponsiveContainer width="100%" height={300}>
+            <PieChart>
+              <Pie
+                data={[
+                  { name: dict.admin?.perItem || 'Per Item', value: report.revenueByPricingMethod.item },
+                  { name: dict.admin?.perWeight || 'Per Weight', value: report.revenueByPricingMethod.weight },
+                ].filter((row) => row.value > 0)}
+                cx="50%"
+                cy="50%"
+                labelLine={false}
+                label={({ name, percent }) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}
+                outerRadius={80}
+                fill="#8884d8"
+                dataKey="value"
+              >
+                {[0, 1].map((index) => (
+                  <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
+                ))}
+              </Pie>
+              <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: 0 }} />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
       </div>
     </div>
   );

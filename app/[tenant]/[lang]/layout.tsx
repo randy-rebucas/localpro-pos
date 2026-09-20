@@ -5,7 +5,6 @@ import LangSetter from "@/components/LangSetter";
 import { getTenantBySlug } from "@/lib/tenant";
 import { getSystemSettings } from "@/lib/system-settings";
 import ProtectedLayout from "./layout-protected";
-import { headers } from "next/headers"; // eslint-disable-line @typescript-eslint/no-unused-vars
 
 const geistSans = Geist({ // eslint-disable-line @typescript-eslint/no-unused-vars
   variable: "--font-geist-sans",
@@ -28,12 +27,9 @@ export const viewport: Viewport = {
   maximumScale: 5,
 };
 
-export async function generateStaticParams() {
-  return [
-    { tenant: 'default', lang: 'en' },
-    { tenant: 'default', lang: 'es' },
-  ];
-}
+// Parent layout (app/[tenant]/layout.tsx) reads per-request headers/cookies for
+// tenant/domain resolution, so this route tree can never be statically prerendered.
+export const dynamic = 'force-dynamic';
 
 export default async function RootLayout({
   children,

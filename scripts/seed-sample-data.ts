@@ -28,6 +28,7 @@ import bcrypt from 'bcryptjs';
 import prisma from '../lib/db';
 import { getDefaultTenantSettings } from '../lib/currency';
 import { applyBusinessTypeDefaults } from '../lib/business-types';
+import { flattenSettingsForPrisma } from '../lib/tenant-settings-flatten';
 
 // ── Config ──────────────────────────────────────────────────────────────────
 const FORCE       = process.argv.includes('--force');
@@ -366,15 +367,17 @@ async function seedTenant(cfg: SeedTenantConfig, existingTenantId?: string) {
       warn(`Tenant "${cfg.slug}" exists — will overwrite data (--force)`);
     } else {
       const baseSettings = getDefaultTenantSettings();
-      const settings = applyBusinessTypeDefaults(
-        {
-          ...baseSettings,
-          companyName: cfg.companyName,
-          email:       cfg.email,
-          phone:       cfg.phone,
-          businessType: cfg.businessType,
-        },
-        cfg.businessType,
+      const settings = flattenSettingsForPrisma(
+        applyBusinessTypeDefaults(
+          {
+            ...baseSettings,
+            companyName: cfg.companyName,
+            email:       cfg.email,
+            phone:       cfg.phone,
+            businessType: cfg.businessType,
+          },
+          cfg.businessType,
+        )
       );
 
       const tenant = await prisma.tenant.create({
@@ -383,7 +386,7 @@ async function seedTenant(cfg: SeedTenantConfig, existingTenantId?: string) {
           slug:     cfg.slug,
           name:     cfg.name,
           isActive: true,
-          settings: { create: settings as Record<string, unknown> },
+          settings: { create: settings },
         },
       });
       tenantId = tenant.id;

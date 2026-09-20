@@ -57,7 +57,7 @@ export default function ReportsPage() {
   const canViewReports = canAccess('reports.view');
   const canViewXReading = canAccess('reports.x_reading');
   const canViewZReading = canAccess('reports.z_reading');
-  const visibleTabs = (['sales', 'trends', 'products', 'vat', 'profit-loss', 'cash-drawer', 'sales-journal', 'x-reading', 'z-reading'] as const).filter((tab) => {
+  const visibleTabs = (['sales', 'trends', 'products', 'vat', 'profit-loss', 'cash-drawer', 'sales-journal', 'x-reading', 'z-reading'] as ReportTab[]).filter((tab) => {
     if (tab === 'x-reading') return canViewXReading;
     if (tab === 'z-reading') return canViewZReading;
     return canViewReports;

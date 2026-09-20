@@ -18,6 +18,12 @@ export interface BusinessTypeConfig {
     enableLoyaltyProgram: boolean;
     enableCustomerManagement: boolean;
     enableBookingScheduling: boolean;
+    enableDelivery: boolean;
+    enableWorkOrders: boolean;
+    enableLaundryOrders: boolean;
+    enableKitchenDisplay: boolean;
+    enableAccounting: boolean;
+    enableTableManagement: boolean;
   };
   productTypes: ('regular' | 'bundle' | 'service')[];
   requiredFields: string[];
@@ -37,6 +43,12 @@ export const BUSINESS_TYPE_CONFIGS: Record<BusinessType, BusinessTypeConfig> = {
       enableLoyaltyProgram: true,
       enableCustomerManagement: true,
       enableBookingScheduling: false,
+      enableDelivery: false,
+      enableWorkOrders: false,
+      enableLaundryOrders: false,
+      enableKitchenDisplay: false,
+      enableAccounting: true,
+      enableTableManagement: false,
     },
     productTypes: ['regular', 'bundle'],
     requiredFields: ['name', 'price', 'sku'],
@@ -58,6 +70,12 @@ export const BUSINESS_TYPE_CONFIGS: Record<BusinessType, BusinessTypeConfig> = {
       enableLoyaltyProgram: true,
       enableCustomerManagement: true,
       enableBookingScheduling: true,
+      enableDelivery: true,
+      enableWorkOrders: false,
+      enableLaundryOrders: false,
+      enableKitchenDisplay: true,
+      enableAccounting: true,
+      enableTableManagement: true,
     },
     productTypes: ['regular', 'bundle', 'service'],
     requiredFields: ['name', 'price'],
@@ -80,6 +98,12 @@ export const BUSINESS_TYPE_CONFIGS: Record<BusinessType, BusinessTypeConfig> = {
       enableLoyaltyProgram: true,
       enableCustomerManagement: true,
       enableBookingScheduling: true,
+      enableDelivery: true,
+      enableWorkOrders: false,
+      enableLaundryOrders: true,
+      enableKitchenDisplay: false,
+      enableAccounting: true,
+      enableTableManagement: false,
     },
     productTypes: ['service'],
     requiredFields: ['name', 'price'],
@@ -102,6 +126,12 @@ export const BUSINESS_TYPE_CONFIGS: Record<BusinessType, BusinessTypeConfig> = {
       enableLoyaltyProgram: true,
       enableCustomerManagement: true,
       enableBookingScheduling: true,
+      enableDelivery: true,
+      enableWorkOrders: true,
+      enableLaundryOrders: false,
+      enableKitchenDisplay: false,
+      enableAccounting: true,
+      enableTableManagement: false,
     },
     productTypes: ['service'],
     requiredFields: ['name', 'price'],
@@ -124,6 +154,12 @@ export const BUSINESS_TYPE_CONFIGS: Record<BusinessType, BusinessTypeConfig> = {
       enableLoyaltyProgram: false,
       enableCustomerManagement: true,
       enableBookingScheduling: false,
+      enableDelivery: false,
+      enableWorkOrders: true,
+      enableLaundryOrders: false,
+      enableKitchenDisplay: false,
+      enableAccounting: true,
+      enableTableManagement: true,
     },
     productTypes: ['regular', 'bundle', 'service'],
     requiredFields: ['name', 'price'],
@@ -145,6 +181,12 @@ export const BUSINESS_TYPE_CONFIGS: Record<BusinessType, BusinessTypeConfig> = {
       enableLoyaltyProgram: true,
       enableCustomerManagement: true,
       enableBookingScheduling: false,
+      enableDelivery: false,
+      enableWorkOrders: false,
+      enableLaundryOrders: false,
+      enableKitchenDisplay: false,
+      enableAccounting: true,
+      enableTableManagement: false,
     },
     productTypes: ['regular'],
     requiredFields: ['name', 'price', 'sku', 'prn', 'expiryDate', 'batchNumber'],
@@ -245,6 +287,12 @@ export function applyBusinessTypeDefaults(settings: any, businessType?: string):
     enableLoyaltyProgram: settings.enableLoyaltyProgram ?? config.defaultFeatures.enableLoyaltyProgram,
     enableCustomerManagement: settings.enableCustomerManagement ?? config.defaultFeatures.enableCustomerManagement,
     enableBookingScheduling: settings.enableBookingScheduling ?? config.defaultFeatures.enableBookingScheduling,
+    enableDelivery: settings.enableDelivery ?? config.defaultFeatures.enableDelivery,
+    enableWorkOrders: settings.enableWorkOrders ?? config.defaultFeatures.enableWorkOrders,
+    enableLaundryOrders: settings.enableLaundryOrders ?? config.defaultFeatures.enableLaundryOrders,
+    enableKitchenDisplay: settings.enableKitchenDisplay ?? config.defaultFeatures.enableKitchenDisplay,
+    enableAccounting: settings.enableAccounting ?? config.defaultFeatures.enableAccounting,
+    enableTableManagement: settings.enableTableManagement ?? config.defaultFeatures.enableTableManagement,
   };
 }
 

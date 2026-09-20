@@ -8,192 +8,25 @@ import { getValidationTranslatorFromRequest } from '@/lib/validation-translation
 import { applyBusinessTypeDefaults } from '@/lib/business-types';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
-
-/**
- * NOTE ON TRANSLATION GAP (same rationale as app/api/tenants/[slug]/route.ts):
- * The Mongoose `Tenant.settings` was a single Mixed sub-document, so this
- * endpoint used to `$set` arbitrary top-level keys directly. TenantSettings
- * is now a normalized table with fixed columns, and several array-shaped
- * sub-sections (businessHours schedule/specialHours, holidays,
- * receiptTemplates, practitionerLicenses, exchangeRates,
- * rolePermissionOverrides, taxRules) live in their own dedicated tables and
- * their own dedicated routes — this endpoint does not attempt to write them
- * even if present in the submitted `settings` object, to avoid two different
- * write paths racing on the same normalized rows.
- */
-const NESTED_FLATTEN_MAP: Record<string, Record<string, string>> = {
-  address: {
-    street: 'addressStreet',
-    city: 'addressCity',
-    state: 'addressState',
-    zipCode: 'addressZipCode',
-    country: 'addressCountry',
-  },
-  hardware: {
-    printerType: 'printerType',
-    printerProfile: 'printerProfile',
-    printerVendorId: 'printerVendorId',
-    printerProductId: 'printerProductId',
-    printerIpAddress: 'printerIpAddress',
-    printerPortNumber: 'printerPortNumber',
-    barcodeScannerType: 'barcodeScannerType',
-    barcodeScannerEnabled: 'barcodeScannerEnabled',
-    qrReaderEnabled: 'qrReaderEnabled',
-    qrReaderCameraId: 'qrReaderCameraId',
-    cashDrawerEnabled: 'cashDrawerEnabled',
-    cashDrawerConnectedToPrinter: 'cashDrawerConnectedToPrinter',
-    touchscreenEnabled: 'touchscreenEnabled',
-  },
-  notificationTemplates: {
-    emailBookingConfirmation: 'emailBookingConfirmationTemplate',
-    emailBookingReminder: 'emailBookingReminderTemplate',
-    emailBookingCancellation: 'emailBookingCancellationTemplate',
-    emailLowStockAlert: 'emailLowStockAlertTemplate',
-    emailAttendanceAlert: 'emailAttendanceAlertTemplate',
-    smsBookingConfirmation: 'smsBookingConfirmationTemplate',
-    smsBookingReminder: 'smsBookingReminderTemplate',
-    smsBookingCancellation: 'smsBookingCancellationTemplate',
-    smsLowStockAlert: 'smsLowStockAlertTemplate',
-  },
-  customTheme: {
-    fontFamily: 'fontFamily',
-    fontSource: 'fontSource',
-    googleFontUrl: 'googleFontUrl',
-    customFontUrl: 'customFontUrl',
-    theme: 'theme',
-    customThemeCss: 'customThemeCss',
-    borderRadius: 'borderRadius',
-    customBorderRadius: 'customBorderRadius',
-  },
-  businessHours: {
-    timezone: 'businessHoursTimezone',
-  },
-  multiCurrency: {
-    enabled: 'multiCurrencyEnabled',
-    displayCurrencies: 'displayCurrencies',
-    exchangeRateSource: 'exchangeRateSource',
-    exchangeRateApiKey: 'exchangeRateApiKey',
-  },
-  businessPermits: {
-    mayorsPermitNumber: 'mayorsPermitNumber',
-    mayorsPermitExpiry: 'mayorsPermitExpiry',
-    barangayClearanceNumber: 'barangayClearanceNumber',
-    barangayClearanceExpiry: 'barangayClearanceExpiry',
-    dtiSecRegistration: 'dtiSecRegistration',
-    birCertificateOfRegistration: 'birCertificateOfRegistration',
-    fireSafetyInspectionCertificate: 'fireSafetyInspectionCertificate',
-    fsicExpiry: 'fsicExpiry',
-    sanitaryPermitNumber: 'sanitaryPermitNumber',
-    sanitaryPermitExpiry: 'sanitaryPermitExpiry',
-  },
-  restaurantCompliance: {
-    fdaFoodBusinessLicense: 'fdaFoodBusinessLicense',
-    fdaFblExpiry: 'fdaFblExpiry',
-    foodSafetyCertificateNumber: 'foodSafetyCertificateNumber',
-    foodSafetyCertificateExpiry: 'foodSafetyCertificateExpiry',
-    foodHandlersCertified: 'foodHandlersCertified',
-    numberOfCertifiedHandlers: 'numberOfCertifiedHandlers',
-    healthCertificateExpiry: 'healthCertificateExpiry',
-    kitchenSanitationCompliant: 'kitchenSanitationCompliant',
-  },
-  retailCompliance: {
-    dtiBusinessNameRegistration: 'dtiBusinessNameRegistration',
-    priceTaggingCompliant: 'priceTaggingCompliant',
-    weightsAndMeasuresCompliant: 'weightsAndMeasuresCompliant',
-    btiAccreditation: 'btiAccreditation',
-    productLabelsCompliant: 'productLabelsCompliant',
-  },
-  laundryCompliance: {
-    environmentalComplianceCertificate: 'environmentalComplianceCertificate',
-    eccExpiry: 'eccExpiry',
-    wastewaterDischargePermit: 'wastewaterDischargePermit',
-    wastewaterPermitExpiry: 'wastewaterPermitExpiry',
-    solidWasteManagementPlan: 'solidWasteManagementPlan',
-  },
-  serviceCompliance: {
-    dohAccreditation: 'serviceDohAccreditation',
-    dohAccreditationExpiry: 'serviceDohAccreditationExpiry',
-  },
-  pharmacyCompliance: {
-    pharmacistName: 'pharmacistName',
-    pharmacistPRCNumber: 'pharmacistPRCNumber',
-    pharmacistPTRNumber: 'pharmacistPTRNumber',
-    fdaLTO: 'fdaLTO',
-    fdaLTOExpiryDate: 'fdaLTOExpiryDate',
-    dohAccreditation: 'pharmacyDohAccreditation',
-    pdeaLicense: 'pdeaLicense',
-    pdeaLicenseExpiry: 'pdeaLicenseExpiry',
-    requirePrescriptionForRx: 'requirePrescriptionForRx',
-    trackExpiryDates: 'trackExpiryDates',
-    expiryAlertDays: 'expiryAlertDays',
-  },
-};
-
-const DATE_COLUMNS = new Set([
-  'birPtuIssuedDate', 'birPtuExpiryDate', 'mayorsPermitExpiry', 'barangayClearanceExpiry',
-  'fsicExpiry', 'sanitaryPermitExpiry', 'fdaFblExpiry', 'foodSafetyCertificateExpiry',
-  'healthCertificateExpiry', 'eccExpiry', 'wastewaterPermitExpiry', 'serviceDohAccreditationExpiry',
-  'fdaLTOExpiryDate', 'pdeaLicenseExpiry', 'exchangeRateLastUpdated',
-]);
-
-// Array-shaped sub-sections handled by their own dedicated routes/tables —
-// intentionally excluded here (see NOTE above).
-const EXCLUDED_TOP_LEVEL_KEYS = new Set([
-  'businessHours', 'holidays', 'receiptTemplates', 'practitionerLicenses',
-  'exchangeRates', 'rolePermissionOverrides', 'taxRules',
-]);
-
-const KNOWN_SCALAR_KEYS = new Set([
-  'currency', 'currencySymbol', 'currencyPosition', 'dateFormat', 'timeFormat', 'timezone', 'language',
-  'decimalSeparator', 'thousandsSeparator', 'decimalPlaces', 'companyName', 'logo', 'favicon',
-  'primaryColor', 'secondaryColor', 'accentColor', 'backgroundColor', 'textColor', 'email', 'phone',
-  'website', 'receiptHeader', 'receiptFooter', 'receiptShowLogo', 'receiptShowAddress', 'receiptShowPhone',
-  'receiptShowEmail', 'receiptDefaultTemplateId', 'taxEnabled', 'taxRate', 'taxLabel', 'businessType',
-  'taxId', 'registrationNumber', 'lowStockThreshold', 'lowStockAlert', 'emailNotifications',
-  'smsNotifications', 'attendanceNotificationsEnabled', 'attendanceExpectedStartTime',
-  'attendanceMaxHoursWithoutClockOut', 'enableInventory', 'enableCategories', 'enableDiscounts',
-  'enableLoyaltyProgram', 'enableCustomerManagement', 'enableOnAccountSales', 'autoOpenDrawerOnShiftStart',
-  'autoOpenDrawerOnShiftEnd', 'enableBookingScheduling', 'enableTableManagement', 'ecommerceShopifyEnabled',
-  'ecommerceWooCommerceEnabled', 'birTin', 'birPtuNumber', 'birPtuIssuedDate', 'birPtuExpiryDate',
-  'birMinNumber', 'birBusinessStyle', 'birSystemProvider', 'birTerminalSN', 'birAccreditationNo',
-  'birAccreditationDate', 'birAccreditationValidUntil', 'birEsalesPushUrl',
-]);
-
-function flattenSettingsForPrisma(settings: Record<string, unknown>): Record<string, unknown> {
-  const flat: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(settings)) {
-    if (EXCLUDED_TOP_LEVEL_KEYS.has(key)) continue;
-    const nestedMap = NESTED_FLATTEN_MAP[key];
-    if (nestedMap && value && typeof value === 'object' && !Array.isArray(value)) {
-      for (const [nestedKey, nestedVal] of Object.entries(value as Record<string, unknown>)) {
-        const column = nestedMap[nestedKey];
-        if (column) flat[column] = nestedVal;
-      }
-      continue;
-    }
-    if (KNOWN_SCALAR_KEYS.has(key)) {
-      flat[key] = value;
-    }
-    // Unknown keys are dropped — see NOTE above.
-  }
-  for (const column of Object.keys(flat)) {
-    if (DATE_COLUMNS.has(column) && flat[column]) {
-      flat[column] = new Date(flat[column] as string);
-    }
-  }
-  return flat;
-}
+import { flattenSettingsForPrisma } from '@/lib/tenant-settings-flatten';
+import { runWithBypass } from '@/lib/tenant-context';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ slug: string }> }
 ) {
   try {
-    // Settings are public per tenant (no sensitive data exposed)
+    // Settings are public per tenant (no sensitive data exposed). This runs
+    // before any per-tenant auth context exists (it's how the client first
+    // discovers the tenant it's in), and TenantSettings is RLS-protected, so
+    // the lookup must explicitly bypass RLS rather than relying on request
+    // auth to have set `app.tenant_id` already — see lib/tenant-context.ts.
     const { slug } = await params;
     const t = await getValidationTranslatorFromRequest(request);
 
-    const tenant = await prisma.tenant.findFirst({ where: { slug, isActive: true }, include: { settings: true } });
+    const tenant = await runWithBypass(() =>
+      prisma.tenant.findFirst({ where: { slug, isActive: true }, include: { settings: true } })
+    );
     if (!tenant) {
       return NextResponse.json(
         { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
