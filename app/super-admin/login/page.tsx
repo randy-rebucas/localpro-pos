@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import PasswordInput from '@/components/ui/PasswordInput';
+import Recaptcha, { RECAPTCHA_SITE_KEY, RecaptchaHandle } from '@/components/ui/Recaptcha';
 
 export default function SuperAdminLoginPage() {
   const router = useRouter();
@@ -11,6 +12,8 @@ export default function SuperAdminLoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(true);
+  const [recaptchaToken, setRecaptchaToken] = useState('');
+  const recaptchaRef = useRef<RecaptchaHandle>(null);
 
   useEffect(() => {
     // Redirect if already logged in as super_admin
@@ -26,6 +29,12 @@ export default function SuperAdminLoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    if (RECAPTCHA_SITE_KEY && !recaptchaToken) {
+      setError('Please complete the reCAPTCHA verification');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -33,7 +42,7 @@ export default function SuperAdminLoginPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, recaptchaToken }),
       });
       const data = await res.json();
 
@@ -43,8 +52,10 @@ export default function SuperAdminLoginPage() {
         const retryAfter = res.headers.get('Retry-After');
         const mins = retryAfter ? Math.ceil(Number(retryAfter) / 60) : 15;
         setError(`Too many login attempts. Please try again in ${mins} minute${mins !== 1 ? 's' : ''}.`);
+        recaptchaRef.current?.reset();
       } else {
         setError(data.error || 'Login failed');
+        recaptchaRef.current?.reset();
       }
     } catch {
       setError('Login failed. Please try again.');
@@ -100,6 +111,8 @@ export default function SuperAdminLoginPage() {
                 autoComplete="current-password"
               />
             </div>
+
+            <Recaptcha ref={recaptchaRef} onChange={setRecaptchaToken} className="flex justify-center" />
 
             {error && (
               <div className="bg-red-50 border border-red-300 text-red-800 text-sm p-3">

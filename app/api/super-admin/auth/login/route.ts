@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { generateToken } from '@/lib/auth';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
+import { verifyRecaptcha } from '@/lib/recaptcha';
 import { logger } from '@/lib/logger';
 import bcrypt from 'bcryptjs';
 import { setBypassContext } from '@/lib/tenant-context';
@@ -19,7 +20,15 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { email, password } = body;
+    const { email, password, recaptchaToken } = body;
+
+    const recaptchaValid = await verifyRecaptcha(recaptchaToken, ip);
+    if (!recaptchaValid) {
+      return NextResponse.json(
+        { success: false, error: 'reCAPTCHA verification failed. Please try again.' },
+        { status: 400 }
+      );
+    }
 
     if (!email || !password) {
       return NextResponse.json(

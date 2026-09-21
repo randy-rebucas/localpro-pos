@@ -7,6 +7,7 @@ import { validateEmail, validatePassword, validateTenant } from '@/lib/validatio
 import { getValidationTranslator } from '@/lib/validation-translations';
 import { applyBusinessTypeDefaults, omitFeatureFlagDefaults } from '@/lib/business-types';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
+import { verifyRecaptcha } from '@/lib/recaptcha';
 import { SubscriptionService } from '@/lib/subscription';
 import { getPublicAppUrl } from '@/lib/ecommerce/public-url';
 import { sendEmail } from '@/lib/notifications';
@@ -50,11 +51,20 @@ export async function POST(request: NextRequest) {
       language,
       phone,
       email: contactEmail,
+      recaptchaToken,
     } = body;
 
     // Get translation function based on selected language
     const lang = (language === 'es' ? 'es' : 'en') as 'en' | 'es';
     t = await getValidationTranslator(lang);
+
+    const recaptchaValid = await verifyRecaptcha(recaptchaToken, ip);
+    if (!recaptchaValid) {
+      return NextResponse.json(
+        { success: false, error: t('validation.recaptchaFailed', 'reCAPTCHA verification failed. Please try again.') },
+        { status: 400 }
+      );
+    }
 
     // Validate tenant data
     const tenantErrors = validateTenant({ slug, name }, t);

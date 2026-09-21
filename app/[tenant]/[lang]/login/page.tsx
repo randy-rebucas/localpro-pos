@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import PasswordInput from '@/components/ui/PasswordInput';
+import Recaptcha, { RECAPTCHA_SITE_KEY, RecaptchaHandle } from '@/components/ui/Recaptcha';
 
 const QRCodeScanner = dynamic(() => import('@/components/QRCodeScanner'), {
   ssr: false,
@@ -29,6 +30,8 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loggingIn, setLoggingIn] = useState(false);
   const [showQRScanner, setShowQRScanner] = useState(false);
+  const [recaptchaToken, setRecaptchaToken] = useState('');
+  const recaptchaRef = useRef<RecaptchaHandle>(null);
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -51,13 +54,20 @@ export default function LoginPage() {
       return;
     }
 
-    const result = await login(email, password, tenant);
-    
+    if (RECAPTCHA_SITE_KEY && !recaptchaToken) {
+      setError(dict?.login?.completeRecaptcha || 'Please complete the reCAPTCHA verification');
+      setLoggingIn(false);
+      return;
+    }
+
+    const result = await login(email, password, tenant, recaptchaToken);
+
     if (result.success) {
       router.push(`/${tenant}/${lang}`);
     } else {
       setError(result.error || dict?.login?.loginFailed || 'Login failed. Please check your credentials.');
       setLoggingIn(false);
+      recaptchaRef.current?.reset();
     }
   };
 
@@ -177,6 +187,8 @@ export default function LoginPage() {
                 disabled={loggingIn}
               />
             </div>
+
+            <Recaptcha ref={recaptchaRef} onChange={setRecaptchaToken} className="flex justify-center" />
 
             <button
               type="submit"

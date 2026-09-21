@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { detectLocation } from '@/lib/location-detection';
 import { getDictionaryClient } from '@/app/[tenant]/[lang]/dictionaries-client';
 import { validatePassword as validatePasswordLib } from '@/lib/validation';
 import PasswordInput from '@/components/ui/PasswordInput';
+import Recaptcha, { RECAPTCHA_SITE_KEY, RecaptchaHandle } from '@/components/ui/Recaptcha';
 
 export default function SignupPage() {
   const router = useRouter();
@@ -35,6 +36,10 @@ export default function SignupPage() {
   const [passwordErrors, setPasswordErrors] = useState<string[]>([]);
   const [phonePlaceholder, setPhonePlaceholder] = useState('+63 912 345 6789');
   const [detectingLocation, setDetectingLocation] = useState(true);
+  const [step, setStep] = useState(1);
+  const TOTAL_STEPS = 3;
+  const [recaptchaToken, setRecaptchaToken] = useState('');
+  const recaptchaRef = useRef<RecaptchaHandle>(null);
 
   // Load dictionary
   useEffect(() => {
@@ -100,21 +105,54 @@ export default function SignupPage() {
     return result.errors;
   };
 
+  const validateStep = (targetStep: number) => {
+    setError('');
+    if (targetStep === 1) {
+      if (!formData.slug || !formData.name || !formData.businessType) {
+        setError(dict?.signup?.fillRequiredFields || 'Please fill in all required fields');
+        return false;
+      }
+      if (!/^[a-z0-9-]+$/.test(formData.slug)) {
+        setError(dict?.signup?.storeIdentifierFormatError || 'Store identifier can only contain lowercase letters, numbers, and hyphens');
+        return false;
+      }
+    }
+    if (targetStep === 2) {
+      if (!formData.adminName || !formData.adminEmail || !formData.adminPassword) {
+        setError(dict?.signup?.fillRequiredFields || 'Please fill in all required fields');
+        return false;
+      }
+      const pwdErrors = validatePassword(formData.adminPassword);
+      if (pwdErrors.length > 0) {
+        setPasswordErrors(pwdErrors);
+        return false;
+      }
+    }
+    if (targetStep === 3 && RECAPTCHA_SITE_KEY && !recaptchaToken) {
+      setError(dict?.signup?.completeRecaptcha || 'Please complete the reCAPTCHA verification');
+      return false;
+    }
+    return true;
+  };
+
+  const goNext = () => {
+    if (!validateStep(step)) return;
+    setError('');
+    setStep((s) => Math.min(s + 1, TOTAL_STEPS));
+  };
+
+  const goBack = () => {
+    setError('');
+    setStep((s) => Math.max(s - 1, 1));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setPasswordErrors([]);
 
-    // Validate password
-    const pwdErrors = validatePassword(formData.adminPassword);
-    if (pwdErrors.length > 0) {
-      setPasswordErrors(pwdErrors);
-      return;
-    }
-
-    // Validate slug format
-    if (!/^[a-z0-9-]+$/.test(formData.slug)) {
-      setError(dict?.signup?.storeIdentifierFormatError || 'Store identifier can only contain lowercase letters, numbers, and hyphens');
+    // Validate everything before final submit
+    if (!validateStep(1) || !validateStep(2) || !validateStep(3)) {
       return;
     }
 
@@ -124,7 +162,7 @@ export default function SignupPage() {
       const res = await fetch('/api/tenants/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({ ...formData, recaptchaToken }),
       });
 
       const data = await res.json();
@@ -137,6 +175,7 @@ export default function SignupPage() {
         }, 3000);
       } else {
         setError(data.error || dict?.signup?.failedToCreateStore || 'Failed to create store. Please try again.');
+        recaptchaRef.current?.reset();
       }
     } catch (err: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       setError(err.message || dict?.signup?.errorOccurred || 'An error occurred. Please try again.');
@@ -187,6 +226,37 @@ export default function SignupPage() {
           <p className="text-gray-600 text-sm sm:text-base">{dict?.signup?.signupSubtitle || 'Sign up to get started with your POS system'}</p>
         </div>
 
+        {/* Step indicator */}
+        <div className="flex items-center justify-center gap-2 mb-8">
+          {[1, 2, 3].map((s) => (
+            <div key={s} className="flex items-center">
+              <div
+                className={`w-9 h-9 flex items-center justify-center text-sm font-semibold ${
+                  s === step
+                    ? 'bg-brand text-white'
+                    : s < step
+                    ? 'bg-win8-success text-white'
+                    : 'bg-gray-200 text-gray-500'
+                }`}
+              >
+                {s < step ? (
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                ) : (
+                  s
+                )}
+              </div>
+              {s < TOTAL_STEPS && <div className={`w-10 h-0.5 ${s < step ? 'bg-win8-success' : 'bg-gray-200'}`} />}
+            </div>
+          ))}
+        </div>
+        <p className="text-center text-xs text-gray-500 mb-6">
+          {step === 1 && (dict?.signup?.stepStoreInfo || 'Step 1 of 3: Store Information')}
+          {step === 2 && (dict?.signup?.stepAdminAccount || 'Step 2 of 3: Admin Account')}
+          {step === 3 && (dict?.signup?.stepOptionalSettings || 'Step 3 of 3: Optional Settings')}
+        </p>
+
         {error && (
           <div className="mb-6 p-4 bg-win8-danger text-white text-sm flex items-start gap-2">
             <svg className="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -197,10 +267,11 @@ export default function SignupPage() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Store Information */}
-          <div className="border-b border-gray-300 pb-6">
+          {/* Step 1: Store Information */}
+          {step === 1 && (
+          <div className="pb-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">{dict?.signup?.storeInformation || 'Store Information'}</h2>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label htmlFor="slug" className="block text-sm font-medium text-gray-700 mb-1">
@@ -282,9 +353,11 @@ export default function SignupPage() {
               )}
             </div>
           </div>
+          )}
 
-          {/* Admin Account */}
-          <div className="border-b border-gray-300 pb-6">
+          {/* Step 2: Admin Account */}
+          {step === 2 && (
+          <div className="pb-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">{dict?.signup?.adminAccount || 'Admin Account'}</h2>
             
             <div className="space-y-4">
@@ -347,8 +420,10 @@ export default function SignupPage() {
               </div>
             </div>
           </div>
+          )}
 
-          {/* Optional Settings */}
+          {/* Step 3: Optional Settings */}
+          {step === 3 && (
           <div>
             <h2 className="text-xl font-semibold text-gray-900 mb-4">{dict?.signup?.optionalSettings || 'Optional Settings'}</h2>
             
@@ -432,24 +507,49 @@ export default function SignupPage() {
                 />
               </div>
             </div>
-          </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-brand text-white px-4 py-4 hover:brightness-110 font-medium transition-[filter] disabled:opacity-50 disabled:cursor-not-allowed text-lg flex items-center justify-center gap-2"
-          >
-            {loading ? (
-              <>
-                <div className="win8-spinner-sm text-white" role="status" aria-label="Loading">
-                  <span /><span /><span /><span /><span />
-                </div>
-                <span>{dict?.signup?.creatingStore || 'Creating Store...'}</span>
-              </>
-            ) : (
-              dict?.signup?.createStore || 'Create Store'
+            <Recaptcha ref={recaptchaRef} onChange={setRecaptchaToken} className="mt-6 flex justify-center" />
+          </div>
+          )}
+
+          <div className="flex items-center gap-3">
+            {step > 1 && (
+              <button
+                type="button"
+                onClick={goBack}
+                className="flex-1 bg-white text-gray-700 border border-gray-300 px-4 py-4 hover:bg-gray-50 font-medium transition-colors text-lg"
+              >
+                {dict?.signup?.back || 'Back'}
+              </button>
             )}
-          </button>
+
+            {step < TOTAL_STEPS ? (
+              <button
+                type="button"
+                onClick={goNext}
+                className="flex-1 bg-brand text-white px-4 py-4 hover:brightness-110 font-medium transition-[filter] text-lg"
+              >
+                {dict?.signup?.next || 'Next'}
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={loading}
+                className="flex-1 bg-brand text-white px-4 py-4 hover:brightness-110 font-medium transition-[filter] disabled:opacity-50 disabled:cursor-not-allowed text-lg flex items-center justify-center gap-2"
+              >
+                {loading ? (
+                  <>
+                    <div className="win8-spinner-sm text-white" role="status" aria-label="Loading">
+                      <span /><span /><span /><span /><span />
+                    </div>
+                    <span>{dict?.signup?.creatingStore || 'Creating Store...'}</span>
+                  </>
+                ) : (
+                  dict?.signup?.createStore || 'Create Store'
+                )}
+              </button>
+            )}
+          </div>
 
           <p className="text-center text-sm text-gray-600">
             {dict?.signup?.alreadyHaveStore || 'Already have a store?'}{' '}

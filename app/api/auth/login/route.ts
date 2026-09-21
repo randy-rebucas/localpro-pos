@@ -6,6 +6,7 @@ import { validateEmail } from '@/lib/validation';
 import bcrypt from 'bcryptjs';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
+import { verifyRecaptcha } from '@/lib/recaptcha';
 import { logger } from '@/lib/logger';
 import { setTenantContext } from '@/lib/tenant-context';
 
@@ -23,8 +24,16 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { email, password, tenantSlug } = body;
+    const { email, password, tenantSlug, recaptchaToken } = body;
     t = await getValidationTranslatorFromRequest(request);
+
+    const recaptchaValid = await verifyRecaptcha(recaptchaToken, ip);
+    if (!recaptchaValid) {
+      return NextResponse.json(
+        { success: false, error: t('validation.recaptchaFailed', 'reCAPTCHA verification failed. Please try again.') },
+        { status: 400 }
+      );
+    }
 
     // Validation
     if (!email || !password) {

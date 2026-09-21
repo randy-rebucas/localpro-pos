@@ -14,7 +14,7 @@ interface User {
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (email: string, password: string, tenantSlug: string) => Promise<{ success: boolean; error?: string }>;
+  login: (email: string, password: string, tenantSlug: string, recaptchaToken?: string) => Promise<{ success: boolean; error?: string }>;
   loginQR: (qrToken: string, tenantSlug: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   isAuthenticated: boolean;
@@ -56,13 +56,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const login = async (email: string, password: string, tenantSlug: string) => {
+  const login = async (email: string, password: string, tenantSlug: string, recaptchaToken?: string) => {
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ email, password, tenantSlug }),
+        body: JSON.stringify({ email, password, tenantSlug, recaptchaToken }),
       });
 
       const data = await res.json();
