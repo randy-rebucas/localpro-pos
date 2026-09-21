@@ -41,6 +41,14 @@ export default function SignupPage() {
   const [recaptchaToken, setRecaptchaToken] = useState('');
   const recaptchaRef = useRef<RecaptchaHandle>(null);
 
+  const businessTypeFeatures: Record<string, string> = {
+    retail: 'Inventory + Products + Barcode + Purchasing',
+    restaurant: 'Tables + Menu + Modifiers + Kitchen + KDS',
+    laundry: 'Laundry Workflow + Pickup + Delivery + Rider',
+    service: 'Appointment + Work Order + Staff Assignment',
+    general: 'Flexible Products + Services + Orders',
+  };
+
   // Load dictionary
   useEffect(() => {
     getDictionaryClient(formData.language as 'en' | 'es' || 'en').then(setDict);
@@ -117,7 +125,7 @@ export default function SignupPage() {
         return false;
       }
     }
-    if (targetStep === 2) {
+    if (targetStep === 3) {
       if (!formData.adminName || !formData.adminEmail || !formData.adminPassword) {
         setError(dict?.signup?.fillRequiredFields || 'Please fill in all required fields');
         return false;
@@ -127,10 +135,10 @@ export default function SignupPage() {
         setPasswordErrors(pwdErrors);
         return false;
       }
-    }
-    if (targetStep === 3 && RECAPTCHA_SITE_KEY && !recaptchaToken) {
-      setError(dict?.signup?.completeRecaptcha || 'Please complete the reCAPTCHA verification');
-      return false;
+      if (RECAPTCHA_SITE_KEY && !recaptchaToken) {
+        setError(dict?.signup?.completeRecaptcha || 'Please complete the reCAPTCHA verification');
+        return false;
+      }
     }
     return true;
   };
@@ -253,8 +261,8 @@ export default function SignupPage() {
         </div>
         <p className="text-center text-xs text-gray-500 mb-6">
           {step === 1 && (dict?.signup?.stepStoreInfo || 'Step 1 of 3: Store Information')}
-          {step === 2 && (dict?.signup?.stepAdminAccount || 'Step 2 of 3: Admin Account')}
-          {step === 3 && (dict?.signup?.stepOptionalSettings || 'Step 3 of 3: Optional Settings')}
+          {step === 2 && (dict?.signup?.stepOptionalSettings || 'Step 2 of 3: Optional Settings')}
+          {step === 3 && (dict?.signup?.stepAdminAccount || 'Step 3 of 3: Admin Account')}
         </p>
 
         {error && (
@@ -346,87 +354,26 @@ export default function SignupPage() {
                   ))}
                 </select>
               )}
-              {formData.businessType && !loadingBusinessTypes && (
-                <p className="mt-1 text-xs text-gray-600">
-                  {businessTypes.find((t) => t.type === formData.businessType)?.description || ''}
-                </p>
+              {formData.businessType && !loadingBusinessTypes && businessTypeFeatures[formData.businessType] && (
+                <div className="mt-2 px-3 py-2 bg-brand-soft border border-brand text-xs text-brand-navy flex items-start gap-2">
+                  <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span>
+                    <span className="font-semibold">{dict?.signup?.includes || 'Includes'}: </span>
+                    {businessTypeFeatures[formData.businessType]}
+                  </span>
+                </div>
               )}
             </div>
           </div>
           )}
 
-          {/* Step 2: Admin Account */}
+          {/* Step 2: Optional Settings */}
           {step === 2 && (
           <div className="pb-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">{dict?.signup?.adminAccount || 'Admin Account'}</h2>
-            
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="adminName" className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict?.signup?.yourName || 'Your Name'} <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  id="adminName"
-                  required
-                  value={formData.adminName}
-                  onChange={(e) => setFormData({ ...formData, adminName: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 focus:outline-none focus:border-brand bg-white transition-colors"
-                  placeholder={dict?.signup?.namePlaceholder || 'John Doe'}
-                />
-              </div>
-
-              <div>
-                <label htmlFor="adminEmail" className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict?.signup?.adminEmail || 'Admin Email'} <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="email"
-                  id="adminEmail"
-                  required
-                  value={formData.adminEmail}
-                  onChange={(e) => setFormData({ ...formData, adminEmail: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 focus:outline-none focus:border-brand bg-white transition-colors"
-                  placeholder={dict?.signup?.adminEmailPlaceholder || 'admin@example.com'}
-                />
-              </div>
-
-              <div>
-                <label htmlFor="adminPassword" className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict?.signup?.adminPassword || 'Admin Password'} <span className="text-red-500">*</span>
-                </label>
-                <PasswordInput
-                  id="adminPassword"
-                  required
-                  value={formData.adminPassword}
-                  onChange={(e) => {
-                    setFormData({ ...formData, adminPassword: e.target.value });
-                    if (e.target.value) {
-                      setPasswordErrors(validatePassword(e.target.value));
-                    } else {
-                      setPasswordErrors([]);
-                    }
-                  }}
-                  className="w-full px-4 py-3 border border-gray-300 focus:outline-none focus:border-brand bg-white transition-colors"
-                  placeholder={dict?.signup?.createStrongPassword || 'Create a strong password'}
-                />
-                {passwordErrors.length > 0 && (
-                  <ul className="mt-2 text-xs text-red-600 space-y-1">
-                    {passwordErrors.map((err, idx) => (
-                      <li key={idx}>• {err}</li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </div>
-          </div>
-          )}
-
-          {/* Step 3: Optional Settings */}
-          {step === 3 && (
-          <div>
             <h2 className="text-xl font-semibold text-gray-900 mb-4">{dict?.signup?.optionalSettings || 'Optional Settings'}</h2>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label htmlFor="currency" className="block text-sm font-medium text-gray-700 mb-1">
@@ -505,6 +452,73 @@ export default function SignupPage() {
                   className="w-full px-4 py-3 border border-gray-300 focus:outline-none focus:border-brand bg-white transition-colors"
                   placeholder={dict?.signup?.contactEmailPlaceholder || 'contact@example.com'}
                 />
+              </div>
+            </div>
+          </div>
+          )}
+
+          {/* Step 3: Admin Account */}
+          {step === 3 && (
+          <div>
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">{dict?.signup?.adminAccount || 'Admin Account'}</h2>
+
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="adminName" className="block text-sm font-medium text-gray-700 mb-1">
+                  {dict?.signup?.yourName || 'Your Name'} <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  id="adminName"
+                  required
+                  value={formData.adminName}
+                  onChange={(e) => setFormData({ ...formData, adminName: e.target.value })}
+                  className="w-full px-4 py-3 border border-gray-300 focus:outline-none focus:border-brand bg-white transition-colors"
+                  placeholder={dict?.signup?.namePlaceholder || 'John Doe'}
+                />
+              </div>
+
+              <div>
+                <label htmlFor="adminEmail" className="block text-sm font-medium text-gray-700 mb-1">
+                  {dict?.signup?.adminEmail || 'Admin Email'} <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="email"
+                  id="adminEmail"
+                  required
+                  value={formData.adminEmail}
+                  onChange={(e) => setFormData({ ...formData, adminEmail: e.target.value })}
+                  className="w-full px-4 py-3 border border-gray-300 focus:outline-none focus:border-brand bg-white transition-colors"
+                  placeholder={dict?.signup?.adminEmailPlaceholder || 'admin@example.com'}
+                />
+              </div>
+
+              <div>
+                <label htmlFor="adminPassword" className="block text-sm font-medium text-gray-700 mb-1">
+                  {dict?.signup?.adminPassword || 'Admin Password'} <span className="text-red-500">*</span>
+                </label>
+                <PasswordInput
+                  id="adminPassword"
+                  required
+                  value={formData.adminPassword}
+                  onChange={(e) => {
+                    setFormData({ ...formData, adminPassword: e.target.value });
+                    if (e.target.value) {
+                      setPasswordErrors(validatePassword(e.target.value));
+                    } else {
+                      setPasswordErrors([]);
+                    }
+                  }}
+                  className="w-full px-4 py-3 border border-gray-300 focus:outline-none focus:border-brand bg-white transition-colors"
+                  placeholder={dict?.signup?.createStrongPassword || 'Create a strong password'}
+                />
+                {passwordErrors.length > 0 && (
+                  <ul className="mt-2 text-xs text-red-600 space-y-1">
+                    {passwordErrors.map((err, idx) => (
+                      <li key={idx}>• {err}</li>
+                    ))}
+                  </ul>
+                )}
               </div>
             </div>
 

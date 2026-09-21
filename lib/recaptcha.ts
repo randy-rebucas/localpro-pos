@@ -10,7 +10,8 @@ interface RecaptchaVerifyResponse {
 }
 
 /**
- * Verifies a Google reCAPTCHA v2 token server-side.
+ * Verifies a reCAPTCHA token server-side via the classic siteverify REST
+ * endpoint (site key + secret key — no GCP service account needed).
  * Returns true when verification is disabled (no secret configured), so
  * local/dev environments without reCAPTCHA keys are not blocked.
  */
