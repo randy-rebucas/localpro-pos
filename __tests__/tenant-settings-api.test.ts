@@ -145,10 +145,35 @@ describe('GET /api/tenants/:slug/settings', () => {
     const { status, body } = await parseResponse(res);
 
     expect(status).toBe(200);
-    expect(body.data).toEqual({ companyName: 'Acme', rolePermissionOverrides: {} });
+    expect(body.data).toEqual({
+      companyName: 'Acme',
+      exchangeRateApiKeyConfigured: false,
+      suggestedCurrency: null,
+      rolePermissionOverrides: {},
+    });
     expect(mockTenantFindFirst).toHaveBeenCalledWith(
       expect.objectContaining({ where: { slug: SLUG, isActive: true } })
     );
+  });
+
+  it('suggests a base currency derived from the tenant\'s configured address country', async () => {
+    mockTenantFindFirst.mockResolvedValue({ id: TENANT_A_ID, slug: SLUG });
+    mockTenantSettingsFindUnique.mockResolvedValue({ companyName: 'Acme', addressCountry: 'Philippines', currency: 'USD' });
+
+    const res = await GET(createRequest(`/api/tenants/${SLUG}/settings`), { params: Promise.resolve({ slug: SLUG }) });
+    const { body } = await parseResponse(res);
+
+    expect(body.data.suggestedCurrency).toEqual({ currency: 'PHP', countryName: 'Philippines' });
+  });
+
+  it('returns a null suggestion when the address country cannot be resolved', async () => {
+    mockTenantFindFirst.mockResolvedValue({ id: TENANT_A_ID, slug: SLUG });
+    mockTenantSettingsFindUnique.mockResolvedValue({ companyName: 'Acme', addressCountry: 'Narnia' });
+
+    const res = await GET(createRequest(`/api/tenants/${SLUG}/settings`), { params: Promise.resolve({ slug: SLUG }) });
+    const { body } = await parseResponse(res);
+
+    expect(body.data.suggestedCurrency).toBeNull();
   });
 
   it('404s for a tenant that does not exist or is inactive', async () => {
@@ -227,6 +252,116 @@ describe('PUT /api/tenants/:slug/settings', () => {
       create: { tenantId: TENANT_A_ID, primaryColor: '#222222' },
       update: { primaryColor: '#222222' },
     });
+  });
+
+  it('flattens a submitted advancedBranding object into its real Prisma columns', async () => {
+    authAs(TENANT_A_ID, 'owner');
+    mockExistingTenant({ id: TENANT_A_ID, slug: SLUG, settings: {} });
+    mockTenantSettingsUpsert.mockResolvedValue({ tenantId: TENANT_A_ID });
+
+    const res = await PUT(
+      createRequest(`/api/tenants/${SLUG}/settings`, 'PUT', {
+        advancedBranding: {
+          fontFamily: 'Inter',
+          fontSource: 'google',
+          googleFontUrl: 'https://fonts.googleapis.com/css2?family=Inter',
+          customThemeCss: ':root { --x: 1; }',
+        },
+      }),
+      { params: Promise.resolve({ slug: SLUG }) }
+    );
+    const { status } = await parseResponse(res);
+
+    expect(status).toBe(200);
+    expect(mockTenantSettingsUpsert).toHaveBeenCalledWith({
+      where: { tenantId: TENANT_A_ID },
+      create: {
+        tenantId: TENANT_A_ID,
+        fontFamily: 'Inter',
+        fontSource: 'google',
+        googleFontUrl: 'https://fonts.googleapis.com/css2?family=Inter',
+        customThemeCss: ':root { --x: 1; }',
+      },
+      update: {
+        fontFamily: 'Inter',
+        fontSource: 'google',
+        googleFontUrl: 'https://fonts.googleapis.com/css2?family=Inter',
+        customThemeCss: ':root { --x: 1; }',
+      },
+    });
+  });
+
+  it('rejects a non-https googleFontUrl/customFontUrl', async () => {
+    authAs(TENANT_A_ID, 'owner');
+    mockExistingTenant({ id: TENANT_A_ID, slug: SLUG, settings: {} });
+
+    const res = await PUT(
+      createRequest(`/api/tenants/${SLUG}/settings`, 'PUT', {
+        advancedBranding: { googleFontUrl: 'javascript:alert(1)' },
+      }),
+      { params: Promise.resolve({ slug: SLUG }) }
+    );
+    const { status } = await parseResponse(res);
+
+    expect(status).toBe(400);
+    expect(mockTenantSettingsUpsert).not.toHaveBeenCalled();
+  });
+
+  it('never returns the raw exchangeRateApiKey from GET, only whether one is configured', async () => {
+    mockTenantFindFirst.mockResolvedValue({ id: TENANT_A_ID, slug: SLUG });
+    mockTenantSettingsFindUnique.mockResolvedValue({ companyName: 'Acme', exchangeRateApiKey: 'super-secret-key' });
+
+    const res = await GET(createRequest(`/api/tenants/${SLUG}/settings`), { params: Promise.resolve({ slug: SLUG }) });
+    const { body } = await parseResponse(res);
+
+    expect(body.data.exchangeRateApiKey).toBeUndefined();
+    expect(body.data.exchangeRateApiKeyConfigured).toBe(true);
+    expect(JSON.stringify(body.data)).not.toContain('super-secret-key');
+  });
+
+  it('does not clobber an existing exchangeRateApiKey when the submitted value is blank', async () => {
+    authAs(TENANT_A_ID, 'owner');
+    mockExistingTenant({
+      id: TENANT_A_ID,
+      slug: SLUG,
+      settings: { exchangeRateApiKey: 'existing-key', multiCurrencyEnabled: true },
+    });
+    mockTenantSettingsUpsert.mockResolvedValue({ tenantId: TENANT_A_ID });
+
+    const res = await PUT(
+      createRequest(`/api/tenants/${SLUG}/settings`, 'PUT', {
+        multiCurrency: { enabled: true, exchangeRateSource: 'api', exchangeRateApiKey: '' },
+      }),
+      { params: Promise.resolve({ slug: SLUG }) }
+    );
+    const { status } = await parseResponse(res);
+
+    expect(status).toBe(200);
+    const upsertCall = mockTenantSettingsUpsert.mock.calls[0][0];
+    expect(upsertCall.update).not.toHaveProperty('exchangeRateApiKey');
+    expect(upsertCall.update).toMatchObject({ multiCurrencyEnabled: true, exchangeRateSource: 'api' });
+  });
+
+  it('updates exchangeRateApiKey when the submitted value is non-empty', async () => {
+    authAs(TENANT_A_ID, 'owner');
+    mockExistingTenant({
+      id: TENANT_A_ID,
+      slug: SLUG,
+      settings: { exchangeRateApiKey: 'old-key' },
+    });
+    mockTenantSettingsUpsert.mockResolvedValue({ tenantId: TENANT_A_ID });
+
+    const res = await PUT(
+      createRequest(`/api/tenants/${SLUG}/settings`, 'PUT', {
+        multiCurrency: { enabled: true, exchangeRateApiKey: 'new-key' },
+      }),
+      { params: Promise.resolve({ slug: SLUG }) }
+    );
+    const { status } = await parseResponse(res);
+
+    expect(status).toBe(200);
+    const upsertCall = mockTenantSettingsUpsert.mock.calls[0][0];
+    expect(upsertCall.update).toMatchObject({ exchangeRateApiKey: 'new-key' });
   });
 
   it('rejects an invalid hex color', async () => {

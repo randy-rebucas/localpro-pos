@@ -4,6 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { randomUUID } from 'crypto';
 import prisma from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 import { roleAtLeast } from '@/lib/permissions';
@@ -125,7 +126,7 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
-    const id = `holiday_${Date.now()}`;
+    const id = `holiday_${randomUUID()}`;
     const resolvedDate = type === 'single'
       ? date
       : (recurring?.month && recurring?.dayOfMonth

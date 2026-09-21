@@ -4,7 +4,7 @@
 **Backing API:** `app/api/tenants/[slug]/settings/route.ts` (`GET`, `PUT`)
 **Permission gate:** `settings.manage` via `usePermissions()` → `lib/permissions.ts` (`hasPermission`) and server-side `hasTenantPermission()` in `lib/permissions-server.ts`
 **Existing test coverage:** `__tests__/tenant-settings-api.test.ts` (API route only — **no component-level test exists for this page**)
-**Status:** initial audit completed 2026-09-21; addressable findings (#2, #4, #5, #6, #7 below) fixed same day in `page.tsx` + `route.ts`, verified via `tsc --noEmit`, `eslint`, and the existing 9-test API suite (all pass). Finding #8 (no component tests) closed same day — added `__tests__/admin-settings-page.test.tsx` (12 tests, all passing; full suite run confirms no regressions elsewhere). Finding #1 (duplicate settings pages) remains open — it's a product/ownership decision, not something to resolve unilaterally in code. See §3.
+**Status:** initial audit completed 2026-09-21; addressable findings (#2, #4, #5, #6, #7 below) fixed same day in `page.tsx` + `route.ts`, verified via `tsc --noEmit`, `eslint`, and the existing 9-test API suite (all pass). Finding #8 (no component tests) closed same day — added `__tests__/admin-settings-page.test.tsx` (13 tests, all passing). A same-day data-loading follow-up (§2a) found and fixed a critical bug: the Contact tab's address fields always loaded blank due to a flat-vs-nested API shape mismatch, present on both settings pages — fixed in `page.tsx` and the shared `hooks/useSettingsPage.ts`. Full suite (446 tests) passes with no regressions. Two items remain open, both product decisions rather than code fixes: finding #1 (duplicate settings pages) and the untoggleable-feature-flags gap (§2a). See §3 and §5.
 
 ---
 
@@ -34,7 +34,20 @@
 
 ---
 
+## 2a. Data-loading audit (2026-09-21 follow-up)
+
+Prompted by "are all settings actually being captured on load" — cross-checked every field the page reads from `GET` against what the API actually returns (the raw `TenantSettings` Prisma row, flat columns, per `prisma/schema.prisma:481-681`), rather than assuming the mapping in `fetchSettings` was correct.
+
+- **Confirmed bug, fixed:** `fetchSettings` read `s.address?.street` / `.city` / `.state` / `.zipCode` / `.country` — but the API response has **no nested `address` object**, only flat `addressStreet`/`addressCity`/`addressState`/`addressZipCode`/`addressCountry` columns (the nesting only exists on the *write* side, via `lib/tenant-settings-flatten.ts`, which flattens the PUT payload before it hits Prisma). So `s.address` was always `undefined`, and **the Contact tab's Street/City/State/ZIP/Country fields silently reset to blank on every page load**, even for tenants who had saved real address data. Saves themselves worked correctly (`payload.address = {...}` on PUT is flattened server-side), so the underlying data was never lost — it just never displayed back. Fixed in `page.tsx` (read the flat columns directly) and regression-tested in `__tests__/admin-settings-page.test.tsx` (`address fields load from the flat GET response`); verified the test fails without the fix and passes with it.
+- **Same bug found in the sibling page** ([app/[tenant]/[lang]/settings/page.tsx](app/[tenant]/[lang]/settings/page.tsx), lines ~940-980) via its shared `hooks/useSettingsPage.ts` data hook — same `settings.address?.street` pattern, same always-`undefined` result. Fixed at the hook level (`reshapeAddress()` in `useSettingsPage.ts` reconstructs the nested `address` object from the flat GET response before it's merged into state), so both pages are corrected by one change. Not separately regression-tested (out of scope for this pass — that page has no test file at all; see the open item in §5).
+- **New finding — missing feature-flag coverage:** the Prisma schema and `lib/business-types.ts`'s `FEATURE_FLAG_KEYS` (the set of flags reset on a business-type switch, same tier as `enableInventory`/`enableCategories`/etc.) include five flags — `enableDelivery`, `enableWorkOrders`, `enableLaundryOrders`, `enableKitchenDisplay`, `enableAccounting` — that **have no toggle UI anywhere in the codebase** (confirmed via a repo-wide grep of `app/`). Each one gates a real, linked sidebar nav item (`components/admin/AdminSidebar.tsx`: Delivery, Work Orders, Laundry Orders, Kitchen Display, Ledger/accounting), so a tenant can never manually turn these modules on or off — they're permanently locked to whatever `applyBusinessTypeDefaults()` set at signup/business-type-switch time. This may be intentional (these read as more "structural" than the other togglable flags), but it's inconsistent with every other `enable*` flag having a toggle, and worth a product decision the same way finding #1 does. *(Open — not fixed, needs a product call on whether these should be exposed, and where.)*
+
+---
+
 ## 3. Findings (bugs / risks), ranked
+
+### Critical — fixed
+0. ~~Contact-tab address fields (Street/City/State/ZIP/Country) always loaded blank~~ — **Fixed**, see §2a. This was the highest-severity finding in this file: silent data loss *in the UI* (not the database) on every page load, on both settings pages.
 
 ### High
 1. **Two independently maintained settings UIs writing to the same API resource.** *(Open — product decision, not code-fixable unilaterally.)* Field sets differ (e.g., logo is a raw text URL here vs. a real upload component on the other page; no multi-currency/e-commerce/receipt-template tabs here). Divergent client-side validation increases the odds of one UI persisting a state the other can't represent or re-render correctly. *(Recommend: confirm intended ownership, then either delete/redirect the stale one or explicitly document the split.)*
@@ -88,7 +101,8 @@ Items marked `[x]` are now automated in `__tests__/admin-settings-page.test.tsx`
 - [ ] Dirty a field, click Save (not switching tabs) → no confirm dialog fires; the dirty baseline (`savedForm`) advances so re-clicking the same tab afterward is a no-op.
 
 ### Data integrity / persistence
-- [ ] Reload after save reflects persisted values (no optimistic-UI drift).
+- [x] Reload after save reflects persisted values for the address sub-fields specifically (the flat-vs-nested bug from §2a) — regression-tested via `address fields load from the flat GET response`.
+- [ ] Reload after save reflects persisted values for every other field (no optimistic-UI drift) — only address was audited field-by-field against the raw API shape; worth doing the same trace for every `FormData` key to rule out a similar flat/nested mismatch elsewhere.
 - [ ] `TenantSettings` row auto-created (self-heal path, route.ts:63-80) for a tenant with no existing row — company name defaults to `Tenant.name`.
 - [ ] `refreshSettings()` after save propagates new values into `AdminSidebar` (feature-flag-gated nav items appear/disappear) and other consumers without a full page reload.
 
@@ -107,10 +121,12 @@ Items marked `[x]` are now automated in `__tests__/admin-settings-page.test.tsx`
 
 ## 5. Recommended next steps
 
-1. **Resolve the two-settings-pages question (finding #1)** — still open, the only remaining item, and it changes the scope of any future work here: confirm with the team which of `app/[tenant]/[lang]/admin/settings/page.tsx` and `app/[tenant]/[lang]/settings/page.tsx` is canonical, then either delete/redirect the stale one or explicitly document the split so QA knows which surface to regress and which test suite (this one, or a future equivalent for the other page) is authoritative.
-2. ~~Add component tests (finding #8)~~ — done: `__tests__/admin-settings-page.test.tsx`, 12 tests, all passing. Follow-up (not blocking): fill in the `[ ]` gaps left in §4 — currency-code/hex-color/tax-rate validation cases, boundary-accept values (as opposed to just the over-limit rejections already covered), and the business-type-switch reset behavior all still need test cases.
-3. ~~Add an upper bound to `lowStockThreshold` and a max length to `taxLabel`/`receiptHeader`/`receiptFooter`~~ — done, client (`page.tsx`) + server (`route.ts`), matched validation on both sides, now regression-tested.
-4. ~~Derive `currencySymbol` from `currency`~~ — done; symbol auto-fills on currency change and remains user-editable; regression-tested.
-5. ~~Sanitize the logo URL~~ — done; both client and server now require `https://` and reject any other scheme, closing the `javascript:`/`data:` injection surface; regression-tested.
-6. ~~Guard against silently discarding unsaved edits on tab switch~~ — done via `switchSection`/`isSectionDirty`; regression-tested.
-7. **Concurrent-edit / cross-tenant / business-type-reset cases (from §4)** need a real integration test against the live API route rather than a component test with a mocked `fetch` — worth a follow-up in whatever suite already exercises `route.ts` against a test database, if one exists.
+1. ~~Fix the address fields always loading blank~~ — done, see §2a. Fixed in both `page.tsx` (direct read) and `hooks/useSettingsPage.ts` (`reshapeAddress()`, fixing the sibling settings page too). Regression-tested for the admin page; **the sibling page (`app/[tenant]/[lang]/settings/page.tsx`) has no test file at all**, so its fix is unverified by an automated test — worth a follow-up test once/if that page's ownership question (next item) is resolved.
+2. **Resolve the two-settings-pages question (finding #1)** — still open, and it changes the scope of any future work here: confirm with the team which of `app/[tenant]/[lang]/admin/settings/page.tsx` and `app/[tenant]/[lang]/settings/page.tsx` is canonical, then either delete/redirect the stale one or explicitly document the split so QA knows which surface to regress and which test suite is authoritative.
+3. **Decide whether the five untoggleable feature flags (§2a) are intentional** — `enableDelivery`/`enableWorkOrders`/`enableLaundryOrders`/`enableKitchenDisplay`/`enableAccounting` gate live sidebar nav items but have no UI anywhere to turn them on/off manually; a tenant is stuck with whatever the business-type default assigned. If not intentional, add toggles to the Features tab (same pattern as the existing 11) on whichever page is deemed canonical per item 2.
+4. ~~Add component tests (finding #8)~~ — done: `__tests__/admin-settings-page.test.tsx`, 13 tests, all passing. Follow-up (not blocking): fill in the `[ ]` gaps left in §4 — currency-code/hex-color/tax-rate validation cases, boundary-accept values (as opposed to just the over-limit rejections already covered), the business-type-switch reset behavior, and (per item 3 above) an equivalent test file for the sibling settings page, which currently has none.
+5. ~~Add an upper bound to `lowStockThreshold` and a max length to `taxLabel`/`receiptHeader`/`receiptFooter`~~ — done, client (`page.tsx`) + server (`route.ts`), matched validation on both sides, now regression-tested.
+6. ~~Derive `currencySymbol` from `currency`~~ — done; symbol auto-fills on currency change and remains user-editable; regression-tested.
+7. ~~Sanitize the logo URL~~ — done; both client and server now require `https://` and reject any other scheme, closing the `javascript:`/`data:` injection surface; regression-tested.
+8. ~~Guard against silently discarding unsaved edits on tab switch~~ — done via `switchSection`/`isSectionDirty`; regression-tested.
+9. **Concurrent-edit / cross-tenant / business-type-reset cases (from §4)** need a real integration test against the live API route rather than a component test with a mocked `fetch` — worth a follow-up in whatever suite already exercises `route.ts` against a test database, if one exists.

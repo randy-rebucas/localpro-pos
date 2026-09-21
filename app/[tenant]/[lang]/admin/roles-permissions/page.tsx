@@ -70,10 +70,19 @@ export default function RolesPermissionsPage() {
 
   const toggle = (role: OverridableRole, key: string, defaultMinRole: string) => {
     const current = isChecked(role, key, defaultMinRole);
-    setOverrides((prev) => ({
-      ...prev,
-      [role]: { ...prev[role], [key]: !current },
-    }));
+    const next = !current;
+    setOverrides((prev) => {
+      // If toggling lands back on the role's default value, drop the
+      // override entirely instead of storing a redundant explicit one —
+      // otherwise the cell keeps showing "(custom)" even though it now
+      // behaves identically to the default.
+      if (next === roleAtLeast(role, defaultMinRole)) {
+        const roleOverrides = { ...(prev[role] || {}) };
+        delete roleOverrides[key];
+        return { ...prev, [role]: roleOverrides };
+      }
+      return { ...prev, [role]: { ...prev[role], [key]: next } };
+    });
     setDirty(true);
   };
 

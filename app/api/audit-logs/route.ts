@@ -4,11 +4,17 @@ import prisma from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { checkRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
     const user = await requireAuth(request);
+
+    const rl = checkRateLimit(`audit-logs-list:${user.tenantId}`, 60, 60_000);
+    if (!rl.allowed) {
+      return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
+    }
 
     // Get translation function
     const t = await getValidationTranslatorFromRequest(request);

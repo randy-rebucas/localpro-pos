@@ -15,7 +15,14 @@ import {
   getPlaceholderForCustomFontUrl,
   getPlaceholderForCustomCSS,
   getCustomCSSHint,
+  validateCustomCSS,
 } from '@/lib/branding-helpers';
+
+// Matches the https-only check the settings PUT route now enforces for
+// googleFontUrl/customFontUrl (see app/api/tenants/[slug]/settings/route.ts) —
+// both get rendered into a <link href>/@font-face src: url(...) app-wide
+// (contexts/TenantSettingsContext.tsx), same injection surface as `logo`.
+const SAFE_URL_RE = /^https:\/\/[^\s"'<>]+$/i;
 import toast from 'react-hot-toast';
 import { usePermissions } from '@/hooks/usePermissions';
 
@@ -46,6 +53,23 @@ export default function AdvancedBrandingPage() {
 
   const handleSave = useCallback(async () => {
     if (!settings) return;
+
+    const branding = settings.advancedBranding;
+    if (branding?.googleFontUrl && !SAFE_URL_RE.test(branding.googleFontUrl)) {
+      toast.error(dict?.validation?.invalidFontUrl || 'Google Font URL must be a valid https:// address');
+      return false;
+    }
+    if (branding?.customFontUrl && !SAFE_URL_RE.test(branding.customFontUrl)) {
+      toast.error(dict?.validation?.invalidFontUrl || 'Custom Font URL must be a valid https:// address');
+      return false;
+    }
+    if (branding?.customThemeCss) {
+      const cssCheck = validateCustomCSS(branding.customThemeCss);
+      if (!cssCheck.valid) {
+        toast.error(cssCheck.errors[0]);
+        return false;
+      }
+    }
 
     const success = await save(settings, () => {
       toast.success(dict?.admin?.advancedBrandingSaved || 'Advanced branding settings saved successfully!');
@@ -203,13 +227,10 @@ export default function AdvancedBrandingPage() {
                   {dict?.admin?.customCSS || 'Custom CSS'}
                 </label>
                 <textarea
-                  value={settings.advancedBranding?.customTheme?.css || ''}
+                  value={settings.advancedBranding?.customThemeCss || ''}
                   onChange={(e) => updateSetting('advancedBranding', {
                     ...settings.advancedBranding,
-                    customTheme: {
-                      ...settings.advancedBranding?.customTheme,
-                      css: e.target.value,
-                    },
+                    customThemeCss: e.target.value,
                   })}
                   rows={10}
                   className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white font-mono text-sm"

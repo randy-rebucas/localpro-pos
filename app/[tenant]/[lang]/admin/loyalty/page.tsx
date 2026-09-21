@@ -9,6 +9,8 @@ import { useLoyaltyCustomers } from '@/hooks/useLoyaltyCustomers';
 import { getSaveSuccessMessage, getSaveErrorMessage } from '@/lib/loyalty-helpers';
 import { getDictionaryClient } from '../../dictionaries-client';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { formatCurrency, getCurrencySymbol } from '@/lib/currency';
 
 export default function LoyaltyPage() {
   const params = useParams();
@@ -18,6 +20,15 @@ export default function LoyaltyPage() {
   const canManage = canAccess('loyalty.config');
   const canView = canAccess('loyalty.manage');
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const { settings: tenantSettings } = useTenantSettings();
+  // Points/peso amounts on this page were hardcoded to the ₱ symbol regardless
+  // of the tenant's configured currency — falls back to ₱ only while tenant
+  // settings are still loading, matching every other currency-aware admin page.
+  const currencySymbol = tenantSettings
+    ? tenantSettings.currencySymbol || getCurrencySymbol(tenantSettings.currency)
+    : '₱';
+  const formatMoney = (amount: number) =>
+    tenantSettings ? formatCurrency(amount, tenantSettings) : `${currencySymbol}${amount.toFixed(2)}`;
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -96,7 +107,7 @@ export default function LoyaltyPage() {
             { label: dict?.loyalty?.totalCustomers || 'Total Customers', value: totalCustomers.toLocaleString() },
             { label: dict?.loyalty?.withPoints || 'With Points', value: enrolledCount.toLocaleString() },
             { label: dict?.loyalty?.pointsOutstanding || 'Points Outstanding', value: totalPoints.toLocaleString() },
-            { label: dict?.loyalty?.estLiability || 'Est. Liability', value: `₱${pesoValue.toFixed(2)}` },
+            { label: dict?.loyalty?.estLiability || 'Est. Liability', value: formatMoney(pesoValue) },
           ].map(stat => (
             <div key={stat.label} className="bg-white border border-gray-300 p-4">
               <p className="text-xs text-gray-500 uppercase font-medium mb-1">{stat.label}</p>
@@ -117,7 +128,7 @@ export default function LoyaltyPage() {
                 <fieldset disabled={!canManage} className="space-y-4">
                 <div>
                   <label className="block text-xs font-medium text-gray-500 uppercase mb-1">
-                    {dict?.loyalty?.pointsPerPeso || 'Points per ₱1 spent'}
+                    {(dict?.loyalty?.pointsPerPeso || 'Points per {symbol}1 spent').replace('{symbol}', currencySymbol)}
                   </label>
                   <input
                     type="number"
@@ -128,13 +139,13 @@ export default function LoyaltyPage() {
                     className="w-full px-3 py-2 border border-gray-300 text-sm focus:outline-none focus:border-brand"
                   />
                   <p className="text-xs text-gray-400 mt-1">
-                    {dict?.loyalty?.pointsPerPesoHint || 'e.g. 1 = earn 1 pt per ₱1'}
+                    {(dict?.loyalty?.pointsPerPesoHint || 'e.g. 1 = earn 1 pt per {symbol}1').replace('{symbol}', currencySymbol)}
                   </p>
                 </div>
 
                 <div>
                   <label className="block text-xs font-medium text-gray-500 uppercase mb-1">
-                    {dict?.loyalty?.pesoPerPoint || '₱ value per point'}
+                    {(dict?.loyalty?.pesoPerPoint || '{symbol} value per point').replace('{symbol}', currencySymbol)}
                   </label>
                   <input
                     type="number"
@@ -145,7 +156,7 @@ export default function LoyaltyPage() {
                     className="w-full px-3 py-2 border border-gray-300 text-sm focus:outline-none focus:border-brand"
                   />
                   <p className="text-xs text-gray-400 mt-1">
-                    {dict?.loyalty?.pesoPerPointHint || 'e.g. 0.10 = 100 pts = ₱10'}
+                    {(dict?.loyalty?.pesoPerPointHint || 'e.g. 0.10 = 100 pts = {symbol}10').replace('{symbol}', currencySymbol)}
                   </p>
                 </div>
 
@@ -196,9 +207,9 @@ export default function LoyaltyPage() {
 
               {config && (
                 <div className="mt-4 pt-4 border-t border-gray-100 text-xs text-gray-400 space-y-1">
-                  <p>{(dict?.loyalty?.rateSummaryLabel || 'Rate: {rate} pt / ₱1 spent').replace('{rate}', String(config.pointsPerPeso))}</p>
-                  <p>{(dict?.loyalty?.valueSummaryLabel || 'Value: ₱{value} / point').replace('{value}', String(config.pesoPerPoint))}</p>
-                  <p>{(dict?.loyalty?.minRedeemSummaryLabel || 'Min redeem: {points} points (₱{value})').replace('{points}', String(config.minRedemption)).replace('{value}', (config.minRedemption * config.pesoPerPoint).toFixed(2))}</p>
+                  <p>{(dict?.loyalty?.rateSummaryLabel || 'Rate: {rate} pt / {symbol}1 spent').replace('{rate}', String(config.pointsPerPeso)).replace('{symbol}', currencySymbol)}</p>
+                  <p>{(dict?.loyalty?.valueSummaryLabel || 'Value: {symbol}{value} / point').replace('{value}', String(config.pesoPerPoint)).replace('{symbol}', currencySymbol)}</p>
+                  <p>{(dict?.loyalty?.minRedeemSummaryLabel || 'Min redeem: {points} points ({symbol}{value})').replace('{points}', String(config.minRedemption)).replace('{value}', (config.minRedemption * config.pesoPerPoint).toFixed(2)).replace('{symbol}', currencySymbol)}</p>
                 </div>
               )}
             </div>
@@ -269,7 +280,7 @@ export default function LoyaltyPage() {
                               )}
                             </td>
                             <td className="px-4 py-3 whitespace-nowrap text-right text-sm text-gray-500">
-                              {value > 0 ? `₱${value.toFixed(2)}` : '—'}
+                              {value > 0 ? formatMoney(value) : '—'}
                             </td>
                             <td className="px-4 py-3 whitespace-nowrap text-right">
                               <Link

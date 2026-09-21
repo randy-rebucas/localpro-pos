@@ -9,6 +9,10 @@ export interface ITenantSettings {
   currency: string;
   currencySymbol?: string;
   currencyPosition: 'before' | 'after';
+  // Server-computed hint (app/api/tenants/[slug]/settings/route.ts), from the
+  // tenant's configured address country — never auto-applied, only offered
+  // as a one-click suggestion on the Multi-Currency admin page.
+  suggestedCurrency?: { currency: string; countryName: string } | null;
   dateFormat: string;
   timeFormat: '12h' | '24h';
   timezone: string;
@@ -157,7 +161,14 @@ export interface ITenantSettings {
     displayCurrencies?: string[];
     exchangeRates?: Record<string, number>;
     exchangeRateSource?: 'manual' | 'api';
+    // Never populated from a GET response (the raw key is a credential and
+    // is intentionally excluded from the — unauthenticated — settings read;
+    // see app/api/tenants/[slug]/settings/route.ts). Only ever set locally
+    // when the admin types a new value to replace the one on file.
     exchangeRateApiKey?: string;
+    // Whether a key is currently on file server-side, since the key itself
+    // never round-trips back to the client.
+    exchangeRateApiKeyConfigured?: boolean;
     lastUpdated?: Date;
   };
 
@@ -191,17 +202,19 @@ export interface ITenantSettings {
     };
   };
 
-  // Advanced Branding
+  // Advanced Branding — flat, one level deep, matching every other
+  // NESTED_FLATTEN_MAP section (lib/tenant-settings-flatten.ts) and the real
+  // flat TenantSettings columns (prisma/schema.prisma). Previously nested
+  // `customTheme: { css }` one level too deep, which combined with a
+  // mismatched flatten map key meant this whole section was silently
+  // dropped on every save — see docs/qa/advanced-branding-qa-analysis.md.
   advancedBranding?: {
     fontFamily?: string;
     fontSource?: 'google' | 'custom' | 'system';
     googleFontUrl?: string;
     customFontUrl?: string;
     theme?: 'light' | 'dark' | 'auto' | 'custom';
-    customTheme?: {
-      css?: string;
-      variables?: Record<string, string>;
-    };
+    customThemeCss?: string;
     borderRadius?: 'none' | 'sm' | 'md' | 'lg' | 'xl' | 'custom';
     customBorderRadius?: string;
   };

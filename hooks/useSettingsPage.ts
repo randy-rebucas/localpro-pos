@@ -6,6 +6,28 @@ import type { BusinessTypeConfig } from '@/lib/business-types';
 
 export type SettingsStatus = 'loading' | 'ready' | 'error';
 
+// GET /api/tenants/{tenant}/settings returns the flat Prisma TenantSettings
+// row (addressStreet/addressCity/addressState/addressZipCode/addressCountry
+// columns) — it never sends a nested `address` object. `ITenantSettings` and
+// every settings page's UI expect `settings.address.street` etc, so without
+// this the address fields silently render blank on every load even though
+// they were saved correctly (the PUT path flattens the nested payload before
+// writing — see lib/tenant-settings-flatten.ts).
+function reshapeAddress(data: Record<string, unknown>): Partial<ITenantSettings> {
+  if (data.address) return data as Partial<ITenantSettings>;
+  const { addressStreet, addressCity, addressState, addressZipCode, addressCountry, ...rest } = data;
+  return {
+    ...rest,
+    address: {
+      street: (addressStreet as string) ?? '',
+      city: (addressCity as string) ?? '',
+      state: (addressState as string) ?? '',
+      zipCode: (addressZipCode as string) ?? '',
+      country: (addressCountry as string) ?? '',
+    },
+  } as Partial<ITenantSettings>;
+}
+
 function mergeDefaultSettings(data: Partial<ITenantSettings>): ITenantSettings {
   return {
     currency: 'USD',
@@ -81,7 +103,7 @@ export function useSettingsPage(tenant: string) {
       const res = await fetch(`/api/tenants/${tenant}/settings`);
       const data = await res.json();
       if (data.success) {
-        setSettings(mergeDefaultSettings(data.data));
+        setSettings(mergeDefaultSettings(reshapeAddress(data.data)));
         setStatus('ready');
       } else {
         setSettings(null);

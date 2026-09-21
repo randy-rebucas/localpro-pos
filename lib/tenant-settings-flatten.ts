@@ -54,7 +54,12 @@ const NESTED_FLATTEN_MAP: Record<string, Record<string, string>> = {
     smsBookingCancellation: 'smsBookingCancellationTemplate',
     smsLowStockAlert: 'smsLowStockAlertTemplate',
   },
-  customTheme: {
+  // Was keyed 'customTheme' — but no page ever sends a top-level `customTheme`
+  // object; the Advanced Branding page (and ITenantSettings) nest these under
+  // `advancedBranding`, so every field here was silently dropped by the
+  // "unknown keys are dropped" fallback below on every save. Renamed to match
+  // what's actually sent; see docs/qa/advanced-branding-qa-analysis.md.
+  advancedBranding: {
     fontFamily: 'fontFamily',
     fontSource: 'fontSource',
     googleFontUrl: 'googleFontUrl',
@@ -183,4 +188,40 @@ export function flattenSettingsForPrisma(settings: Record<string, unknown>): Rec
     }
   }
   return flat;
+}
+
+/**
+ * Reverse of the `advancedBranding` mapping above: GET /api/tenants/[slug]/
+ * settings returns the flat columns directly, so this nests them back under
+ * `advancedBranding` the way ITenantSettings and every consumer expects.
+ * Deliberately centralized here (not duplicated per-consumer) — the previous
+ * duplication is exactly how this field went silently unread/unwritten
+ * everywhere for a while (see docs/qa/advanced-branding-qa-analysis.md): the
+ * flatten map above got out of sync with what the client actually sent, and
+ * nothing forced the read side to agree with the write side.
+ *
+ * Used by both hooks/useBrandingSettings.ts (the admin config page) and
+ * contexts/TenantSettingsContext.tsx (the app-wide provider that actually
+ * applies the configured font/custom CSS to every tenant page).
+ */
+export function reshapeAdvancedBranding(data: Record<string, unknown>): Record<string, unknown> {
+  if (data.advancedBranding) return data;
+  const {
+    fontFamily, fontSource, googleFontUrl, customFontUrl, theme,
+    customThemeCss, borderRadius, customBorderRadius,
+    ...rest
+  } = data;
+  return {
+    ...rest,
+    advancedBranding: {
+      fontFamily: fontFamily ?? undefined,
+      fontSource: fontSource ?? 'system',
+      googleFontUrl: googleFontUrl ?? undefined,
+      customFontUrl: customFontUrl ?? undefined,
+      theme: theme ?? 'light',
+      customThemeCss: customThemeCss ?? undefined,
+      borderRadius: borderRadius ?? 'md',
+      customBorderRadius: customBorderRadius ?? undefined,
+    },
+  };
 }

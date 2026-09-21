@@ -7,6 +7,7 @@ import { getDictionaryClient } from '../../dictionaries-client';
 import { useMultiCurrencySettings } from '@/hooks/useMultiCurrencySettings';
 import { useExchangeRateFetch } from '@/hooks/useExchangeRateFetch';
 import { usePermissions } from '@/hooks/usePermissions';
+import { getCurrencySymbol } from '@/lib/currency';
 import {
   getSaveSuccessMessage,
   getSaveErrorMessage,
@@ -24,13 +25,29 @@ export default function MultiCurrencyPage() {
 
   const { settings, loading, saving, message, setMessage, fetchSettings, updateSetting, saveSettings } =
     useMultiCurrencySettings(tenant);
-  const { fetching: fetchingRates, fetchRates } = useExchangeRateFetch(tenant);
+  const { fetching: fetchingRates, fetchRates, loadRates, saveManualRates } = useExchangeRateFetch(tenant);
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
     fetchSettings();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lang, tenant]);
+
+  // Exchange rates live in their own table, not on TenantSettings — load
+  // whatever's already on file once settings have resolved, so previously
+  // saved/fetched rates actually show up instead of rendering blank inputs.
+  useEffect(() => {
+    if (!settings) return;
+    (async () => {
+      const result = await loadRates();
+      if (result.success && result.data) {
+        updateSetting('multiCurrency.exchangeRates', result.data.exchangeRates);
+        updateSetting('multiCurrency.lastUpdated', result.data.lastUpdated ? new Date(result.data.lastUpdated) : undefined);
+      }
+    })();
+  // Only once settings first resolve, not on every settings change (updateSetting above would otherwise loop).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [!!settings]);
 
   const handleFetchRates = async () => {
     const result = await fetchRates();
@@ -51,12 +68,27 @@ export default function MultiCurrencyPage() {
     if (!settings || !dict) return;
 
     const result = await saveSettings(settings);
-    if (result.success) {
-      setMessage({ type: 'success', text: getSaveSuccessMessage(dict) });
-      setTimeout(() => setMessage(null), 3000);
-    } else {
+    if (!result.success) {
       setMessage({ type: 'error', text: result.error || getSaveErrorMessage(dict) });
+      return;
     }
+
+    // The settings PUT can't persist multiCurrency.exchangeRates (no flat
+    // column for it — see lib/tenant-settings-flatten.ts); manually-entered
+    // rates need the dedicated exchange-rates endpoint or they're silently
+    // dropped. Only relevant in manual mode — API-sourced rates are already
+    // persisted by handleFetchRates at fetch time.
+    const rates = settings.multiCurrency?.exchangeRates;
+    if (settings.multiCurrency?.exchangeRateSource === 'manual' && rates && Object.keys(rates).length > 0) {
+      const ratesResult = await saveManualRates(rates);
+      if (!ratesResult.success) {
+        setMessage({ type: 'error', text: ratesResult.error || getSaveErrorMessage(dict) });
+        return;
+      }
+    }
+
+    setMessage({ type: 'success', text: getSaveSuccessMessage(dict) });
+    setTimeout(() => setMessage(null), 3000);
   };
 
   if (!dict || loading) {
@@ -89,6 +121,49 @@ export default function MultiCurrencyPage() {
             {dict?.admin?.multiCurrencyDescription || 'Configure exchange rates and API settings for multi-currency support'}
           </p>
         </div>
+
+        <div className="mb-6 p-4 bg-gray-50 border border-gray-200 flex items-center justify-between flex-wrap gap-2">
+          <div>
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+              {dict?.admin?.baseCurrency || 'Base Currency'}
+            </span>
+            <p className="text-lg font-bold text-gray-900">
+              {settings?.currency || 'PHP'} ({settings?.currencySymbol || getCurrencySymbol(settings?.currency || 'PHP')})
+            </p>
+          </div>
+          <Link
+            href={`/${tenant}/${lang}/admin/settings`}
+            className="text-sm text-brand hover:text-brand-hover font-medium"
+          >
+            {dict?.admin?.changeBaseCurrency || 'Change in Settings →'}
+          </Link>
+        </div>
+
+        {settings?.suggestedCurrency && settings.suggestedCurrency.currency !== settings?.currency && (
+          <div className="mb-6 p-4 bg-blue-50 border border-blue-300 flex items-center justify-between flex-wrap gap-3">
+            <p className="text-sm text-blue-800">
+              {(
+                dict?.admin?.suggestedCurrencyHint ||
+                'Your tenant\'s country ({country}) commonly uses {currency} — want to use it as your base currency?'
+              )
+                .replace('{country}', settings.suggestedCurrency.countryName)
+                .replace('{currency}', settings.suggestedCurrency.currency)}
+            </p>
+            {canManage && (
+              <button
+                type="button"
+                onClick={() => {
+                  const code = settings.suggestedCurrency!.currency;
+                  updateSetting('currency', code);
+                  updateSetting('currencySymbol', getCurrencySymbol(code));
+                }}
+                className="px-4 py-2 bg-brand text-white text-sm font-medium hover:bg-brand-hover whitespace-nowrap"
+              >
+                {(dict?.admin?.useSuggestedCurrency || 'Use {currency}').replace('{currency}', settings.suggestedCurrency.currency)}
+              </button>
+            )}
+          </div>
+        )}
 
         {message && (
           <div
@@ -130,13 +205,18 @@ export default function MultiCurrencyPage() {
                     {dict?.admin?.exchangeRateApiKey || 'Exchange Rate API Key (Optional)'}
                   </label>
                   <input
-                    type="text"
+                    type="password"
+                    autoComplete="new-password"
                     value={multiCurrency.exchangeRateApiKey || ''}
                     onChange={(e) => {
                       updateSetting('multiCurrency.exchangeRateApiKey', e.target.value);
                     }}
                     className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
-                    placeholder={dict?.admin?.apiKeyPlaceholder || 'API key for exchange rate service'}
+                    placeholder={
+                      multiCurrency.exchangeRateApiKeyConfigured
+                        ? dict?.admin?.apiKeyConfiguredPlaceholder || 'Key is configured — leave blank to keep it'
+                        : dict?.admin?.apiKeyPlaceholder || 'API key for exchange rate service'
+                    }
                   />
                   <p className="mt-2 text-xs text-gray-500">
                     {dict?.admin?.apiKeyHint || 'Leave empty to use free tier (exchangerate-api.com)'}

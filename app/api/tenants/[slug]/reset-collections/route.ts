@@ -5,6 +5,7 @@ import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 // Map collection names (as used by the tenant-settings backup/reset UI) to
 // their Prisma delegate. Kept as `any` because each delegate has a different
@@ -98,8 +99,13 @@ export async function GET(
   { params }: { params: Promise<{ slug: string }> }
 ) {
   try {
-    const user = await requireAuth(request);
     const { slug } = await params;
+    const rl = checkRateLimit(`reset-collections-backup:${slug}`, 10, 60_000);
+    if (!rl.allowed) {
+      return NextResponse.json({ success: false, error: 'Rate limit exceeded' }, { status: 429 });
+    }
+
+    const user = await requireAuth(request);
     const t = await getValidationTranslatorFromRequest(request);
 
     const tenant = await prisma.tenant.findFirst({ where: { slug, isActive: true } });
@@ -202,8 +208,13 @@ export async function POST(
   { params }: { params: Promise<{ slug: string }> }
 ) {
   try {
-    const user = await requireAuth(request);
     const { slug } = await params;
+    const rl = checkRateLimit(`reset-collections-reset:${slug}`, 5, 60_000);
+    if (!rl.allowed) {
+      return NextResponse.json({ success: false, error: 'Rate limit exceeded' }, { status: 429 });
+    }
+
+    const user = await requireAuth(request);
 
     const tenant = await prisma.tenant.findFirst({ where: { slug, isActive: true } });
     const t = await getValidationTranslatorFromRequest(request);
@@ -254,6 +265,10 @@ export async function POST(
     // failure partway through (e.g. an FK-order mistake) must not leave the
     // tenant with some collections wiped and others untouched.
     const orderedCollections = orderCollections(collections);
+    // Prisma's default 5s transaction timeout is easy to blow through when
+    // deleting across ~20 collections for a tenant with real data volume; a
+    // timed-out transaction fully rolls back (still atomic) but the reset
+    // would then always fail for any non-trivial tenant.
     const results = await dbTransaction(async (tx) => {
       const r: Record<string, { deleted: number }> = {};
       for (const collectionName of orderedCollections) {
@@ -263,7 +278,7 @@ export async function POST(
         r[collectionName] = { deleted: result.count || 0 };
       }
       return r;
-    });
+    }, { timeout: 60_000, maxWait: 10_000 });
 
     // Create audit log
     await createAuditLog(request, {
@@ -307,8 +322,13 @@ export async function PUT(
   { params }: { params: Promise<{ slug: string }> }
 ) {
   try {
-    const user = await requireAuth(request);
     const { slug } = await params;
+    const rl = checkRateLimit(`reset-collections-restore:${slug}`, 5, 60_000);
+    if (!rl.allowed) {
+      return NextResponse.json({ success: false, error: 'Rate limit exceeded' }, { status: 429 });
+    }
+
+    const user = await requireAuth(request);
 
     const tenant = await prisma.tenant.findFirst({ where: { slug, isActive: true } });
     const t = await getValidationTranslatorFromRequest(request);
@@ -364,6 +384,8 @@ export async function PUT(
     const orderedForClear = orderCollections(collectionNames);
     const orderedForRestore = [...orderedForClear].reverse(); // parents-first insert order
 
+    // Same rationale as the reset transaction above: clearing + bulk-inserting
+    // across ~20 collections can exceed Prisma's 5s default transaction timeout.
     const results = await dbTransaction(async (tx) => {
       const r: Record<string, { restored: number; cleared: number }> = {};
 
@@ -399,7 +421,7 @@ export async function PUT(
       }
 
       return r;
-    });
+    }, { timeout: 60_000, maxWait: 10_000 });
 
     // Create audit log
     await createAuditLog(request, {

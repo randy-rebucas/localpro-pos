@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
-import { getDefaultTenantSettings } from '@/lib/currency';
+import { getDefaultTenantSettings, getCurrencySymbol } from '@/lib/currency';
 import { useSampleDataManager } from '@/hooks/useSampleDataManager';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
@@ -30,6 +30,7 @@ export default function SampleDataPage() {
   const { settings } = useTenantSettings();
   const tenantSettings = settings || getDefaultTenantSettings();
   const primaryColor = tenantSettings.primaryColor || '#35979c';
+  const currencySymbol = tenantSettings.currencySymbol || getCurrencySymbol(tenantSettings.currency);
 
   useEffect(() => {
     getDictionaryClient(lang).then((d) => {
@@ -156,7 +157,7 @@ export default function SampleDataPage() {
                   { key: 'categories', label: dict?.admin?.categories || 'Categories', icon: '🏷️', items: preview.sample.categories.join(', ') },
                   { key: 'products',   label: dict?.admin?.products || 'Products',   icon: '📦', items: `${preview.preview.products} products across ${preview.preview.categories} categories` },
                   { key: 'customers',  label: dict?.admin?.customers || 'Customers',  icon: '👤', items: `${preview.preview.customers} sample customers with contact details and tags` },
-                  { key: 'discounts',  label: dict?.admin?.discounts || 'Discounts',  icon: '🎫', items: preview.sample.discounts.map(d => `${d.code} (${d.type === 'percentage' ? d.value + '%' : '₱' + d.value} off)`).join(', ') },
+                  { key: 'discounts',  label: dict?.admin?.discounts || 'Discounts',  icon: '🎫', items: preview.sample.discounts.map(d => `${d.code} (${d.type === 'percentage' ? d.value + '%' : currencySymbol + d.value} off)`).join(', ') },
                 ] as { key: keyof typeof preview.preview; label: string; icon: string; items: string }[]).map(row => {
                   const toAdd    = preview.preview[row.key];
                   const existing = preview.existing[row.key];
@@ -242,7 +243,7 @@ export default function SampleDataPage() {
                           </span>
                         </td>
                         <td className="px-5 py-3 text-sm text-right font-medium text-gray-900">
-                          ₱{p.price.toLocaleString()}
+                          {currencySymbol}{p.price.toLocaleString()}
                         </td>
                       </tr>
                     ))}

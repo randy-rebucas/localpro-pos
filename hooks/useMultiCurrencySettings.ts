@@ -9,7 +9,59 @@ export interface MultiCurrencySettings {
   exchangeRates: Record<string, number>;
   exchangeRateSource: 'manual' | 'api';
   exchangeRateApiKey: string;
+  exchangeRateApiKeyConfigured?: boolean;
   lastUpdated?: Date;
+}
+
+// GET /api/tenants/{tenant}/settings returns the flat Prisma TenantSettings
+// row (multiCurrencyEnabled/displayCurrencies/exchangeRateSource/
+// exchangeRateApiKey/exchangeRateLastUpdated columns) — it never sends a
+// nested `multiCurrency` object. This page and ITenantSettings both expect
+// `settings.multiCurrency.*`, so without this every field here (enabled,
+// display currencies, source, API key) silently reverts to the hardcoded
+// default on every load even though it was saved correctly — the PUT path
+// flattens the nested payload before writing (lib/tenant-settings-flatten.ts),
+// there's just no reverse step on read. Mirrors reshapeAddress in
+// hooks/useSettingsPage.ts, the same fix for the same class of bug.
+function reshapeMultiCurrency(data: Record<string, unknown>): Record<string, unknown> {
+  if (data.multiCurrency) return data;
+  const {
+    multiCurrencyEnabled,
+    displayCurrencies,
+    exchangeRateSource,
+    exchangeRateApiKeyConfigured,
+    exchangeRateLastUpdated,
+    ...rest
+  } = data;
+  return {
+    ...rest,
+    multiCurrency: {
+      enabled: (multiCurrencyEnabled as boolean) ?? false,
+      displayCurrencies: (displayCurrencies as string[]) ?? [],
+      exchangeRates: {},
+      exchangeRateSource: (exchangeRateSource as 'manual' | 'api') ?? 'manual',
+      // The raw key is never sent back by GET (see the settings route) —
+      // only whether one is on file. The field stays blank until the admin
+      // types a new value; leaving it blank on save keeps the existing key
+      // unchanged rather than clearing it (see the settings PUT handler).
+      exchangeRateApiKey: '',
+      exchangeRateApiKeyConfigured: (exchangeRateApiKeyConfigured as boolean) ?? false,
+      lastUpdated: exchangeRateLastUpdated ?? undefined,
+    },
+  };
+}
+
+function mergeDefaultSettings(data: Record<string, unknown>): ITenantSettings {
+  return {
+    multiCurrency: {
+      enabled: false,
+      displayCurrencies: [],
+      exchangeRates: {},
+      exchangeRateSource: 'manual',
+      exchangeRateApiKey: '',
+    },
+    ...data,
+  } as unknown as ITenantSettings;
 }
 
 export const useMultiCurrencySettings = (tenant: string) => {
@@ -36,17 +88,7 @@ export const useMultiCurrencySettings = (tenant: string) => {
       const data = await res.json();
 
       if (data.success) {
-        const defaultSettings = {
-          multiCurrency: {
-            enabled: false,
-            displayCurrencies: [],
-            exchangeRates: {},
-            exchangeRateSource: 'manual',
-            exchangeRateApiKey: '',
-          },
-          ...data.data,
-        };
-        setSettings(defaultSettings);
+        setSettings(mergeDefaultSettings(reshapeMultiCurrency(data.data)));
       } else {
         setMessage({ type: 'error', text: data.error || 'Failed to load settings' });
       }
@@ -105,8 +147,9 @@ export const useMultiCurrencySettings = (tenant: string) => {
         const data = await res.json();
 
         if (data.success) {
-          setSettings(data.data);
-          return { success: true, data: data.data };
+          const reshaped = mergeDefaultSettings(reshapeMultiCurrency(data.data));
+          setSettings(reshaped);
+          return { success: true, data: reshaped };
         } else {
           const errorMessage =
             res.status === 401 || res.status === 403

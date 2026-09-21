@@ -6,6 +6,7 @@
 
 import { getBusinessTypeConfig, BusinessType, getAllowedProductTypes } from './business-types'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { ITenantSettings } from '@/types/tenant';
+import { formatCurrency } from './currency';
 
 /**
  * Structural shape covering the product fields these helpers read/write.
@@ -302,7 +303,7 @@ export function formatProductForDisplay(
   return {
     title,
     subtitle,
-    price: `$${product.price.toFixed(2)}`,
+    price: formatCurrency(product.price, settings),
     details,
   };
 }

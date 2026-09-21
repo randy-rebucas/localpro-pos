@@ -14,6 +14,7 @@ import prisma, { dbTransaction } from '@/lib/db';
 import { getLowStockProducts } from '@/lib/stock';
 import { sendEmail } from '@/lib/notifications';
 import { getTenantSettingsById } from '@/lib/tenant';
+import { getCurrencySymbol } from '@/lib/currency';
 import { AutomationResult } from './types';
 
 export interface PurchaseOrderOptions {
@@ -139,6 +140,7 @@ export async function generatePurchaseOrders(
 
             if (tenantSettings?.emailNotifications && tenantSettings?.email) {
               const companyName = tenantSettings?.companyName || tenant.name || 'Business';
+              const currencySymbol = tenantSettings.currencySymbol || getCurrencySymbol(tenantSettings.currency || 'PHP');
               await sendEmail({
                 to: tenantSettings.email,
                 subject: `Draft Purchase Order Created: ${orderNumber} - ${companyName}`,
@@ -146,7 +148,7 @@ export async function generatePurchaseOrders(
 
 Order Number: ${orderNumber}
 Items: ${products.length}
-Total: $${totalAmount.toFixed(2)}
+Total: ${currencySymbol}${totalAmount.toFixed(2)}
 
 Review and approve it in Admin → Purchase Orders before it's sent to the supplier.
 
@@ -210,6 +212,7 @@ This is an automated purchase order from your POS system.`,
         // Send to tenant email for approval
         if (tenantSettings?.emailNotifications && tenantSettings?.email) {
           const companyName = tenantSettings?.companyName || tenant.name || 'Business';
+          const currencySymbol = tenantSettings.currencySymbol || getCurrencySymbol(tenantSettings.currency || 'PHP');
 
           const emailBody = `Purchase Order Suggestion for ${companyName}
 
@@ -225,11 +228,11 @@ ${purchaseOrderItems.map(item =>
   `- ${item.name} (SKU: ${item.sku})
   Current Stock: ${item.currentStock}
   Reorder Quantity: ${item.reorderQuantity}
-  Unit Price: $${item.unitPrice.toFixed(2)}
-  Subtotal: $${item.subtotal.toFixed(2)}`
+  Unit Price: ${currencySymbol}${item.unitPrice.toFixed(2)}
+  Subtotal: ${currencySymbol}${item.subtotal.toFixed(2)}`
 ).join('\n\n')}
 
-Total Amount: $${totalAmount.toFixed(2)}
+Total Amount: ${currencySymbol}${totalAmount.toFixed(2)}
 
 CSV Data:
 ${csvContent}

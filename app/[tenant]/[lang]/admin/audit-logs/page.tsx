@@ -276,7 +276,7 @@ export default function AuditLogsPage() {
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-100">
                       {auditLogs.map((log) => {
-                        const { name: userName, email: userEmail } = extractUserInfo(log.userId);
+                        const { name: userName, email: userEmail } = extractUserInfo(log.user);
                         return (
                           <tr key={log._id} className="hover:bg-gray-50">
                             <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-500">

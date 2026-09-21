@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { ITenantSettings } from '@/types/tenant';
+import { reshapeAdvancedBranding } from '@/lib/tenant-settings-flatten';
 
 export function useBrandingSettings(tenant: string) {
   const [settings, setSettings] = useState<ITenantSettings | null>(null);
@@ -25,7 +26,7 @@ export function useBrandingSettings(tenant: string) {
 
       const data = await res.json();
       if (data.success) {
-        setSettings(data.data);
+        setSettings(reshapeAdvancedBranding(data.data) as unknown as ITenantSettings);
       } else {
         const errorMsg = data.error || 'Failed to load settings';
         setError(errorMsg);

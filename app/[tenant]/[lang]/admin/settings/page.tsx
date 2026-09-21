@@ -163,11 +163,15 @@ export default function AdminSettingsPage() {
           email: s.email ?? '',
           phone: s.phone ?? '',
           website: s.website ?? '',
-          addressStreet: s.address?.street ?? '',
-          addressCity: s.address?.city ?? '',
-          addressState: s.address?.state ?? '',
-          addressZipCode: s.address?.zipCode ?? '',
-          addressCountry: s.address?.country ?? '',
+          // GET returns the flat TenantSettings row (addressStreet/addressCity/...
+          // columns), not a nested `address` object — only the PUT payload is
+          // nested (see lib/tenant-settings-flatten.ts). Reading `s.address?.x`
+          // here was always undefined, silently blanking these fields on load.
+          addressStreet: s.addressStreet ?? '',
+          addressCity: s.addressCity ?? '',
+          addressState: s.addressState ?? '',
+          addressZipCode: s.addressZipCode ?? '',
+          addressCountry: s.addressCountry ?? '',
           receiptHeader: s.receiptHeader ?? '',
           receiptFooter: s.receiptFooter ?? '',
           receiptShowLogo: s.receiptShowLogo ?? true,

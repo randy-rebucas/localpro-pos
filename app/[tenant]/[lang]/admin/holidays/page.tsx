@@ -5,7 +5,6 @@ import HolidaysManager from '@/components/settings/HolidaysManager';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
-import { useHolidaysSettings } from '@/hooks/useHolidaysSettings';
 
 export default function HolidaysAdminPage() {
   const params = useParams();
@@ -13,15 +12,11 @@ export default function HolidaysAdminPage() {
   const lang = params.lang as 'en' | 'es';
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
 
-  const { settings, loading, fetchSettings, updateSettings } = useHolidaysSettings(tenant);
-
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
-    fetchSettings();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lang, tenant]);
+  }, [lang]);
 
-  if (!dict || loading || !settings) {
+  if (!dict) {
     return (
       <div className="flex items-center justify-center py-24">
         <div className="text-center">
@@ -45,14 +40,7 @@ export default function HolidaysAdminPage() {
         </div>
 
         <div className="bg-white border border-gray-300 p-5 sm:p-6 lg:p-8">
-          <HolidaysManager
-            settings={settings}
-            tenant={tenant}
-            dict={dict}
-            onUpdate={(updates) => {
-              updateSettings(updates);
-            }}
-          />
+          <HolidaysManager tenant={tenant} dict={dict} />
         </div>
       </div>
     </div>

@@ -2,7 +2,6 @@
 
 import React, { useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
-import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
 import { useBackupCollections } from '@/hooks/useBackupCollections';
 import { useRestoreCollections } from '@/hooks/useRestoreCollections';

@@ -163,7 +163,7 @@ export default function AdminSidebar() {
         { label: 'Feature Flags', href: `${base}/admin/feature-flags`, icon: ToggleLeft, permission: 'feature_flags.manage' },
         { label: 'Roles & Permissions', href: `${base}/admin/roles-permissions`, icon: Lock, permission: 'roles_permissions.manage' },
         { label: 'Audit Logs', href: `${base}/admin/audit-logs`, icon: ClipboardList, permission: 'audit_logs.view' },
-        { label: 'Backup & Reset', href: `${base}/admin/backup-reset`, icon: Database, permission: 'backup_reset.manage' },
+        { label: 'Backup & Reset', href: `${base}/admin/backup-reset`, icon: Database, permission: 'reset_collections.manage' },
         { label: 'Sample Data', href: `${base}/admin/sample-data`, icon: Sparkles, permission: 'sample_data.manage' },
         { label: 'API Docs', href: `${base}/admin/api-docs`, icon: Code2, permission: 'api_docs.view' },
         { label: 'Settings', href: `${base}/admin/settings`, icon: Settings, permission: 'settings.manage' },

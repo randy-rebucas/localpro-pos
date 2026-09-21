@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import { useParams } from 'next/navigation';
 import { ITenantSettings } from '@/types/tenant';
 import { getDefaultTenantSettings } from '@/lib/currency';
+import { reshapeAdvancedBranding } from '@/lib/tenant-settings-flatten';
 
 interface TenantSettingsContextType {
   settings: ITenantSettings | null;
@@ -26,9 +27,13 @@ export function TenantSettingsProvider({ children }: { children: ReactNode }) {
       const data = await res.json();
       
       if (data.success) {
-        // Merge with defaults to ensure all fields exist
+        // Merge with defaults to ensure all fields exist. GET returns flat
+        // Prisma columns for advanced branding (fontFamily/fontSource/etc),
+        // not the nested `advancedBranding` object every consumer expects —
+        // without reshaping, the font/custom-CSS effect below never had
+        // anything to read (see docs/qa/advanced-branding-qa-analysis.md).
         const defaultSettings = getDefaultTenantSettings();
-        setSettings({ ...defaultSettings, ...data.data });
+        setSettings({ ...defaultSettings, ...reshapeAdvancedBranding(data.data) } as ITenantSettings);
       } else {
         // Use defaults if fetch fails
         setSettings(getDefaultTenantSettings());
@@ -122,10 +127,10 @@ export function TenantSettingsProvider({ children }: { children: ReactNode }) {
     // Custom CSS
     const customCssStyleId = 'tenant-custom-css';
     document.getElementById(customCssStyleId)?.remove();
-    if (branding?.customTheme?.css) {
+    if (branding?.customThemeCss) {
       const style = document.createElement('style');
       style.id = customCssStyleId;
-      style.textContent = branding.customTheme.css;
+      style.textContent = branding.customThemeCss;
       document.head.appendChild(style);
     }
   }, [settings?.advancedBranding]);

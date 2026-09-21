@@ -28,6 +28,12 @@ export function useBrandingSave(tenant: string) {
         body: JSON.stringify({ settings }),
       });
 
+      // Read the body before branching on res.ok — a 400 (e.g. the font URL
+      // scheme / custom CSS validation in the settings PUT route) carries a
+      // specific `data.error` message that a generic "HTTP 400" would throw
+      // away, leaving the admin with no idea what to fix.
+      const data = await res.json();
+
       if (!res.ok) {
         if (res.status === 401 || res.status === 403) {
           const errorMsg = 'Unauthorized. Please login with admin account.';
@@ -35,10 +41,12 @@ export function useBrandingSave(tenant: string) {
           onError?.(errorMsg);
           return false;
         }
-        throw new Error(`HTTP ${res.status}: Failed to save settings`);
+        const errorMsg = data?.error || `Failed to save settings (HTTP ${res.status})`;
+        setMessage({ type: 'error', text: errorMsg });
+        onError?.(errorMsg);
+        return false;
       }
 
-      const data = await res.json();
       if (data.success) {
         const successMsg = 'Advanced branding settings saved successfully!';
         setMessage({ type: 'success', text: successMsg });

@@ -6,6 +6,7 @@
 import prisma from '@/lib/db';
 import { sendEmail } from '@/lib/notifications';
 import { getTenantSettingsById } from '@/lib/tenant';
+import { getCurrencySymbol } from '@/lib/currency';
 import { AutomationResult } from './types';
 
 export interface SalesTrendAnalysisOptions {
@@ -58,6 +59,8 @@ export async function analyzeSalesTrends(
         if (!tenantSettings?.emailNotifications) {
           continue;
         }
+
+        const currencySymbol = tenantSettings.currencySymbol || getCurrencySymbol(tenantSettings.currency || 'PHP');
 
         const now = new Date();
         let currentPeriodStart: Date;
@@ -149,7 +152,7 @@ export async function analyzeSalesTrends(
           trendAnalysis = `
 COMPARISON WITH PREVIOUS ${period.toUpperCase()}:
 
-Sales: ${salesChange >= 0 ? '+' : ''}$${salesChange.toFixed(2)} (${salesChangePercent}%)
+Sales: ${salesChange >= 0 ? '+' : ''}${currencySymbol}${salesChange.toFixed(2)} (${salesChangePercent}%)
 Transactions: ${transactionChange >= 0 ? '+' : ''}${transactionChange} (${transactionChangePercent}%)
 
 ${salesChangeNum > 0 ? '📈 Sales are increasing!' : salesChangeNum < 0 ? '📉 Sales are decreasing' : '➡️ Sales are stable'}
@@ -162,9 +165,9 @@ ${salesChangeNum > 0 ? '📈 Sales are increasing!' : salesChangeNum < 0 ? '📉
 Current Period: ${currentPeriodStart.toLocaleDateString()} - ${currentPeriodEnd.toLocaleDateString()}
 
 CURRENT PERIOD STATISTICS:
-- Total Sales: $${currentData.totalSales.toFixed(2)}
+- Total Sales: ${currencySymbol}${currentData.totalSales.toFixed(2)}
 - Transaction Count: ${currentData.transactionCount}
-- Average Transaction: $${currentData.avgTransaction.toFixed(2)}
+- Average Transaction: ${currencySymbol}${currentData.avgTransaction.toFixed(2)}
 ${trendAnalysis}
 
 ${previousData && parseFloat(salesChangePercent || '0') > 0 ? '💡 Suggestion: Consider increasing inventory for high-performing products.' : ''}

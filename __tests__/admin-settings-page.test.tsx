@@ -35,6 +35,9 @@ vi.mock('react-hot-toast', () => ({
 
 import AdminSettingsPage from '@/app/[tenant]/[lang]/admin/settings/page';
 
+// Shaped like the real GET /api/tenants/{tenant}/settings response: the flat
+// Prisma TenantSettings row (addressStreet/addressCity/... columns), never a
+// nested `address` object — see the regression test below.
 const baseSettings = {
   companyName: 'Acme Store',
   businessType: 'retail',
@@ -48,6 +51,11 @@ const baseSettings = {
   taxLabel: 'VAT',
   lowStockAlert: true,
   lowStockThreshold: 10,
+  addressStreet: '123 Main St.',
+  addressCity: 'Makati',
+  addressState: 'Metro Manila',
+  addressZipCode: '1200',
+  addressCountry: 'Philippines',
 };
 
 // A stable implementation (not `mockResolvedValueOnce`) so it survives the
@@ -281,5 +289,23 @@ describe('currency symbol auto-fill', () => {
     await userEvent.selectOptions(currencySelect, 'USD');
 
     expect(symbolInput).toHaveValue('$');
+  });
+});
+
+describe('address fields load from the flat GET response', () => {
+  it('populates Street/City/State/ZIP/Country from the flat addressStreet/addressCity/... columns', async () => {
+    // Regression test: GET /api/tenants/{tenant}/settings returns the flat
+    // Prisma row (addressStreet, addressCity, ...), never a nested `address`
+    // object. Reading `s.address?.street` in fetchSettings always resolved
+    // to undefined, so these fields silently reset to blank on every load
+    // despite having been saved correctly by the PUT handler.
+    await renderLoaded(true);
+    await userEvent.click(screen.getByRole('button', { name: 'Contact' }));
+
+    expect(labelledInput('Street')).toHaveValue(baseSettings.addressStreet);
+    expect(labelledInput('City / Municipality')).toHaveValue(baseSettings.addressCity);
+    expect(labelledInput('Province / State')).toHaveValue(baseSettings.addressState);
+    expect(labelledInput('ZIP Code')).toHaveValue(baseSettings.addressZipCode);
+    expect(labelledInput('Country')).toHaveValue(baseSettings.addressCountry);
   });
 });

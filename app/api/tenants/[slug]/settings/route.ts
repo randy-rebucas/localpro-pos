@@ -10,6 +10,7 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { flattenSettingsForPrisma } from '@/lib/tenant-settings-flatten';
 import { runWithBypass } from '@/lib/tenant-context';
+import { suggestCurrencyForCountry } from '@/lib/country-currency';
 
 export async function GET(
   request: NextRequest,
@@ -86,9 +87,32 @@ export async function GET(
     // falling back to each permission's hardcoded default role floor.
     const rolePermissionOverrides = (override?.overrides as Record<string, unknown> | undefined) || {};
 
+    // This GET is intentionally unauthenticated (see the comment above — it's
+    // how the client discovers which tenant it's in before login). The raw
+    // exchangeRateApiKey is a real credential (see app/api/tenants/[slug]/
+    // exchange-rates/route.ts, which sends it to an external rate provider),
+    // so it must never be included here — only whether one is on file. The
+    // admin UI re-derives its masked display from that flag; leaving the
+    // field blank on save preserves the existing key instead of clearing it
+    // (see the PUT handler below).
+    const { exchangeRateApiKey, ...settingsWithoutApiKey } = tenantSettings as Record<string, unknown>;
+
+    // Suggests a base currency from the tenant's configured address country
+    // (Multi-Currency admin page) — a hint only, never auto-applied server-side.
+    const currencySuggestion = suggestCurrencyForCountry(
+      (settingsWithoutApiKey as { addressCountry?: string }).addressCountry
+    );
+
+    const data = {
+      ...settingsWithoutApiKey,
+      exchangeRateApiKeyConfigured: !!exchangeRateApiKey,
+      suggestedCurrency: currencySuggestion,
+      rolePermissionOverrides,
+    };
+
     return NextResponse.json({
       success: true,
-      data: { ...tenantSettings, rolePermissionOverrides },
+      data,
     });
   } catch (error: unknown) {
     logger.error('Error fetching tenant settings:', error);
@@ -122,6 +146,21 @@ export async function PUT(
 
     const body = await request.json();
     const settings = body.settings || body;
+
+    // The GET handler never returns the raw exchangeRateApiKey (see above),
+    // so the client always starts this field blank and only fills it in when
+    // the admin types a *new* key. A blank/absent submission here must mean
+    // "unchanged," not "clear the key" — otherwise every unrelated save from
+    // the Multi-Currency page (toggling the source, editing display
+    // currencies) would silently wipe out a previously-configured key.
+    if (
+      settings.multiCurrency &&
+      typeof settings.multiCurrency === 'object' &&
+      !settings.multiCurrency.exchangeRateApiKey
+    ) {
+      const { exchangeRateApiKey: _omit, ...multiCurrencyWithoutKey } = settings.multiCurrency;
+      settings.multiCurrency = multiCurrencyWithoutKey;
+    }
 
     // businessHours has its own granular permission (the Business Hours admin
     // page gates on it, not settings.manage) — enforce it here too, since this
@@ -221,6 +260,22 @@ export async function PUT(
         { success: false, error: t('validation.invalidLogoUrl', 'Logo URL must be a valid https:// address') },
         { status: 400 }
       );
+    }
+
+    // Validate font URL schemes — googleFontUrl/customFontUrl get rendered
+    // into a <link href>/@font-face src: url(...) app-wide (see
+    // contexts/TenantSettingsContext.tsx), same injection surface as `logo`
+    // above, so the same https-only restriction applies. These live nested
+    // under `advancedBranding` (see lib/tenant-settings-flatten.ts), unlike
+    // `logo` which is a top-level scalar — checked pre-flatten here, so the
+    // nesting still applies at this point in the handler.
+    const advancedBranding = updatedSettings.advancedBranding as Record<string, unknown> | undefined;
+    for (const field of ['googleFontUrl', 'customFontUrl']) {
+      const value = advancedBranding?.[field] as string | undefined;
+      if (value && !/^https:\/\/[^\s"'<>]+$/i.test(value)) {
+        const errorMsg = t('validation.invalidFontUrl', 'Font URL must be a valid https:// address').replace('{field}', field);
+        return NextResponse.json({ success: false, error: errorMsg }, { status: 400 });
+      }
     }
 
     // Validate tax label / receipt text lengths (mirrors the client caps —

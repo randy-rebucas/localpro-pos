@@ -3,11 +3,14 @@ import { useState, useCallback } from 'react';
 export interface AuditLog {
   _id: string;
   tenantId: string;
-  userId?: {
-    _id: string;
+  // Raw scalar FK column — GET /api/audit-logs's Prisma query includes the
+  // joined actor separately as `user` (see below); `userId` itself is never
+  // an object. Read `user` for display, not `userId`.
+  userId?: string | null;
+  user?: {
     name: string;
     email: string;
-  } | string;
+  } | null;
   action: string;
   entityType: string;
   entityId?: string;

@@ -10,6 +10,7 @@ import { generateReceiptNumber, isDuplicateReceiptNumberError } from '@/lib/rece
 import { updateStock, updateBundleStock, getProductStock } from '@/lib/stock';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { getTenantSettingsById } from '@/lib/tenant';
+import { getCurrencySymbol } from '@/lib/currency';
 import { checkSubscriptionLimit, SubscriptionService, checkFeatureAccess } from '@/lib/subscription';
 import { logger } from '@/lib/logger';
 import { calculateTax } from '@/lib/tax-calculation';
@@ -990,7 +991,7 @@ export async function POST(request: NextRequest) {
                 points: -loyaltyPointsToRedeem,
                 balanceBefore: newBalance,
                 balanceAfter: balanceAfterRedeem,
-                description: `Redeemed ${loyaltyPointsToRedeem} points (₱${loyaltyDiscountAmount.toFixed(2)} discount)`,
+                description: `Redeemed ${loyaltyPointsToRedeem} points (${tenantSettings?.currencySymbol || getCurrencySymbol(tenantSettings?.currency || 'PHP')}${loyaltyDiscountAmount.toFixed(2)} discount)`,
                 createdById: user.userId,
               },
             });
