@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
-import prisma from '@/lib/db';
+import prisma, { dbTransaction } from '@/lib/db';
 import { requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { handleApiError } from '@/lib/error-handler';
@@ -86,20 +86,50 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'amount is required' }, { status: 400 });
     }
 
-    const event = await prisma.billingEvent.create({
-      data: {
-        id: randomUUID(),
-        tenantId: tenant.id,
-        subscriptionId: subscription.id,
-        type,
-        amount: Number(amount),
-        currency: 'PHP',
-        description,
-        notes,
-        transactionId,
-        invoiceUrl,
-        recordedById: adminUser.userId,
-      },
+    // Idempotency: a transactionId identifies the same underlying payment, so
+    // a retry/double-submit with the same (tenant, transactionId, type) is
+    // treated as a no-op rather than double-recording revenue/refunds.
+    if (transactionId) {
+      const existingEvent = await prisma.billingEvent.findFirst({
+        where: { tenantId: tenant.id, transactionId, type },
+      });
+      if (existingEvent) {
+        return NextResponse.json({ success: true, data: existingEvent }, { status: 200 });
+      }
+    }
+
+    const event = await dbTransaction(async (tx) => {
+      const created = await tx.billingEvent.create({
+        data: {
+          id: randomUUID(),
+          tenantId: tenant.id,
+          subscriptionId: subscription.id,
+          type,
+          amount: Number(amount),
+          currency: 'PHP',
+          description,
+          notes,
+          transactionId,
+          invoiceUrl,
+          recordedById: adminUser.userId,
+        },
+      });
+
+      const ip = request.headers.get('x-forwarded-for') || '';
+      await tx.superAdminAction.create({
+        data: {
+          id: randomUUID(),
+          adminUserId: adminUser.userId,
+          action: 'billing.record',
+          targetType: 'Subscription',
+          targetId: subscription.id,
+          description: `Recorded billing event "${type}" (${amount}) for tenant ${tenantSlug}`,
+          ipAddress: ip,
+          userAgent: request.headers.get('user-agent') || '',
+        },
+      });
+
+      return created;
     });
 
     await createAuditLog(request, {
@@ -110,20 +140,6 @@ export async function POST(
       entityId: event.id,
       changes: { type, amount, transactionId, invoiceUrl },
       metadata: { recordedBy: adminUser.userId, role: 'super_admin' },
-    });
-
-    const ip = request.headers.get('x-forwarded-for') || '';
-    await prisma.superAdminAction.create({
-      data: {
-        id: randomUUID(),
-        adminUserId: adminUser.userId,
-        action: 'billing.record',
-        targetType: 'Subscription',
-        targetId: subscription.id,
-        description: `Recorded billing event "${type}" (${amount}) for tenant ${tenantSlug}`,
-        ipAddress: ip,
-        userAgent: request.headers.get('user-agent') || '',
-      },
     });
 
     return NextResponse.json({ success: true, data: event }, { status: 201 });

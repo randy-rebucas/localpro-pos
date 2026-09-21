@@ -179,7 +179,23 @@ export async function PATCH(
     if (invoiceId !== undefined) updateData.invoiceId = invoiceId || null;
     if (notes !== undefined) updateData.notes = notes;
 
-    await prisma.deposit.update({ where: { id }, data: updateData });
+    const { count } = await prisma.deposit.updateMany({
+      where: { id, tenantId, status: existing.status },
+      data: updateData,
+    });
+
+    if (count === 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: t(
+            'validation.depositStatusChanged',
+            'This deposit was already updated by someone else. Please refresh and try again.'
+          ),
+        },
+        { status: 409 }
+      );
+    }
 
     const updated = await prisma.deposit.findUnique({
       where: { id },
@@ -254,7 +270,20 @@ export async function DELETE(
       );
     }
 
-    await prisma.deposit.update({ where: { id }, data: { status: 'cancelled' } });
+    const { count } = await prisma.deposit.updateMany({
+      where: { id, tenantId, status: 'pending' },
+      data: { status: 'cancelled' },
+    });
+
+    if (count === 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: t('validation.depositCannotCancel', 'Only a pending deposit can be cancelled directly'),
+        },
+        { status: 400 }
+      );
+    }
 
     await createAuditLog(request, {
       tenantId,

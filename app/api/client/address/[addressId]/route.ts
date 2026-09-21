@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/db';
+import prisma, { dbTransaction } from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
@@ -50,10 +50,6 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     // Handle default flag
     if (isDefault === true) {
-      await prisma.address.updateMany({
-        where: { userId: currentUser.userId, tenantId: address.tenantId, isDefault: true, id: { not: addressId } },
-        data: { isDefault: false },
-      });
       updates.isDefault = true;
     } else if (isDefault === false) {
       updates.isDefault = false;
@@ -66,9 +62,20 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const updatedAddress = await prisma.address.update({
-      where: { id: addressId },
-      data: updates,
+    // Unsetting the previous default and updating this address run in one
+    // transaction — otherwise two concurrent "set as default" requests can
+    // each clear the other's default and both end up marked default.
+    const updatedAddress = await dbTransaction(async (tx) => {
+      if (isDefault === true) {
+        await tx.address.updateMany({
+          where: { userId: currentUser.userId, tenantId: address.tenantId, isDefault: true, id: { not: addressId } },
+          data: { isDefault: false },
+        });
+      }
+      return tx.address.update({
+        where: { id: addressId },
+        data: updates,
+      });
     });
 
     await createAuditLog(request, {
@@ -122,29 +129,33 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     const wasDefault = address.isDefault;
     const tenantId = address.tenantId;
 
-    await prisma.address.update({
-      where: { id: addressId },
-      data: { isActive: false },
-    });
-
-    // If we deleted the default address, promote the most recent remaining one
-    if (wasDefault) {
-      const nextDefault = await prisma.address.findFirst({
-        where: {
-          userId: currentUser.userId,
-          tenantId,
-          isActive: true,
-        },
-        orderBy: { createdAt: 'desc' },
+    // Soft-deleting and promoting the next default run in one transaction so
+    // a concurrent request can't read the old (about-to-be-deleted) default
+    // in between and skip promoting a replacement.
+    await dbTransaction(async (tx) => {
+      await tx.address.update({
+        where: { id: addressId },
+        data: { isActive: false },
       });
 
-      if (nextDefault) {
-        await prisma.address.update({
-          where: { id: nextDefault.id },
-          data: { isDefault: true },
+      if (wasDefault) {
+        const nextDefault = await tx.address.findFirst({
+          where: {
+            userId: currentUser.userId,
+            tenantId,
+            isActive: true,
+          },
+          orderBy: { createdAt: 'desc' },
         });
+
+        if (nextDefault) {
+          await tx.address.update({
+            where: { id: nextDefault.id },
+            data: { isDefault: true },
+          });
+        }
       }
-    }
+    });
 
     await createAuditLog(request, {
       tenantId,

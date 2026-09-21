@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
-import prisma from '@/lib/db';
+import prisma, { dbTransaction } from '@/lib/db';
 import { requireRole } from '@/lib/auth';
 import { handleApiError } from '@/lib/error-handler';
 
@@ -62,38 +62,42 @@ export async function POST(request: NextRequest) {
     }
 
     const couponId = randomUUID();
-    const coupon = await prisma.coupon.create({
-      data: {
-        id: couponId,
-        code: String(code).toUpperCase(),
-        description,
-        discountType,
-        discountValue: Number(discountValue),
-        appliesTo: appliesTo || 'all_plans',
-        maxUses: maxUses ? Number(maxUses) : undefined,
-        validFrom: validFrom ? new Date(validFrom) : new Date(),
-        validUntil: validUntil ? new Date(validUntil) : undefined,
-        isActive: true,
-        createdById: adminUser.userId,
-        plans: planIds && planIds.length > 0
-          ? { create: (planIds as string[]).map((planId) => ({ planId })) }
-          : undefined,
-      },
-      include: { plans: true },
-    });
-
     const ip = request.headers.get('x-forwarded-for') || '';
-    await prisma.superAdminAction.create({
-      data: {
-        id: randomUUID(),
-        adminUserId: adminUser.userId,
-        action: 'coupon.create',
-        targetType: 'Coupon',
-        targetId: coupon.id,
-        description: `Created coupon ${code}`,
-        ipAddress: ip,
-        userAgent: request.headers.get('user-agent') || '',
-      },
+    const coupon = await dbTransaction(async (tx) => {
+      const created = await tx.coupon.create({
+        data: {
+          id: couponId,
+          code: String(code).toUpperCase(),
+          description,
+          discountType,
+          discountValue: Number(discountValue),
+          appliesTo: appliesTo || 'all_plans',
+          maxUses: maxUses ? Number(maxUses) : undefined,
+          validFrom: validFrom ? new Date(validFrom) : new Date(),
+          validUntil: validUntil ? new Date(validUntil) : undefined,
+          isActive: true,
+          createdById: adminUser.userId,
+          plans: planIds && planIds.length > 0
+            ? { create: (planIds as string[]).map((planId) => ({ planId })) }
+            : undefined,
+        },
+        include: { plans: true },
+      });
+
+      await tx.superAdminAction.create({
+        data: {
+          id: randomUUID(),
+          adminUserId: adminUser.userId,
+          action: 'coupon.create',
+          targetType: 'Coupon',
+          targetId: created.id,
+          description: `Created coupon ${code}`,
+          ipAddress: ip,
+          userAgent: request.headers.get('user-agent') || '',
+        },
+      });
+
+      return created;
     });
 
     return NextResponse.json({ success: true, data: coupon }, { status: 201 });

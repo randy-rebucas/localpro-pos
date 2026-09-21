@@ -100,16 +100,32 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      customer = await prisma.customer.create({
-        data: {
-          id: randomUUID(),
-          tenantId: tenant.id,
-          firstName,
-          lastName,
-          phone: normalizedPhone,
-          isActive: true,
-        },
-      });
+      try {
+        customer = await prisma.customer.create({
+          data: {
+            id: randomUUID(),
+            tenantId: tenant.id,
+            firstName,
+            lastName,
+            phone: normalizedPhone,
+            isActive: true,
+          },
+        });
+      } catch (createError: unknown) {
+        // Unique-constraint race: another concurrent verify for the same
+        // phone created the customer first — use that row instead.
+        if (
+          typeof createError === 'object' && createError !== null &&
+          'code' in createError && createError.code === 'P2002'
+        ) {
+          customer = await prisma.customer.findFirst({
+            where: { tenantId: tenant.id, phone: normalizedPhone },
+          });
+          if (!customer) throw createError;
+        } else {
+          throw createError;
+        }
+      }
     } else if (!customer.isActive) {
       // Update last login time (if we add that field)
       // For now, just ensure customer is active

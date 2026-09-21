@@ -1302,6 +1302,9 @@ model Customer {
   groups              CustomerGroupMember[]
 
   @@unique([tenantId, email])
+  // Partial unique on (tenantId, phone) WHERE phone IS NOT NULL — prevents
+  // duplicate customer rows from a find-or-create race (OTP login); applied
+  // via prisma/migrations/20260921000001_customer_unique_phone.
   @@index([tenantId, phone])
   @@index([tenantId, isActive])
   @@index([tenantId, shopifyCustomerId])
@@ -2731,6 +2734,9 @@ model WorkOrderTimeEntry {
 
   @@index([tenantId, workOrderId])
   @@index([tenantId, userId, startedAt])
+  // Partial unique on (tenantId, workOrderId, userId) WHERE endedAt IS NULL —
+  // enforces a single open time entry per technician per work order; applied
+  // via prisma/migrations/20260921000000_work_order_time_entry_one_open.
   @@map("work_order_time_entries")
 }
 

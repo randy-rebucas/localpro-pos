@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { AlertTriangle, CalendarClock, Package } from 'lucide-react';
 import { getDictionaryClient } from '../../dictionaries-client';
+import { usePermissions } from '@/hooks/usePermissions';
 
 interface ExpiryProduct {
   _id: string;
@@ -43,6 +44,8 @@ export default function ExpiryTrackingPage() {
   const params = useParams();
   const lang = params.lang as 'en' | 'es';
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const { canAccess } = usePermissions();
+  const canView = canAccess('expiry_tracking.manage');
 
   const [report, setReport] = useState<ExpiryReport | null>(null);
   const [loading, setLoading] = useState(true);
@@ -69,7 +72,10 @@ export default function ExpiryTrackingPage() {
     }
   }, [alertDays, scheduleFilter, dict]);
 
-  useEffect(() => { fetchReport(); }, [fetchReport]);
+  useEffect(() => {
+    if (canView) fetchReport();
+    else setLoading(false);
+  }, [fetchReport, canView]);
 
   const ProductRow = ({ p }: { p: ExpiryProduct }) => (
     <tr className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
@@ -96,6 +102,19 @@ export default function ExpiryTrackingPage() {
       </td>
     </tr>
   );
+
+  if (!canView) {
+    return (
+      <div className="px-4 sm:px-6 py-6">
+        <div className="bg-red-50 border-2 border-red-300 p-6">
+          <h2 className="text-lg font-bold text-red-800 mb-1">{dict?.admin?.accessRestricted || 'Access Restricted'}</h2>
+          <p className="text-sm text-red-700">
+            {dict?.admin?.accessRestrictedExpiryTracking || "You don't have permission to view expiry tracking. Contact an admin or owner."}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="px-4 sm:px-6 py-6">

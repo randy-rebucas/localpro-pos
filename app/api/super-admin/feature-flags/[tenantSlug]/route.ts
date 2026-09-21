@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
-import prisma from '@/lib/db';
+import prisma, { dbTransaction } from '@/lib/db';
 import { requireRole } from '@/lib/auth';
 import { handleApiError } from '@/lib/error-handler';
 
@@ -58,38 +58,42 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'feature and enabled are required' }, { status: 400 });
     }
 
-    const override = await prisma.featureFlagOverride.upsert({
-      where: { tenantId_feature: { tenantId: tenant.id, feature } },
-      create: {
-        id: randomUUID(),
-        tenantId: tenant.id,
-        feature,
-        enabled,
-        reason: reason || undefined,
-        expiresAt: expiresAt ? new Date(expiresAt) : undefined,
-        grantedById: adminUser.userId,
-      },
-      update: {
-        enabled,
-        reason: reason || undefined,
-        expiresAt: expiresAt ? new Date(expiresAt) : undefined,
-        grantedById: adminUser.userId,
-      },
-    });
-
     const ip = request.headers.get('x-forwarded-for') || '';
-    await prisma.superAdminAction.create({
-      data: {
-        id: randomUUID(),
-        adminUserId: adminUser.userId,
-        action: 'feature_flag.override',
-        targetType: 'Tenant',
-        targetId: String(tenant.id),
-        description: `Set feature "${feature}" to ${enabled} for tenant ${tenantSlug}`,
-        changes: { feature, enabled, reason, expiresAt },
-        ipAddress: ip,
-        userAgent: request.headers.get('user-agent') || '',
-      },
+    const override = await dbTransaction(async (tx) => {
+      const upserted = await tx.featureFlagOverride.upsert({
+        where: { tenantId_feature: { tenantId: tenant.id, feature } },
+        create: {
+          id: randomUUID(),
+          tenantId: tenant.id,
+          feature,
+          enabled,
+          reason: reason || undefined,
+          expiresAt: expiresAt ? new Date(expiresAt) : undefined,
+          grantedById: adminUser.userId,
+        },
+        update: {
+          enabled,
+          reason: reason || undefined,
+          expiresAt: expiresAt ? new Date(expiresAt) : undefined,
+          grantedById: adminUser.userId,
+        },
+      });
+
+      await tx.superAdminAction.create({
+        data: {
+          id: randomUUID(),
+          adminUserId: adminUser.userId,
+          action: 'feature_flag.override',
+          targetType: 'Tenant',
+          targetId: String(tenant.id),
+          description: `Set feature "${feature}" to ${enabled} for tenant ${tenantSlug}`,
+          changes: { feature, enabled, reason, expiresAt },
+          ipAddress: ip,
+          userAgent: request.headers.get('user-agent') || '',
+        },
+      });
+
+      return upserted;
     });
 
     return NextResponse.json({ success: true, data: override });
@@ -120,20 +124,21 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: 'feature query param is required' }, { status: 400 });
     }
 
-    await prisma.featureFlagOverride.deleteMany({ where: { tenantId: tenant.id, feature } });
-
     const ip = request.headers.get('x-forwarded-for') || '';
-    await prisma.superAdminAction.create({
-      data: {
-        id: randomUUID(),
-        adminUserId: adminUser.userId,
-        action: 'feature_flag.remove',
-        targetType: 'Tenant',
-        targetId: String(tenant.id),
-        description: `Removed feature flag override "${feature}" for tenant ${tenantSlug}`,
-        ipAddress: ip,
-        userAgent: request.headers.get('user-agent') || '',
-      },
+    await dbTransaction(async (tx) => {
+      await tx.featureFlagOverride.deleteMany({ where: { tenantId: tenant.id, feature } });
+      await tx.superAdminAction.create({
+        data: {
+          id: randomUUID(),
+          adminUserId: adminUser.userId,
+          action: 'feature_flag.remove',
+          targetType: 'Tenant',
+          targetId: String(tenant.id),
+          description: `Removed feature flag override "${feature}" for tenant ${tenantSlug}`,
+          ipAddress: ip,
+          userAgent: request.headers.get('user-agent') || '',
+        },
+      });
     });
 
     return NextResponse.json({ success: true });

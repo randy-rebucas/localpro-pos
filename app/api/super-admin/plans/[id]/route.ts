@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/db';
+import prisma, { dbTransaction } from '@/lib/db';
 import { requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { handleApiError } from '@/lib/error-handler';
@@ -182,6 +182,30 @@ export async function DELETE(
       });
     }
 
+    // Re-check for active/trial subscriptions inside the same serializable
+    // transaction as the delete, so a subscription created concurrently
+    // between the count above and this delete can't end up referencing a
+    // deleted plan.
+    try {
+      await dbTransaction(async (tx) => {
+        const stillActiveCount = await tx.subscription.count({
+          where: { planId: id, status: { in: ['active', 'trial'] } },
+        });
+        if (stillActiveCount > 0) {
+          throw new Error('PLAN_NOW_HAS_ACTIVE_SUBSCRIPTIONS');
+        }
+        await tx.subscriptionPlan.delete({ where: { id } });
+      }, { isolationLevel: 'Serializable' });
+    } catch (txError: unknown) {
+      if (txError instanceof Error && txError.message === 'PLAN_NOW_HAS_ACTIVE_SUBSCRIPTIONS') {
+        return NextResponse.json(
+          { success: false, error: 'A subscription started referencing this plan; please retry the deletion.' },
+          { status: 409 }
+        );
+      }
+      throw txError;
+    }
+
     if (tenantId) {
       await createAuditLog(request, {
         tenantId,
@@ -194,7 +218,6 @@ export async function DELETE(
       });
     }
 
-    await prisma.subscriptionPlan.delete({ where: { id } });
     return NextResponse.json({ success: true, message: 'Plan deleted' });
   } catch (error: unknown) {
     if (error instanceof Error && (error.message === 'Unauthorized' || error.message.includes('Forbidden'))) {

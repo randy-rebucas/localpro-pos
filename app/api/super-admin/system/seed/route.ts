@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
-import prisma from '@/lib/db';
+import prisma, { dbTransaction } from '@/lib/db';
 import { requireRole } from '@/lib/auth';
 import { handleApiError } from '@/lib/error-handler';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -187,31 +187,37 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const seeded: string[] = [];
+    // All upserts run in one transaction so a mid-loop failure (e.g. one bad
+    // record) can't leave the plan/coupon catalog partially seeded.
+    const seeded: string[] = await dbTransaction(async (tx) => {
+      const result: string[] = [];
 
-    if (target === 'plans' || target === 'all') {
-      for (const planData of DEFAULT_PLANS) {
-        const { tier, ...rest } = planData;
-        await prisma.subscriptionPlan.upsert({
-          where: { tier: tier as never },
-          create: { id: randomUUID(), tier: tier as never, ...rest },
-          update: { ...rest },
-        });
-        seeded.push(`plan:${tier}`);
+      if (target === 'plans' || target === 'all') {
+        for (const planData of DEFAULT_PLANS) {
+          const { tier, ...rest } = planData;
+          await tx.subscriptionPlan.upsert({
+            where: { tier: tier as never },
+            create: { id: randomUUID(), tier: tier as never, ...rest },
+            update: { ...rest },
+          });
+          result.push(`plan:${tier}`);
+        }
       }
-    }
 
-    if (target === 'coupons' || target === 'all') {
-      for (const couponData of DEFAULT_COUPONS) {
-        const { code, ...rest } = couponData;
-        await prisma.coupon.upsert({
-          where: { code },
-          create: { id: randomUUID(), code, ...rest, createdById: user.userId },
-          update: { ...rest },
-        });
-        seeded.push(`coupon:${code}`);
+      if (target === 'coupons' || target === 'all') {
+        for (const couponData of DEFAULT_COUPONS) {
+          const { code, ...rest } = couponData;
+          await tx.coupon.upsert({
+            where: { code },
+            create: { id: randomUUID(), code, ...rest, createdById: user.userId },
+            update: { ...rest },
+          });
+          result.push(`coupon:${code}`);
+        }
       }
-    }
+
+      return result;
+    });
 
     const defaultTenant = await prisma.tenant.findUnique({ where: { slug: 'default' }, select: { id: true } });
     if (defaultTenant) {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
-import prisma from '@/lib/db';
+import prisma, { dbTransaction } from '@/lib/db';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth, getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
@@ -150,23 +150,40 @@ export async function POST(
       );
     }
 
-    const timeEntry = await prisma.workOrderTimeEntry.create({
-      data: {
-        id: randomUUID(),
-        tenantId,
-        workOrderId: id,
-        userId,
-        startedAt: new Date(),
-        notes: body.notes || undefined,
-      },
-      include: { user: { select: { id: true, name: true, email: true } } },
-    });
+    let timeEntry;
+    try {
+      timeEntry = await dbTransaction(async (tx) => {
+        const created = await tx.workOrderTimeEntry.create({
+          data: {
+            id: randomUUID(),
+            tenantId,
+            workOrderId: id,
+            userId,
+            startedAt: new Date(),
+            notes: body.notes || undefined,
+          },
+          include: { user: { select: { id: true, name: true, email: true } } },
+        });
 
-    if (workOrder.status === 'assigned' || workOrder.status === 'pending') {
-      await prisma.workOrder.update({
-        where: { id },
-        data: { status: 'in_progress', startedAt: workOrder.startedAt || new Date() },
+        if (workOrder.status === 'assigned' || workOrder.status === 'pending') {
+          await tx.workOrder.update({
+            where: { id },
+            data: { status: 'in_progress', startedAt: workOrder.startedAt || new Date() },
+          });
+        }
+
+        return created;
       });
+    } catch (txError: unknown) {
+      // Unique-constraint race: another request opened a time entry for this
+      // technician/work-order between our findFirst check and this create.
+      if (typeof txError === 'object' && txError !== null && 'code' in txError && txError.code === 'P2002') {
+        return NextResponse.json(
+          { success: false, error: t('validation.timeEntryAlreadyOpen', 'This technician already has an open time entry on this work order') },
+          { status: 400 }
+        );
+      }
+      throw txError;
     }
 
     await createAuditLog(request, {

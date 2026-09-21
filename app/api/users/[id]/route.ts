@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
-import prisma from '@/lib/db';
+import prisma, { dbTransaction } from '@/lib/db';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth, getRoleRank } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
@@ -113,23 +113,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       );
     }
 
-    // SECURITY: prevent a tenant from being left with no active owner/admin.
-    if (isActive === false && oldUser.isActive !== false && ['owner', 'admin'].includes(oldUser.role)) {
-      const remainingActiveAdmins = await prisma.user.count({
-        where: {
-          tenantId,
-          id: { not: id },
-          isActive: true,
-          role: { in: ['owner', 'admin'] },
-        },
-      });
-      if (remainingActiveAdmins === 0) {
-        return NextResponse.json(
-          { success: false, error: t('validation.cannotDeactivateLastAdmin', 'Cannot deactivate the last active owner/admin for this tenant') },
-          { status: 400 }
-        );
-      }
-    }
+    const willDeactivateAdmin =
+      isActive === false && oldUser.isActive !== false && ['owner', 'admin'].includes(oldUser.role);
 
     // Build update object
     const updateData: any = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -181,15 +166,41 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     let user;
     try {
-      user = await prisma.user.update({
-        where: { id },
-        data: updateData,
-        select: {
-          id: true, email: true, name: true, role: true, tenantId: true, branchId: true,
-          isActive: true, lastLogin: true, qrToken: true, createdAt: true, updatedAt: true,
-        },
-      });
-    } catch {
+      user = await dbTransaction(async (tx) => {
+        // SECURITY: prevent a tenant from being left with no active owner/admin.
+        // Re-checked here, inside the same serializable transaction as the
+        // write, so two concurrent deactivations of different admins can't
+        // both see "someone else is still active" and both succeed.
+        if (willDeactivateAdmin) {
+          const remainingActiveAdmins = await tx.user.count({
+            where: {
+              tenantId,
+              id: { not: id },
+              isActive: true,
+              role: { in: ['owner', 'admin'] },
+            },
+          });
+          if (remainingActiveAdmins === 0) {
+            throw new Error('LAST_ADMIN');
+          }
+        }
+
+        return tx.user.update({
+          where: { id },
+          data: updateData,
+          select: {
+            id: true, email: true, name: true, role: true, tenantId: true, branchId: true,
+            isActive: true, lastLogin: true, qrToken: true, createdAt: true, updatedAt: true,
+          },
+        });
+      }, { isolationLevel: 'Serializable' });
+    } catch (txError: unknown) {
+      if (txError instanceof Error && txError.message === 'LAST_ADMIN') {
+        return NextResponse.json(
+          { success: false, error: t('validation.cannotDeactivateLastAdmin', 'Cannot deactivate the last active owner/admin for this tenant') },
+          { status: 400 }
+        );
+      }
       user = null;
     }
 
@@ -281,26 +292,39 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       );
     }
 
-    // SECURITY: prevent a tenant from being left with no active owner/admin.
-    if (user.isActive !== false && ['owner', 'admin'].includes(user.role)) {
-      const remainingActiveAdmins = await prisma.user.count({
-        where: {
-          tenantId,
-          id: { not: id },
-          isActive: true,
-          role: { in: ['owner', 'admin'] },
-        },
-      });
-      if (remainingActiveAdmins === 0) {
+    const isActiveAdmin = user.isActive !== false && ['owner', 'admin'].includes(user.role);
+
+    // Hard delete - actually remove the user from the database
+    let deleted;
+    try {
+      deleted = await dbTransaction(async (tx) => {
+        // SECURITY: prevent a tenant from being left with no active owner/admin.
+        // Re-checked inside the same serializable transaction as the delete
+        // so concurrent deletions of different admins can't both pass.
+        if (isActiveAdmin) {
+          const remainingActiveAdmins = await tx.user.count({
+            where: {
+              tenantId,
+              id: { not: id },
+              isActive: true,
+              role: { in: ['owner', 'admin'] },
+            },
+          });
+          if (remainingActiveAdmins === 0) {
+            throw new Error('LAST_ADMIN');
+          }
+        }
+        return tx.user.deleteMany({ where: { id, tenantId } });
+      }, { isolationLevel: 'Serializable' });
+    } catch (txError: unknown) {
+      if (txError instanceof Error && txError.message === 'LAST_ADMIN') {
         return NextResponse.json(
           { success: false, error: t('validation.cannotDeleteLastAdmin', 'Cannot delete the last active owner/admin for this tenant') },
           { status: 400 }
         );
       }
+      throw txError;
     }
-
-    // Hard delete - actually remove the user from the database
-    const deleted = await prisma.user.deleteMany({ where: { id, tenantId } });
     if (deleted.count === 0) {
       return NextResponse.json({ success: false, error: t('validation.userNotFound', 'User not found') }, { status: 404 });
     }

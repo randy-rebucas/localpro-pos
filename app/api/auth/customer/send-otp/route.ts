@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/db';
+import prisma, { dbTransaction } from '@/lib/db';
 import { sendSMS } from '@/lib/notifications';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
@@ -83,23 +83,26 @@ export async function POST(request: NextRequest) {
     const otp = (100000 + (crypto.randomInt(900000))).toString();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes expiry
 
-    // Invalidate any existing OTPs for this phone
-    await prisma.customerOTP.updateMany({
-      where: { tenantId: tenant.id, phone: normalizedPhone, verified: false },
-      data: { verified: true }, // Mark as used
-    });
+    // Invalidating old OTPs and creating the new one run together — otherwise
+    // a failure between the two leaves the phone with zero valid OTPs and no
+    // way to retry until the request-rate-limit window passes.
+    await dbTransaction(async (tx) => {
+      await tx.customerOTP.updateMany({
+        where: { tenantId: tenant.id, phone: normalizedPhone, verified: false },
+        data: { verified: true }, // Mark as used
+      });
 
-    // Create new OTP
-    await prisma.customerOTP.create({
-      data: {
-        id: randomUUID(),
-        tenantId: tenant.id,
-        phone: normalizedPhone,
-        otp,
-        expiresAt,
-        verified: false,
-        attempts: 0,
-      },
+      await tx.customerOTP.create({
+        data: {
+          id: randomUUID(),
+          tenantId: tenant.id,
+          phone: normalizedPhone,
+          otp,
+          expiresAt,
+          verified: false,
+          attempts: 0,
+        },
+      });
     });
 
     // Send OTP via SMS using Twilio

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/db';
+import { dbTransaction } from '@/lib/db';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { requireEcommerceIntegrationFeature } from '@/lib/ecommerce/require-ecommerce-feature';
@@ -25,8 +25,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Invalid provider' }, { status: 400 });
     }
 
-    await prisma.productChannelListing.deleteMany({ where: { tenantId, provider } });
-    await prisma.tenantEcommerceIntegration.deleteMany({ where: { tenantId, provider } });
+    await dbTransaction(async (tx) => {
+      await tx.productChannelListing.deleteMany({ where: { tenantId, provider } });
+      await tx.tenantEcommerceIntegration.deleteMany({ where: { tenantId, provider } });
+    });
 
     return NextResponse.json({ success: true });
   } catch (e: unknown) {

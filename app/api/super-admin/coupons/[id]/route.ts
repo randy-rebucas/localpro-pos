@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
-import prisma from '@/lib/db';
+import prisma, { dbTransaction } from '@/lib/db';
 import { requireRole } from '@/lib/auth';
 import { handleApiError } from '@/lib/error-handler';
 
@@ -31,40 +31,44 @@ export async function PUT(
       }
     }
 
-    const coupon = await prisma.coupon.update({
-      where: { id },
-      data: {
-        ...(body.description !== undefined && { description: body.description }),
-        ...(body.discountType !== undefined && { discountType: body.discountType }),
-        ...(body.discountValue !== undefined && { discountValue: Number(body.discountValue) }),
-        ...(body.appliesTo !== undefined && { appliesTo: body.appliesTo }),
-        ...(body.planIds !== undefined && {
-          plans: {
-            deleteMany: {},
-            create: (body.planIds as string[]).map((planId) => ({ planId })),
-          },
-        }),
-        ...(body.maxUses !== undefined && { maxUses: body.maxUses ? Number(body.maxUses) : null }),
-        ...(body.validFrom !== undefined && { validFrom: new Date(body.validFrom) }),
-        ...(body.validUntil !== undefined && { validUntil: body.validUntil ? new Date(body.validUntil) : null }),
-        ...(body.isActive !== undefined && { isActive: body.isActive }),
-      },
-      include: { plans: true },
-    });
-
     const ip = request.headers.get('x-forwarded-for') || '';
-    await prisma.superAdminAction.create({
-      data: {
-        id: randomUUID(),
-        adminUserId: adminUser.userId,
-        action: 'coupon.update',
-        targetType: 'Coupon',
-        targetId: id,
-        description: `Updated coupon ${coupon.code}`,
-        changes: body,
-        ipAddress: ip,
-        userAgent: request.headers.get('user-agent') || '',
-      },
+    const coupon = await dbTransaction(async (tx) => {
+      const updated = await tx.coupon.update({
+        where: { id },
+        data: {
+          ...(body.description !== undefined && { description: body.description }),
+          ...(body.discountType !== undefined && { discountType: body.discountType }),
+          ...(body.discountValue !== undefined && { discountValue: Number(body.discountValue) }),
+          ...(body.appliesTo !== undefined && { appliesTo: body.appliesTo }),
+          ...(body.planIds !== undefined && {
+            plans: {
+              deleteMany: {},
+              create: (body.planIds as string[]).map((planId) => ({ planId })),
+            },
+          }),
+          ...(body.maxUses !== undefined && { maxUses: body.maxUses ? Number(body.maxUses) : null }),
+          ...(body.validFrom !== undefined && { validFrom: new Date(body.validFrom) }),
+          ...(body.validUntil !== undefined && { validUntil: body.validUntil ? new Date(body.validUntil) : null }),
+          ...(body.isActive !== undefined && { isActive: body.isActive }),
+        },
+        include: { plans: true },
+      });
+
+      await tx.superAdminAction.create({
+        data: {
+          id: randomUUID(),
+          adminUserId: adminUser.userId,
+          action: 'coupon.update',
+          targetType: 'Coupon',
+          targetId: id,
+          description: `Updated coupon ${updated.code}`,
+          changes: body,
+          ipAddress: ip,
+          userAgent: request.headers.get('user-agent') || '',
+        },
+      });
+
+      return updated;
     });
 
     return NextResponse.json({ success: true, data: coupon });
@@ -89,20 +93,21 @@ export async function DELETE(
     if (!existing) {
       return NextResponse.json({ success: false, error: 'Coupon not found' }, { status: 404 });
     }
-    const coupon = await prisma.coupon.delete({ where: { id } });
-
     const ip = request.headers.get('x-forwarded-for') || '';
-    await prisma.superAdminAction.create({
-      data: {
-        id: randomUUID(),
-        adminUserId: adminUser.userId,
-        action: 'coupon.delete',
-        targetType: 'Coupon',
-        targetId: id,
-        description: `Deleted coupon ${coupon.code}`,
-        ipAddress: ip,
-        userAgent: request.headers.get('user-agent') || '',
-      },
+    await dbTransaction(async (tx) => {
+      const coupon = await tx.coupon.delete({ where: { id } });
+      await tx.superAdminAction.create({
+        data: {
+          id: randomUUID(),
+          adminUserId: adminUser.userId,
+          action: 'coupon.delete',
+          targetType: 'Coupon',
+          targetId: id,
+          description: `Deleted coupon ${coupon.code}`,
+          ipAddress: ip,
+          userAgent: request.headers.get('user-agent') || '',
+        },
+      });
     });
 
     return NextResponse.json({ success: true });

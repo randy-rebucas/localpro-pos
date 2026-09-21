@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/db';
+import prisma, { dbTransaction } from '@/lib/db';
 import { Prisma } from '@prisma/client';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
@@ -113,56 +113,74 @@ export async function PUT(request: NextRequest) {
       const category = await prisma.category.findFirst({
         where: { id: updates.categoryId, tenantId, isActive: { not: false } },
       });
-
       if (!category) {
         return NextResponse.json({ success: false, error: 'Category not found' }, { status: 404 });
       }
-
-      const result = await prisma.product.updateMany({
-        where,
-        data: { categoryId: updates.categoryId, category: category.name },
-      });
-      modifiedCount = Math.max(modifiedCount, result.count);
     }
 
-    if (updates.trackInventory !== undefined) {
-      const result = await prisma.product.updateMany({
-        where,
-        data: { trackInventory: updates.trackInventory },
-      });
-      modifiedCount = Math.max(modifiedCount, result.count);
-    }
+    // categoryId/trackInventory/lowStockThreshold/price are applied together
+    // in one transaction so a mid-batch failure (e.g. the raw-SQL price update
+    // throwing) can't leave products with some fields updated and others not.
+    if (updates.categoryId || updates.trackInventory !== undefined || updates.lowStockThreshold !== undefined || updates.price) {
+      modifiedCount = await dbTransaction(async (tx) => {
+        let count = 0;
 
-    if (updates.lowStockThreshold !== undefined) {
-      const result = await prisma.product.updateMany({
-        where,
-        data: { lowStockThreshold: updates.lowStockThreshold },
-      });
-      modifiedCount = Math.max(modifiedCount, result.count);
-    }
+        if (updates.categoryId) {
+          const category = await tx.category.findFirst({
+            where: { id: updates.categoryId, tenantId, isActive: { not: false } },
+          });
+          if (!category) {
+            throw new Error('CATEGORY_NOT_FOUND');
+          }
+          const result = await tx.product.updateMany({
+            where,
+            data: { categoryId: updates.categoryId, category: category.name },
+          });
+          count = Math.max(count, result.count);
+        }
 
-    if (updates.price) {
-      const { mode, value } = updates.price;
-      if (mode === 'set') {
-        const result = await prisma.product.updateMany({ where, data: { price: value } });
-        modifiedCount = Math.max(modifiedCount, result.count);
-      } else {
-        const multiplier = mode === 'percent' ? 1 + value / 100 : 1;
-        const addAmount = mode === 'add' ? value : 0;
-        // Postgres has no per-row $multiply/$add update expression like Mongo's
-        // aggregation-pipeline update — apply each product's new price via raw SQL
-        // so the max(0, ...) floor and per-row current price are still honored atomically.
-        const result = mode === 'percent'
-          ? await prisma.$executeRaw`
-              UPDATE products SET price = GREATEST(0, price * ${multiplier})
-              WHERE id = ANY(${validIds}) AND "tenantId" = ${tenantId}
-            `
-          : await prisma.$executeRaw`
-              UPDATE products SET price = GREATEST(0, price + ${addAmount})
-              WHERE id = ANY(${validIds}) AND "tenantId" = ${tenantId}
-            `;
-        modifiedCount = Math.max(modifiedCount, result);
-      }
+        if (updates.trackInventory !== undefined) {
+          const result = await tx.product.updateMany({
+            where,
+            data: { trackInventory: updates.trackInventory },
+          });
+          count = Math.max(count, result.count);
+        }
+
+        if (updates.lowStockThreshold !== undefined) {
+          const result = await tx.product.updateMany({
+            where,
+            data: { lowStockThreshold: updates.lowStockThreshold },
+          });
+          count = Math.max(count, result.count);
+        }
+
+        if (updates.price) {
+          const { mode, value } = updates.price;
+          if (mode === 'set') {
+            const result = await tx.product.updateMany({ where, data: { price: value } });
+            count = Math.max(count, result.count);
+          } else {
+            const multiplier = mode === 'percent' ? 1 + value / 100 : 1;
+            const addAmount = mode === 'add' ? value : 0;
+            // Postgres has no per-row $multiply/$add update expression like Mongo's
+            // aggregation-pipeline update — apply each product's new price via raw SQL
+            // so the max(0, ...) floor and per-row current price are still honored atomically.
+            const result = mode === 'percent'
+              ? await tx.$executeRaw`
+                  UPDATE products SET price = GREATEST(0, price * ${multiplier})
+                  WHERE id = ANY(${validIds}) AND "tenantId" = ${tenantId}
+                `
+              : await tx.$executeRaw`
+                  UPDATE products SET price = GREATEST(0, price + ${addAmount})
+                  WHERE id = ANY(${validIds}) AND "tenantId" = ${tenantId}
+                `;
+            count = Math.max(count, result);
+          }
+        }
+
+        return count;
+      });
     }
 
     if (updates.stock) {

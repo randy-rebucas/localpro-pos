@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/db';
+import prisma, { dbTransaction } from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
@@ -41,32 +41,37 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // If this is the default address, unset previous default
-    if (isDefault) {
-      await prisma.address.updateMany({
-        where: { userId: currentUser.userId, tenantId: tenant.id, isDefault: true },
-        data: { isDefault: false },
+    // Unsetting the previous default and creating the new (possibly default)
+    // address run in one transaction — otherwise two concurrent "set as
+    // default" requests can each clear the other's default and both end up
+    // marked default.
+    const address = await dbTransaction(async (tx) => {
+      if (isDefault) {
+        await tx.address.updateMany({
+          where: { userId: currentUser.userId, tenantId: tenant.id, isDefault: true },
+          data: { isDefault: false },
+        });
+      }
+
+      // If user has no addresses, make this the default
+      const existingCount = await tx.address.count({
+        where: { userId: currentUser.userId, tenantId: tenant.id },
       });
-    }
 
-    // If user has no addresses, make this the default
-    const existingCount = await prisma.address.count({
-      where: { userId: currentUser.userId, tenantId: tenant.id },
-    });
-
-    const address = await prisma.address.create({
-      data: {
-        id: randomUUID(),
-        userId: currentUser.userId,
-        tenantId: tenant.id,
-        label: label || 'Home',
-        street,
-        city,
-        state,
-        zipCode,
-        country,
-        isDefault: isDefault || existingCount === 0,
-      },
+      return tx.address.create({
+        data: {
+          id: randomUUID(),
+          userId: currentUser.userId,
+          tenantId: tenant.id,
+          label: label || 'Home',
+          street,
+          city,
+          state,
+          zipCode,
+          country,
+          isDefault: isDefault || existingCount === 0,
+        },
+      });
     });
 
     await createAuditLog(request, {

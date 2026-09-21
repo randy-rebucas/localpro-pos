@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/db';
+import prisma, { dbTransaction } from '@/lib/db';
 import { requireRole } from '@/lib/auth';
 import { createAuditLog } from '@/lib/audit';
 import { handleApiError } from '@/lib/error-handler';
@@ -34,29 +34,33 @@ export async function PUT(
 
     switch (action) {
       case 'deactivate':
-        await prisma.user.update({ where: { id }, data: { isActive: false } });
-        if (tenantId) {
-          await createAuditLog(request, {
-            tenantId,
-            action: 'user.deactivate',
-            entityType: 'User',
-            entityId: id,
-            changes: { isActive: { from: true, to: false } },
-          });
-        }
+        await dbTransaction(async (tx) => {
+          await tx.user.update({ where: { id }, data: { isActive: false } });
+          if (tenantId) {
+            await createAuditLog(request, {
+              tenantId,
+              action: 'user.deactivate',
+              entityType: 'User',
+              entityId: id,
+              changes: { isActive: { from: true, to: false } },
+            });
+          }
+        });
         break;
 
       case 'activate':
-        await prisma.user.update({ where: { id }, data: { isActive: true } });
-        if (tenantId) {
-          await createAuditLog(request, {
-            tenantId,
-            action: 'user.activate',
-            entityType: 'User',
-            entityId: id,
-            changes: { isActive: { from: false, to: true } },
-          });
-        }
+        await dbTransaction(async (tx) => {
+          await tx.user.update({ where: { id }, data: { isActive: true } });
+          if (tenantId) {
+            await createAuditLog(request, {
+              tenantId,
+              action: 'user.activate',
+              entityType: 'User',
+              entityId: id,
+              changes: { isActive: { from: false, to: true } },
+            });
+          }
+        });
         break;
 
       case 'change-role': {
@@ -66,17 +70,22 @@ export async function PUT(
             { status: 400 }
           );
         }
-        const previousRole = user.role;
-        await prisma.user.update({ where: { id }, data: { role } });
-        if (tenantId) {
-          await createAuditLog(request, {
-            tenantId,
-            action: 'user.change_role',
-            entityType: 'User',
-            entityId: id,
-            changes: { role: { from: previousRole, to: role } },
-          });
-        }
+        // Re-read the role inside the transaction so a concurrent role change
+        // can't make the audit log's "from" value stale.
+        await dbTransaction(async (tx) => {
+          const current = await tx.user.findUnique({ where: { id }, select: { role: true } });
+          const previousRole = current?.role ?? user.role;
+          await tx.user.update({ where: { id }, data: { role } });
+          if (tenantId) {
+            await createAuditLog(request, {
+              tenantId,
+              action: 'user.change_role',
+              entityType: 'User',
+              entityId: id,
+              changes: { role: { from: previousRole, to: role } },
+            });
+          }
+        });
         break;
       }
 
