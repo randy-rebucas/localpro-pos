@@ -20,7 +20,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
-    if (!(await hasTenantPermission(user.role, tenantId, 'settings.manage'))) {
+    // cash_drawer.manage (cashier-floor) — this endpoint is invoked on every
+    // cash checkout print (receipt-printer.ts openDrawerViaPrintProxy) and on
+    // shift start/end (AttendanceClock.tsx), both routine cashier actions;
+    // settings.manage (manager-floor) would block ordinary cashiers from it.
+    if (!(await hasTenantPermission(user.role, tenantId, 'cash_drawer.manage'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 

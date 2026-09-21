@@ -96,6 +96,11 @@ export default function AttendanceClock() {
         setSession(data.data);
         setNotes('');
         await fetchCurrentSession();
+        if (settings?.autoOpenDrawerOnShiftStart) {
+          fetch('/api/hardware/cash-drawer-kick', { method: 'POST', credentials: 'include' }).catch(() => {
+            // Best-effort — no network drawer configured, or hardware offline.
+          });
+        }
       } else {
         setError(data.error || dict?.common?.failedToClockIn || 'Failed to clock in');
       }
@@ -127,6 +132,11 @@ export default function AttendanceClock() {
         setSession(data.data);
         setNotes('');
         await fetchCurrentSession();
+        if (settings?.autoOpenDrawerOnShiftEnd) {
+          fetch('/api/hardware/cash-drawer-kick', { method: 'POST', credentials: 'include' }).catch(() => {
+            // Best-effort — no network drawer configured, or hardware offline.
+          });
+        }
       } else {
         setError(data.error || dict?.common?.failedToClockOut || 'Failed to clock out');
       }

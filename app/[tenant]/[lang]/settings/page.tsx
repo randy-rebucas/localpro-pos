@@ -184,13 +184,20 @@ export default function SettingsPage() {
     try {
       setSaving(true);
       setMessage(null);
+      // Stock-alert threshold and email/SMS notification toggles are owned by
+      // Admin → Settings (see the note in the Notifications tab above) — this
+      // page still round-trips the rest of `settings` as a full object, so
+      // without this exclusion a save here would silently overwrite whatever
+      // the admin settings page last set for these keys with this page's
+      // stale, last-fetched copy.
+      const { lowStockAlert, lowStockThreshold, emailNotifications, smsNotifications, ...settingsToSave } = settings;
       const res = await fetch(`/api/tenants/${tenant}/settings`, {
         method: 'PUT',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
         },
         credentials: 'include', // Include cookies for authentication
-        body: JSON.stringify({ settings }),
+        body: JSON.stringify({ settings: settingsToSave }),
       });
 
       const data = await res.json();
@@ -1458,81 +1465,16 @@ export default function SettingsPage() {
                       {settingsDict.customizeTemplates || 'Customize Templates →'}
                     </Link>
                   </div>
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-3">{settingsDict.stockAlerts || 'Stock Alerts'}</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          {settingsDict.lowStockThreshold || 'Low Stock Threshold'}
-                        </label>
-                        <input
-                          type="number"
-                          min="0"
-                          value={settings.lowStockThreshold || 10}
-                          onChange={(e) => updateSetting('lowStockThreshold', parseInt(e.target.value) || 10)}
-                          className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
-                        />
-                        <p className="mt-2 text-xs text-gray-500">
-                          {settingsDict.lowStockThresholdHint || 'Alert when stock falls below this quantity'}
-                        </p>
-                      </div>
-                      <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
-                        <input
-                          type="checkbox"
-                          id="lowStockAlert"
-                          checked={settings.lowStockAlert !== false}
-                          onChange={(e) => updateSetting('lowStockAlert', e.target.checked)}
-                          className="checkbox-win8 h-5 w-5 cursor-pointer"
-                        />
-                        <label htmlFor="lowStockAlert" className="ml-3 flex-1">
-                          <div className="text-sm font-medium text-gray-900">
-                            {settingsDict.enableLowStockAlerts || 'Enable Low Stock Alerts'}
-                          </div>
-                          <div className="text-xs text-gray-500 mt-1">
-                            {settingsDict.lowStockAlertDesc || 'Get notified when products fall below threshold'}
-                          </div>
-                        </label>
-                      </div>
-                    </div>
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-3">{settingsDict.notificationChannels || 'Notification Channels'}</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
-                        <input
-                          type="checkbox"
-                          id="emailNotifications"
-                          checked={settings.emailNotifications || false}
-                          onChange={(e) => updateSetting('emailNotifications', e.target.checked)}
-                          className="checkbox-win8 h-5 w-5 cursor-pointer"
-                        />
-                        <label htmlFor="emailNotifications" className="ml-3 flex-1">
-                          <div className="text-sm font-medium text-gray-900">
-                            {settingsDict.enableEmailNotifications || 'Enable Email Notifications'}
-                          </div>
-                          <div className="text-xs text-gray-500 mt-1">
-                            {settingsDict.emailNotificationsDesc || 'Receive notifications via email'}
-                          </div>
-                        </label>
-                      </div>
-                      <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
-                        <input
-                          type="checkbox"
-                          id="smsNotifications"
-                          checked={settings.smsNotifications || false}
-                          onChange={(e) => updateSetting('smsNotifications', e.target.checked)}
-                          className="checkbox-win8 h-5 w-5 cursor-pointer"
-                        />
-                        <label htmlFor="smsNotifications" className="ml-3 flex-1">
-                          <div className="text-sm font-medium text-gray-900">
-                            {settingsDict.enableSmsNotifications || 'Enable SMS Notifications'}
-                          </div>
-                          <div className="text-xs text-gray-500 mt-1">
-                            {settingsDict.smsNotificationsDesc || 'Receive notifications via SMS'}
-                          </div>
-                        </label>
-                      </div>
-                    </div>
+                  <div className="p-4 bg-brand-soft border border-teal-200">
+                    <p className="text-sm text-brand-navy mb-2">
+                      <strong>Note:</strong> {settingsDict.stockAlertSettingsMovedNote || 'Low stock threshold and email/SMS notification toggles are managed in Admin → Settings, so they have one owner instead of two pages independently overwriting each other.'}
+                    </p>
+                    <Link
+                      href={`/${tenant}/${lang}/admin/settings`}
+                      className="text-sm text-brand hover:text-brand-hover font-medium underline"
+                    >
+                      {settingsDict.manageInAdminSettings || 'Manage in Admin → Settings →'}
+                    </Link>
                   </div>
 
                   {/* Attendance Notifications */}

@@ -106,8 +106,10 @@ export async function sendTransactionReceipt(
   <div class="receipt">
     <div class="header">
       <h2>${companyName}</h2>
-      ${tenantSettings?.address ? `<p>${[tenantSettings.address.street, tenantSettings.address.city, tenantSettings.address.state, tenantSettings.address.zipCode].filter(Boolean).join(', ')}</p>` : ''}
-      ${tenantSettings?.phone ? `<p>${tenantSettings.phone}</p>` : ''}
+      ${tenantSettings?.receiptHeader ? `<p>${tenantSettings.receiptHeader}</p>` : ''}
+      ${tenantSettings?.receiptShowAddress !== false && tenantSettings?.address ? `<p>${[tenantSettings.address.street, tenantSettings.address.city, tenantSettings.address.state, tenantSettings.address.zipCode].filter(Boolean).join(', ')}</p>` : ''}
+      ${tenantSettings?.receiptShowPhone !== false && tenantSettings?.phone ? `<p>${tenantSettings.phone}</p>` : ''}
+      ${tenantSettings?.receiptShowEmail && tenantSettings?.email ? `<p>${tenantSettings.email}</p>` : ''}
     </div>
     
     <div class="info">

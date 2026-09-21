@@ -69,6 +69,8 @@ export interface ReceiptData {
   customerPhone?: string;
   template?: string; // Template HTML to use
   cashierName?: string; // Name of the cashier/user who processed the sale
+  taxId?: string;          // Non-BIR tax ID / TIN as entered in Settings → General
+  registrationNumber?: string; // DTI / SEC / CDA registration number
   // BIR compliance fields
   tin?: string;            // BIR Tax Identification Number
   businessStyle?: string;  // Trade name / style of business
@@ -333,8 +335,13 @@ class ReceiptPrinterService {
       commands.push(this.setFontSize('normal'));
       commands.push(this.setBold(false));
       if (data.businessStyle) commands.push(this.encodeText(data.businessStyle + '\n'));
+      if (data.header) commands.push(this.encodeText(data.header + '\n'));
       if (data.address) commands.push(this.encodeText(data.address + '\n'));
       if (data.phone) commands.push(this.encodeText(data.phone + '\n'));
+      if (data.email) commands.push(this.encodeText(data.email + '\n'));
+      if (data.website) commands.push(this.encodeText(data.website + '\n'));
+      if (data.taxId) commands.push(this.encodeText(`Tax ID: ${data.taxId}\n`));
+      if (data.registrationNumber) commands.push(this.encodeText(`Reg. No: ${data.registrationNumber}\n`));
       if (data.tin) commands.push(this.encodeText(`TIN: ${data.tin}\n`));
       commands.push(this.setBold(true));
       commands.push(this.encodeText((isVAT ? 'VAT REGISTERED' : 'NON-VAT REGISTERED') + '\n'));
@@ -607,8 +614,13 @@ class ReceiptPrinterService {
     ${data.logo ? `<img src="${data.logo}" alt="Logo" style="max-width:100px;max-height:60px;display:block;margin:0 auto 4px;" />` : ''}
     ${data.storeName ? `<h2>${data.storeName}</h2>` : ''}
     ${data.businessStyle ? `<div>${data.businessStyle}</div>` : ''}
+    ${data.header ? `<div>${data.header}</div>` : ''}
     ${data.address ? `<div>${data.address}</div>` : ''}
     ${data.phone ? `<div>${data.phone}</div>` : ''}
+    ${data.email ? `<div>${data.email}</div>` : ''}
+    ${data.website ? `<div>${data.website}</div>` : ''}
+    ${data.taxId ? `<div>Tax ID: ${data.taxId}</div>` : ''}
+    ${data.registrationNumber ? `<div>Reg. No: ${data.registrationNumber}</div>` : ''}
     ${data.tin ? `<div>TIN: ${data.tin}</div>` : ''}
     <div><strong>${isVAT ? 'VAT REGISTERED' : 'NON-VAT REGISTERED'}</strong></div>
     <br>

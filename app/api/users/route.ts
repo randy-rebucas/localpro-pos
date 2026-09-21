@@ -11,6 +11,7 @@ import { getValidationTranslatorFromRequest } from '@/lib/validation-translation
 import { checkSubscriptionLimit, SubscriptionService } from '@/lib/subscription';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
+import { requireEmployeesAccess } from '@/lib/employees-access';
 
 export async function GET(request: NextRequest) {
   try {
@@ -86,6 +87,13 @@ export async function POST(request: NextRequest) {
 
     // Get translation function
     t = await getValidationTranslatorFromRequest(request);
+
+    try {
+      await requireEmployeesAccess(tenantId);
+    } catch (featureError: unknown) {
+      const msg = featureError instanceof Error ? featureError.message : 'Forbidden';
+      return NextResponse.json({ success: false, error: msg }, { status: 403 });
+    }
 
     const ip = request.headers.get('x-forwarded-for') ?? 'unknown';
     const { allowed } = checkRateLimit(`write:users:${tenantId}:${ip}`, 20, 60_000);

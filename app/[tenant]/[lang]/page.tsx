@@ -956,8 +956,12 @@ export default function Dashboard() {
 
     const receiptData = {
       storeName: settings.companyName,
-      address: addressStr,
-      phone: settings.phone,
+      address: settings.receiptShowAddress !== false ? addressStr : undefined,
+      phone: settings.receiptShowPhone !== false ? settings.phone : undefined,
+      email: settings.receiptShowEmail ? settings.email : undefined,
+      website: settings.website,
+      taxId: settings.taxId,
+      registrationNumber: settings.registrationNumber,
       logo: settings.receiptShowLogo !== false ? settings.logo : undefined,
       receiptNumber: transaction.receiptNumber || transaction._id?.slice(-8) || 'N/A',
       date: transaction.date || formatDateTime(new Date(transaction.createdAt || Date.now()), settings || getDefaultTenantSettings()),

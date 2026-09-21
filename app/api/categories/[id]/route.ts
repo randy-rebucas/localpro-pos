@@ -7,6 +7,7 @@ import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { validateAndSanitize, validateCategory } from '@/lib/validation';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { requireCategoriesAccess } from '@/lib/categories-access';
 
 export async function GET(
   request: NextRequest,
@@ -52,6 +53,13 @@ export async function PUT(
 
     if (!(await hasTenantPermission(user.role, tenantId, 'categories.manage'))) {
       return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
+    }
+
+    try {
+      await requireCategoriesAccess(tenantId);
+    } catch (featureError: unknown) {
+      const msg = featureError instanceof Error ? featureError.message : 'Forbidden';
+      return NextResponse.json({ success: false, error: msg }, { status: 403 });
     }
 
     const { id } = await params;

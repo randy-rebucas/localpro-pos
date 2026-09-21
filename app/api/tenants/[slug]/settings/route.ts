@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/db';
+import prisma, { dbTransaction } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getDefaultTenantSettings } from '@/lib/currency';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
-import { applyBusinessTypeDefaults, FEATURE_FLAG_KEYS } from '@/lib/business-types';
+import { applyBusinessTypeDefaults, omitFeatureFlagDefaults, FEATURE_FLAG_KEYS } from '@/lib/business-types';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { flattenSettingsForPrisma } from '@/lib/tenant-settings-flatten';
@@ -24,9 +24,28 @@ export async function GET(
     const { slug } = await params;
     const t = await getValidationTranslatorFromRequest(request);
 
-    const tenant = await runWithBypass(() =>
-      prisma.tenant.findFirst({ where: { slug, isActive: true }, include: { settings: true } })
+    // IMPORTANT: `prisma.tenant.findFirst({ include: { settings: true } })`
+    // under runWithBypass() does NOT reliably propagate the RLS bypass to the
+    // joined relation — only the top-level row (verified empirically: the
+    // include comes back null even for a tenant with a real, populated
+    // settings row). The batch-array form `withTenantScoping` uses on the
+    // $extends()-wrapped client apparently doesn't keep that guarantee for
+    // relation includes or for direct writes either. `dbTransaction` (a real
+    // interactive `$transaction(async tx => ...)` on the un-extended client)
+    // does not have this problem, so every RLS-bypassed op here goes through
+    // it instead — including the plain reads, since `runWithBypass(() =>
+    // prisma.tenantSettings.findUnique(...))` on its own was also observed
+    // to silently return null instead of throwing.
+    const { tenant, settings, override } = await runWithBypass(() =>
+      dbTransaction(async (tx) => {
+        const tenantRow = await tx.tenant.findFirst({ where: { slug, isActive: true } });
+        if (!tenantRow) return { tenant: null, settings: null, override: null };
+        const settingsRow = await tx.tenantSettings.findUnique({ where: { tenantId: tenantRow.id } });
+        const overrideRow = await tx.tenantRolePermissionOverride.findUnique({ where: { tenantId: tenantRow.id } });
+        return { tenant: tenantRow, settings: settingsRow, override: overrideRow };
+      })
     );
+
     if (!tenant) {
       return NextResponse.json(
         { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
@@ -34,7 +53,43 @@ export async function GET(
       );
     }
 
-    return NextResponse.json({ success: true, data: tenant.settings });
+    // Self-heal: every signup/tenant-creation path creates TenantSettings
+    // atomically alongside the Tenant row, but a tenant migrated or seeded
+    // outside those paths can end up with no settings row at all — which
+    // otherwise surfaces as every field on the Settings page silently
+    // reverting to blank/default, hiding data the owner already entered
+    // during onboarding (e.g. the store name they typed at signup lives on
+    // `Tenant.name`, not yet mirrored onto `TenantSettings.companyName`).
+    let tenantSettings = settings;
+    if (!tenantSettings) {
+      const defaults = flattenSettingsForPrisma(
+        applyBusinessTypeDefaults(
+          omitFeatureFlagDefaults(getDefaultTenantSettings() as unknown as Record<string, unknown>),
+          'general'
+        ) as unknown as Record<string, unknown>
+      );
+      tenantSettings = await runWithBypass(() =>
+        dbTransaction((tx) =>
+          tx.tenantSettings.upsert({
+            where: { tenantId: tenant.id },
+            create: { tenantId: tenant.id, ...defaults, companyName: tenant.name },
+            update: {},
+          })
+        )
+      );
+    }
+
+    // Role-permission overrides live in a separate table (see lib/permissions-server.ts's
+    // hasTenantPermission, the server-side source of truth). They're merged back in here
+    // (read-only, no permission metadata) so the client's usePermissions()/canAccess() can
+    // mirror the same effective overrides the server actually enforces, instead of always
+    // falling back to each permission's hardcoded default role floor.
+    const rolePermissionOverrides = (override?.overrides as Record<string, unknown> | undefined) || {};
+
+    return NextResponse.json({
+      success: true,
+      data: { ...tenantSettings, rolePermissionOverrides },
+    });
   } catch (error: unknown) {
     logger.error('Error fetching tenant settings:', error);
     const t = await getValidationTranslatorFromRequest(request);
@@ -83,14 +138,21 @@ export async function PUT(
 
     // Load existing settings so sub-sections managed by dedicated admin pages
     // are preserved when the main settings page saves only its own tabs.
-    const existingTenant = await prisma.tenant.findFirst({ where: { slug }, include: { settings: true } });
+    // Queried separately rather than via `include: { settings: true } }` —
+    // that pattern does not reliably return the joined RLS-protected relation
+    // through this extended client (see the GET handler above for the
+    // empirically-verified root cause); an empty `existingSettings` here
+    // would silently reset every other tab's fields to their defaults the
+    // next time a business-type switch persists the full merged object.
+    const existingTenant = await prisma.tenant.findFirst({ where: { slug } });
     if (!existingTenant) {
       return NextResponse.json(
         { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
         { status: 404 }
       );
     }
-    const existingSettings = (existingTenant.settings as unknown as Record<string, unknown>) || {};
+    const existingSettingsRow = await prisma.tenantSettings.findUnique({ where: { tenantId: existingTenant.id } });
+    const existingSettings = (existingSettingsRow as unknown as Record<string, unknown>) || {};
 
     // Tenant isolation: verify the authenticated user belongs to this tenant
     if (user.role !== 'super_admin' && user.tenantId !== existingTenant.id) {
@@ -148,6 +210,45 @@ export async function PUT(
       if (value && !/^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/.test(value)) {
         const errorMsg = t('validation.invalidColorFormat', 'Invalid color format for {field}. Use hex format (e.g., #FF5733)').replace('{field}', field);
         return NextResponse.json({ success: false, error: errorMsg }, { status: 400 });
+      }
+    }
+
+    // Validate logo URL scheme — the settings pages render this straight into
+    // an <img src>, so only allow https to avoid javascript:/data: payloads
+    // (matches the client-side check in the admin settings page).
+    if (updatedSettings.logo && !/^https:\/\/[^\s"'<>]+$/i.test(updatedSettings.logo as string)) {
+      return NextResponse.json(
+        { success: false, error: t('validation.invalidLogoUrl', 'Logo URL must be a valid https:// address') },
+        { status: 400 }
+      );
+    }
+
+    // Validate tax label / receipt text lengths (mirrors the client caps —
+    // these get printed onto physical receipts via lib/hardware/receipt-printer.ts).
+    if (updatedSettings.taxLabel && (updatedSettings.taxLabel as string).length > 32) {
+      return NextResponse.json(
+        { success: false, error: t('validation.taxLabelTooLong', 'Tax label must be 32 characters or fewer') },
+        { status: 400 }
+      );
+    }
+    for (const field of ['receiptHeader', 'receiptFooter']) {
+      const value = updatedSettings[field] as string | undefined;
+      if (value && value.length > 500) {
+        return NextResponse.json(
+          { success: false, error: t('validation.receiptTextTooLong', 'Receipt header/footer must be 500 characters or fewer') },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Validate low stock threshold bounds
+    if (updatedSettings.lowStockThreshold !== undefined) {
+      const threshold = updatedSettings.lowStockThreshold as number;
+      if (threshold < 1 || threshold > 100000) {
+        return NextResponse.json(
+          { success: false, error: t('validation.lowStockThresholdRange', 'Low stock threshold must be between 1 and 100000') },
+          { status: 400 }
+        );
       }
     }
 

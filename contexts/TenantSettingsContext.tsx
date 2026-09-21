@@ -78,6 +78,13 @@ export function TenantSettingsProvider({ children }: { children: ReactNode }) {
     }
   }, [settings?.primaryColor]);
 
+  // Apply secondary color to a CSS variable, same as primaryColor above.
+  useEffect(() => {
+    if (settings?.secondaryColor) {
+      document.documentElement.style.setProperty('--secondary-color', settings.secondaryColor);
+    }
+  }, [settings?.secondaryColor]);
+
   // Apply Advanced Branding — font + custom CSS. `theme` and `borderRadius`
   // are intentionally not applied here: this app has no dark-mode styling
   // and enforces sharp (non-rounded) corners everywhere as its design system,

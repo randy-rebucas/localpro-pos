@@ -7,6 +7,7 @@ import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { validateAndSanitize, validateCategory } from '@/lib/validation';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { requireCategoriesAccess } from '@/lib/categories-access';
 
 export async function GET(request: NextRequest) {
   try {
@@ -57,8 +58,16 @@ export async function POST(request: NextRequest) {
       throw authError;
     }
 
-    const body = await request.json();
     const t = await getValidationTranslatorFromRequest(request);
+
+    try {
+      await requireCategoriesAccess(tenantId);
+    } catch (featureError: unknown) {
+      const msg = featureError instanceof Error ? featureError.message : 'Forbidden';
+      return NextResponse.json({ success: false, error: msg }, { status: 403 });
+    }
+
+    const body = await request.json();
     const { data, errors } = validateAndSanitize(body, validateCategory, t);
 
     if (errors.length > 0) {

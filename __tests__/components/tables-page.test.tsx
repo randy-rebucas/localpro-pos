@@ -20,7 +20,12 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('@/contexts/TenantSettingsContext', () => ({
   useTenantSettings: () => ({
-    settings: { currency: 'PHP', language: 'en' },
+    // enableTableManagement must be explicit here: supportsFeature() falls
+    // back to the business type's default (false for 'general', which is
+    // what an unset businessType resolves to) when it's missing, which
+    // disables the Add Table button and blocks every test below that
+    // depends on the modal actually opening.
+    settings: { currency: 'PHP', language: 'en', enableTableManagement: true },
     loading: false,
   }),
   TenantSettingsProvider: ({ children }: { children: React.ReactNode }) => children,

@@ -7,6 +7,7 @@ import { Settings } from 'lucide-react';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import { getDictionaryClient } from '../../dictionaries-client';
+import { getCurrencySymbol } from '@/lib/currency';
 
 const TIMEZONES = [
   'UTC', 'Asia/Manila', 'Asia/Singapore', 'Asia/Tokyo', 'Asia/Bangkok',
@@ -134,6 +135,7 @@ export default function AdminSettingsPage() {
     lowStockAlert: true, lowStockThreshold: 10,
     emailNotifications: false, smsNotifications: false,
   });
+  const [savedForm, setSavedForm] = useState<FormData>(form);
 
   const fetchSettings = useCallback(async () => {
     try {
@@ -141,7 +143,8 @@ export default function AdminSettingsPage() {
       const json = await res.json();
       if (json.success && json.data) {
         const s = json.data;
-        setForm(prev => ({
+        setForm(prev => {
+          const next = {
           ...prev,
           companyName: s.companyName ?? '',
           businessType: s.businessType ?? '',
@@ -191,7 +194,10 @@ export default function AdminSettingsPage() {
           lowStockThreshold: s.lowStockThreshold ?? 10,
           emailNotifications: s.emailNotifications ?? false,
           smsNotifications: s.smsNotifications ?? false,
-        }));
+          };
+          setSavedForm(next);
+          return next;
+        });
       }
     } catch {
       toast.error(dict?.settings?.failedToLoad || 'Failed to load settings');
@@ -217,7 +223,25 @@ export default function AdminSettingsPage() {
     notifications: ['lowStockAlert', 'lowStockThreshold', 'emailNotifications', 'smsNotifications'],
   };
 
+  const isSectionDirty = (sectionId: string): boolean =>
+    (SECTION_FIELDS[sectionId] || []).some(key => form[key] !== savedForm[key]);
+
+  const switchSection = (sectionId: string) => {
+    if (sectionId === activeSection) return;
+    if (isSectionDirty(activeSection)) {
+      const confirmMsg = dict?.settings?.unsavedChangesConfirm
+        || 'You have unsaved changes in this section. Switch tabs and discard them?';
+      if (!window.confirm(confirmMsg)) return;
+      setForm(savedForm);
+    }
+    setActiveSection(sectionId);
+  };
+
   const HEX_COLOR_RE = /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/;
+  const SAFE_LOGO_URL_RE = /^https:\/\/[^\s"'<>]+$/i;
+  const TAX_LABEL_MAX_LEN = 32;
+  const RECEIPT_TEXT_MAX_LEN = 500;
+  const LOW_STOCK_THRESHOLD_MAX = 100000;
 
   const validateActiveSection = (): string | null => {
     if (activeSection === 'general' && form.currency && form.currency.length !== 3) {
@@ -230,9 +254,25 @@ export default function AdminSettingsPage() {
       if (form.secondaryColor && !HEX_COLOR_RE.test(form.secondaryColor)) {
         return (dict?.validation?.invalidColorFormat || 'Invalid color format for {field}. Use hex format (e.g., #FF5733)').replace('{field}', dict?.settings?.secondaryColor || 'Secondary Color');
       }
+      if (form.logo && !SAFE_LOGO_URL_RE.test(form.logo)) {
+        return dict?.validation?.invalidLogoUrl || 'Logo URL must be a valid https:// address';
+      }
     }
-    if (activeSection === 'receipt' && form.taxEnabled && (form.taxRate < 0 || form.taxRate > 100)) {
-      return dict?.validation?.taxRateRange || 'Tax rate must be between 0 and 100';
+    if (activeSection === 'receipt') {
+      if (form.taxEnabled && (form.taxRate < 0 || form.taxRate > 100)) {
+        return dict?.validation?.taxRateRange || 'Tax rate must be between 0 and 100';
+      }
+      if (form.taxLabel && form.taxLabel.length > TAX_LABEL_MAX_LEN) {
+        return dict?.validation?.taxLabelTooLong || `Tax label must be ${TAX_LABEL_MAX_LEN} characters or fewer`;
+      }
+      if (form.receiptHeader.length > RECEIPT_TEXT_MAX_LEN || form.receiptFooter.length > RECEIPT_TEXT_MAX_LEN) {
+        return dict?.validation?.receiptTextTooLong || `Receipt header/footer must be ${RECEIPT_TEXT_MAX_LEN} characters or fewer`;
+      }
+    }
+    if (activeSection === 'notifications' && form.lowStockAlert
+      && (form.lowStockThreshold < 1 || form.lowStockThreshold > LOW_STOCK_THRESHOLD_MAX)) {
+      return dict?.validation?.lowStockThresholdRange
+        || `Low stock threshold must be between 1 and ${LOW_STOCK_THRESHOLD_MAX}`;
     }
     return null;
   };
@@ -268,6 +308,7 @@ export default function AdminSettingsPage() {
       const json = await res.json();
       if (json.success) {
         toast.success(dict?.settings?.saved || 'Settings saved');
+        setSavedForm(f => ({ ...f, ...payload } as FormData));
         await refreshSettings();
       } else {
         toast.error(json.error || dict?.settings?.error || 'Failed to save settings');
@@ -340,7 +381,7 @@ export default function AdminSettingsPage() {
                 {SECTIONS.map(s => (
                   <button
                     key={s.id}
-                    onClick={() => setActiveSection(s.id)}
+                    onClick={() => switchSection(s.id)}
                     className={`w-full text-left px-4 py-2 text-sm transition-colors ${
                       activeSection === s.id
                         ? 'bg-brand text-white font-medium'
@@ -427,7 +468,14 @@ export default function AdminSettingsPage() {
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       <div className="sm:col-span-2">
                         <label className={labelCls}>{dict?.settings?.currencySectionLabel || 'Currency'}</label>
-                        <select value={form.currency} onChange={e => set('currency', e.target.value)} className={inputCls}>
+                        <select
+                          value={form.currency}
+                          onChange={e => {
+                            const code = e.target.value;
+                            setForm(f => ({ ...f, currency: code, currencySymbol: getCurrencySymbol(code) }));
+                          }}
+                          className={inputCls}
+                        >
                           {CURRENCIES.map(c => <option key={c.code} value={c.code}>{c.label}</option>)}
                         </select>
                       </div>
@@ -460,10 +508,11 @@ export default function AdminSettingsPage() {
                   <div>
                     <label className={labelCls}>{dict?.settings?.logoUrl || 'Logo URL'}</label>
                     <input type="url" value={form.logo} onChange={e => set('logo', e.target.value)} placeholder="https://..." className={inputCls} />
-                    {form.logo && (
+                    <p className="text-xs text-gray-400 mt-1">{dict?.settings?.logoUrlHint || 'Must be a secure (https://) image URL'}</p>
+                    {form.logo && SAFE_LOGO_URL_RE.test(form.logo) && (
                       <div className="mt-3 border border-gray-200 p-3 inline-block">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={form.logo} alt={dict?.settings?.logoPreviewAlt || 'Logo preview'} className="h-16 object-contain" />
+                        <img src={form.logo} alt={dict?.settings?.logoPreviewAlt || 'Logo preview'} className="h-16 object-contain" onError={e => { e.currentTarget.style.display = 'none'; }} />
                       </div>
                     )}
                   </div>
@@ -557,11 +606,11 @@ export default function AdminSettingsPage() {
                   <div className="p-5 space-y-4">
                     <div>
                       <label className={labelCls}>{dict?.settings?.receiptHeader || 'Receipt Header'}</label>
-                      <textarea value={form.receiptHeader} onChange={e => set('receiptHeader', e.target.value)} rows={3} placeholder={dict?.settings?.receiptHeaderExamplePlaceholder || 'e.g. Thank you for shopping with us!'} className={inputCls} />
+                      <textarea value={form.receiptHeader} onChange={e => set('receiptHeader', e.target.value)} rows={3} maxLength={RECEIPT_TEXT_MAX_LEN} placeholder={dict?.settings?.receiptHeaderExamplePlaceholder || 'e.g. Thank you for shopping with us!'} className={inputCls} />
                     </div>
                     <div>
                       <label className={labelCls}>{dict?.settings?.receiptFooter || 'Receipt Footer'}</label>
-                      <textarea value={form.receiptFooter} onChange={e => set('receiptFooter', e.target.value)} rows={3} placeholder={dict?.settings?.receiptFooterExamplePlaceholder || 'e.g. All sales are final. Goods once sold cannot be returned.'} className={inputCls} />
+                      <textarea value={form.receiptFooter} onChange={e => set('receiptFooter', e.target.value)} rows={3} maxLength={RECEIPT_TEXT_MAX_LEN} placeholder={dict?.settings?.receiptFooterExamplePlaceholder || 'e.g. All sales are final. Goods once sold cannot be returned.'} className={inputCls} />
                     </div>
                   </div>
                 </div>
@@ -592,7 +641,7 @@ export default function AdminSettingsPage() {
                         </div>
                         <div>
                           <label className={labelCls}>{dict?.settings?.taxLabel || 'Tax Label'}</label>
-                          <input type="text" value={form.taxLabel} onChange={e => set('taxLabel', e.target.value)} placeholder="VAT" className={inputCls} />
+                          <input type="text" value={form.taxLabel} onChange={e => set('taxLabel', e.target.value)} maxLength={TAX_LABEL_MAX_LEN} placeholder="VAT" className={inputCls} />
                         </div>
                       </div>
                     )}
@@ -650,7 +699,7 @@ export default function AdminSettingsPage() {
                     {form.lowStockAlert && (
                       <div>
                         <label className={labelCls}>{dict?.settings?.lowStockThresholdUnitsLabel || 'Low Stock Threshold (units)'}</label>
-                        <input type="number" min={1} value={form.lowStockThreshold} onChange={e => set('lowStockThreshold', Number(e.target.value))} className={`${inputCls} w-32`} />
+                        <input type="number" min={1} max={LOW_STOCK_THRESHOLD_MAX} value={form.lowStockThreshold} onChange={e => set('lowStockThreshold', Number(e.target.value))} className={`${inputCls} w-32`} />
                       </div>
                     )}
                   </div>

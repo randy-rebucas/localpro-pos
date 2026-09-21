@@ -10,7 +10,24 @@ import { NextRequest } from 'next/server';
 // ---------------------------------------------------------------------------
 
 const mockTenantFindFirst = vi.fn();
+const mockTenantSettingsFindUnique = vi.fn();
 const mockTenantSettingsUpsert = vi.fn();
+const mockRolePermissionOverrideFindUnique = vi.fn();
+
+// `dbTransaction`'s real implementation runs the callback against a real
+// interactive `$transaction` client; the mock just invokes it against the
+// same mocked model methods, since these tests only care about which model
+// methods get called with what args, not Prisma's transaction plumbing.
+const mockTxClient = {
+  tenant: { findFirst: (...args: unknown[]) => mockTenantFindFirst(...args) },
+  tenantSettings: {
+    findUnique: (...args: unknown[]) => mockTenantSettingsFindUnique(...args),
+    upsert: (...args: unknown[]) => mockTenantSettingsUpsert(...args),
+  },
+  tenantRolePermissionOverride: {
+    findUnique: (...args: unknown[]) => mockRolePermissionOverrideFindUnique(...args),
+  },
+};
 
 vi.mock('@/lib/db', () => ({
   default: {
@@ -18,9 +35,14 @@ vi.mock('@/lib/db', () => ({
       findFirst: (...args: unknown[]) => mockTenantFindFirst(...args),
     },
     tenantSettings: {
+      findUnique: (...args: unknown[]) => mockTenantSettingsFindUnique(...args),
       upsert: (...args: unknown[]) => mockTenantSettingsUpsert(...args),
     },
+    tenantRolePermissionOverride: {
+      findUnique: (...args: unknown[]) => mockRolePermissionOverrideFindUnique(...args),
+    },
   },
+  dbTransaction: (callback: (tx: typeof mockTxClient) => unknown) => callback(mockTxClient),
 }));
 
 vi.mock('@/lib/rate-limit', () => ({
@@ -85,14 +107,29 @@ function authAs(tenantId: string, role: string = 'owner', userId: string = 'user
   mockGetCurrentUser.mockResolvedValue({ userId, tenantId, email: 'test@example.com', role });
 }
 
-/** PUT reads the existing tenant via `prisma.tenant.findFirst({ where: { slug }, include: { settings: true } })`. */
-function mockExistingTenant(tenant: Record<string, unknown> | null) {
-  mockTenantFindFirst.mockResolvedValue(tenant);
+/**
+ * PUT reads the existing tenant and its settings via two separate queries
+ * (`prisma.tenant.findFirst({ where: { slug } })` then
+ * `prisma.tenantSettings.findUnique({ where: { tenantId } })`) rather than
+ * `include`, so this mocks both from one tenant-shaped object for
+ * convenience.
+ */
+function mockExistingTenant(tenant: (Record<string, unknown> & { id: string; settings?: Record<string, unknown> }) | null) {
+  if (!tenant) {
+    mockTenantFindFirst.mockResolvedValue(null);
+    mockTenantSettingsFindUnique.mockResolvedValue(null);
+    return;
+  }
+  const { settings, ...tenantRow } = tenant;
+  mockTenantFindFirst.mockResolvedValue(tenantRow);
+  mockTenantSettingsFindUnique.mockResolvedValue(settings ?? null);
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
   mockHasTenantPermission.mockResolvedValue(true);
+  mockRolePermissionOverrideFindUnique.mockResolvedValue(null);
+  mockTenantSettingsFindUnique.mockResolvedValue(null);
 });
 
 // ---------------------------------------------------------------------------
@@ -101,13 +138,14 @@ beforeEach(() => {
 
 describe('GET /api/tenants/:slug/settings', () => {
   it('returns settings for an existing active tenant', async () => {
-    mockTenantFindFirst.mockResolvedValue({ id: TENANT_A_ID, slug: SLUG, settings: { companyName: 'Acme' } });
+    mockTenantFindFirst.mockResolvedValue({ id: TENANT_A_ID, slug: SLUG });
+    mockTenantSettingsFindUnique.mockResolvedValue({ companyName: 'Acme' });
 
     const res = await GET(createRequest(`/api/tenants/${SLUG}/settings`), { params: Promise.resolve({ slug: SLUG }) });
     const { status, body } = await parseResponse(res);
 
     expect(status).toBe(200);
-    expect(body.data).toEqual({ companyName: 'Acme' });
+    expect(body.data).toEqual({ companyName: 'Acme', rolePermissionOverrides: {} });
     expect(mockTenantFindFirst).toHaveBeenCalledWith(
       expect.objectContaining({ where: { slug: SLUG, isActive: true } })
     );

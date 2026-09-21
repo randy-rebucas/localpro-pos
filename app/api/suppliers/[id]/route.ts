@@ -7,6 +7,7 @@ import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
+import { requireSuppliersAccess } from '@/lib/suppliers-access';
 
 function toSupplierJSON(s: { id: string; [key: string]: unknown }) {
   return { ...s, _id: s.id };
@@ -36,6 +37,13 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     if (!(await hasTenantPermission(user.role, tenantId, 'suppliers.manage'))) {
       return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
+    }
+
+    try {
+      await requireSuppliersAccess(tenantId);
+    } catch (featureError: unknown) {
+      const msg = featureError instanceof Error ? featureError.message : 'Forbidden';
+      return NextResponse.json({ success: false, error: msg }, { status: 403 });
     }
 
     const ip = request.headers.get('x-forwarded-for') ?? 'unknown';

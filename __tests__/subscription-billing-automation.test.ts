@@ -187,11 +187,16 @@ describe('processSubscriptionBilling — invoice generation', () => {
 
     expect(result.details.invoicesGenerated).toBe(1);
     expect(Invoice.create).toHaveBeenCalledTimes(1);
+    // Subscription invoices carry a flat 12% PH VAT on top of the plan price
+    // (lib/automations/subscription-billing.ts) — priceMonthly 1000 -> subtotal
+    // 1000, taxAmount 120, total 1120.
     expect(Invoice.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ tenantId: 'tenant-1', total: 1000, status: 'sent' }) })
+      expect.objectContaining({
+        data: expect.objectContaining({ tenantId: 'tenant-1', subtotal: 1000, taxAmount: 120, total: 1120, status: 'sent' }),
+      })
     );
     expect(BillingEvent.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ type: 'invoice_generated', amount: 1000 }) })
+      expect.objectContaining({ data: expect.objectContaining({ type: 'invoice_generated', amount: 1120 }) })
     );
     expect(sub.lastInvoiceGeneratedAt).toBeInstanceOf(Date);
     expect(Subscription.update).toHaveBeenCalledTimes(1);

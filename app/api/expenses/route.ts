@@ -8,6 +8,7 @@ import { getValidationTranslatorFromRequest } from '@/lib/validation-translation
 import { checkRateLimit } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
 import { postExpenseToLedger } from '@/lib/accounting/auto-post';
+import { requireExpensesAccess } from '@/lib/expenses-access';
 
 export async function GET(request: NextRequest) {
   try {
@@ -54,6 +55,13 @@ export async function POST(request: NextRequest) {
 
     if (!(await hasTenantPermission(user.role, tenantId, 'expenses.manage'))) {
       return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
+    }
+
+    try {
+      await requireExpensesAccess(tenantId);
+    } catch (featureError: unknown) {
+      const msg = featureError instanceof Error ? featureError.message : 'Forbidden';
+      return NextResponse.json({ success: false, error: msg }, { status: 403 });
     }
 
     const ip = request.headers.get('x-forwarded-for') ?? 'unknown';

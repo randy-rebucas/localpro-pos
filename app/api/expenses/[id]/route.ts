@@ -6,6 +6,7 @@ import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
+import { requireExpensesAccess } from '@/lib/expenses-access';
 
 export async function GET(
   request: NextRequest,
@@ -46,6 +47,13 @@ export async function PUT(
 
     if (!(await hasTenantPermission(authResult.user.role, authResult.tenantId, 'expenses.manage'))) {
       return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
+    }
+
+    try {
+      await requireExpensesAccess(tenantId);
+    } catch (featureError: unknown) {
+      const msg = featureError instanceof Error ? featureError.message : 'Forbidden';
+      return NextResponse.json({ success: false, error: msg }, { status: 403 });
     }
 
     const ip = request.headers.get('x-forwarded-for') ?? 'unknown';

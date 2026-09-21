@@ -28,7 +28,7 @@ interface NavItem {
   /** Permission key (see lib/permissions.ts) gating this item. Owner/admin/super_admin always see everything regardless. Omit for items visible to any admin-panel user. */
   permission?: string;
   /** Business-type feature flag (see lib/business-type-helpers.ts supportsFeature) gating this item's visibility. Omit for items visible regardless of business type. */
-  feature?: 'inventory' | 'booking' | 'delivery' | 'workOrders' | 'laundryOrders' | 'kitchenDisplay' | 'tableManagement' | 'suppliers' | 'expenses' | 'employees' | 'accounting';
+  feature?: 'inventory' | 'booking' | 'delivery' | 'workOrders' | 'laundryOrders' | 'kitchenDisplay' | 'tableManagement' | 'categories' | 'suppliers' | 'expenses' | 'employees' | 'accounting';
 }
 
 interface NavGroup {
@@ -77,7 +77,7 @@ export default function AdminSidebar() {
       defaultOpen: true,
       items: [
         { label: 'Products', href: `${base}/admin/products`, icon: Package, permission: 'products.manage' },
-        { label: 'Categories', href: `${base}/admin/categories`, icon: Tag, permission: 'categories.manage' },
+        { label: 'Categories', href: `${base}/admin/categories`, icon: Tag, permission: 'categories.manage', feature: 'categories' },
         { label: 'Bundles', href: `${base}/admin/bundles`, icon: Layers, permission: 'bundles.manage' },
         { label: 'Inventory', href: `${base}/admin/inventory`, icon: Boxes, permission: 'inventory.manage', feature: 'inventory' },
         { label: 'Stock Movements', href: `${base}/admin/stock-movements`, icon: ArrowUpDown, permission: 'stock_movements.manage', feature: 'inventory' },
@@ -148,7 +148,7 @@ export default function AdminSidebar() {
       title: 'Configuration',
       defaultOpen: false,
       items: [
-        { label: 'Users', href: `${base}/admin/users`, icon: Users2, permission: 'users.manage' },
+        { label: 'Users', href: `${base}/admin/users`, icon: Users2, permission: 'users.manage', feature: 'employees' },
         { label: 'Branches', href: `${base}/admin/branches`, icon: GitBranch, permission: 'branches.manage' },
         { label: 'Business Type', href: `${base}/admin/business-types`, icon: Store, permission: 'business_types.manage' },
         { label: 'Business Hours', href: `${base}/admin/business-hours`, icon: Clock, permission: 'business_hours.manage' },
