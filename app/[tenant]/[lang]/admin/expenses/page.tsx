@@ -1,12 +1,13 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
 import { type TranslationDict } from '@/types/dictionary';
 import Currency from '@/components/Currency';
-import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import AdminPageHeader from '@/components/admin/AdminPageHeader';
+import Win8Drawer from '@/components/admin/Win8Drawer';
+import { showToast } from '@/lib/toast';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useExpensesList, type Expense } from '@/hooks/useExpensesList';
 import { useExpensesForm, type ExpenseFormData } from '@/hooks/useExpensesForm';
@@ -18,8 +19,9 @@ import {
   getDeleteSuccessMessage,
   getDeleteErrorMessage,
   getDateValidationError,
-  getExpenseNameBadgeClass,
 } from '@/lib/expenses-helpers';
+
+const ICON_BUTTON = 'inline-flex items-center justify-center p-2.5 text-white hover:brightness-110 disabled:opacity-50 transition-[filter]';
 
 export default function ExpensesPage() {
   const params = useParams();
@@ -28,12 +30,15 @@ export default function ExpensesPage() {
   const [dict, setDict] = useState<TranslationDict | null>(null);
   const [showExpenseModal, setShowExpenseModal] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+  // Remounts the form on every open so it re-initializes even when reopening the same expense.
+  const [formKey, setFormKey] = useState(0);
   const { canAccess } = usePermissions();
   const canManage = canAccess('expenses.manage');
 
   const {
     expenses,
     loading,
+    error,
     message,
     filters,
     expenseNames,
@@ -48,25 +53,23 @@ export default function ExpensesPage() {
     setDeletingId,
   } = useExpensesList();
 
-  const { settings } = useTenantSettings(); // eslint-disable-line @typescript-eslint/no-unused-vars
-
-  // Auto-dismiss messages after 5 seconds
+  // List-level feedback goes to toasts.
   useEffect(() => {
-    if (message) {
-      const timer = setTimeout(() => {
-        setMessage(null);
-      }, 5000);
-      return () => clearTimeout(timer);
-    }
+    if (!message) return;
+    if (message.type === 'success') showToast.success(message.text);
+    else showToast.error(message.text);
+    setMessage(null);
   }, [message, setMessage]);
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
-    fetchExpenses();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lang, tenant]);
+  }, [lang]);
 
-  // Validate date range
+  // fetchExpenses is rebuilt whenever filters change, so this also refetches on filter changes.
+  useEffect(() => {
+    fetchExpenses();
+  }, [fetchExpenses, tenant]);
+
   const handleDateFilterChange = (field: 'startDate' | 'endDate', value: string) => {
     const newFilters = { ...filters, [field]: value };
     const validation = validateDateRange(newFilters.startDate, newFilters.endDate);
@@ -77,12 +80,12 @@ export default function ExpensesPage() {
     setFilters(newFilters);
   };
 
-  const handleDeleteExpense = async (expenseId: string) => {
+  const handleDeleteExpense = async (expense: Expense) => {
     if (!dict) return;
-    if (!confirm(getDeleteConfirmMessage(dict))) return;
+    if (!confirm(getDeleteConfirmMessage(dict, expense.name))) return;
 
-    setDeletingId(expenseId);
-    const success = await deleteExpense(expenseId);
+    setDeletingId(expense._id);
+    const success = await deleteExpense(expense._id);
     setDeletingId(null);
 
     if (success) {
@@ -93,121 +96,195 @@ export default function ExpensesPage() {
     }
   };
 
-  if (!dict || loading) {
+  const openForm = (expense: Expense | null) => {
+    setEditingExpense(expense);
+    setFormKey((k) => k + 1);
+    setShowExpenseModal(true);
+  };
+
+  if (!dict) {
     return (
       <div className="flex items-center justify-center py-24">
-        <div className="text-center">
-          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-brand"></div>
-          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
-        </div>
+        <div className="win8-spinner text-brand"><span /><span /><span /><span /><span /></div>
       </div>
     );
   }
 
-  return (
-    <div>
-      <div className="px-4 sm:px-6 py-6">
-        <div className="mb-6 sm:mb-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-2">
-                {dict.admin?.expenses || 'Expenses'}
-              </h1>
-              <p className="text-gray-600">{dict.admin?.expensesSubtitle || 'Manage and track business expenses'}</p>
-            </div>
-          </div>
+  const hasFilters = !!(filters.startDate || filters.endDate || filters.name);
+
+  const renderBody = () => {
+    if (loading) {
+      return (
+        <div className="text-center py-12 bg-white border border-gray-300">
+          <div className="win8-spinner text-brand mx-auto"><span /><span /><span /><span /><span /></div>
+          <p className="mt-3 text-gray-400 text-sm">{dict.admin?.loadingExpenses || 'Loading expenses…'}</p>
         </div>
+      );
+    }
 
-        {message && (
-          <div className={`mb-6 p-4 border flex items-center justify-between ${message.type === 'success' ? 'bg-green-50 text-green-800 border-green-300' : 'bg-red-50 text-red-800 border-red-300'}`}>
-            <span>{message.text}</span>
-            <button
-              onClick={() => setMessage(null)}
-              className="ml-4 text-gray-500 hover:text-gray-700"
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-        )}
+    if (error) {
+      return (
+        <div className="text-center py-12 bg-white border border-gray-300">
+          <p className="text-win8-danger text-sm font-medium">{error}</p>
+          <button
+            type="button"
+            onClick={() => fetchExpenses()}
+            className="mt-4 px-4 py-2 bg-brand text-white text-sm hover:bg-brand-hover transition-colors"
+          >
+            {dict.common?.retry || 'Retry'}
+          </button>
+        </div>
+      );
+    }
 
-        {/* Summary Card */}
-        <div className="bg-white border border-gray-300 p-6 mb-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-sm font-medium text-gray-500">{dict.admin?.totalExpenses || 'Total Expenses'}</h3>
-              <p className="text-3xl font-bold text-gray-900 mt-2">
-                <Currency amount={totalAmount} />
+    if (expenses.length === 0) {
+      return (
+        <div className="text-center py-12 text-gray-400 bg-white border border-gray-300">
+          {hasFilters
+            ? (dict.admin?.noExpensesMatch || 'No expenses match your filters.')
+            : (dict.admin?.noExpensesYet || 'No expenses yet.')}
+        </div>
+      );
+    }
+
+    const editLabel = dict.common?.edit || 'Edit';
+    const deleteLabel = dict.common?.delete || 'Delete';
+
+    return (
+      <div className="overflow-x-auto border border-gray-300 bg-white max-h-[70vh] overflow-y-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-brand-navy text-white text-xs uppercase tracking-wide sticky top-0 z-10">
+            <tr>
+              <th className="px-4 py-3 text-left font-medium">{dict.admin?.date || 'Date'}</th>
+              <th className="px-4 py-3 text-left font-medium">{dict.admin?.expenseName || 'Name of Expense'}</th>
+              <th className="px-4 py-3 text-right font-medium">{dict.admin?.amount || 'Amount'}</th>
+              <th className="px-4 py-3 text-left font-medium">{dict.admin?.paymentMethod || 'Payment Method'}</th>
+              <th className="px-4 py-3 text-left font-medium">{dict.admin?.user || 'User'}</th>
+              {canManage && <th className="px-4 py-3 text-right font-medium">{dict.common?.actions || 'Actions'}</th>}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-200">
+            {expenses.map((expense) => {
+              const userName = typeof expense.userId === 'object' && expense.userId !== null ? expense.userId.name : '—';
+              const deleting = deletingId === expense._id;
+              return (
+                <tr key={expense._id} className="hover:bg-gray-100 transition-colors">
+                  <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-700 tabular-nums">{formatDate(expense.date)}</td>
+                  <td className="px-4 py-3">
+                    <p className="font-medium text-gray-900">{expense.name}</p>
+                    {expense.description && (
+                      <p className="text-xs text-gray-500 max-w-[320px] truncate" title={expense.description}>{expense.description}</p>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap text-right tabular-nums font-semibold text-gray-900">
+                    <Currency amount={expense.amount} />
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap text-gray-700">{getPaymentMethodLabel(expense.paymentMethod, dict)}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-gray-700">{userName}</td>
+                  {canManage && (
+                    <td className="px-4 py-3">
+                      <div className="flex justify-end gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => openForm(expense)}
+                          title={editLabel}
+                          aria-label={`${editLabel}: ${expense.name}`}
+                          className={`${ICON_BUTTON} bg-brand`}
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M11 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z" />
+                          </svg>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteExpense(expense)}
+                          disabled={deleting}
+                          title={deleteLabel}
+                          aria-label={`${deleteLabel}: ${expense.name}`}
+                          className={`${ICON_BUTTON} bg-win8-danger`}
+                        >
+                          {deleting ? (
+                            <span className="win8-spinner win8-spinner-sm"><span /><span /><span /><span /><span /></span>
+                          ) : (
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M6 7h12M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m2 0-.7 12.1a2 2 0 0 1-2 1.9H9.7a2 2 0 0 1-2-1.9L7 7h10Z" />
+                            </svg>
+                          )}
+                        </button>
+                      </div>
+                    </td>
+                  )}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  return (
+    <>
+      <div className="px-4 sm:px-6 py-6">
+        <AdminPageHeader
+          title={dict.admin?.expenses || 'Expenses'}
+          description={dict.admin?.expensesSubtitle || 'Manage and track business expenses'}
+        />
+
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="bg-white border border-gray-300 p-5">
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide leading-tight">
+                {dict.admin?.totalExpenses || 'Total Expenses'}
+              </p>
+              <p className="text-3xl font-bold tabular-nums text-win8-danger mt-1.5">
+                {loading ? '—' : <Currency amount={totalAmount} />}
               </p>
             </div>
-            <div className="text-right">
-              <p className="text-sm text-gray-500">{dict.admin?.totalRecords || 'Total Records'}</p>
-              <p className="text-2xl font-semibold text-gray-900 mt-2">{expenses.length}</p>
+            <div className="bg-white border border-gray-300 p-5">
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide leading-tight">
+                {dict.admin?.totalRecords || 'Total Records'}
+              </p>
+              <p className="text-3xl font-bold tabular-nums text-gray-900 mt-1.5">
+                {loading ? '—' : expenses.length.toLocaleString()}
+              </p>
             </div>
           </div>
-        </div>
 
-        <div className="bg-white border border-gray-300 p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-bold text-gray-900">{dict.admin?.expenses || 'Expenses'}</h2>
-            {canManage && (
-              <button
-                onClick={() => {
-                  setEditingExpense(null);
-                  setShowExpenseModal(true);
-                }}
-                className="px-4 py-2 bg-brand text-white hover:bg-brand-hover font-medium border border-brand-hover"
-              >
-                {dict.common?.add || 'Add'} {dict.admin?.expense || 'Expense'}
-              </button>
-            )}
-          </div>
-
-          {/* Filters */}
-          <div className="mb-6 p-4 bg-gray-50 border border-gray-300">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-medium text-gray-700">{dict.admin?.filters || 'Filters'}</h3>
-              {(filters.startDate || filters.endDate || filters.name) && (
-                <button
-                  onClick={() => setFilters({ startDate: '', endDate: '', name: '' })}
-                  className="text-sm text-brand hover:text-brand-navy"
-                >
-                  {dict.common?.clearFilters || 'Clear Filters'}
-                </button>
-              )}
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-white border border-gray-300 p-4 flex flex-wrap gap-3 items-end">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="expenses-start" className="block text-xs font-medium text-gray-600 mb-1">
                 {dict.admin?.startDate || 'Start Date'}
               </label>
               <input
+                id="expenses-start"
                 type="date"
                 value={filters.startDate}
                 onChange={(e) => handleDateFilterChange('startDate', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand text-sm bg-white"
+                className="px-3 py-2 border border-gray-300 text-sm bg-white"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="expenses-end" className="block text-xs font-medium text-gray-600 mb-1">
                 {dict.admin?.endDate || 'End Date'}
               </label>
               <input
+                id="expenses-end"
                 type="date"
                 value={filters.endDate}
                 onChange={(e) => handleDateFilterChange('endDate', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand text-sm bg-white"
+                className="px-3 py-2 border border-gray-300 text-sm bg-white"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="expenses-name" className="block text-xs font-medium text-gray-600 mb-1">
                 {dict.admin?.expenseName || 'Name of Expense'}
               </label>
               <select
+                id="expenses-name"
                 value={filters.name}
                 onChange={(e) => setFilters({ ...filters, name: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand text-sm bg-white"
+                className="px-3 py-2 border border-gray-300 text-sm bg-white w-48"
               >
                 <option value="">{dict.common?.all || 'All Names'}</option>
                 {expenseNames.map((name) => (
@@ -217,104 +294,50 @@ export default function ExpensesPage() {
                 ))}
               </select>
             </div>
-            </div>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.date || 'Date'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.expenseName || 'Name of Expense'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.description || 'Description'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.amount || 'Amount'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.paymentMethod || 'Payment Method'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.user || 'User'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.common?.actions || 'Actions'}</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {expenses.map((expense) => {
-                  const userName = typeof expense.userId === 'object' && expense.userId !== null
-                    ? expense.userId.name
-                    : '-';
-                  return (
-                    <tr key={expense._id} className="hover:bg-gray-50">
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {formatDate(expense.date)}
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
-                        <span className={getExpenseNameBadgeClass()}>
-                          {expense.name}
-                        </span>
-                      </td>
-                      <td className="px-4 py-4 text-sm text-gray-900">{expense.description}</td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
-                        <Currency amount={expense.amount} />
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {getPaymentMethodLabel(expense.paymentMethod, dict)}
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{userName}</td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
-                        {canManage ? (
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => {
-                                setEditingExpense(expense);
-                                setShowExpenseModal(true);
-                              }}
-                              className="text-brand hover:text-brand-navy-deep"
-                            >
-                              {dict.common?.edit || 'Edit'}
-                            </button>
-                            <button
-                              onClick={() => handleDeleteExpense(expense._id)}
-                              disabled={deletingId === expense._id}
-                              className="text-red-600 hover:text-red-900 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              {deletingId === expense._id ? (dict.common?.deleting || 'Deleting...') : (dict.common?.delete || 'Delete')}
-                            </button>
-                          </div>
-                        ) : (
-                          <span className="text-gray-400">-</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            {expenses.length === 0 && (
-              <div className="text-center py-8 text-gray-500">{dict.common?.noResults || 'No expenses found'}</div>
+            {hasFilters && (
+              <button
+                type="button"
+                onClick={() => setFilters({ startDate: '', endDate: '', name: '' })}
+                className="px-3 py-2 text-sm text-gray-500 hover:text-gray-700"
+              >
+                {dict.common?.clearFilters || 'Clear Filters'}
+              </button>
+            )}
+            {canManage && (
+              <button
+                type="button"
+                onClick={() => openForm(null)}
+                className="ml-auto px-4 py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover transition-colors"
+              >
+                + {dict.admin?.addExpense || 'Add Expense'}
+              </button>
             )}
           </div>
-        </div>
 
-        {showExpenseModal && (
-          <ExpenseModal
-            expense={editingExpense}
-            onClose={() => {
-              setShowExpenseModal(false);
-              setEditingExpense(null);
-            }}
-            onSave={async () => {
-              await fetchExpenses();
-              setShowExpenseModal(false);
-              setEditingExpense(null);
-              setMessage({ type: 'success', text: editingExpense ? (dict?.common?.expenseUpdatedSuccess || 'Expense updated successfully') : (dict?.common?.expenseCreatedSuccess || 'Expense created successfully') });
-            }}
-            dict={dict}
-            createExpense={createExpense}
-            updateExpense={updateExpense}
-          />
-        )}
+          {renderBody()}
+        </div>
       </div>
-    </div>
+
+      <Win8Drawer open={showExpenseModal} onClose={() => setShowExpenseModal(false)} widthClass="max-w-2xl">
+        <ExpenseForm
+          key={formKey}
+          expense={editingExpense}
+          onClose={() => setShowExpenseModal(false)}
+          onSave={async () => {
+            await fetchExpenses();
+            setShowExpenseModal(false);
+            setMessage({ type: 'success', text: editingExpense ? (dict?.common?.expenseUpdatedSuccess || 'Expense updated successfully') : (dict?.common?.expenseCreatedSuccess || 'Expense created successfully') });
+          }}
+          dict={dict}
+          createExpense={createExpense}
+          updateExpense={updateExpense}
+        />
+      </Win8Drawer>
+    </>
   );
 }
 
-function ExpenseModal({
+function ExpenseForm({
   expense,
   onClose,
   onSave,
@@ -351,141 +374,145 @@ function ExpenseModal({
     });
   };
 
+  const inputClass = 'w-full border border-gray-300 px-3 py-2 text-sm bg-white';
+  const labelClass = 'block text-xs font-medium text-gray-600 mb-1';
+  const required = <span className="text-win8-danger">*</span>;
+  const optional = <span className="text-gray-400 font-normal">({dict?.common?.optional || 'optional'})</span>;
 
   return (
-    <div className="fixed inset-0 bg-gray-900/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white border border-gray-300 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="p-6">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">
-            {expense ? (dict?.admin?.editExpense || 'Edit Expense') : (dict?.admin?.addExpense || 'Add Expense')}
-          </h2>
-          <form onSubmit={onFormSubmit} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict?.admin?.expenseName || 'Name of Expense'} *
-                </label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ name: e.target.value })}
-                  placeholder={dict?.admin?.expenseNamePlaceholder || 'Enter expense name (e.g., Office Supplies, Rent, Utilities)'}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict?.admin?.amount || 'Amount'} *
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  required
-                  value={formData.amount}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    if (value === '' || /^\d*\.?\d*$/.test(value)) {
-                      setFormData({ amount: value });
-                    }
-                  }}
-                  placeholder="0.00"
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-                />
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict?.admin?.description || 'Description'} *
-              </label>
-                <textarea
-                  required
-                  value={formData.description}
-                  onChange={(e) => setFormData({ description: e.target.value })}
-                  rows={2}
-                  placeholder={dict?.admin?.expenseDescriptionPlaceholder || 'Enter expense description'}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-                />
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict?.admin?.date || 'Date'} *
-                </label>
-                <input
-                  type="date"
-                  required
-                  value={formData.date}
-                  onChange={(e) => setFormData({ date: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict?.admin?.paymentMethod || 'Payment Method'} *
-                </label>
-                <select
-                  value={formData.paymentMethod}
-                  onChange={(e) => setFormData({ paymentMethod: e.target.value as any })} // eslint-disable-line @typescript-eslint/no-explicit-any
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-                  required
-                >
-                  <option value="cash">{dict?.admin?.cash || 'Cash'}</option>
-                  <option value="card">{dict?.admin?.card || 'Card'}</option>
-                  <option value="digital">{dict?.admin?.digital || 'Digital'}</option>
-                  <option value="other">{dict?.admin?.other || 'Other'}</option>
-                </select>
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict?.admin?.receipt || 'Receipt'} (optional)
-              </label>
-              <input
-                type="text"
-                value={formData.receipt}
-                onChange={(e) => setFormData({ receipt: e.target.value })}
-                placeholder={dict?.admin?.receiptURLPlaceholder || 'Receipt URL or reference'}
-                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict?.admin?.notes || 'Notes'} (optional)
-              </label>
-              <textarea
-                value={formData.notes}
-                onChange={(e) => setFormData({ notes: e.target.value })}
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-              />
-            </div>
-            {error && (
-              <div className="bg-red-50 text-red-800 border border-red-300 p-3">
-                {error}
-              </div>
-            )}
-            <div className="flex gap-3 justify-end pt-4">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 bg-white"
-              >
-                {dict?.common?.cancel || 'Cancel'}
-              </button>
-              <button
-                type="submit"
-                disabled={submitting}
-                className="px-4 py-2 bg-brand text-white hover:bg-brand-hover disabled:opacity-50 border border-brand-hover"
-              >
-                {submitting ? (dict?.common?.loading || 'Saving...') : (dict?.common?.save || 'Save')}
-              </button>
-            </div>
-          </form>
-        </div>
+    <>
+      <div className="flex items-center justify-between px-6 py-4 bg-brand-navy text-white shrink-0">
+        <h2 className="text-base font-semibold">
+          {expense ? (dict?.admin?.editExpense || 'Edit Expense') : (dict?.admin?.addExpense || 'Add Expense')}
+        </h2>
+        <button
+          type="button"
+          onClick={onClose}
+          title={dict?.common?.close || 'Close'}
+          aria-label={dict?.common?.close || 'Close'}
+          className="text-white/70 hover:text-white"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+          </svg>
+        </button>
       </div>
-    </div>
+      <form onSubmit={onFormSubmit} className="flex flex-col flex-1 min-h-0">
+        <div className="p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label htmlFor="expense-name" className={labelClass}>{dict?.admin?.expenseName || 'Name of Expense'} {required}</label>
+              <input
+                id="expense-name"
+                type="text"
+                value={formData.name}
+                onChange={(e) => setFormData({ name: e.target.value })}
+                placeholder={dict?.admin?.expenseNamePlaceholder || 'Enter expense name (e.g., Office Supplies, Rent, Utilities)'}
+                className={inputClass}
+                required
+              />
+            </div>
+            <div>
+              <label htmlFor="expense-amount" className={labelClass}>{dict?.admin?.amount || 'Amount'} {required}</label>
+              <input
+                id="expense-amount"
+                type="number"
+                step="0.01"
+                min="0"
+                required
+                value={formData.amount}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                    setFormData({ amount: value });
+                  }
+                }}
+                placeholder="0.00"
+                className={`${inputClass} tabular-nums`}
+              />
+            </div>
+          </div>
+          <div>
+            <label htmlFor="expense-description" className={labelClass}>{dict?.admin?.description || 'Description'} {required}</label>
+            <textarea
+              id="expense-description"
+              required
+              value={formData.description}
+              onChange={(e) => setFormData({ description: e.target.value })}
+              rows={2}
+              placeholder={dict?.admin?.expenseDescriptionPlaceholder || 'Enter expense description'}
+              className={`${inputClass} resize-none`}
+            />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label htmlFor="expense-date" className={labelClass}>{dict?.admin?.date || 'Date'} {required}</label>
+              <input
+                id="expense-date"
+                type="date"
+                required
+                value={formData.date}
+                onChange={(e) => setFormData({ date: e.target.value })}
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label htmlFor="expense-method" className={labelClass}>{dict?.admin?.paymentMethod || 'Payment Method'} {required}</label>
+              <select
+                id="expense-method"
+                value={formData.paymentMethod}
+                onChange={(e) => setFormData({ paymentMethod: e.target.value as any })} // eslint-disable-line @typescript-eslint/no-explicit-any
+                className={inputClass}
+                required
+              >
+                <option value="cash">{dict?.admin?.cash || 'Cash'}</option>
+                <option value="card">{dict?.admin?.card || 'Card'}</option>
+                <option value="digital">{dict?.admin?.digital || 'Digital'}</option>
+                <option value="other">{dict?.admin?.other || 'Other'}</option>
+              </select>
+            </div>
+          </div>
+          <hr className="border-gray-300" />
+          <div>
+            <label htmlFor="expense-receipt" className={labelClass}>{dict?.admin?.receipt || 'Receipt'} {optional}</label>
+            <input
+              id="expense-receipt"
+              type="text"
+              value={formData.receipt}
+              onChange={(e) => setFormData({ receipt: e.target.value })}
+              placeholder={dict?.admin?.receiptURLPlaceholder || 'Receipt URL or reference'}
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label htmlFor="expense-notes" className={labelClass}>{dict?.admin?.notes || 'Notes'} {optional}</label>
+            <textarea
+              id="expense-notes"
+              value={formData.notes}
+              onChange={(e) => setFormData({ notes: e.target.value })}
+              rows={3}
+              className={`${inputClass} resize-none`}
+            />
+          </div>
+          {error && <div className="bg-win8-danger text-white text-sm p-3">{error}</div>}
+        </div>
+        <div className="flex gap-3 px-6 py-4 border-t border-gray-300 justify-end shrink-0">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 border border-gray-300 text-gray-700 bg-white text-sm hover:bg-gray-100 transition-colors"
+          >
+            {dict?.common?.cancel || 'Cancel'}
+          </button>
+          <button
+            type="submit"
+            disabled={submitting}
+            className="px-4 py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover disabled:opacity-50 transition-colors"
+          >
+            {submitting ? (dict?.common?.saving || 'Saving…') : (dict?.common?.save || 'Save')}
+          </button>
+        </div>
+      </form>
+    </>
   );
 }
-

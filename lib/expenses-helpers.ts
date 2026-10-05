@@ -31,7 +31,10 @@ export function validateDateRange(startDate: string, endDate: string): { valid: 
   return { valid: true };
 }
 
-export function getDeleteConfirmMessage(dict: Dict): string {
+export function getDeleteConfirmMessage(dict: Dict, name?: string): string {
+  if (name) {
+    return (dict?.admin?.deleteExpenseNamed || 'Delete expense "{name}"? This cannot be undone.').replace('{name}', name);
+  }
   return dict?.common?.deleteExpenseConfirm || dict?.admin?.deleteExpenseConfirm || 'Are you sure you want to delete this expense?';
 }
 
@@ -65,6 +68,3 @@ export function formatPaymentMethodDisplay(method: string): string {
   return method.charAt(0).toUpperCase() + method.slice(1);
 }
 
-export function getExpenseNameBadgeClass(): string {
-  return 'px-2 py-1 text-xs font-semibold border border-teal-300 bg-brand-soft text-brand-navy';
-}

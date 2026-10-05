@@ -29,6 +29,8 @@ export interface ExpenseFilters {
 interface UseExpensesListReturn {
   expenses: Expense[];
   loading: boolean;
+  /** Set when the list itself failed to load (distinct from action feedback in `message`). */
+  error: string | null;
   message: { type: 'success' | 'error'; text: string } | null;
   filters: ExpenseFilters;
   expenseNames: string[];
@@ -48,6 +50,7 @@ interface UseExpensesListReturn {
 export function useExpensesList(): UseExpensesListReturn {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [filters, setFilters] = useState<ExpenseFilters>({ startDate: '', endDate: '', name: '' });
   const [expenseNames, setExpenseNames] = useState<string[]>([]);
@@ -58,6 +61,7 @@ export function useExpensesList(): UseExpensesListReturn {
 
   const fetchExpenses = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const params = new URLSearchParams();
       if (filters.startDate) params.append('startDate', filters.startDate);
@@ -77,20 +81,23 @@ export function useExpensesList(): UseExpensesListReturn {
       const data = await res.json();
       if (data.success) {
         setExpenses(data.data || []);
-        // Extract unique expense names
-        const uniqueNames = Array.from(new Set((data.data || []).map((e: Expense) => e.name))).sort() as string[];
-        setExpenseNames(uniqueNames);
+        // Extract unique expense names. Skipped while a name filter is active,
+        // otherwise the dropdown would shrink to just the selected name.
+        if (!filters.name) {
+          const uniqueNames = Array.from(new Set((data.data || []).map((e: Expense) => e.name))).sort() as string[];
+          setExpenseNames(uniqueNames);
+        }
         // Note: intentionally not clearing `message` here — callers commonly
         // set a success/error message right before triggering a refetch
         // (delete, save), and clearing it here would wipe that feedback out
         // from under them.
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to fetch expenses' });
+        setError(data.error || 'Failed to fetch expenses');
       }
-    } catch (error) {
-      if (error instanceof Error && error.name !== 'AbortError') {
-        console.error('Failed to fetch expenses:', error);
-        setMessage({ type: 'error', text: 'Failed to fetch expenses' });
+    } catch (err) {
+      if (err instanceof Error && err.name !== 'AbortError') {
+        console.error('Failed to fetch expenses:', err);
+        setError('Failed to fetch expenses');
       }
     } finally {
       setLoading(false);
@@ -111,11 +118,9 @@ export function useExpensesList(): UseExpensesListReturn {
         return true;
       }
       const errorText = data.error || 'Failed to save expense';
-      setMessage({ type: 'error', text: errorText });
       return errorText;
     } catch {
       const errorText = 'Failed to save expense';
-      setMessage({ type: 'error', text: errorText });
       return errorText;
     }
   }, []);
@@ -134,11 +139,9 @@ export function useExpensesList(): UseExpensesListReturn {
         return true;
       }
       const errorText = data.error || 'Failed to update expense';
-      setMessage({ type: 'error', text: errorText });
       return errorText;
     } catch {
       const errorText = 'Failed to update expense';
-      setMessage({ type: 'error', text: errorText });
       return errorText;
     }
   }, []);
@@ -165,6 +168,7 @@ export function useExpensesList(): UseExpensesListReturn {
   return {
     expenses,
     loading,
+    error,
     message,
     filters,
     expenseNames,
