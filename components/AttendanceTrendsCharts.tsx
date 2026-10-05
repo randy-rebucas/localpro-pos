@@ -6,6 +6,12 @@ import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { getDefaultTenantSettings } from '@/lib/currency';
 import { formatDate } from '@/lib/formatting';
 
+// Win8 token hexes (success, accent) for series fills; recharts needs literal colors.
+const SUCCESS = '#0b7a44';
+const ACCENT = '#7a3fc9';
+const TOOLTIP_STYLE = { backgroundColor: '#fff', border: '1px solid #d1d5db', borderRadius: 0 };
+const PANEL = 'bg-white border border-gray-300 p-5';
+
 const formatHours = (value: number) => {
   const h = Math.floor(value);
   const m = Math.round((value - h) * 60);
@@ -15,10 +21,10 @@ const formatHours = (value: number) => {
 const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ color: string; name: string; value: number; payload: { fullName: string } }>; label?: string }) => {
   if (active && payload && payload.length) {
     return (
-      <div className="bg-white border border-gray-300 rounded-lg p-3 shadow-lg">
-        <p className="font-semibold text-gray-900 mb-2">{label || payload[0].payload.fullName}</p>
+      <div className="bg-white border border-gray-300 p-3">
+        <p className="text-sm font-semibold text-gray-900 mb-1">{label || payload[0].payload.fullName}</p>
         {payload.map((entry, index: number) => (
-          <p key={index} className="text-sm" style={{ color: entry.color }}>
+          <p key={index} className="text-sm tabular-nums" style={{ color: entry.color }}>
             {entry.name}: {entry.name.toLowerCase().includes('hours')
               ? formatHours(entry.value)
               : entry.value}
@@ -114,14 +120,14 @@ export default memo(function AttendanceTrendsCharts({ attendances, dict }: Atten
   }
 
   return (
-    <div className="space-y-6 mb-6">
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       {/* Daily Hours Worked - Line Chart */}
       {dailyHoursData.length > 0 && (
-        <div className="bg-gray-50 border border-gray-200 p-4 rounded-lg">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
+        <div className={`${PANEL} lg:col-span-2`}>
+          <h3 className="text-sm font-bold text-gray-900 mb-4">
             {dict.admin?.dailyHoursWorked || 'Daily Hours Worked'}
           </h3>
-          <ResponsiveContainer width="100%" height={350}>
+          <ResponsiveContainer width="100%" height={300}>
             <LineChart data={dailyHoursData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
               <XAxis
@@ -155,11 +161,11 @@ export default memo(function AttendanceTrendsCharts({ attendances, dict }: Atten
 
       {/* Daily Attendance Count - Bar Chart */}
       {dailyCountData.length > 0 && (
-        <div className="bg-gray-50 border border-gray-200 p-4 rounded-lg">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
+        <div className={PANEL}>
+          <h3 className="text-sm font-bold text-gray-900 mb-4">
             {dict.admin?.dailyAttendanceCount || 'Daily Attendance Count'}
           </h3>
-          <ResponsiveContainer width="100%" height={350}>
+          <ResponsiveContainer width="100%" height={300}>
             <BarChart data={dailyCountData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
               <XAxis
@@ -174,16 +180,9 @@ export default memo(function AttendanceTrendsCharts({ attendances, dict }: Atten
                 stroke="#6b7280"
                 style={{ fontSize: '12px' }}
               />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: '#fff',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '8px',
-                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-                }}
-              />
+              <Tooltip contentStyle={TOOLTIP_STYLE} />
               <Legend />
-              <Bar dataKey="count" fill="#10b981" name={dict.admin?.attendanceCount || 'Attendance Count'} />
+              <Bar dataKey="count" fill={SUCCESS} name={dict.admin?.attendanceCount || 'Attendance Count'} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -191,11 +190,11 @@ export default memo(function AttendanceTrendsCharts({ attendances, dict }: Atten
 
       {/* Hours by Employee - Bar Chart */}
       {employeeHoursData.length > 0 && (
-        <div className="bg-gray-50 border border-gray-200 p-4 rounded-lg">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
+        <div className={PANEL}>
+          <h3 className="text-sm font-bold text-gray-900 mb-4">
             {dict.admin?.hoursByEmployee || 'Hours by Employee'}
           </h3>
-          <ResponsiveContainer width="100%" height={350}>
+          <ResponsiveContainer width="100%" height={300}>
             <BarChart data={employeeHoursData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
               <XAxis
@@ -213,7 +212,7 @@ export default memo(function AttendanceTrendsCharts({ attendances, dict }: Atten
               />
               <Tooltip content={<CustomTooltip />} />
               <Legend />
-              <Bar dataKey="hours" fill="#8b5cf6" name={dict.admin?.totalHours || 'Total Hours'} />
+              <Bar dataKey="hours" fill={ACCENT} name={dict.admin?.totalHours || 'Total Hours'} />
             </BarChart>
           </ResponsiveContainer>
         </div>

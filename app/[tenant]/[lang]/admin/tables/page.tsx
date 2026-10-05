@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
@@ -7,6 +7,8 @@ import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { supportsFeature } from '@/lib/business-type-helpers';
 import { getDictionaryClient } from '../../dictionaries-client';
 import { usePermissions } from '@/hooks/usePermissions';
+import AdminPageHeader from '@/components/admin/AdminPageHeader';
+import Win8Drawer from '@/components/admin/Win8Drawer';
 
 interface TableRow {
   _id: string;
@@ -16,11 +18,19 @@ interface TableRow {
   isActive: boolean;
 }
 
-const STATUS_CONFIG: Record<string, { label: string; cls: string }> = {
-  open: { label: 'Open', cls: 'bg-green-100 text-green-800' },
-  occupied: { label: 'Occupied', cls: 'bg-red-100 text-red-800' },
-  'check-requested': { label: 'Check Requested', cls: 'bg-yellow-100 text-yellow-800' },
+const STATUS_BADGE: Record<string, string> = {
+  open: 'bg-win8-success text-white',
+  occupied: 'bg-win8-danger text-white',
+  'check-requested': 'bg-win8-warning text-white',
 };
+
+const STATUS_FALLBACK_LABEL: Record<string, string> = {
+  open: 'Open',
+  occupied: 'Occupied',
+  'check-requested': 'Check Requested',
+};
+
+const SMALL_ACTION = 'px-3 py-1 text-xs font-semibold text-white hover:brightness-110 transition-[filter]';
 
 export default function TablesPage() {
   const params = useParams();
@@ -29,13 +39,13 @@ export default function TablesPage() {
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [tables, setTables] = useState<TableRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [showInactive, setShowInactive] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [selectedTable, setSelectedTable] = useState<TableRow | null>(null);
   const [formData, setFormData] = useState({ name: '', capacity: '' });
 
   const { settings } = useTenantSettings();
-  const primaryColor = settings?.primaryColor || '#35979c';
   const { canAccess } = usePermissions();
   const canManage = canAccess('tables.configure');
   const tableManagementEnabled = supportsFeature(settings ?? undefined, 'tableManagement');
@@ -47,15 +57,16 @@ export default function TablesPage() {
   const fetchTables = useCallback(async () => {
     try {
       setLoading(true);
+      setLoadError(null);
       const res = await fetch(
         `/api/tables?tenant=${tenant}&isActive=${showInactive ? 'all' : 'true'}`,
         { credentials: 'include' }
       );
       const data = await res.json();
       if (data.success) setTables(data.data || []);
-      else toast.error(data.error || dict?.tables?.failedToLoadTables || 'Failed to load tables');
+      else setLoadError(data.error || dict?.tables?.failedToLoadTables || 'Failed to load tables');
     } catch {
-      toast.error(dict?.tables?.errorLoadingTables || 'Error loading tables');
+      setLoadError(dict?.tables?.errorLoadingTables || 'Error loading tables');
     } finally {
       setLoading(false);
     }
@@ -169,19 +180,164 @@ export default function TablesPage() {
     'check-requested': dict?.tables?.statusCheckRequested || 'Check Requested',
   };
 
-  return (
-    <div>
-      <div className="px-4 sm:px-6 py-6">
-        {/* Header */}
-        <div className="mb-8 flex flex-wrap gap-3 justify-between items-center">
-          <div>
-            <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-1">{dict?.tables?.title || 'Tables'}</h1>
-            <p className="text-gray-600">
-              {activeTables.length} {activeTables.length !== 1 ? (dict?.tables?.activeTables || 'active tables') : (dict?.tables?.activeTable || 'active table')}
-            </p>
+  const formTitle = selectedTable ? (dict?.tables?.editTable || 'Edit Table') : (dict?.tables?.addTable || 'Add Table');
+
+  const renderBody = () => {
+    if (loading) {
+      return (
+        <div className="text-center py-12 bg-white border border-gray-300">
+          <div className="win8-spinner text-brand mx-auto"><span /><span /><span /><span /><span /></div>
+          <p className="mt-3 text-gray-400 text-sm">{dict?.tables?.loadingTables || 'Loading tables…'}</p>
+        </div>
+      );
+    }
+
+    if (loadError) {
+      return (
+        <div className="text-center py-12 bg-white border border-gray-300">
+          <p className="text-win8-danger text-sm font-medium">{loadError}</p>
+          <button
+            type="button"
+            onClick={fetchTables}
+            className="mt-4 px-4 py-2 bg-brand text-white text-sm hover:bg-brand-hover transition-colors"
+          >
+            {dict?.common?.retry || 'Retry'}
+          </button>
+        </div>
+      );
+    }
+
+    if (displayed.length === 0) {
+      return (
+        <div className="text-center py-12 text-gray-400 bg-white border border-gray-300">
+          <p>{dict?.tables?.noTablesYet || 'No tables configured yet'}</p>
+          {canManage && tableManagementEnabled && (
+            <button
+              type="button"
+              onClick={openAdd}
+              className="mt-4 px-4 py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover transition-colors"
+            >
+              + {dict?.tables?.addTable || 'Add Table'}
+            </button>
+          )}
+        </div>
+      );
+    }
+
+    return (
+      <>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {displayed.map((table) => (
+            <div
+              key={table._id}
+              className={`bg-white border p-4 ${table.isActive ? 'border-gray-300' : 'border-dashed border-gray-300 opacity-60'}`}
+            >
+              <div className="flex justify-between items-start gap-2 mb-1">
+                <h3 className="text-base font-bold text-gray-900 truncate" title={table.name}>{table.name}</h3>
+                <span
+                  className={`shrink-0 px-2 py-0.5 text-xs font-semibold ${
+                    table.isActive ? STATUS_BADGE[table.status] || 'bg-gray-500 text-white' : 'bg-gray-500 text-white'
+                  }`}
+                >
+                  {table.isActive
+                    ? statusLabels[table.status] || STATUS_FALLBACK_LABEL[table.status] || table.status
+                    : dict?.admin?.inactive || 'Inactive'}
+                </span>
+              </div>
+
+              <p className="text-xs text-gray-500 tabular-nums">
+                {table.capacity ? `${table.capacity} ${dict?.tables?.seats || 'seats'}` : '—'}
+              </p>
+
+              {canManage && (
+                <div className="flex flex-wrap gap-1.5 mt-3">
+                  {table.isActive ? (
+                    <>
+                      {table.status !== 'open' && (
+                        <button
+                          type="button"
+                          onClick={() => handleResetStatus(table)}
+                          className={`${SMALL_ACTION} bg-win8-warning`}
+                        >
+                          {dict?.tables?.resetToOpen || 'Reset to Open'}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => openEdit(table)}
+                        className={`${SMALL_ACTION} bg-brand`}
+                      >
+                        {dict?.common?.edit || 'Edit'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeactivate(table)}
+                        className={`${SMALL_ACTION} bg-win8-danger`}
+                      >
+                        {dict?.admin?.deactivate || 'Deactivate'}
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleReactivate(table)}
+                      className={`${SMALL_ACTION} bg-win8-success`}
+                    >
+                      {dict?.tables?.reactivate || 'Reactivate'}
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {activeTables.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
+            {Object.keys(STATUS_BADGE).map((key) => (
+              <span key={key} className={`px-2 py-0.5 font-semibold ${STATUS_BADGE[key]}`}>
+                {statusLabels[key] || STATUS_FALLBACK_LABEL[key]}
+              </span>
+            ))}
+            <span className="ml-auto">{dict?.tables?.resetToOpenHint || '"Reset to Open" clears stuck occupied status'}</span>
           </div>
-          <div className="flex items-center gap-3">
-            <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
+        )}
+      </>
+    );
+  };
+
+  return (
+    <>
+      <div className="px-4 sm:px-6 py-6">
+        <AdminPageHeader
+          title={dict?.tables?.title || 'Tables'}
+          description={`${activeTables.length} ${activeTables.length !== 1 ? (dict?.tables?.activeTables || 'active tables') : (dict?.tables?.activeTable || 'active table')}`}
+        />
+
+        <div className="space-y-4">
+          {!tableManagementEnabled && (
+            <div className="bg-white border border-win8-warning p-4 flex items-start gap-3" role="status">
+              <span className="w-8 h-8 shrink-0 bg-win8-warning text-white flex items-center justify-center" aria-hidden="true">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </span>
+              <div className="min-w-0">
+                <h2 className="text-sm font-bold text-win8-warning">
+                  {dict?.tables?.tableManagementNotAvailable || 'Table Management Not Available'}
+                </h2>
+                <p className="text-sm text-gray-700 mt-0.5">
+                  {dict?.tables?.tableManagementNotAvailableDesc || 'Table management is turned off for this store.'}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {dict?.tables?.tableManagementNotAvailableHint || 'Enable it under Settings → Feature Flags.'}
+                </p>
+              </div>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between gap-3 flex-wrap bg-white border border-gray-300 p-3">
+            <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
               <input
                 type="checkbox"
                 className="checkbox-win8"
@@ -195,217 +351,83 @@ export default function TablesPage() {
                 type="button"
                 onClick={openAdd}
                 disabled={!tableManagementEnabled}
-                style={{ backgroundColor: primaryColor }}
-                className="px-4 py-2 text-sm font-semibold text-white hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:opacity-50"
+                className="px-4 py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 + {dict?.tables?.addTable || 'Add Table'}
               </button>
             )}
           </div>
+
+          {renderBody()}
         </div>
-
-        {!tableManagementEnabled && (
-          <div className="mb-6 p-4 bg-yellow-50 border-2 border-yellow-300 text-yellow-800">
-            <div className="flex items-start gap-3">
-              <svg className="w-6 h-6 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-              <div>
-                <h3 className="text-lg font-semibold text-yellow-900 mb-2">
-                  {dict?.tables?.tableManagementNotAvailable || 'Table Management Not Available'}
-                </h3>
-                <p className="text-yellow-800">
-                  {dict?.tables?.tableManagementNotAvailableDesc || 'Table management is turned off for this store.'}
-                </p>
-                <p className="text-sm text-yellow-700 mt-2">
-                  {dict?.tables?.tableManagementNotAvailableHint || 'Enable it under Settings → Feature Flags.'}
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Loading */}
-        {loading && (
-          <div className="text-center py-16">
-            <div
-              className="inline-block animate-spin h-8 w-8 border-b-2"
-              style={{ borderTopColor: primaryColor, borderRightColor: primaryColor, borderLeftColor: primaryColor, borderBottomColor: 'transparent' }}
-            />
-          </div>
-        )}
-
-        {/* Tables grid */}
-        {!loading && displayed.length > 0 && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {displayed.map((table) => {
-              const statusCfg = STATUS_CONFIG[table.status] ?? STATUS_CONFIG.open;
-              return (
-                <div
-                  key={table._id}
-                  className={`bg-white border-2 p-4 transition ${
-                    table.isActive ? 'border-gray-200' : 'border-dashed border-gray-200 opacity-60'
-                  }`}
-                >
-                  <div className="flex justify-between items-start mb-2">
-                    <h3 className="text-lg font-bold text-gray-900">{table.name}</h3>
-                    {table.isActive ? (
-                      <span className={`px-2 py-0.5 text-xs font-medium ${statusCfg.cls}`}>
-                        {statusLabels[table.status] || statusCfg.label}
-                      </span>
-                    ) : (
-                      <span className="px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-500">
-                        {dict?.admin?.inactive || 'Inactive'}
-                      </span>
-                    )}
-                  </div>
-
-                  {table.capacity && (
-                    <p className="text-sm text-gray-500 mb-3">{table.capacity} {dict?.tables?.seats || 'seats'}</p>
-                  )}
-
-                  {canManage && (
-                    <div className="flex flex-wrap gap-2 mt-3">
-                      {table.isActive ? (
-                        <>
-                          {table.status !== 'open' && (
-                            <button
-                              type="button"
-                              onClick={() => handleResetStatus(table)}
-                              className="text-xs px-2 py-1 border border-gray-200 text-gray-500 hover:text-gray-700 hover:border-gray-300 transition"
-                            >
-                              {dict?.tables?.resetToOpen || 'Reset to Open'}
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => openEdit(table)}
-                            className="text-xs px-3 py-1 border hover:bg-gray-50 transition"
-                            style={{ borderColor: primaryColor, color: primaryColor }}
-                          >
-                            {dict?.common?.edit || 'Edit'}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeactivate(table)}
-                            className="text-xs px-3 py-1 border border-red-200 text-red-500 hover:bg-red-50 transition"
-                          >
-                            {dict?.admin?.deactivate || 'Deactivate'}
-                          </button>
-                        </>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => handleReactivate(table)}
-                          className="text-xs px-3 py-1 border border-green-300 text-green-600 hover:bg-green-50 transition"
-                        >
-                          {dict?.tables?.reactivate || 'Reactivate'}
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Empty state */}
-        {!loading && displayed.length === 0 && (
-          <div className="text-center py-16 bg-white border-2 border-gray-200">
-            <svg className="w-12 h-12 mx-auto text-gray-300 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 10h18M3 14h18M10 4v16M14 4v16" />
-            </svg>
-            <p className="text-gray-500 mb-4">{dict?.tables?.noTablesYet || 'No tables configured yet'}</p>
-            {canManage && (
-              <button
-                type="button"
-                onClick={openAdd}
-                style={{ backgroundColor: primaryColor }}
-                className="px-4 py-2 text-sm font-semibold text-white hover:opacity-90 transition"
-              >
-                + {dict?.tables?.addTable || 'Add Table'}
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* Status legend */}
-        {!loading && activeTables.length > 0 && (
-          <div className="flex flex-wrap gap-3 mt-4 text-xs text-gray-500">
-            {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
-              <span key={key} className={`px-2 py-0.5 font-medium ${cfg.cls}`}>{statusLabels[key] || cfg.label}</span>
-            ))}
-            <span className="ml-auto">{dict?.tables?.resetToOpenHint || '"Reset to Open" clears stuck occupied status'}</span>
-          </div>
-        )}
       </div>
 
-      {/* Add / Edit Modal */}
-      {showModal && (
-        <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-          onClick={() => setShowModal(false)}
-        >
-          <div
-            className="bg-white w-full max-w-sm border border-gray-300"
-            onClick={(e) => e.stopPropagation()}
+      <Win8Drawer open={showModal} onClose={() => setShowModal(false)} widthClass="max-w-md">
+        <div className="flex items-center justify-between px-6 py-4 bg-brand-navy text-white shrink-0">
+          <h2 className="text-base font-semibold">{formTitle}</h2>
+          <button
+            type="button"
+            onClick={() => setShowModal(false)}
+            title={dict?.common?.close || 'Close'}
+            aria-label={dict?.common?.close || 'Close'}
+            className="text-white/70 hover:text-white"
           >
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
-              <h2 className="font-bold text-gray-900">{selectedTable ? (dict?.tables?.editTable || 'Edit Table') : (dict?.tables?.addTable || 'Add Table')}</h2>
-              <button type="button" onClick={() => setShowModal(false)} className="p-1 text-gray-400 hover:text-gray-600">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmit} className="px-5 py-5 space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">{dict?.tables?.tableName || 'Table Name'} *</label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:border-brand"
-                  placeholder={dict?.tables?.tableNamePlaceholder || 'e.g. T1, Table 5, Patio A'}
-                  maxLength={50}
-                  autoFocus
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">{dict?.tables?.seatingCapacity || 'Seating Capacity'}</label>
-                <input
-                  type="number"
-                  value={formData.capacity}
-                  onChange={(e) => setFormData({ ...formData, capacity: e.target.value })}
-                  className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:border-brand"
-                  placeholder={dict?.tables?.capacityPlaceholder || 'e.g. 4'}
-                  min={1}
-                  max={100}
-                />
-              </div>
-              <div className="flex gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="flex-1 px-4 py-2 border border-gray-300 text-sm hover:bg-gray-50 transition"
-                >
-                  {dict?.common?.cancel || 'Cancel'}
-                </button>
-                <button
-                  type="submit"
-                  style={{ backgroundColor: primaryColor }}
-                  className="flex-1 px-4 py-2 text-sm font-semibold text-white hover:opacity-90 transition"
-                >
-                  {selectedTable ? (dict?.tables?.saveChanges || 'Save Changes') : (dict?.tables?.addTable || 'Add Table')}
-                </button>
-              </div>
-            </form>
-          </div>
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
-      )}
-    </div>
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+          <div className="p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
+            <div>
+              <label htmlFor="table-name" className="block text-xs font-medium text-gray-600 mb-1">
+                {dict?.tables?.tableName || 'Table Name'} <span className="text-win8-danger">*</span>
+              </label>
+              <input
+                id="table-name"
+                type="text"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                className="w-full border border-gray-300 px-3 py-2 text-sm"
+                placeholder={dict?.tables?.tableNamePlaceholder || 'e.g. T1, Table 5, Patio A'}
+                maxLength={50}
+                autoFocus
+                required
+              />
+            </div>
+            <div>
+              <label htmlFor="table-capacity" className="block text-xs font-medium text-gray-600 mb-1">
+                {dict?.tables?.seatingCapacity || 'Seating Capacity'}
+              </label>
+              <input
+                id="table-capacity"
+                type="number"
+                value={formData.capacity}
+                onChange={(e) => setFormData({ ...formData, capacity: e.target.value })}
+                className="w-full border border-gray-300 px-3 py-2 text-sm tabular-nums"
+                placeholder={dict?.tables?.capacityPlaceholder || 'e.g. 4'}
+                min={1}
+                max={100}
+              />
+            </div>
+          </div>
+          <div className="flex gap-3 px-6 py-4 border-t border-gray-300 justify-end shrink-0">
+            <button
+              type="button"
+              onClick={() => setShowModal(false)}
+              className="px-4 py-2 border border-gray-300 text-gray-700 bg-white text-sm hover:bg-gray-100 transition-colors"
+            >
+              {dict?.common?.cancel || 'Cancel'}
+            </button>
+            <button
+              type="submit"
+              className="px-4 py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover disabled:opacity-50 transition-colors"
+            >
+              {selectedTable ? (dict?.tables?.saveChanges || 'Save Changes') : (dict?.tables?.addTable || 'Add Table')}
+            </button>
+          </div>
+        </form>
+      </Win8Drawer>
+    </>
   );
 }

@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import React, { useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
@@ -9,17 +9,15 @@ import { useAttendanceFilters } from '@/hooks/useAttendanceFilters';
 import { useCurrentSessions } from '@/hooks/useCurrentSessions';
 import { getUserName, buildExportData, formatHours, calculateTotalHours, calculateAverageHours } from '@/lib/attendance-helpers';
 import { usePermissions } from '@/hooks/usePermissions';
+import AdminPageHeader from '@/components/admin/AdminPageHeader';
 import toast from 'react-hot-toast';
 
 // Dynamically import charts to avoid SSR issues
 const AttendanceTrendsCharts = dynamic(() => import('@/components/AttendanceTrendsCharts'), {
   ssr: false,
   loading: () => (
-    <div className="w-full h-64 flex items-center justify-center">
-      <div className="text-center">
-        <div className="inline-block animate-spin h-8 w-8 border-b-2 border-brand"></div>
-        <p className="mt-4 text-gray-600">Loading chart...</p>
-      </div>
+    <div className="h-64 flex items-center justify-center bg-white border border-gray-300">
+      <div className="win8-spinner text-brand"><span /><span /><span /><span /><span /></div>
     </div>
   ),
 });
@@ -30,6 +28,16 @@ interface User {
   email: string;
 }
 
+type ExportFormat = 'csv' | 'excel' | 'pdf';
+
+const EXPORT_FORMATS: { format: ExportFormat; label: string }[] = [
+  { format: 'csv', label: 'CSV' },
+  { format: 'excel', label: 'Excel' },
+  { format: 'pdf', label: 'PDF' },
+];
+
+const timeOnly = (d: Date) => d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+
 export default function AttendancePage() {
   const params = useParams();
   const router = useRouter();
@@ -38,9 +46,9 @@ export default function AttendancePage() {
   const [dict, setDict] = React.useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [users, setUsers] = React.useState<User[]>([]);
   const [usersLoading, setUsersLoading] = React.useState(true);
-  const [message, setMessage] = React.useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [exporting, setExporting] = React.useState<ExportFormat | null>(null);
 
-  const { attendances, loading, fetchAttendances } = useAttendance();
+  const { attendances, loading, error, fetchAttendances } = useAttendance();
   const { selectedUserId, setSelectedUserId, startDate, setStartDate, endDate, setEndDate, initializeDateRange } = useAttendanceFilters();
   const { currentSessions, fetchCurrentSessions, calculateSessionHours } = useCurrentSessions();
   const { canAccess } = usePermissions();
@@ -74,7 +82,7 @@ export default function AttendancePage() {
         if (!res.ok) {
           throw new Error(`Failed to fetch users: HTTP ${res.status}`);
         }
-        
+
         const data = await res.json();
         if (data.success) {
           setUsers(data.data);
@@ -84,7 +92,7 @@ export default function AttendancePage() {
       } catch (error) {
         console.error('Error fetching users:', error);
         const errorMsg = error instanceof Error ? error.message : (dict?.admin?.failedToLoadEmployees || 'Failed to load employees');
-        setMessage({ type: 'error', text: errorMsg });
+        toast.error(errorMsg);
       } finally {
         setUsersLoading(false);
       }
@@ -94,22 +102,17 @@ export default function AttendancePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenant]);
 
-  // Fetch attendance records when filters change
-  useEffect(() => {
+  const loadAttendances = useCallback(() => {
     if (startDate && endDate) {
-      fetchAttendances(
-        {
-          userId: selectedUserId,
-          startDate,
-          endDate,
-          limit: 100,
-        },
-        (error) => {
-          setMessage({ type: 'error', text: error });
-        }
-      );
+      // Failures surface through the hook's `error` (rendered with a Retry button).
+      fetchAttendances({ userId: selectedUserId, startDate, endDate, limit: 100 });
     }
   }, [startDate, endDate, selectedUserId, fetchAttendances]);
+
+  // Fetch attendance records when filters change
+  useEffect(() => {
+    loadAttendances();
+  }, [loadAttendances]);
 
   // Fetch current sessions when users load
   useEffect(() => {
@@ -119,7 +122,7 @@ export default function AttendancePage() {
   }, [users, fetchCurrentSessions]);
 
   const handleExport = useCallback(
-    async (format: 'csv' | 'excel' | 'pdf' = 'csv') => {
+    async (format: ExportFormat = 'csv') => {
       const headers = [
         'Employee',
         'Clock In',
@@ -134,6 +137,7 @@ export default function AttendancePage() {
       const exportData = buildExportData(attendances, users);
       const baseFilename = `attendance_export_${startDate || 'all'}_to_${endDate || 'today'}`;
 
+      setExporting(format);
       try {
         const { arrayToCSV, downloadCSV, downloadExcel, downloadPDF } = await import('@/lib/export');
         if (format === 'csv') {
@@ -149,6 +153,8 @@ export default function AttendancePage() {
         console.error('Error exporting:', error);
         const errorMsg = error instanceof Error ? error.message : (dict?.admin?.failedToExport || 'Failed to export {format}').replace('{format}', format);
         toast.error(errorMsg);
+      } finally {
+        setExporting(null);
       }
     },
     [attendances, users, startDate, endDate, dict]
@@ -157,10 +163,7 @@ export default function AttendancePage() {
   if (!dict) {
     return (
       <div className="flex items-center justify-center py-24">
-        <div className="text-center">
-          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-brand"></div>
-          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
-        </div>
+        <div className="win8-spinner text-brand"><span /><span /><span /><span /><span /></div>
       </div>
     );
   }
@@ -168,9 +171,9 @@ export default function AttendancePage() {
   if (!canManage) {
     return (
       <div className="px-4 sm:px-6 py-6">
-        <div className="bg-red-50 border-2 border-red-300 p-6">
-          <h2 className="text-lg font-bold text-red-800 mb-1">{dict?.admin?.accessRestricted || 'Access Restricted'}</h2>
-          <p className="text-sm text-red-700">
+        <div className="bg-white border border-win8-danger p-6" role="alert">
+          <h2 className="text-base font-bold text-win8-danger mb-1">{dict?.admin?.accessRestricted || 'Access Restricted'}</h2>
+          <p className="text-sm text-gray-700">
             {dict?.admin?.accessRestrictedAttendance || "You don't have permission to view the attendance dashboard. Contact an admin or owner."}
           </p>
         </div>
@@ -178,221 +181,238 @@ export default function AttendancePage() {
     );
   }
 
+  // Dates are initialized in an effect, so treat the pre-init render as loading too.
+  const showLoading = loading || !startDate || !endDate;
+  const hasFilters = !!selectedUserId;
+
+  const renderRecords = () => {
+    if (showLoading) {
+      return (
+        <div className="text-center py-12 bg-white border border-gray-300">
+          <div className="win8-spinner text-brand mx-auto"><span /><span /><span /><span /><span /></div>
+          <p className="mt-3 text-gray-400 text-sm">{dict.admin?.loadingAttendance || 'Loading attendance records…'}</p>
+        </div>
+      );
+    }
+
+    if (error) {
+      return (
+        <div className="text-center py-12 bg-white border border-gray-300">
+          <p className="text-win8-danger text-sm font-medium">{error}</p>
+          <button
+            type="button"
+            onClick={loadAttendances}
+            className="mt-4 px-4 py-2 bg-brand text-white text-sm hover:bg-brand-hover transition-colors"
+          >
+            {dict.common?.retry || 'Retry'}
+          </button>
+        </div>
+      );
+    }
+
+    if (attendances.length === 0) {
+      return (
+        <div className="text-center py-12 text-gray-400 bg-white border border-gray-300">
+          {hasFilters
+            ? (dict.admin?.noAttendanceMatch || 'No attendance records match your filters.')
+            : (dict.admin?.noAttendanceInRange || 'No attendance records in this date range.')}
+        </div>
+      );
+    }
+
+    return (
+      <div className="overflow-x-auto border border-gray-300 bg-white max-h-[70vh] overflow-y-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-brand-navy text-white text-xs uppercase tracking-wide sticky top-0 z-10">
+            <tr>
+              <th className="px-4 py-3 text-left font-medium">{dict.admin?.employee || 'Employee'}</th>
+              <th className="px-4 py-3 text-left font-medium">{dict.admin?.clockIn || 'Clock In'}</th>
+              <th className="px-4 py-3 text-left font-medium">{dict.admin?.clockOut || 'Clock Out'}</th>
+              <th className="px-4 py-3 text-left font-medium">{dict.admin?.break || 'Break'}</th>
+              <th className="px-4 py-3 text-right font-medium">{dict.admin?.totalHours || 'Total Hours'}</th>
+              <th className="px-4 py-3 text-left font-medium">{dict.admin?.notes || 'Notes'}</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-200">
+            {attendances.map((attendance) => {
+              const userName = getUserName(attendance, users);
+              const clockIn = new Date(attendance.clockIn);
+              const clockOut = attendance.clockOut ? new Date(attendance.clockOut) : null;
+              const breakStart = attendance.breakStart ? new Date(attendance.breakStart) : null;
+              const breakEnd = attendance.breakEnd ? new Date(attendance.breakEnd) : null;
+
+              return (
+                <tr key={attendance._id} className="hover:bg-gray-100 transition-colors">
+                  <td className="px-4 py-3 whitespace-nowrap font-medium text-gray-900">{userName}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-700 tabular-nums">{clockIn.toLocaleString(undefined, { hour12: true })}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-700 tabular-nums">
+                    {clockOut ? clockOut.toLocaleString(undefined, { hour12: true }) : (
+                      <span className="px-2 py-0.5 text-xs font-semibold bg-win8-success text-white">
+                        {dict.admin?.active || 'Active'}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-700 tabular-nums">
+                    {breakStart && breakEnd ? (
+                      <span>{timeOnly(breakStart)} – {timeOnly(breakEnd)}</span>
+                    ) : breakStart ? (
+                      <span className="px-2 py-0.5 text-xs font-semibold bg-win8-warning text-white">{dict.admin?.onBreak || 'On Break'}</span>
+                    ) : '—'}
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap text-right tabular-nums font-semibold text-gray-900">
+                    {attendance.totalHours ? formatHours(attendance.totalHours) : '—'}
+                  </td>
+                  <td className="px-4 py-3 text-gray-500 max-w-[200px] truncate" title={attendance.notes || undefined}>
+                    {attendance.notes || '—'}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
   return (
     <div className="px-4 sm:px-6 py-6">
+      <AdminPageHeader
+        title={dict.admin?.attendance || 'Attendance Management'}
+        description={dict.admin?.attendanceDescription || 'View and manage employee attendance records'}
+        actions={
+          <button
+            type="button"
+            onClick={() => router.push(`/${tenant}/${lang}/admin/attendance/notifications`)}
+            className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 bg-white text-sm hover:bg-gray-100 transition-colors"
+          >
+            <svg className="w-4 h-4 text-win8-warning" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+            </svg>
+            <span className="hidden sm:inline">{dict.admin?.viewNotifications || 'View Notifications'}</span>
+          </button>
+        }
+      />
 
-      {/* Page header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">
-            {dict.admin?.attendance || 'Attendance Management'}
-          </h1>
-          <p className="text-sm text-gray-500 mt-0.5">{dict.admin?.attendanceDescription || 'View and manage employee attendance records'}</p>
-        </div>
-        <button
-          onClick={() => router.push(`/${tenant}/${lang}/admin/attendance/notifications`)}
-          className="hidden sm:flex items-center gap-2 px-4 py-2 text-sm font-medium border border-gray-300 bg-white hover:bg-gray-50 transition-colors"
-        >
-          <svg className="w-4 h-4 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-          </svg>
-          {dict.admin?.viewNotifications || 'View Notifications'}
-        </button>
-      </div>
-
-      {/* Alert message */}
-      {message && (
-        <div className={`mb-6 p-4 border text-sm ${message.type === 'success' ? 'bg-green-50 text-green-800 border-green-300' : 'bg-red-50 text-red-800 border-red-300'}`}>
-          {message.text}
-        </div>
-      )}
-
-      {/* Two-column layout */}
-      <div className="flex gap-6 items-start">
-
-        {/* Left — Filters sidebar */}
-        <aside className="w-56 shrink-0 sticky top-6 space-y-4">
-          <div className="bg-white border border-gray-300 p-4">
-            <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">{dict.admin?.filters || 'Filters'}</h2>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">{dict.admin?.employee || 'Employee'}</label>
-                <select
-                  value={selectedUserId}
-                  onChange={(e) => setSelectedUserId(e.target.value)}
-                  disabled={usersLoading}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 bg-white disabled:opacity-50"
+      <div className="space-y-4">
+        {/* Filter bar */}
+        <div className="bg-white border border-gray-300 p-4 flex flex-wrap gap-3 items-end">
+          <div>
+            <label htmlFor="attendance-employee" className="block text-xs font-medium text-gray-600 mb-1">{dict.admin?.employee || 'Employee'}</label>
+            <select
+              id="attendance-employee"
+              value={selectedUserId}
+              onChange={(e) => setSelectedUserId(e.target.value)}
+              disabled={usersLoading}
+              className="px-3 py-2 text-sm border border-gray-300 bg-white w-48 disabled:opacity-50"
+            >
+              <option value="">{dict.common?.all || 'All Employees'}</option>
+              {users.map((user) => (
+                <option key={user._id} value={user._id}>{user.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="attendance-start" className="block text-xs font-medium text-gray-600 mb-1">{dict.reports?.startDate || 'Start Date'}</label>
+            <input
+              id="attendance-start"
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="px-3 py-2 text-sm border border-gray-300 bg-white"
+            />
+          </div>
+          <div>
+            <label htmlFor="attendance-end" className="block text-xs font-medium text-gray-600 mb-1">{dict.reports?.endDate || 'End Date'}</label>
+            <input
+              id="attendance-end"
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="px-3 py-2 text-sm border border-gray-300 bg-white"
+            />
+          </div>
+          <div className="ml-auto">
+            <p className="text-xs font-medium text-gray-600 mb-1">{dict.admin?.exportSectionTitle || 'Export'}</p>
+            <div className="flex gap-1.5">
+              {EXPORT_FORMATS.map(({ format, label }) => (
+                <button
+                  key={format}
+                  type="button"
+                  onClick={() => handleExport(format)}
+                  disabled={exporting !== null || showLoading || attendances.length === 0}
+                  className="px-3 py-2 border border-gray-300 text-gray-700 bg-white text-sm hover:bg-gray-100 disabled:opacity-50 transition-colors"
                 >
-                  <option value="">{dict.common?.all || 'All Employees'}</option>
-                  {users.map((user) => (
-                    <option key={user._id} value={user._id}>{user.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">{dict.reports?.startDate || 'Start Date'}</label>
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 bg-white"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">{dict.reports?.endDate || 'End Date'}</label>
-                <input
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 bg-white"
-                />
-              </div>
+                  {exporting === format ? (dict.admin?.exporting || 'Exporting…') : label}
+                </button>
+              ))}
             </div>
           </div>
+        </div>
 
-          {/* Export */}
-          <div className="bg-white border border-gray-300 p-4">
-            <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">{dict.admin?.exportSectionTitle || 'Export'}</h2>
-            <div className="space-y-2">
-              <button onClick={() => handleExport('csv')} className="w-full px-3 py-2 text-sm text-left border border-gray-300 bg-white hover:bg-gray-50 transition-colors">
-                CSV
-              </button>
-              <button onClick={() => handleExport('excel')} className="w-full px-3 py-2 text-sm text-left border border-gray-300 bg-white hover:bg-gray-50 transition-colors">
-                Excel
-              </button>
-              <button onClick={() => handleExport('pdf')} className="w-full px-3 py-2 text-sm text-left border border-gray-300 bg-white hover:bg-gray-50 transition-colors">
-                PDF
-              </button>
-            </div>
-          </div>
-
-          {/* Currently clocked in */}
-          {currentSessions.length > 0 && (
-            <div className="bg-teal-50 border border-teal-300 p-4">
-              <h2 className="text-xs font-semibold text-teal-700 uppercase tracking-wide mb-3">
-                {dict.admin?.currentlyClockedIn || 'Clocked In'} · {currentSessions.length}
+        {/* Currently clocked in */}
+        {currentSessions.length > 0 && (
+          <section className="bg-white border border-gray-300">
+            <div className="px-5 py-3 border-b border-gray-300 flex items-center gap-2">
+              <span className="inline-block w-2.5 h-2.5 bg-win8-success" aria-hidden="true" />
+              <h2 className="text-sm font-bold text-gray-900">
+                {dict.admin?.currentlyClockedIn || 'Clocked In'}
               </h2>
-              <div className="space-y-2">
-                {currentSessions.map((session) => {
-                  const userName = typeof session.userId === 'object' ? session.userId.name : getUserName(session, users);
-                  const clockInTime = new Date(session.clockIn);
-                  const hours = calculateSessionHours(session.clockIn);
-                  return (
-                    <div key={session._id} className="bg-white border border-teal-200 px-3 py-2 flex items-center justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-gray-900 truncate">{userName}</p>
-                        <p className="text-xs text-gray-500">{clockInTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}</p>
-                      </div>
-                      <span className="text-sm font-bold text-teal-700 flex-shrink-0">{hours.toFixed(1)}h</span>
+              <span className="text-xs font-semibold px-1.5 py-0.5 bg-win8-success text-white tabular-nums">{currentSessions.length}</span>
+            </div>
+            <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {currentSessions.map((session) => {
+                const userName = typeof session.userId === 'object' ? session.userId.name : getUserName(session, users);
+                const hours = calculateSessionHours(session.clockIn);
+                return (
+                  <div key={session._id} className="border border-gray-300 px-3 py-2 flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-gray-900 truncate" title={userName}>{userName}</p>
+                      <p className="text-xs text-gray-500 tabular-nums">{timeOnly(new Date(session.clockIn))}</p>
                     </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </aside>
-
-        {/* Right — Main content */}
-        <div className="flex-1 min-w-0 space-y-6">
-
-          {/* Stat cards */}
-          <div className="grid grid-cols-3 gap-4">
-            <div className="bg-white border border-gray-300 px-5 py-4">
-              <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">{dict.admin?.totalRecords || 'Total Records'}</p>
-              <p className="text-2xl font-bold text-gray-900">{attendances.length}</p>
-            </div>
-            <div className="bg-white border border-gray-300 px-5 py-4">
-              <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">{dict.admin?.totalHours || 'Total Hours'}</p>
-              <p className="text-2xl font-bold text-gray-900">{formatHours(calculateTotalHours(attendances))}</p>
-            </div>
-            <div className="bg-white border border-gray-300 px-5 py-4">
-              <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">{dict.admin?.averageHours || 'Avg Hours/Record'}</p>
-              <p className="text-2xl font-bold text-gray-900">
-                {attendances.length > 0 ? formatHours(calculateAverageHours(attendances)) : '—'}
-              </p>
-            </div>
-          </div>
-
-          {/* Trends chart */}
-          {attendances.length > 0 && (
-            <div className="bg-white border border-gray-300 p-5">
-              <h2 className="text-sm font-semibold text-gray-900 mb-4">
-                {dict.admin?.attendanceTrends || 'Attendance Trends'}
-              </h2>
-              <AttendanceTrendsCharts attendances={attendances} dict={dict} />
-            </div>
-          )}
-
-          {/* Attendance table */}
-          <div className="bg-white border border-gray-300">
-            <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-gray-900">{dict.admin?.attendanceRecords || 'Attendance Records'}</h2>
-              <span className="text-xs text-gray-400">{attendances.length} records</span>
-            </div>
-            {loading ? (
-              <div className="flex items-center justify-center py-16">
-                <div className="text-center">
-                  <div className="inline-block animate-spin h-7 w-7 border-b-2 border-brand"></div>
-                  <p className="mt-3 text-sm text-gray-500">{dict.common?.loading || 'Loading...'}</p>
-                </div>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.employee || 'Employee'}</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.clockIn || 'Clock In'}</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.clockOut || 'Clock Out'}</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.break || 'Break'}</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.totalHours || 'Total Hours'}</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.notes || 'Notes'}</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {attendances.map((attendance) => {
-                      const userName = getUserName(attendance, users);
-                      const clockIn = new Date(attendance.clockIn);
-                      const clockOut = attendance.clockOut ? new Date(attendance.clockOut) : null;
-                      const breakStart = attendance.breakStart ? new Date(attendance.breakStart) : null;
-                      const breakEnd = attendance.breakEnd ? new Date(attendance.breakEnd) : null;
-
-                      return (
-                        <tr key={attendance._id} className="hover:bg-gray-50">
-                          <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">{userName}</td>
-                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{clockIn.toLocaleString(undefined, { hour12: true })}</td>
-                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                            {clockOut ? clockOut.toLocaleString(undefined, { hour12: true }) : (
-                              <span className="inline-flex items-center gap-1 text-green-600 font-semibold">
-                                <span className="w-1.5 h-1.5 bg-green-500 animate-pulse" />
-                                {dict.admin?.active || 'Active'}
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                            {breakStart && breakEnd ? (
-                              <span>{breakStart.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })} – {breakEnd.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}</span>
-                            ) : breakStart ? (
-                              <span className="text-yellow-600 font-medium">{dict.admin?.onBreak || 'On Break'}</span>
-                            ) : '—'}
-                          </td>
-                          <td className="px-4 py-3 whitespace-nowrap text-sm font-semibold text-gray-900">{formatHours(attendance.totalHours)}</td>
-                          <td className="px-4 py-3 text-sm text-gray-500 max-w-[180px] truncate" title={attendance.notes || undefined}>
-                            {attendance.notes || '—'}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-                {attendances.length === 0 && (
-                  <div className="text-center py-12 text-sm text-gray-400">
-                    {dict.common?.noData || 'No attendance records found'}
+                    <span className="text-sm font-bold text-win8-success tabular-nums shrink-0">{hours.toFixed(1)}h</span>
                   </div>
-                )}
-              </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {/* KPI cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="bg-white border border-gray-300 p-5">
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide leading-tight">{dict.admin?.totalRecords || 'Total Records'}</p>
+            <p className="text-3xl font-bold tabular-nums text-gray-900 mt-1.5">{showLoading ? '—' : attendances.length.toLocaleString()}</p>
+          </div>
+          <div className="bg-white border border-gray-300 p-5">
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide leading-tight">{dict.admin?.totalHours || 'Total Hours'}</p>
+            <p className="text-3xl font-bold tabular-nums text-brand mt-1.5">
+              {showLoading || attendances.length === 0 ? '—' : formatHours(calculateTotalHours(attendances))}
+            </p>
+          </div>
+          <div className="bg-white border border-gray-300 p-5">
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide leading-tight">{dict.admin?.averageHours || 'Avg Hours/Record'}</p>
+            <p className="text-3xl font-bold tabular-nums text-gray-900 mt-1.5">
+              {showLoading || attendances.length === 0 ? '—' : formatHours(calculateAverageHours(attendances))}
+            </p>
+          </div>
+        </div>
+
+        {/* Trends charts */}
+        {!showLoading && !error && attendances.length > 0 && (
+          <AttendanceTrendsCharts attendances={attendances} dict={dict} />
+        )}
+
+        {/* Records */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-sm font-bold text-gray-900">{dict.admin?.attendanceRecords || 'Attendance Records'}</h2>
+            {!showLoading && !error && (
+              <span className="text-xs text-gray-500 tabular-nums">
+                {(dict.admin?.recordsCount || '{count} records').replace('{count}', attendances.length.toLocaleString())}
+              </span>
             )}
           </div>
+          {renderRecords()}
         </div>
       </div>
     </div>
