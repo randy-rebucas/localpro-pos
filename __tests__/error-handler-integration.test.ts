@@ -1,6 +1,6 @@
 // Set env vars before any imports
 process.env.JWT_SECRET = 'test-secret-for-error-handler-tests-32chars!!';
-process.env.NODE_ENV = 'test';
+Object.assign(process.env, { NODE_ENV: 'test' });
 
 import { describe, it, expect, vi } from 'vitest';
 import { handleApiError } from '@/lib/error-handler';

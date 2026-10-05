@@ -1,6 +1,6 @@
 // Set env vars before any imports
 process.env.JWT_SECRET = 'test-secret-for-integration-tests-32chars!!';
-process.env.NODE_ENV = 'test';
+Object.assign(process.env, { NODE_ENV: 'test' });
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { generateToken, verifyToken, getCurrentUser, hasRole } from '@/lib/auth';

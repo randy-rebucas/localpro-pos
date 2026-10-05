@@ -1,5 +1,5 @@
 process.env.JWT_SECRET = 'test-secret-for-subscription-current-billing-tests-32chars!!';
-process.env.NODE_ENV = 'test';
+Object.assign(process.env, { NODE_ENV: 'test' });
 process.env.MONGODB_URI = 'mongodb://test:test@localhost:27017/localpro-pos-test';
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';

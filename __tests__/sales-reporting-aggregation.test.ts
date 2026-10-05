@@ -1,5 +1,5 @@
 process.env.JWT_SECRET = 'test-secret-for-sales-reporting-aggregation-32chars!';
-process.env.NODE_ENV = 'test';
+Object.assign(process.env, { NODE_ENV: 'test' });
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 

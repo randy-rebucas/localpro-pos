@@ -28,7 +28,7 @@ describe('verifyCronAuth', () => {
   }
 
   it('allows requests in development when CRON_SECRET is not set', async () => {
-    process.env.NODE_ENV = 'development';
+    Object.assign(process.env, { NODE_ENV: 'development' });
     delete process.env.CRON_SECRET;
     const verifyCronAuth = await loadVerifyCronAuth();
     const result = verifyCronAuth(makeRequest(), null);
@@ -36,7 +36,7 @@ describe('verifyCronAuth', () => {
   });
 
   it('denies requests in production when CRON_SECRET is not set', async () => {
-    process.env.NODE_ENV = 'production';
+    Object.assign(process.env, { NODE_ENV: 'production' });
     delete process.env.CRON_SECRET;
     const verifyCronAuth = await loadVerifyCronAuth();
     const result = verifyCronAuth(makeRequest(), null);

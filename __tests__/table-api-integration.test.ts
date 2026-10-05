@@ -1,6 +1,6 @@
 // Set env vars before any imports
 process.env.JWT_SECRET = 'test-secret-for-table-api-tests-32chars!!';
-process.env.NODE_ENV = 'test';
+Object.assign(process.env, { NODE_ENV: 'test' });
 process.env.MONGODB_URI = 'mongodb://test:test@localhost:27017/localpro-pos-test';
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -81,7 +81,7 @@ function createRequest(
     headers['authorization'] = `Bearer ${token}`;
   }
 
-  const options: RequestInit = {
+  const options: NonNullable<ConstructorParameters<typeof NextRequest>[1]> = {
     method,
     headers,
   };

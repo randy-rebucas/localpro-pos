@@ -1,5 +1,5 @@
 process.env.JWT_SECRET = 'test-secret-for-accounting-auto-post-tests-32chars!!';
-process.env.NODE_ENV = 'test';
+Object.assign(process.env, { NODE_ENV: 'test' });
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -221,10 +221,10 @@ describe('postExpenseToLedger', () => {
     const lines = call.data.lines.create as Array<{ accountId: string; debit: number; credit: number }>;
     const debitLine = lines.find((l) => l.debit > 0);
     const creditLine = lines.find((l) => l.credit > 0);
-    expect(debitLine.accountId).toBe('acct-general-expense');
-    expect(creditLine.accountId).toBe('acct-cash');
-    expect(debitLine.debit).toBe(45);
-    expect(creditLine.credit).toBe(45);
+    expect(debitLine?.accountId).toBe('acct-general-expense');
+    expect(creditLine?.accountId).toBe('acct-cash');
+    expect(debitLine?.debit).toBe(45);
+    expect(creditLine?.credit).toBe(45);
   });
 
   it('credits Accounts Payable for a non-cash expense', async () => {
@@ -244,7 +244,7 @@ describe('postExpenseToLedger', () => {
     const call = mockJournalEntryCreate.mock.calls[0][0];
     const lines = call.data.lines.create as Array<{ accountId: string; credit: number }>;
     const creditLine = lines.find((l) => l.credit > 0);
-    expect(creditLine.accountId).toBe('acct-ap');
+    expect(creditLine?.accountId).toBe('acct-ap');
   });
 
   it('is idempotent: a second call for the same expenseId does not create a second entry', async () => {
@@ -291,9 +291,9 @@ describe('postCashDrawerVarianceToLedger', () => {
     const lines = call.data.lines.create as Array<{ accountId: string; debit: number; credit: number }>;
     const debitLine = lines.find((l) => l.debit > 0);
     const creditLine = lines.find((l) => l.credit > 0);
-    expect(debitLine.accountId).toBe('acct-over-short');
-    expect(creditLine.accountId).toBe('acct-cash');
-    expect(debitLine.debit).toBe(15);
+    expect(debitLine?.accountId).toBe('acct-over-short');
+    expect(creditLine?.accountId).toBe('acct-cash');
+    expect(debitLine?.debit).toBe(15);
   });
 
   it('posts an overage: debit Cash, credit Cash Over/Short', async () => {
@@ -313,9 +313,9 @@ describe('postCashDrawerVarianceToLedger', () => {
     const lines = call.data.lines.create as Array<{ accountId: string; debit: number; credit: number }>;
     const debitLine = lines.find((l) => l.debit > 0);
     const creditLine = lines.find((l) => l.credit > 0);
-    expect(debitLine.accountId).toBe('acct-cash');
-    expect(creditLine.accountId).toBe('acct-over-short');
-    expect(creditLine.credit).toBe(8);
+    expect(debitLine?.accountId).toBe('acct-cash');
+    expect(creditLine?.accountId).toBe('acct-over-short');
+    expect(creditLine?.credit).toBe(8);
   });
 
   it('does not post when there is no variance', async () => {

@@ -12,7 +12,7 @@ interface TenantSettingsContextType {
   refreshSettings: () => Promise<void>;
 }
 
-const TenantSettingsContext = createContext<TenantSettingsContextType | undefined>(undefined);
+export const TenantSettingsContext = createContext<TenantSettingsContextType | undefined>(undefined);
 
 export function TenantSettingsProvider({ children }: { children: ReactNode }) {
   const params = useParams();

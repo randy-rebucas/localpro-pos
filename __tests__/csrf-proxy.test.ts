@@ -1,6 +1,6 @@
 // Set env vars before any imports
 process.env.JWT_SECRET = 'test-secret-for-csrf-proxy-tests-32chars!!';
-process.env.NODE_ENV = 'test';
+Object.assign(process.env, { NODE_ENV: 'test' });
 
 /**
  * Tests for the CSRF and exempt-path logic extracted from proxy.ts.

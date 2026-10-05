@@ -1,5 +1,5 @@
 process.env.JWT_SECRET = 'test-secret-for-delivery-api-tests-32chars!!';
-process.env.NODE_ENV = 'test';
+Object.assign(process.env, { NODE_ENV: 'test' });
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
@@ -88,7 +88,7 @@ const TENANT_A = 'tenant-a';
 const TENANT_B = 'tenant-b';
 
 function createRequest(url: string, method: string = 'GET', body?: Record<string, unknown>): NextRequest {
-  const options: RequestInit = { method, headers: { 'content-type': 'application/json' } };
+  const options: NonNullable<ConstructorParameters<typeof NextRequest>[1]> = { method, headers: { 'content-type': 'application/json' } };
   if (body) options.body = JSON.stringify(body);
   return new NextRequest(new URL(url, 'http://localhost'), options);
 }
