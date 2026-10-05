@@ -37,6 +37,7 @@ interface RecaptchaProps {
  */
 const Recaptcha = forwardRef<RecaptchaHandle, RecaptchaProps>(function Recaptcha({ onChange, className }, ref) {
   const [scriptReady, setScriptReady] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const widgetId = useRef<number | null>(null);
 
@@ -62,10 +63,19 @@ const Recaptcha = forwardRef<RecaptchaHandle, RecaptchaProps>(function Recaptcha
     const interval = setInterval(() => {
       if (window.grecaptcha?.enterprise) {
         setScriptReady(true);
+        setLoadFailed(false);
         clearInterval(interval);
       }
     }, 200);
-    return () => clearInterval(interval);
+    // If the script is blocked (CSP, ad/privacy blocker, network), the widget
+    // would otherwise stay blank with no explanation — surface it instead.
+    const timeout = setTimeout(() => {
+      if (!window.grecaptcha?.enterprise) setLoadFailed(true);
+    }, 10000);
+    return () => {
+      clearInterval(interval);
+      clearTimeout(timeout);
+    };
   }, []);
 
   useEffect(() => {
@@ -93,10 +103,16 @@ const Recaptcha = forwardRef<RecaptchaHandle, RecaptchaProps>(function Recaptcha
         src="https://www.google.com/recaptcha/enterprise.js?render=explicit"
         strategy="afterInteractive"
         onLoad={() => setScriptReady(true)}
+        onError={() => setLoadFailed(true)}
       />
       <div className={className}>
         <div ref={containerRef} />
       </div>
+      {loadFailed && !scriptReady && (
+        <p role="alert" className="mt-2 text-center text-sm text-red-600">
+          reCAPTCHA could not load. Disable ad/privacy blockers for this site or check your connection, then refresh the page.
+        </p>
+      )}
     </>
   );
 });
