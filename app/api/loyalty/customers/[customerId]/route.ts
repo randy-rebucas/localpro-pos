@@ -65,6 +65,7 @@ export async function GET(
         loyaltyPointsBalance: Number(customer.loyaltyPointsBalance ?? 0),
         history: history.map((h) => ({
           ...h,
+          _id: h.id, // Legacy client key: the loyalty history list keys entries by `_id`.
           points: Number(h.points),
           balanceBefore: Number(h.balanceBefore),
           balanceAfter: Number(h.balanceAfter),

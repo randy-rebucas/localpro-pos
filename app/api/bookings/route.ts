@@ -12,6 +12,7 @@ import { getValidationTranslatorFromRequest } from '@/lib/validation-translation
 import { requireBookingSchedulingAccess } from '@/lib/booking-scheduling-access';
 import { getClosedHolidayForDate } from '@/lib/holidays';
 import { logger } from '@/lib/logger';
+import { serializeBooking } from '@/lib/booking-serializer';
 
 class BookingConflictError extends Error {
   conflicts: unknown;
@@ -85,7 +86,7 @@ export async function GET(request: NextRequest) {
       orderBy: { startTime: 'asc' },
     });
 
-    return NextResponse.json({ success: true, data: bookings });
+    return NextResponse.json({ success: true, data: bookings.map(serializeBooking) });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     logger.error('Get bookings error:', error);
     const t = await getValidationTranslatorFromRequest(request);
@@ -322,7 +323,7 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json(
-      { success: true, data: bookingData },
+      { success: true, data: bookingData ? serializeBooking(bookingData) : null },
       { status: 201 }
     );
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any

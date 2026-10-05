@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import prisma from '@/lib/db';
-import type { Prisma, TableStatus } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
+import { TABLE_STATUSES, toPrismaTableStatus, serializeTable } from '@/lib/table-serializer';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -39,15 +40,14 @@ export async function GET(request: NextRequest) {
     }
 
     if (status) {
-      const validStatuses = ['open', 'occupied', 'check-requested'];
-      if (validStatuses.includes(status)) {
-        where.status = status as TableStatus;
+      if ((TABLE_STATUSES as readonly string[]).includes(status)) {
+        where.status = toPrismaTableStatus(status);
       }
     }
 
     const tables = await prisma.posTable.findMany({ where, orderBy: { name: 'asc' } });
 
-    return NextResponse.json({ success: true, data: tables });
+    return NextResponse.json({ success: true, data: tables.map(serializeTable) });
   } catch (error) {
     return handleApiError(error, 'Failed to fetch tables');
   }
@@ -117,7 +117,7 @@ export async function POST(request: NextRequest) {
       changes: { name: table.name, capacity: table.capacity },
     });
 
-    return NextResponse.json({ success: true, data: table }, { status: 201 });
+    return NextResponse.json({ success: true, data: serializeTable(table) }, { status: 201 });
   } catch (error) {
     return handleApiError(error, 'Failed to create table');
   }

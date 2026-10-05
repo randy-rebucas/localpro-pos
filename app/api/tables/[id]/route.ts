@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
-import type { TableStatus } from '@prisma/client';
+import { TABLE_STATUSES, toPrismaTableStatus, serializeTable } from '@/lib/table-serializer';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -23,7 +23,7 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'Table not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ success: true, data: table });
+    return NextResponse.json({ success: true, data: serializeTable(table) });
   } catch (error) {
     return handleApiError(error, 'Failed to fetch table');
   }
@@ -92,9 +92,8 @@ export async function PATCH(
     }
 
     if (status !== undefined && status !== null) {
-      const validStatuses = ['open', 'occupied', 'check-requested'];
-      if (!validStatuses.includes(status)) {
-        return NextResponse.json({ success: false, error: `Status must be one of: ${validStatuses.join(', ')}` }, { status: 400 });
+      if (!(TABLE_STATUSES as readonly string[]).includes(status)) {
+        return NextResponse.json({ success: false, error: `Status must be one of: ${TABLE_STATUSES.join(', ')}` }, { status: 400 });
       }
     }
 
@@ -105,7 +104,7 @@ export async function PATCH(
       data: {
         ...(name !== undefined ? { name } : {}),
         ...(capacity !== undefined ? { capacity } : {}),
-        ...(status !== undefined ? { status: status as TableStatus } : {}),
+        ...(status !== undefined && status !== null ? { status: toPrismaTableStatus(status) } : {}),
         ...(isActive !== undefined ? { isActive } : {}),
         ...(currentOrderId !== undefined ? { currentOrderId: currentOrderId || null } : {}),
       },
@@ -119,7 +118,7 @@ export async function PATCH(
       changes: { before: oldData, after: updated },
     });
 
-    return NextResponse.json({ success: true, data: updated });
+    return NextResponse.json({ success: true, data: serializeTable(updated) });
   } catch (error) {
     return handleApiError(error, 'Failed to update table');
   }

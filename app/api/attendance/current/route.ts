@@ -4,6 +4,7 @@ import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
+import { serializeAttendance } from '@/lib/attendance-serializer';
 
 /**
  * GET - Get current user's active attendance session (if clocked in)
@@ -43,7 +44,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       data: {
-        ...activeSession,
+        ...serializeAttendance(activeSession),
         currentHours: roundedHours,
       },
     });

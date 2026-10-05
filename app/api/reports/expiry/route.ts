@@ -84,6 +84,7 @@ export async function GET(request: NextRequest) {
       else status = 'warning';
       return {
         id: p.id,
+        _id: p.id, // Legacy client key: the expiry-tracking page keys rows by `_id`.
         name: p.name,
         sku: p.sku,
         stock: p.stock,

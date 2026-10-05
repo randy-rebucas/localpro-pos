@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import prisma from '@/lib/db';
 import { requireRole } from '@/lib/auth';
+import { serializePlan } from '@/lib/subscription-plan-serializer';
 
 export async function GET(request: NextRequest) { // eslint-disable-line @typescript-eslint/no-unused-vars
   try {
@@ -15,7 +16,7 @@ export async function GET(request: NextRequest) { // eslint-disable-line @typesc
       orderBy: { priceMonthly: 'asc' },
     });
 
-    return NextResponse.json({ success: true, data: plans });
+    return NextResponse.json({ success: true, data: plans.map(serializePlan) });
   } catch (_error: unknown) {
     return NextResponse.json({ success: false, error: 'Failed to fetch plans' }, { status: 500 });
   }
@@ -81,7 +82,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({ success: true, data: plan }, { status: 201 });
+    return NextResponse.json({ success: true, data: serializePlan(plan) }, { status: 201 });
   } catch (error: unknown) {
     if ((error as { code?: string }).code === 'P2002') {
       return NextResponse.json(

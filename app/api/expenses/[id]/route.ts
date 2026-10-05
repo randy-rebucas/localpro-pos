@@ -7,6 +7,7 @@ import { getValidationTranslatorFromRequest } from '@/lib/validation-translation
 import { checkRateLimit } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
 import { requireExpensesAccess } from '@/lib/expenses-access';
+import { serializeExpense } from '@/lib/expense-serializer';
 
 export async function GET(
   request: NextRequest,
@@ -28,7 +29,7 @@ export async function GET(
       return NextResponse.json({ success: false, error: t('validation.expenseNotFound', 'Expense not found') }, { status: 404 });
     }
 
-    return NextResponse.json({ success: true, data: expense });
+    return NextResponse.json({ success: true, data: serializeExpense(expense) });
   } catch (error) {
     return handleApiError(error, 'Failed to fetch expense');
   }
@@ -93,7 +94,7 @@ export async function PUT(
       changes: { before: existingExpense, after: expense },
     });
 
-    return NextResponse.json({ success: true, data: expense });
+    return NextResponse.json({ success: true, data: serializeExpense(expense) });
   } catch (error) {
     return handleApiError(error, 'Failed to update expense');
   }

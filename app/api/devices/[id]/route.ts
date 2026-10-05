@@ -82,7 +82,8 @@ export async function PUT(
       changes: { before: oldDevice, after: device },
     });
 
-    return NextResponse.json({ success: true, data: device });
+    // Legacy client key: the admin devices page keys rows by `_id`.
+    return NextResponse.json({ success: true, data: { ...device, _id: device.id } });
   } catch (error) {
     return handleApiError(error, 'Failed to update device');
   }

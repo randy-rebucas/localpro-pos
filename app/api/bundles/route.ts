@@ -8,6 +8,7 @@ import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
+import { serializeBundle } from '@/lib/bundle-serializer';
 
 export async function GET(request: NextRequest) {
   try {
@@ -70,7 +71,7 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: 'desc' },
     });
 
-    return NextResponse.json({ success: true, data: bundles });
+    return NextResponse.json({ success: true, data: bundles.map(serializeBundle) });
   } catch (_error: unknown) {
     logger.error('Error fetching bundles:', _error);
     return NextResponse.json({ success: false, error: 'Failed to fetch bundles' }, { status: 500 });
@@ -137,7 +138,7 @@ export async function POST(request: NextRequest) {
       changes: body,
     });
 
-    return NextResponse.json({ success: true, data: bundle }, { status: 201 });
+    return NextResponse.json({ success: true, data: serializeBundle(bundle) }, { status: 201 });
   } catch (error: unknown) {
     const t = await getValidationTranslatorFromRequest(request);
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {

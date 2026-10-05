@@ -79,7 +79,8 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      data: auditLogs,
+      // Legacy client key: hooks/useAuditLogs.ts keys rows by `_id`.
+      data: auditLogs.map((log) => ({ ...log, _id: log.id })),
       pagination: {
         page,
         limit,

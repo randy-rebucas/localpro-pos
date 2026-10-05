@@ -8,6 +8,16 @@ import { getValidationTranslatorFromRequest } from '@/lib/validation-translation
 import { checkRateLimit } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
 
+// Legacy client shape (admin devices page): `_id` and a populated `branchId`.
+function toDeviceJSON<T extends { id: string; branchId: string | null; branch?: { name: string } | null }>(d: T) {
+  const { branch, ...rest } = d;
+  return {
+    ...rest,
+    _id: d.id,
+    branchId: branch && d.branchId ? { _id: d.branchId, name: branch.name } : d.branchId,
+  };
+}
+
 export async function GET(request: NextRequest) {
   try {
     const authResult = await requireTenantAccess(request);
@@ -31,7 +41,7 @@ export async function GET(request: NextRequest) {
       orderBy: { terminalId: 'asc' },
     });
 
-    return NextResponse.json({ success: true, data: devices });
+    return NextResponse.json({ success: true, data: devices.map(toDeviceJSON) });
   } catch (error) {
     return handleApiError(error, 'Failed to fetch devices');
   }
@@ -106,7 +116,7 @@ export async function POST(request: NextRequest) {
       changes: { label, serialNumber, terminalId, branchId, ptuNumber, ptuStatus },
     });
 
-    return NextResponse.json({ success: true, data: device }, { status: 201 });
+    return NextResponse.json({ success: true, data: toDeviceJSON(device) }, { status: 201 });
   } catch (error) {
     return handleApiError(error, 'Failed to create device');
   }

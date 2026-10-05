@@ -5,6 +5,7 @@ import { hasTenantPermission } from '@/lib/permissions-server';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
+import { serializeSubscription } from '@/lib/subscription-plan-serializer';
 
 export async function GET(request: NextRequest) {
   try {
@@ -28,7 +29,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      data: subscription,
+      data: subscription ? serializeSubscription(subscription) : null,
     });
 
   } catch (error: unknown) {

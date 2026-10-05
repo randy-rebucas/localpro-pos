@@ -11,6 +11,7 @@ import { requireBookingSchedulingAccess } from '@/lib/booking-scheduling-access'
 import { getClosedHolidayForDate } from '@/lib/holidays';
 import { isValidBookingStatusTransition, type BookingStatus } from '@/lib/bookings-helpers';
 import { logger } from '@/lib/logger';
+import { serializeBooking } from '@/lib/booking-serializer';
 
 class BookingConflictError extends Error {
   conflicts: unknown;
@@ -66,7 +67,7 @@ export async function GET(
       );
     }
 
-    return NextResponse.json({ success: true, data: booking });
+    return NextResponse.json({ success: true, data: serializeBooking(booking) });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     logger.error('Get booking error:', error);
     const t = await getValidationTranslatorFromRequest(request);
@@ -303,7 +304,7 @@ export async function PUT(
       changes: updateData,
     });
 
-    return NextResponse.json({ success: true, data: updatedBooking });
+    return NextResponse.json({ success: true, data: updatedBooking ? serializeBooking(updatedBooking) : null });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     logger.error('Update booking error:', error);
     const t = await getValidationTranslatorFromRequest(request);

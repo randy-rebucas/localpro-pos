@@ -9,6 +9,7 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
 import { postExpenseToLedger } from '@/lib/accounting/auto-post';
 import { requireExpensesAccess } from '@/lib/expenses-access';
+import { serializeExpense } from '@/lib/expense-serializer';
 
 export async function GET(request: NextRequest) {
   try {
@@ -39,7 +40,7 @@ export async function GET(request: NextRequest) {
       orderBy: { date: 'desc' },
     });
 
-    return NextResponse.json({ success: true, data: expenses });
+    return NextResponse.json({ success: true, data: expenses.map(serializeExpense) });
   } catch (error) {
     return handleApiError(error, 'Failed to fetch expenses');
   }
@@ -131,7 +132,7 @@ export async function POST(request: NextRequest) {
     // Fire-and-forget: post this expense to the general ledger.
     void postExpenseToLedger(expense.id);
 
-    return NextResponse.json({ success: true, data: expense }, { status: 201 });
+    return NextResponse.json({ success: true, data: serializeExpense(expense) }, { status: 201 });
   } catch (error) {
     return handleApiError(error, 'Failed to create expense');
   }

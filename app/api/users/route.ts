@@ -13,6 +13,11 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { requireEmployeesAccess } from '@/lib/employees-access';
 
+// Legacy client key: user consumers still read `_id` (see api/products convention).
+function toUserJSON<T extends { id: string }>(u: T) {
+  return { ...u, _id: u.id };
+}
+
 export async function GET(request: NextRequest) {
   try {
     // SECURITY: Validate tenant access for authenticated requests
@@ -48,7 +53,7 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: 'desc' },
     });
 
-    return NextResponse.json({ success: true, data: users });
+    return NextResponse.json({ success: true, data: users.map(toUserJSON) });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     if (error.message === 'Unauthorized' || error.message.includes('Forbidden')) {
       return NextResponse.json(
@@ -193,7 +198,7 @@ export async function POST(request: NextRequest) {
 
     const { password: _password, ...userWithoutPassword } = user;
 
-    return NextResponse.json({ success: true, data: userWithoutPassword }, { status: 201 });
+    return NextResponse.json({ success: true, data: toUserJSON(userWithoutPassword) }, { status: 201 });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     if (error.code === 'P2002') {
       return NextResponse.json(

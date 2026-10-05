@@ -8,6 +8,7 @@ import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
+import { serializeBundle } from '@/lib/bundle-serializer';
 
 export async function GET(
   request: NextRequest,
@@ -39,7 +40,7 @@ export async function GET(
       return NextResponse.json({ success: false, error: t('validation.bundleNotFound', 'Bundle not found') }, { status: 404 });
     }
 
-    return NextResponse.json({ success: true, data: bundle });
+    return NextResponse.json({ success: true, data: serializeBundle(bundle) });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     logger.error('Error fetching bundle:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
@@ -126,7 +127,7 @@ export async function PUT(
       changes: { before: oldData, after: bundle },
     });
 
-    return NextResponse.json({ success: true, data: bundle });
+    return NextResponse.json({ success: true, data: serializeBundle(bundle) });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     const t = await getValidationTranslatorFromRequest(request);
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {

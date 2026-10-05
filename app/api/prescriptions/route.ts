@@ -44,7 +44,8 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      data: prescriptions,
+      // Legacy client key: the prescriptions page keys and dispenses by `_id`.
+      data: prescriptions.map((rx) => ({ ...rx, _id: rx.id })),
       pagination: { page, limit, total, pages: Math.ceil(total / limit) },
     });
   } catch (error: unknown) {
@@ -129,7 +130,7 @@ export async function POST(request: NextRequest) {
       changes: { prescriptionNumber, patientName, doctorName },
     });
 
-    return NextResponse.json({ success: true, data: prescription }, { status: 201 });
+    return NextResponse.json({ success: true, data: { ...prescription, _id: prescription.id } }, { status: 201 });
   } catch (error: unknown) {
     return handleApiError(error, 'Failed to create prescription');
   }

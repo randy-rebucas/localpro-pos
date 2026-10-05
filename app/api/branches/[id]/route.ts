@@ -11,6 +11,8 @@ function toBranchResponse(branch: any) { // eslint-disable-line @typescript-esli
   const { street, city, state, zipCode, country, manager, ...rest } = branch;
   return {
     ...rest,
+    // Legacy client key: most branch consumers still read `_id` (see api/products convention).
+    _id: rest.id,
     address: { street, city, state, zipCode, country },
     managerId: manager ? { _id: manager.id, name: manager.name, email: manager.email } : rest.managerId,
   };

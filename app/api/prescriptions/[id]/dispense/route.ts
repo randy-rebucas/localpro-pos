@@ -154,7 +154,8 @@ export async function POST(
       changes: { itemIndexes, dispensedBy: user.userId, status: updatedPrescription.status },
     });
 
-    return NextResponse.json({ success: true, data: updatedPrescription });
+    // Legacy client key: the prescriptions page matches the selected row by `_id`.
+    return NextResponse.json({ success: true, data: { ...updatedPrescription, _id: updatedPrescription.id } });
   } catch (error: unknown) {
     return handleApiError(error, 'Failed to dispense prescription');
   }

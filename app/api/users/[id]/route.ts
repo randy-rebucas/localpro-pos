@@ -11,6 +11,11 @@ import { revokeAllUserTokens } from '@/lib/token-blacklist';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkRateLimit } from '@/lib/rate-limit';
 
+// Legacy client key: user consumers still read `_id` (see api/products convention).
+function toUserJSON<T extends { id: string }>(u: T) {
+  return { ...u, _id: u.id };
+}
+
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const authUser = await requireAuth(request);
@@ -38,7 +43,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ success: false, error: t('validation.userNotFound', 'User not found') }, { status: 404 });
     }
 
-    return NextResponse.json({ success: true, data: user });
+    return NextResponse.json({ success: true, data: toUserJSON(user) });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     if (error.message === 'Unauthorized' || error.message.includes('Forbidden')) {
       return NextResponse.json(
@@ -235,7 +240,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       changes,
     });
 
-    return NextResponse.json({ success: true, data: user });
+    return NextResponse.json({ success: true, data: toUserJSON(user) });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     if (error.code === 'P2002') {
       return NextResponse.json(

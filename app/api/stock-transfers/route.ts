@@ -9,10 +9,12 @@ import { getValidationTranslatorFromRequest } from '@/lib/validation-translation
 import { checkRateLimit } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
 
-function toStockTransferJSON(st: { id: string; [key: string]: unknown }) {
+function toStockTransferJSON(st: { id: string; items?: Array<{ id: string; [key: string]: unknown }>; [key: string]: unknown }) {
+  // Legacy client keys: the receive form posts item._id as itemId, so items need _id too.
   return {
     ...st,
     _id: st.id,
+    ...(st.items ? { items: st.items.map((item) => ({ ...item, _id: item.id })) } : {}),
   };
 }
 

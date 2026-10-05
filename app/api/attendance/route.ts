@@ -6,6 +6,7 @@ import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
+import { serializeAttendance } from '@/lib/attendance-serializer';
 
 /**
  * GET - Get attendance records for current user or all users (if manager+)
@@ -60,7 +61,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      data: attendances,
+      data: attendances.map(serializeAttendance),
     });
   } catch (error: unknown) {
     logger.error('Get attendance error:', error);
@@ -152,7 +153,7 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        data: attendance,
+        data: serializeAttendance(attendance),
       });
     } else {
       // Clock out
@@ -196,7 +197,7 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        data: updatedSession,
+        data: serializeAttendance(updatedSession),
       });
     }
   } catch (error: unknown) {
