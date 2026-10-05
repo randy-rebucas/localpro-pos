@@ -54,7 +54,7 @@ export default function BarcodeModal({ value, productName, onClose }: BarcodeMod
     }
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setError(renderError);
-  }, [value, format]);
+  }, [value, format, d?.renderError]);
 
   const downloadSVG = () => {
     if (!svgRef.current) return;
@@ -124,20 +124,30 @@ export default function BarcodeModal({ value, productName, onClose }: BarcodeMod
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[70] p-4">
-      <div className="bg-white border border-gray-300 w-full max-w-sm">
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[70] p-4" onClick={onClose}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="barcode-modal-title"
+        className="bg-white border border-gray-300 w-full max-w-sm"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
-          <div>
-            <h3 className="text-base font-semibold text-gray-900">{d?.title || 'Barcode'}</h3>
-            <p className="text-xs text-gray-500 mt-0.5 truncate max-w-[200px]">{productName}</p>
+        <div className="flex items-center justify-between px-5 py-4 bg-brand-navy text-white">
+          <div className="min-w-0">
+            <h3 id="barcode-modal-title" className="text-base font-semibold">{d?.title || 'Barcode'}</h3>
+            <p className="text-xs text-white/70 mt-0.5 truncate max-w-[200px]">{productName}</p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 text-xl leading-none"
+            title={dict?.common?.close || 'Close'}
+            aria-label={dict?.common?.close || 'Close'}
+            className="text-white/70 hover:text-white"
           >
-            ×
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+            </svg>
           </button>
         </div>
 
@@ -158,7 +168,7 @@ export default function BarcodeModal({ value, productName, onClose }: BarcodeMod
         {/* Barcode preview */}
         <div className="px-5 py-4 flex flex-col items-center">
           {error ? (
-            <p className="text-sm text-red-600 text-center py-6">{error}</p>
+            <p className="text-sm text-win8-danger text-center py-6">{error}</p>
           ) : (
             <div className="border border-gray-200 bg-white p-2 w-full flex justify-center overflow-x-auto">
               <svg ref={svgRef} />
@@ -173,7 +183,7 @@ export default function BarcodeModal({ value, productName, onClose }: BarcodeMod
             type="button"
             onClick={downloadPNG}
             disabled={!!error}
-            className="flex-1 px-3 py-2 bg-brand text-white text-sm font-medium hover:bg-brand-hover disabled:opacity-40"
+            className="flex-1 px-3 py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover disabled:opacity-50 transition-colors"
           >
             {d?.downloadPng || 'Download PNG'}
           </button>
@@ -181,7 +191,7 @@ export default function BarcodeModal({ value, productName, onClose }: BarcodeMod
             type="button"
             onClick={downloadSVG}
             disabled={!!error}
-            className="flex-1 px-3 py-2 border border-gray-300 text-gray-700 text-sm hover:bg-gray-50 disabled:opacity-40"
+            className="flex-1 px-3 py-2 border border-gray-300 text-gray-700 bg-white text-sm hover:bg-gray-100 disabled:opacity-50 transition-colors"
           >
             {d?.downloadSvg || 'Download SVG'}
           </button>
@@ -189,7 +199,7 @@ export default function BarcodeModal({ value, productName, onClose }: BarcodeMod
             type="button"
             onClick={printBarcode}
             disabled={!!error}
-            className="w-full px-3 py-2 border border-gray-300 text-gray-700 text-sm hover:bg-gray-50 disabled:opacity-40"
+            className="w-full px-3 py-2 border border-gray-300 text-gray-700 bg-white text-sm hover:bg-gray-100 disabled:opacity-50 transition-colors"
           >
             {d?.print || 'Print'}
           </button>

@@ -5,7 +5,7 @@ import { BRAND_PRIMARY_HEX } from '@/lib/brand-defaults';
 import { ITenantSettings } from '@/types/tenant';
 
 interface TaxRule {
-  _id: string;
+  id: string;
   name: string;
   rate: number;
   label: string;
@@ -60,7 +60,7 @@ export default function TaxRulesManager({ settings, tenant, primaryColor = BRAND
   const handleSave = async (rule: Partial<TaxRule>) => {
     try {
       setMessage(null);
-      const url = editing ? `/api/tax-rules/${editing._id}` : '/api/tax-rules';
+      const url = editing ? `/api/tax-rules/${editing.id}` : '/api/tax-rules';
       const method = editing ? 'PATCH' : 'POST';
 
       const res = await fetch(url, {
@@ -158,7 +158,7 @@ export default function TaxRulesManager({ settings, tenant, primaryColor = BRAND
             .sort((a, b) => b.priority - a.priority)
             .map((rule) => (
               <div
-                key={rule._id}
+                key={rule.id}
                 className={`p-4 border-2 ${
                   rule.isActive ? 'border-gray-300 bg-white' : 'border-gray-200 bg-gray-50 opacity-60'
                 }`}
@@ -194,7 +194,7 @@ export default function TaxRulesManager({ settings, tenant, primaryColor = BRAND
                       {dict?.common?.edit || 'Edit'}
                     </button>
                     <button
-                      onClick={() => handleDelete(rule._id)}
+                      onClick={() => handleDelete(rule.id)}
                       className="px-3 py-1 text-xs text-red-600 hover:text-red-700 font-medium"
                     >
                       {dict?.common?.delete || 'Delete'}
@@ -233,7 +233,7 @@ function TaxRuleForm({
   const [city, setCity] = useState(rule?.region?.city || '');
   const [zipCodes, setZipCodes] = useState(rule?.region?.zipCodes?.join(', ') || '');
   const [categoryIds, setCategoryIds] = useState<string[]>(rule?.categoryIds || []);
-  const [categories, setCategories] = useState<Array<{ _id: string; name: string }>>([]);
+  const [categories, setCategories] = useState<Array<{ id: string; name: string }>>([]);
 
   useEffect(() => {
     if (appliesTo !== 'categories') return;
@@ -347,12 +347,12 @@ function TaxRuleForm({
             ) : (
               <div className="border-2 border-gray-300 p-3 max-h-40 overflow-y-auto space-y-1.5">
                 {categories.map((c) => (
-                  <label key={c._id} className="flex items-center gap-2 cursor-pointer">
+                  <label key={c.id} className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
                       className="checkbox-win8"
-                      checked={categoryIds.includes(c._id)}
-                      onChange={() => toggleCategory(c._id)}
+                      checked={categoryIds.includes(c.id)}
+                      onChange={() => toggleCategory(c.id)}
                     />
                     <span className="text-sm text-gray-700">{c.name}</span>
                   </label>

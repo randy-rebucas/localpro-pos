@@ -1,17 +1,11 @@
 import type { CashDrawerSession } from '@/hooks/useCashDrawerSessions';
 
 export function getUserName(session: CashDrawerSession): string {
-  if (typeof session.userId === 'object' && session.userId.name) {
-    return session.userId.name;
-  }
-  return 'Unknown';
+  return session.user?.name || 'Unknown';
 }
 
 export function getUserEmail(session: CashDrawerSession): string {
-  if (typeof session.userId === 'object' && session.userId.email) {
-    return session.userId.email;
-  }
-  return '';
+  return session.user?.email || '';
 }
 
 export function calculateDifference(session: CashDrawerSession): number | null {
@@ -23,14 +17,16 @@ export function calculateDifference(session: CashDrawerSession): number | null {
 
 export function getDifferenceColor(difference: number | null): string {
   if (difference === null) return 'text-gray-600';
-  return difference >= 0 ? 'text-green-600' : 'text-red-600';
+  return difference >= 0 ? 'text-win8-success' : 'text-win8-danger';
 }
 
+const STATUS_BADGE: Record<string, string> = {
+  open: 'bg-win8-success text-white',
+  closed: 'bg-gray-500 text-white',
+};
+
 export function getStatusBadgeClasses(status: string): string {
-  if (status === 'open') {
-    return 'bg-green-100 text-green-800 border-green-300';
-  }
-  return 'bg-gray-100 text-gray-800 border-gray-300';
+  return STATUS_BADGE[status] || 'bg-gray-500 text-white';
 }
 
 export function getStatusLabel(status: string, dict: any): string { // eslint-disable-line @typescript-eslint/no-explicit-any

@@ -29,6 +29,13 @@ interface UseDiscountsFormReturn {
   initializeForm: (discount: Discount) => void;
 }
 
+/** Optional localized copy for client-side validation; English fallbacks otherwise. */
+export interface DiscountFormMessages {
+  codeRequired?: string;
+  valueRequired?: string;
+  saveFailed?: string;
+}
+
 const emptyForm: DiscountFormData = {
   code: '',
   name: '',
@@ -45,7 +52,7 @@ const emptyForm: DiscountFormData = {
   isActive: true,
 };
 
-export function useDiscountsForm(): UseDiscountsFormReturn {
+export function useDiscountsForm(messages: DiscountFormMessages = {}): UseDiscountsFormReturn {
   const [formData, setFormDataState] = useState<DiscountFormData>(emptyForm);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -84,11 +91,11 @@ export function useDiscountsForm(): UseDiscountsFormReturn {
 
       // Validate required fields
       if (!formData.code.trim()) {
-        setError('Code is required');
+        setError(messages.codeRequired || 'Code is required');
         return;
       }
       if (!formData.value) {
-        setError('Value is required');
+        setError(messages.valueRequired || 'Value is required');
         return;
       }
 
@@ -115,12 +122,12 @@ export function useDiscountsForm(): UseDiscountsFormReturn {
           setError(result);
         }
       } catch {
-        setError('An error occurred while saving');
+        setError(messages.saveFailed || 'An error occurred while saving');
       } finally {
         setSubmitting(false);
       }
     },
-    [formData]
+    [formData, messages.codeRequired, messages.valueRequired, messages.saveFailed]
   );
 
   return {

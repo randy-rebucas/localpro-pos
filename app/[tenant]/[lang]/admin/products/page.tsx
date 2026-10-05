@@ -1,6 +1,7 @@
-﻿'use client';
+'use client';
 
 import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import dynamic from 'next/dynamic';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
@@ -10,7 +11,10 @@ const ProductImportModal = dynamic(() => import('@/components/ProductImportModal
 const BulkBarcodeModal = dynamic(() => import('@/components/BulkBarcodeModal'), { ssr: false });
 import { getDictionaryClient } from '../../dictionaries-client';
 import Currency from '@/components/Currency';
+import AdminPageHeader from '@/components/admin/AdminPageHeader';
+import Win8Drawer from '@/components/admin/Win8Drawer';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { getCurrencySymbol, getDefaultTenantSettings } from '@/lib/currency';
 import { showToast } from '@/lib/toast';
 import { useConfirm } from '@/lib/confirm';
 import { getBusinessTypeConfig, getAllowedProductTypes } from '@/lib/business-types'; // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -24,31 +28,64 @@ import {
   getProductDeletedMessage,
   getProductDeleteErrorMessage,
   getDeleteProductConfirmTitle,
-  getDeleteProductConfirmMessage,
   getBulkProductUpdateConfirmMessage,
   getBulkProductUpdateSuccessMessage,
   generateEAN13 as generateEAN13Helper,
 } from '@/lib/products-helpers';
 
 const btnPrimary =
-  'px-4 py-2 bg-brand text-white hover:bg-brand-hover font-medium border border-brand-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
-const btnPrimarySm = `${btnPrimary} text-sm`;
+  'px-4 py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover disabled:opacity-50 transition-colors';
 const btnSecondary =
-  'px-4 py-2 border border-gray-300 text-gray-700 font-medium hover:bg-gray-50 bg-white transition-colors';
-const btnSecondarySm =
-  `${btnSecondary} text-sm disabled:opacity-50 disabled:cursor-not-allowed`;
+  'px-4 py-2 border border-gray-300 text-gray-700 bg-white text-sm hover:bg-gray-100 disabled:opacity-50 transition-colors';
 const btnSecondaryIcon = `${btnSecondary} inline-flex items-center gap-2`;
 const btnDropdownItem =
-  'block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed';
-const btnTableIcon =
-  'p-1.5 border border-transparent hover:border-gray-200 hover:bg-gray-50 transition-colors';
+  'block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-50';
+const btnRowIcon =
+  'inline-flex items-center justify-center p-2.5 text-white hover:brightness-110 disabled:opacity-50 transition-[filter]';
+const inputCls = 'w-full border border-gray-300 px-3 py-2 text-sm bg-white disabled:bg-gray-100';
+const labelCls = 'block text-xs font-medium text-gray-600 mb-1';
+const eyebrowCls = 'text-xs font-semibold text-gray-500 uppercase tracking-wide';
+
+const TYPE_BADGE: Record<string, string> = {
+  regular: 'bg-brand text-white',
+  bundle: 'bg-win8-accent text-white',
+  service: 'bg-win8-info text-white',
+};
+
+const SPINNER_SM = (
+  <span className="win8-spinner win8-spinner-sm"><span /><span /><span /><span /><span /></span>
+);
+
+function CloseIcon({ className = 'w-5 h-5' }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+    </svg>
+  );
+}
+
+/** Navy drawer header strip shared by every form drawer on this page. */
+function DrawerHeader({ title, subtitle, onClose, closeLabel }: { title: string; subtitle?: string; onClose: () => void; closeLabel: string }) {
+  return (
+    <div className="flex items-center justify-between px-6 py-4 bg-brand-navy text-white shrink-0">
+      <div className="min-w-0">
+        <h2 className="text-base font-semibold truncate">{title}</h2>
+        {subtitle && <p className="text-xs text-white/70 mt-0.5">{subtitle}</p>}
+      </div>
+      <button type="button" onClick={onClose} title={closeLabel} aria-label={closeLabel} className="text-white/70 hover:text-white">
+        <CloseIcon />
+      </button>
+    </div>
+  );
+}
 
 export default function ProductsPage() {
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
-  const [showProductModal, setShowProductModal] = useState(false);
+  const [showProductForm, setShowProductForm] = useState(false);
+  const [productFormKey, setProductFormKey] = useState(0);
   const [showImportModal, setShowImportModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [barcodeProduct, setBarcodeProduct] = useState<Product | null>(null);
@@ -58,10 +95,12 @@ export default function ProductsPage() {
   const [statusFilter, setStatusFilter] = useState<'active' | 'inactive' | 'all'>('active');
   const [page, setPage] = useState(1);
   const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set());
-  const [showBulkEditModal, setShowBulkEditModal] = useState(false);
-  const [showBulkRestockModal, setShowBulkRestockModal] = useState(false);
+  const [showBulkEdit, setShowBulkEdit] = useState(false);
+  const [showBulkRestock, setShowBulkRestock] = useState(false);
+  const [bulkFormKey, setBulkFormKey] = useState(0);
   const [showBulkBarcodeModal, setShowBulkBarcodeModal] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
   const selectAllRef = useRef<HTMLInputElement>(null);
   const PAGE_SIZE = 20;
   const { settings } = useTenantSettings();
@@ -125,15 +164,33 @@ export default function ProductsPage() {
     }
   }, [settings]);
 
-  const handleDeleteProduct = async (productId: string) => {
+  const openProductForm = (product: Product | null) => {
+    setEditingProduct(product);
+    setProductFormKey((k) => k + 1);
+    setShowProductForm(true);
+  };
+
+  const openBulkEdit = () => {
+    setBulkFormKey((k) => k + 1);
+    setShowBulkEdit(true);
+  };
+
+  const openBulkRestock = () => {
+    setBulkFormKey((k) => k + 1);
+    setShowBulkRestock(true);
+  };
+
+  const handleDeleteProduct = async (product: Product) => {
     if (!dict) return;
     const confirmed = await confirm(
       getDeleteProductConfirmTitle(dict),
-      getDeleteProductConfirmMessage(dict),
+      (dict.products?.deleteProductNamed || 'Delete product "{name}"?').replace('{name}', product.name),
       { variant: 'danger' }
     );
     if (!confirmed) return;
-    const result = await deleteProduct(productId);
+    setBusyId(product._id);
+    const result = await deleteProduct(product._id);
+    setBusyId(null);
     if (result.success) {
       showToast.success(getProductDeletedMessage(dict));
       if (products.length === 1 && page > 1) {
@@ -148,6 +205,7 @@ export default function ProductsPage() {
 
   const handleReactivateProduct = async (productId: string) => {
     if (!dict) return;
+    setBusyId(productId);
     try {
       const res = await fetch(`/api/products/${productId}`, {
         method: 'PATCH',
@@ -164,6 +222,8 @@ export default function ProductsPage() {
       }
     } catch {
       showToast.error(dict.products?.reactivateError || 'Failed to reactivate product');
+    } finally {
+      setBusyId(null);
     }
   };
 
@@ -201,10 +261,10 @@ export default function ProductsPage() {
         result.message || getBulkProductUpdateSuccessMessage(result.modifiedCount ?? selectedProducts.size, dict)
       );
       setSelectedProducts(new Set());
-      setShowBulkEditModal(false);
+      setShowBulkEdit(false);
       loadProducts();
     } else {
-      showToast.error(result.error || 'Failed to update products');
+      showToast.error(result.error || dict.products?.bulkUpdateFailed || 'Failed to update products');
     }
   };
 
@@ -221,19 +281,22 @@ export default function ProductsPage() {
       if (result.success) {
         if (result.failed > 0) {
           showToast.error(
-            `${result.restocked} restocked, ${result.failed} failed: ${result.errors?.[0]?.error || ''}`
+            (dict.products?.restockPartial || '{restocked} restocked, {failed} failed: {error}')
+              .replace('{restocked}', String(result.restocked))
+              .replace('{failed}', String(result.failed))
+              .replace('{error}', result.errors?.[0]?.error || '')
           );
         } else {
-          showToast.success(`${result.restocked} product(s) restocked`);
+          showToast.success((dict.products?.restockSuccess || '{count} product(s) restocked').replace('{count}', String(result.restocked)));
         }
         setSelectedProducts(new Set());
-        setShowBulkRestockModal(false);
+        setShowBulkRestock(false);
         loadProducts();
       } else {
-        showToast.error(result.error || 'Failed to restock products');
+        showToast.error(result.error || dict.products?.restockFailed || 'Failed to restock products');
       }
     } catch {
-      showToast.error('Failed to restock products');
+      showToast.error(dict.products?.restockFailed || 'Failed to restock products');
     }
   };
 
@@ -307,314 +370,170 @@ export default function ProductsPage() {
     }
   };
 
-  if (!dict || loading) {
+  if (!dict) {
     return (
       <div className="flex items-center justify-center py-24">
-        <div className="text-center">
-          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-brand"></div>
-          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
-        </div>
+        <div className="win8-spinner text-brand"><span /><span /><span /><span /><span /></div>
       </div>
     );
   }
 
-  return (
-    <div>
-      {Dialog}
-      <div className="px-4 sm:px-6 py-6">
-        <div className="mb-6 sm:mb-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-2">
-                {dict.admin?.products || 'Products'}
-              </h1>
-              <p className="text-gray-600">{dict.admin?.productsSubtitle || 'Manage products, variations, and bundles'}</p>
-            </div>
-          </div>
+  const typeLabel = (type: string) =>
+    type === 'regular' ? (dict.admin?.regular || 'Regular')
+      : type === 'bundle' ? (dict.admin?.bundle || 'Bundle')
+      : type === 'service' ? (dict.admin?.service || 'Service')
+      : type;
+
+  const renderEmpty = () => {
+    let text: string;
+    if (productFilter === 'missing-barcode' && !debouncedSearch && statusFilter === 'active') {
+      text = dict.products?.noMissingBarcode || 'Every active product has a barcode.';
+    } else if (debouncedSearch || productFilter !== 'all' || statusFilter === 'inactive') {
+      text = dict.products?.noProductsMatch || 'No products match your filters.';
+    } else {
+      text = dict.products?.noProductsYet || 'No products yet.';
+    }
+    return <div className="text-center py-12 text-gray-400 bg-white border border-gray-300">{text}</div>;
+  };
+
+  const renderBody = () => {
+    if (loading) {
+      return (
+        <div className="text-center py-12 bg-white border border-gray-300">
+          <div className="win8-spinner text-brand mx-auto"><span /><span /><span /><span /><span /></div>
+          <p className="mt-3 text-gray-400 text-sm">{dict.products?.loadingProducts || 'Loading products…'}</p>
         </div>
+      );
+    }
 
-        {message && (
-          <div className={`mb-6 p-4 border ${message.type === 'success' ? 'bg-green-50 text-green-800 border-green-300' : 'bg-red-50 text-red-800 border-red-300'}`}>
-            {message.text}
-          </div>
-        )}
+    if (message?.type === 'error') {
+      return (
+        <div className="text-center py-12 bg-white border border-gray-300">
+          <p className="text-win8-danger text-sm font-medium">{message.text}</p>
+          <button onClick={loadProducts} className="mt-4 px-4 py-2 bg-brand text-white text-sm hover:bg-brand-hover transition-colors">
+            {dict.common?.retry || 'Retry'}
+          </button>
+        </div>
+      );
+    }
 
-        <div className="bg-white border border-gray-300 p-6">
-          {/* Filter tabs */}
-          <div className="flex gap-1 mb-4 border-b border-gray-200">
-            {([
-              { value: 'missing-barcode', label: 'Missing Barcode' },
-              { value: 'all', label: 'All Products' },
-            ] as const).map((tab) => (
-              <button
-                key={tab.value}
-                type="button"
-                onClick={() => { setProductFilter(tab.value); setPage(1); }}
-                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${
-                  productFilter === tab.value
-                    ? 'border-brand text-brand bg-brand-soft'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                {tab.label}
-                {productFilter === tab.value && pagination.total > 0 && (
-                  <span className="ml-2 px-1.5 py-0.5 text-xs bg-brand text-white">
-                    {pagination.total}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
+    if (products.length === 0) return renderEmpty();
 
-          <div className="flex justify-between items-center mb-6 flex-wrap gap-2">
-            <div className="flex-1 max-w-md flex gap-2">
-              <input
-                type="text"
-                placeholder={dict.common?.search || 'Search products...'}
-                value={searchTerm}
-                onChange={(e) => {
-                  setSearchTerm(e.target.value);
-                  setPage(1);
-                }}
-                className="flex-1 px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-              />
-              <select
-                value={statusFilter}
-                onChange={(e) => {
-                  setStatusFilter(e.target.value as 'active' | 'inactive' | 'all');
-                  setPage(1);
-                }}
-                className="px-3 py-2 border border-gray-300 bg-white text-sm"
-                aria-label={dict.products?.statusFilter || 'Status'}
-              >
-                <option value="active">{dict.products?.statusActive || 'Active'}</option>
-                <option value="inactive">{dict.products?.statusInactive || 'Inactive'}</option>
-                <option value="all">{dict.products?.statusAll || 'All'}</option>
-              </select>
-            </div>
-            <div className="flex gap-2 flex-wrap">
-              <div className="relative group">
-                <button
-                  type="button"
-                  onClick={() => handleExport('csv')}
-                  disabled={exporting}
-                  className={btnSecondarySm}
-                >
-                  {exporting
-                    ? (dict.products?.exporting || 'Exporting...')
-                    : `${dict.admin?.export || 'Export'} ▼`}
-                </button>
-                <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-300 hidden group-hover:block z-10">
-                  <button
-                    type="button"
-                    onClick={() => handleExport('csv')}
-                    disabled={exporting}
-                    className={btnDropdownItem}
-                  >
-                    {dict.admin?.exportCSV || 'Export CSV'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleExport('excel')}
-                    disabled={exporting}
-                    className={btnDropdownItem}
-                  >
-                    {dict.admin?.exportExcel || 'Export Excel'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleExport('pdf')}
-                    disabled={exporting}
-                    className={btnDropdownItem}
-                  >
-                    {dict.admin?.exportPDF || 'Export PDF'}
-                  </button>
-                </div>
-              </div>
-              {canManage && (
-                <button
-                  type="button"
-                  onClick={() => setShowImportModal(true)}
-                  className={btnSecondaryIcon}
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                  </svg>
-                  {dict.products?.import || 'Import'}
-                </button>
-              )}
-              {canManage && (
-                <Link
-                  href={`/${tenant}/${lang}/admin/file-upload`}
-                  className={btnSecondaryIcon}
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                  </svg>
-                  {dict.products?.uploadImages || 'Upload Images'}
-                </Link>
-              )}
-              {canManage && (
-                <button
-                  onClick={() => {
-                    setEditingProduct(null);
-                    setShowProductModal(true);
-                  }}
-                  className={btnPrimary}
-                >
-                  {dict.common?.add || 'Add'} {dict.admin?.product || 'Product'}
-                </button>
-              )}
-            </div>
-          </div>
+    const start = (pagination.page - 1) * pagination.limit + 1;
+    const end = Math.min(pagination.page * pagination.limit, pagination.total);
 
-          {selectedProducts.size > 0 && (
-            <div className="mb-4 p-3 bg-brand-soft border border-teal-200 flex items-center justify-between flex-wrap gap-2">
-              <span className="text-sm font-medium text-brand-navy-deep">
-                {selectedProducts.size} {dict.admin?.selected || 'selected'}
-              </span>
-              <div className="flex gap-2 flex-wrap">
-                {canManage && (
-                  <button
-                    type="button"
-                    onClick={() => setShowBulkEditModal(true)}
-                    className={btnPrimarySm}
-                  >
-                    {dict.products?.bulkEdit || 'Edit Selected'}
-                  </button>
-                )}
-                {canManage && (
-                  <button
-                    type="button"
-                    onClick={() => setShowBulkRestockModal(true)}
-                    className={btnPrimarySm}
-                  >
-                    {dict.products?.restockSelected || 'Restock Selected'}
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setShowBulkBarcodeModal(true)}
-                  className={btnSecondarySm}
-                >
-                  {dict.products?.printBarcodes || 'Print Barcodes'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedProducts(new Set())}
-                  className={btnSecondarySm}
-                >
-                  {dict.common?.cancel || 'Cancel'}
-                </button>
-              </div>
-            </div>
-          )}
-
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-10">
-                    <input
-                      ref={selectAllRef}
-                      type="checkbox"
-                      checked={selectedProducts.size === products.length && products.length > 0}
-                      onChange={handleSelectAll}
-                      className="checkbox-win8"
-                      aria-label={dict.common?.selectAll || 'Select all'}
-                    />
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.products?.imageHeader || 'Image'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.name || 'Name'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">SKU</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.category || 'Category'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.price || 'Price'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.stock || 'Stock'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.common?.type || 'Type'}</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">{dict.common?.actions || 'Actions'}</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {products.map((product) => (
-                  <tr key={product._id}>
-                    <td className="px-4 py-4 w-10">
+    return (
+      <div className="border border-gray-300 bg-white">
+        <div className="overflow-x-auto max-h-[70vh] overflow-y-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-brand-navy text-white text-xs uppercase tracking-wide sticky top-0 z-10">
+              <tr>
+                <th className="px-4 py-3 text-left font-medium w-10">
+                  <input
+                    ref={selectAllRef}
+                    type="checkbox"
+                    checked={selectedProducts.size === products.length && products.length > 0}
+                    onChange={handleSelectAll}
+                    className="checkbox-win8"
+                    aria-label={dict.common?.selectAll || 'Select all'}
+                  />
+                </th>
+                <th className="px-4 py-3 text-left font-medium">{dict.products?.imageHeader || 'Image'}</th>
+                <th className="px-4 py-3 text-left font-medium">{dict.admin?.name || 'Name'}</th>
+                <th className="px-4 py-3 text-left font-medium">SKU</th>
+                <th className="px-4 py-3 text-left font-medium">{dict.admin?.category || 'Category'}</th>
+                <th className="px-4 py-3 text-right font-medium">{dict.admin?.price || 'Price'}</th>
+                <th className="px-4 py-3 text-right font-medium">{dict.admin?.stock || 'Stock'}</th>
+                <th className="px-4 py-3 text-left font-medium">{dict.common?.type || 'Type'}</th>
+                <th className="px-4 py-3 text-right font-medium">{dict.common?.actions || 'Actions'}</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {products.map((product) => {
+                const selected = selectedProducts.has(product._id);
+                const busy = busyId === product._id;
+                const lowStock = product.trackInventory && product.stock < (product.lowStockThreshold || 10);
+                const categoryName =
+                  typeof product.categoryId === 'object' && product.categoryId?.name
+                    ? product.categoryId.name
+                    : product.category;
+                return (
+                  <tr key={product._id} className={`hover:bg-gray-100 transition-colors ${selected ? 'bg-brand-soft' : ''}`}>
+                    <td className="px-4 py-3 w-10">
                       <input
                         type="checkbox"
-                        checked={selectedProducts.has(product._id)}
+                        checked={selected}
                         onChange={() => handleSelectProduct(product._id)}
                         className="checkbox-win8"
-                        aria-label={`Select ${product.name}`}
+                        aria-label={`${dict.common?.select || 'Select'} ${product.name}`}
                       />
                     </td>
-                    <td className="px-4 py-4 w-14">
+                    <td className="px-4 py-3 w-14">
                       {product.image ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={product.image} alt={product.name} className="w-10 h-10 object-cover border border-gray-200" />
                       ) : (
                         <div className="w-10 h-10 bg-gray-100 border border-gray-200 flex items-center justify-center">
-                          <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                           </svg>
                         </div>
                       )}
                     </td>
-                    <td className="px-4 py-4">
-                      <div className="text-sm font-medium text-gray-900 flex items-center gap-2">
-                        {product.name}
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium text-gray-900">{product.name}</p>
                         {product.isActive === false && (
-                          <span className="px-1.5 py-0.5 text-xs font-semibold border border-gray-300 bg-gray-100 text-gray-600">
+                          <span className="px-2 py-0.5 text-xs font-semibold bg-gray-500 text-white">
                             {dict.products?.statusInactive || 'Inactive'}
                           </span>
                         )}
                       </div>
                       {product.description && (
-                        <div className="text-xs text-gray-500 mt-1">{product.description.substring(0, 50)}...</div>
+                        <p className="text-xs text-gray-500 mt-0.5 max-w-[240px] truncate" title={product.description}>
+                          {product.description}
+                        </p>
                       )}
                     </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                      <div>{product.sku || '-'}</div>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <p className="font-mono text-xs text-gray-700">{product.sku || '—'}</p>
                       {product.barcode && (
-                        <div className="text-xs text-gray-400 font-mono mt-0.5">{product.barcode}</div>
+                        <p className="text-xs text-gray-400 font-mono mt-0.5">{product.barcode}</p>
                       )}
                     </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {typeof product.categoryId === 'object' && product.categoryId?.name ? product.categoryId.name : product.category || '-'}
-                    </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                    <td className="px-4 py-3 whitespace-nowrap text-gray-700">{categoryName || '—'}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-right font-medium text-gray-900 tabular-nums">
                       <Currency amount={product.price} />
                     </td>
-                    <td className="px-4 py-4 whitespace-nowrap">
-                      <span className={`text-sm font-medium ${product.stock < (product.lowStockThreshold || 10) ? 'text-red-600' : 'text-gray-900'}`}>
-                        {product.trackInventory ? product.stock : '∞'}
+                    <td className="px-4 py-3 whitespace-nowrap text-right tabular-nums">
+                      <span className={lowStock ? 'font-semibold text-win8-danger' : 'text-gray-900'}>
+                        {product.trackInventory ? product.stock.toLocaleString() : '∞'}
                       </span>
                     </td>
-                    <td className="px-4 py-4 whitespace-nowrap">
-                      <span className="px-2 py-1 text-xs font-semibold border border-teal-300 bg-brand-soft text-brand-navy">
-                        {product.productType}
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <span className={`px-2 py-0.5 text-xs font-semibold ${TYPE_BADGE[product.productType] || 'bg-gray-500 text-white'}`}>
+                        {typeLabel(product.productType)}
                         {product.hasVariations && ` ${dict.products?.variations || '(variations)'}`}
                       </span>
                     </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-right">
-                      <div className="flex items-center justify-end gap-1">
+                    <td className="px-4 py-3">
+                      <div className="flex justify-end gap-1.5">
                         <button
                           type="button"
                           onClick={() => setBarcodeProduct(product)}
-                          className={`${btnTableIcon} text-gray-600 hover:text-gray-900`}
+                          className={`${btnRowIcon} bg-brand-navy`}
                           title={dict.products?.barcode || 'Barcode'}
-                          aria-label={dict.products?.barcode || 'Barcode'}
+                          aria-label={`${dict.products?.barcode || 'Barcode'}: ${product.name}`}
                         >
                           <Barcode className="w-4 h-4" aria-hidden />
                         </button>
                         {canManage && (
                           <button
                             type="button"
-                            onClick={() => {
-                              setEditingProduct(product);
-                              setShowProductModal(true);
-                            }}
-                            className={`${btnTableIcon} text-brand hover:text-brand-navy-deep`}
+                            onClick={() => openProductForm(product)}
+                            className={`${btnRowIcon} bg-brand`}
                             title={dict.common?.edit || 'Edit'}
-                            aria-label={dict.common?.edit || 'Edit'}
+                            aria-label={`${dict.common?.edit || 'Edit'} ${product.name}`}
                           >
                             <Pencil className="w-4 h-4" aria-hidden />
                           </button>
@@ -623,143 +542,290 @@ export default function ProductsPage() {
                           <button
                             type="button"
                             onClick={() => handleReactivateProduct(product._id)}
-                            className={`${btnTableIcon} text-green-600 hover:text-green-900`}
+                            disabled={busy}
+                            className={`${btnRowIcon} bg-win8-success`}
                             title={dict.products?.reactivate || 'Reactivate'}
-                            aria-label={dict.products?.reactivate || 'Reactivate'}
+                            aria-label={`${dict.products?.reactivate || 'Reactivate'} ${product.name}`}
                           >
-                            <RotateCcw className="w-4 h-4" aria-hidden />
+                            {busy ? SPINNER_SM : <RotateCcw className="w-4 h-4" aria-hidden />}
                           </button>
                         ) : (
                           <button
                             type="button"
-                            onClick={() => handleDeleteProduct(product._id)}
-                            className={`${btnTableIcon} text-red-600 hover:text-red-900`}
+                            onClick={() => handleDeleteProduct(product)}
+                            disabled={busy}
+                            className={`${btnRowIcon} bg-win8-danger`}
                             title={dict.common?.delete || 'Delete'}
-                            aria-label={dict.common?.delete || 'Delete'}
+                            aria-label={`${dict.common?.delete || 'Delete'} ${product.name}`}
                           >
-                            <Trash2 className="w-4 h-4" aria-hidden />
+                            {busy ? SPINNER_SM : <Trash2 className="w-4 h-4" aria-hidden />}
                           </button>
                         ))}
                       </div>
                     </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-            {products.length === 0 && (
-              <div className="text-center py-8 text-gray-500">
-                {debouncedSearch ? (dict.common?.noResults || 'No products found') : (dict.common?.noData || 'No products yet')}
-              </div>
-            )}
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        {pagination.pages > 1 && (
+          <div className="border-t border-gray-300 px-4 py-3 flex items-center justify-between text-sm text-gray-500">
+            <span className="tabular-nums">
+              {dict.admin?.showing || 'Showing'} {start}–{end} {dict.admin?.of || 'of'} {pagination.total.toLocaleString()}
+            </span>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="px-3 py-1 border border-gray-300 bg-white disabled:opacity-40 hover:bg-gray-100"
+              >
+                ← {dict.common?.previous || 'Prev'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.min(pagination.pages, p + 1))}
+                disabled={page >= pagination.pages}
+                className="px-3 py-1 border border-gray-300 bg-white disabled:opacity-40 hover:bg-gray-100"
+              >
+                {dict.common?.next || 'Next'} →
+              </button>
+            </div>
           </div>
-          {pagination.pages > 1 && (
-            <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-              <p className="text-sm text-gray-600">
-                {dict.admin?.showing || 'Showing'}{' '}
-                {(pagination.page - 1) * pagination.limit + 1}
-                {' '}{dict.admin?.to || 'to'}{' '}
-                {Math.min(pagination.page * pagination.limit, pagination.total)}
-                {' '}{dict.admin?.of || 'of'}{' '}
-                {pagination.total}
-                {' '}{dict.admin?.results || 'results'}
-              </p>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page === 1}
-                  className={btnSecondarySm}
+        )}
+      </div>
+    );
+  };
+
+  const tabs = [
+    { value: 'missing-barcode', label: dict.products?.tabMissingBarcode || 'Missing Barcode' },
+    { value: 'all', label: dict.products?.tabAllProducts || 'All Products' },
+  ] as const;
+
+  return (
+    <>
+      {Dialog}
+      <div className="px-4 sm:px-6 py-6">
+        <AdminPageHeader
+          title={dict.admin?.products || 'Products'}
+          description={dict.admin?.productsSubtitle || 'Manage products, variations, and bundles'}
+        />
+
+        <div className="space-y-4">
+          <div className="bg-white border border-gray-300">
+            <div className="flex border-b border-gray-300" role="tablist">
+              {tabs.map((tab) => {
+                const active = productFilter === tab.value;
+                return (
+                  <button
+                    key={tab.value}
+                    type="button"
+                    role="tab"
+                    aria-selected={active}
+                    onClick={() => { setProductFilter(tab.value); setPage(1); }}
+                    className={`px-4 py-2.5 text-sm font-medium transition-colors ${
+                      active ? 'bg-brand text-white' : 'text-gray-600 hover:bg-gray-100'
+                    }`}
+                  >
+                    {tab.label}
+                    {active && pagination.total > 0 && (
+                      <span className="ml-2 px-1.5 py-0.5 text-xs bg-brand-navy text-white tabular-nums">
+                        {pagination.total.toLocaleString()}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex items-center justify-between gap-3 flex-wrap p-3">
+              <div className="flex gap-3 flex-wrap">
+                <div className="relative">
+                  <svg className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.34-4.34M19 11a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z" />
+                  </svg>
+                  <input
+                    type="text"
+                    placeholder={dict.common?.search || 'Search products…'}
+                    aria-label={dict.common?.search || 'Search products'}
+                    value={searchTerm}
+                    onChange={(e) => {
+                      setSearchTerm(e.target.value);
+                      setPage(1);
+                    }}
+                    className="pl-8 pr-3 py-2 border border-gray-300 text-sm w-56"
+                  />
+                </div>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => {
+                    setStatusFilter(e.target.value as 'active' | 'inactive' | 'all');
+                    setPage(1);
+                  }}
+                  className="px-3 py-2 border border-gray-300 text-sm bg-white text-gray-900"
+                  aria-label={dict.products?.statusFilter || 'Status'}
                 >
-                  {dict.common?.previous || 'Previous'}
+                  <option value="active">{dict.products?.statusActive || 'Active'}</option>
+                  <option value="inactive">{dict.products?.statusInactive || 'Inactive'}</option>
+                  <option value="all">{dict.products?.statusAll || 'All'}</option>
+                </select>
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                <div className="relative group">
+                  <button
+                    type="button"
+                    onClick={() => handleExport('csv')}
+                    disabled={exporting}
+                    aria-haspopup="menu"
+                    className={btnSecondary}
+                  >
+                    {exporting
+                      ? (dict.products?.exporting || 'Exporting…')
+                      : `${dict.admin?.export || 'Export'} ▼`}
+                  </button>
+                  <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-300 hidden group-hover:block group-focus-within:block z-20" role="menu">
+                    <button type="button" role="menuitem" onClick={() => handleExport('csv')} disabled={exporting} className={btnDropdownItem}>
+                      {dict.admin?.exportCSV || 'Export CSV'}
+                    </button>
+                    <button type="button" role="menuitem" onClick={() => handleExport('excel')} disabled={exporting} className={btnDropdownItem}>
+                      {dict.admin?.exportExcel || 'Export Excel'}
+                    </button>
+                    <button type="button" role="menuitem" onClick={() => handleExport('pdf')} disabled={exporting} className={btnDropdownItem}>
+                      {dict.admin?.exportPDF || 'Export PDF'}
+                    </button>
+                  </div>
+                </div>
+                {canManage && (
+                  <button type="button" onClick={() => setShowImportModal(true)} className={btnSecondaryIcon}>
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                    </svg>
+                    {dict.products?.import || 'Import'}
+                  </button>
+                )}
+                {canManage && (
+                  <Link href={`/${tenant}/${lang}/admin/file-upload`} className={btnSecondaryIcon}>
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                    </svg>
+                    {dict.products?.uploadImages || 'Upload Images'}
+                  </Link>
+                )}
+                {canManage && (
+                  <button type="button" onClick={() => openProductForm(null)} className={btnPrimary}>
+                    + {dict.admin?.addProduct || 'Add Product'}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {selectedProducts.size > 0 && (
+            <div className="p-3 bg-brand-soft border border-brand flex items-center justify-between flex-wrap gap-2">
+              <span className="text-sm font-semibold text-brand-navy tabular-nums">
+                {selectedProducts.size} {dict.admin?.selected || 'selected'}
+              </span>
+              <div className="flex gap-2 flex-wrap">
+                {canManage && (
+                  <button type="button" onClick={openBulkEdit} className={btnPrimary}>
+                    {dict.products?.bulkEdit || 'Edit Selected'}
+                  </button>
+                )}
+                {canManage && (
+                  <button type="button" onClick={openBulkRestock} className={btnPrimary}>
+                    {dict.products?.restockSelected || 'Restock Selected'}
+                  </button>
+                )}
+                <button type="button" onClick={() => setShowBulkBarcodeModal(true)} className={btnSecondary}>
+                  {dict.products?.printBarcodes || 'Print Barcodes'}
                 </button>
-                <span className="px-2 text-sm text-gray-700">
-                  {dict.admin?.page || 'Page'} {page} {dict.admin?.of || 'of'} {pagination.pages}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setPage((p) => Math.min(pagination.pages, p + 1))}
-                  disabled={page >= pagination.pages}
-                  className={btnSecondarySm}
-                >
-                  {dict.common?.next || 'Next'}
+                <button type="button" onClick={() => setSelectedProducts(new Set())} className={btnSecondary}>
+                  {dict.common?.cancel || 'Cancel'}
                 </button>
               </div>
             </div>
           )}
+
+          {renderBody()}
         </div>
-
-        {barcodeProduct && (
-          <BarcodeModal
-            value={barcodeProduct.barcode || barcodeProduct.sku || barcodeProduct._id}
-            productName={barcodeProduct.name}
-            onClose={() => setBarcodeProduct(null)}
-          />
-        )}
-
-        {showProductModal && (
-          <ProductModal
-            product={editingProduct}
-            categories={categories}
-            onClose={() => {
-              setShowProductModal(false);
-              setEditingProduct(null);
-            }}
-            onSave={() => {
-              loadProducts();
-              setShowProductModal(false);
-              setEditingProduct(null);
-            }}
-            dict={dict}
-            businessTypeConfig={businessTypeConfig}
-            settings={settings}
-          />
-        )}
-
-        {showImportModal && (
-          <ProductImportModal
-            dict={dict}
-            onClose={() => setShowImportModal(false)}
-            onComplete={() => {
-              loadProducts();
-              fetchCategories();
-            }}
-          />
-        )}
-
-        {showBulkEditModal && (
-          <BulkEditModal
-            categories={categories}
-            dict={dict}
-            count={selectedProducts.size}
-            businessTypeConfig={businessTypeConfig}
-            onClose={() => setShowBulkEditModal(false)}
-            onSave={handleBulkEditSave}
-          />
-        )}
-
-        {showBulkRestockModal && (
-          <BulkRestockModal
-            products={products.filter((p) => selectedProducts.has(p._id))}
-            dict={dict}
-            onClose={() => setShowBulkRestockModal(false)}
-            onSave={handleBulkRestockSave}
-          />
-        )}
-
-        {showBulkBarcodeModal && (
-          <BulkBarcodeModal
-            products={products.filter((p) => selectedProducts.has(p._id))}
-            dict={dict}
-            onClose={() => setShowBulkBarcodeModal(false)}
-          />
-        )}
       </div>
-    </div>
+
+      <Win8Drawer open={showProductForm} onClose={() => setShowProductForm(false)} widthClass="max-w-2xl">
+        <ProductForm
+          key={productFormKey}
+          product={editingProduct}
+          categories={categories}
+          onClose={() => setShowProductForm(false)}
+          onSave={() => {
+            showToast.success(
+              editingProduct
+                ? (dict.products?.productUpdated || 'Product updated')
+                : (dict.products?.productCreated || 'Product created')
+            );
+            setShowProductForm(false);
+            loadProducts();
+          }}
+          dict={dict}
+          businessTypeConfig={businessTypeConfig}
+          settings={settings}
+        />
+      </Win8Drawer>
+
+      <Win8Drawer open={showBulkEdit} onClose={() => setShowBulkEdit(false)}>
+        <BulkEditForm
+          key={bulkFormKey}
+          categories={categories}
+          dict={dict}
+          count={selectedProducts.size}
+          businessTypeConfig={businessTypeConfig}
+          onClose={() => setShowBulkEdit(false)}
+          onSave={handleBulkEditSave}
+        />
+      </Win8Drawer>
+
+      <Win8Drawer open={showBulkRestock} onClose={() => setShowBulkRestock(false)}>
+        <BulkRestockForm
+          key={bulkFormKey}
+          products={products.filter((p) => selectedProducts.has(p._id))}
+          dict={dict}
+          onClose={() => setShowBulkRestock(false)}
+          onSave={handleBulkRestockSave}
+        />
+      </Win8Drawer>
+
+      {barcodeProduct && (
+        <BarcodeModal
+          value={barcodeProduct.barcode || barcodeProduct.sku || barcodeProduct._id}
+          productName={barcodeProduct.name}
+          onClose={() => setBarcodeProduct(null)}
+        />
+      )}
+
+      {showImportModal && (
+        <ProductImportModal
+          dict={dict}
+          onClose={() => setShowImportModal(false)}
+          onComplete={() => {
+            loadProducts();
+            fetchCategories();
+          }}
+        />
+      )}
+
+      {showBulkBarcodeModal && (
+        <BulkBarcodeModal
+          products={products.filter((p) => selectedProducts.has(p._id))}
+          dict={dict}
+          onClose={() => setShowBulkBarcodeModal(false)}
+        />
+      )}
+    </>
   );
 }
 
 
-function ProductModal({
+function ProductForm({
   product,
   categories,
   onClose,
@@ -784,6 +850,9 @@ function ProductModal({
   const [showCategorySuggestions, setShowCategorySuggestions] = useState(false);
   const categoryInputRef = useRef<HTMLInputElement>(null);
   const categoryListRef = useRef<HTMLDivElement>(null);
+  const [imageError, setImageError] = useState('');
+  const currencySymbol = settings?.currencySymbol || getCurrencySymbol(settings?.currency || getDefaultTenantSettings().currency);
+  const [imageUploading, setImageUploading] = useState(false);
 
   // Image picker state
   const [showImagePicker, setShowImagePicker] = useState(false);
@@ -814,6 +883,13 @@ function ProductModal({
     loadPickerFiles();
   };
 
+  useEffect(() => {
+    if (!showImagePicker) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setShowImagePicker(false); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [showImagePicker]);
+
   const handlePickerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -839,10 +915,9 @@ function ProductModal({
   useEffect(() => {
     if (product?.categoryId) {
       const currentCategory = categories.find(
-        cat => cat._id === (typeof product.categoryId === 'object' && product.categoryId?._id ? product.categoryId._id : product.categoryId)
+        cat => cat.id === (typeof product.categoryId === 'object' && product.categoryId?._id ? product.categoryId._id : product.categoryId)
       );
       if (currentCategory) {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         setCategorySearch(currentCategory.name);
       } else {
         setCategorySearch('');
@@ -862,7 +937,7 @@ function ProductModal({
 
   // Handle category selection
   const handleCategorySelect = (category: Category) => {
-    updateFormData({ categoryId: category._id });
+    updateFormData({ categoryId: category.id });
     setCategorySearch(category.name);
     setShowCategorySuggestions(false);
   };
@@ -945,48 +1020,47 @@ function ProductModal({
 
   return (
     <>
-    <div className="fixed inset-0 bg-gray-900/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white border border-gray-300 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="p-6">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">
-            {product ? (dict.admin?.editProduct || 'Edit Product') : (dict.admin?.addProduct || 'Add Product')}
-          </h2>
+      <DrawerHeader
+        title={product ? (dict.admin?.editProduct || 'Edit Product') : (dict.admin?.addProduct || 'Add Product')}
+        onClose={onClose}
+        closeLabel={dict.common?.close || 'Close'}
+      />
+      <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+        <div className="p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
           {businessTypeConfig && (
-            <div className="mb-4 p-3 bg-brand-soft border border-teal-200">
-              <p className="text-sm text-brand-navy-deep">
+            <div className="bg-brand-soft border border-brand p-4 text-sm text-brand-navy">
+              <p>
                 <strong>{dict.products?.businessType || 'Business Type'}:</strong> {businessTypeConfig.name}
               </p>
-              <p className="text-xs text-brand-hover mt-1">
-                {businessTypeConfig.description}
-              </p>
+              <p className="text-xs mt-1">{businessTypeConfig.description}</p>
               {businessTypeConfig.requiredFields.length > 0 && (
-                <p className="text-xs text-brand-hover mt-1">
+                <p className="text-xs mt-1">
                   <strong>{dict.products?.requiredFields || 'Required fields'}:</strong> {businessTypeConfig.requiredFields.join(', ')}
                 </p>
               )}
             </div>
           )}
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict.admin?.name || 'Name'} *
+                <label htmlFor="product-name" className={labelCls}>
+                  {dict.admin?.name || 'Name'} <span className="text-win8-danger">*</span>
                 </label>
                 <input
+                  id="product-name"
                   type="text"
                   required
                   value={formData.name}
                   onChange={(e) => updateFormData({ name: e.target.value })}
                   onBlur={(e) => checkDuplicateName(e.target.value)}
-                  className={`w-full px-3 py-2 border bg-white focus:ring-2 ${
-                    nameDuplicate ? 'border-amber-400 focus:ring-amber-400' : 'border-gray-300 focus:ring-brand'
+                  className={`w-full border px-3 py-2 text-sm bg-white ${
+                    nameDuplicate ? 'border-win8-warning' : 'border-gray-300'
                   }`}
                 />
                 {checkingName && (
-                  <p className="text-xs text-gray-400 mt-1">{dict.products?.checkingDuplicate || 'Checking...'}</p>
+                  <p className="text-xs text-gray-400 mt-1">{dict.products?.checkingDuplicate || 'Checking…'}</p>
                 )}
                 {!checkingName && nameDuplicate && (
-                  <p className="text-xs text-amber-700 mt-1">
+                  <p className="text-xs font-medium text-win8-warning mt-1">
                     {(dict.products?.duplicateProductInlineWarning ||
                       'A product named "{name}" already exists (SKU: {sku}, stock: {stock}).')
                       .replace('{name}', nameDuplicate.name)
@@ -996,20 +1070,21 @@ function ProductModal({
                 )}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  SKU {businessTypeConfig?.requiredFields?.includes('sku') && <span className="text-red-500">*</span>}
+                <label htmlFor="product-sku" className={labelCls}>
+                  SKU {businessTypeConfig?.requiredFields?.includes('sku') && <span className="text-win8-danger">*</span>}
                 </label>
                 <input
+                  id="product-sku"
                   type="text"
                   required={businessTypeConfig?.requiredFields?.includes('sku')}
                   value={formData.sku}
                   onChange={(e) => updateFormData({ sku: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
+                  className={inputCls}
                 />
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className={labelCls}>
                 {dict.products?.barcode || 'Barcode'}
               </label>
               <div className="flex gap-2">
@@ -1017,33 +1092,33 @@ function ProductModal({
                   type="text"
                   value={formData.barcode}
                   onChange={(e) => updateFormData({ barcode: e.target.value })}
-                  className="flex-1 px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white font-mono"
+                  className="flex-1 border border-gray-300 px-3 py-2 text-sm bg-white font-mono"
                   placeholder={dict.products?.scanOrEnterBarcode || 'Scan or enter barcode'}
                 />
                 <button
                   type="button"
                   onClick={() => updateFormData({ barcode: generateEAN13Helper() })}
-                  className="px-3 py-2 border border-gray-300 bg-gray-50 hover:bg-gray-100 text-gray-700 text-sm font-medium flex items-center gap-1.5 transition-colors whitespace-nowrap"
+                  className={`${btnSecondary} inline-flex items-center gap-1.5 whitespace-nowrap`}
                   title={dict.products?.generateEan13Title || 'Generate EAN-13 barcode'}
                 >
-                  <RefreshCw className="h-3.5 w-3.5" />
+                  <RefreshCw className="h-3.5 w-3.5" aria-hidden />
                   {dict.products?.generate || 'Generate'}
                 </button>
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className={labelCls}>
                 {dict.admin?.description || 'Description'}
               </label>
               <textarea
                 value={formData.description}
                 onChange={(e) => updateFormData({ description: e.target.value })}
                 rows={3}
-                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
+                className={inputCls}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className={labelCls}>
                 {dict.products?.productImage || 'Product Image'}
               </label>
               <div className="flex gap-3 items-start">
@@ -1057,22 +1132,27 @@ function ProductModal({
                 )}
                 <div className="flex-1 space-y-2">
                   <div className="flex gap-2">
-                    <label className="flex items-center gap-2 px-3 py-2 border border-gray-300 bg-gray-50 hover:bg-gray-100 cursor-pointer text-sm text-gray-700 transition-colors">
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <label className={`${btnSecondary} inline-flex items-center gap-2 cursor-pointer ${imageUploading ? 'opacity-50 pointer-events-none' : ''}`}>
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                       </svg>
-                      {dict.products?.upload || 'Upload'}
+                      {imageUploading ? (dict.products?.uploading || 'Uploading…') : (dict.products?.upload || 'Upload')}
                       <input
                         type="file"
                         accept="image/jpeg,image/png,image/webp,image/gif"
                         className="hidden"
+                        disabled={imageUploading}
                         onChange={async (e) => {
-                          const file = e.target.files?.[0];
+                          const input = e.target;
+                          const file = input.files?.[0];
                           if (!file) return;
+                          setImageError('');
                           if (file.size > 10 * 1024 * 1024) {
-                            alert(dict.products?.fileTooLarge || 'File too large. Maximum size: 10MB');
+                            setImageError(dict.products?.fileTooLarge || 'File too large. Maximum size: 10MB');
+                            input.value = '';
                             return;
                           }
+                          setImageUploading(true);
                           try {
                             const fd = new FormData();
                             fd.append('file', file);
@@ -1085,19 +1165,18 @@ function ProductModal({
                             if (data.success) {
                               updateFormData({ image: data.data.url });
                             } else {
-                              alert(data.error || dict.products?.failedToUploadImage || 'Failed to upload image');
+                              setImageError(data.error || dict.products?.failedToUploadImage || 'Failed to upload image');
                             }
                           } catch {
-                            alert(dict.products?.uploadFailed || 'Upload failed');
+                            setImageError(dict.products?.uploadFailed || 'Upload failed');
+                          } finally {
+                            setImageUploading(false);
+                            input.value = '';
                           }
                         }}
                       />
                     </label>
-                    <button
-                      type="button"
-                      onClick={openImagePicker}
-                      className="px-3 py-2 border border-gray-300 bg-gray-50 hover:bg-gray-100 text-sm text-gray-700 transition-colors"
-                    >
+                    <button type="button" onClick={openImagePicker} className={btnSecondary}>
                       {dict.products?.browse || 'Browse'}
                     </button>
                   </div>
@@ -1106,23 +1185,27 @@ function ProductModal({
                     value={formData.image.startsWith('data:') ? '' : formData.image}
                     onChange={(e) => updateFormData({ image: e.target.value })}
                     placeholder={dict.products?.pasteImageUrl || 'Or paste image URL (https://...)'}
-                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white text-sm"
+                    aria-label={dict.products?.pasteImageUrl || 'Image URL'}
+                    className={inputCls}
                   />
                   {formData.image && (
                     <button
                       type="button"
                       onClick={() => updateFormData({ image: '' })}
-                      className="text-xs text-red-600 hover:text-red-800"
+                      className="text-xs text-win8-danger hover:underline"
                     >
                       {dict.products?.removeImage || 'Remove image'}
                     </button>
                   )}
+                  {imageError && (
+                    <p className="p-3 bg-white border border-win8-danger text-win8-danger text-sm">{imageError}</p>
+                  )}
                 </div>
               </div>
             </div>
-            <div className={`grid gap-4 ${businessTypeConfig?.defaultFeatures?.enableInventory !== false ? 'grid-cols-3' : 'grid-cols-1'}`}>
+            <div className={`grid gap-3 ${businessTypeConfig?.defaultFeatures?.enableInventory !== false ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-1'}`}>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className={labelCls}>
                   {dict.admin?.price || 'Price'} *
                 </label>
                 <input
@@ -1132,12 +1215,12 @@ function ProductModal({
                   required
                   value={formData.price}
                   onChange={(e) => updateFormData({ price: parseFloat(e.target.value) || 0 })}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
+                  className={inputCls}
                 />
               </div>
               {businessTypeConfig?.defaultFeatures?.enableInventory !== false && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className={labelCls}>
                     {dict.admin?.stock || 'Stock'}
                   </label>
                   <input
@@ -1145,14 +1228,14 @@ function ProductModal({
                     min="0"
                     value={formData.stock}
                     onChange={(e) => updateFormData({ stock: parseInt(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
+                    className={inputCls}
                     disabled={!formData.trackInventory}
                   />
                 </div>
               )}
               {businessTypeConfig?.defaultFeatures?.enableInventory !== false && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className={labelCls}>
                     {dict.admin?.lowStockThreshold || 'Low Stock Threshold'}
                   </label>
                   <input
@@ -1160,14 +1243,14 @@ function ProductModal({
                     min="0"
                     value={formData.lowStockThreshold}
                     onChange={(e) => updateFormData({ lowStockThreshold: parseInt(e.target.value) || 10 })}
-                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
+                    className={inputCls}
                   />
                 </div>
               )}
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="relative">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className={labelCls}>
                   {dict.admin?.category || 'Category'}
                 </label>
                 <div ref={categoryInputRef} className="relative">
@@ -1183,14 +1266,14 @@ function ProductModal({
                         cat => cat.name.toLowerCase() === value.toLowerCase()
                       );
                       if (matchingCategory) {
-                        updateFormData({ categoryId: matchingCategory._id });
+                        updateFormData({ categoryId: matchingCategory.id });
                       } else {
                         updateFormData({ categoryId: '' });
                       }
                     }}
                     onFocus={() => setShowCategorySuggestions(true)}
                     placeholder={dict.admin?.searchCategory || 'Type to search categories...'}
-                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
+                    className={inputCls}
                   />
                   {showCategorySuggestions && filteredCategories.length > 0 && (
                     <div
@@ -1199,11 +1282,11 @@ function ProductModal({
                     >
                       {filteredCategories.map((cat) => (
                         <button
-                          key={cat._id}
+                          key={cat.id}
                           type="button"
                           onClick={() => handleCategorySelect(cat)}
-                          className={`w-full text-left px-4 py-2 hover:bg-brand-soft focus:bg-brand-soft focus:outline-none transition-colors ${
-                            formData.categoryId === cat._id ? 'bg-brand-soft' : ''
+                          className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 transition-colors ${
+                            formData.categoryId === cat.id ? 'bg-brand-soft font-medium text-brand-navy' : 'text-gray-700'
                           }`}
                         >
                           {cat.name}
@@ -1222,13 +1305,13 @@ function ProductModal({
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className={labelCls}>
                   {dict.common?.type || 'Type'} {businessTypeConfig && `(${businessTypeConfig.name})`}
                 </label>
                 <select
                   value={formData.productType}
                   onChange={(e) => updateFormData({ productType: e.target.value as any })} // eslint-disable-line @typescript-eslint/no-explicit-any
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
+                  className={inputCls}
                 >
                   {businessTypeConfig?.productTypes?.map((type: string) => (
                     <option key={type} value={type}>
@@ -1255,27 +1338,25 @@ function ProductModal({
             </div>
             {businessTypeConfig?.defaultFeatures?.enableInventory !== false && (
               <div>
-                <label className="flex items-center">
+                <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={formData.trackInventory}
                     onChange={(e) => updateFormData({ trackInventory: e.target.checked })}
-                    className="checkbox-win8 mr-2"
+                    className="checkbox-win8"
                   />
-                  <span className="text-sm font-medium text-gray-700">
-                    {dict.admin?.trackInventory || 'Track Inventory'}
-                  </span>
+                  {dict.admin?.trackInventory || 'Track Inventory'}
                 </label>
               </div>
             )}
 
             {/* Restaurant-specific fields */}
             {settings?.businessType?.toLowerCase() === 'restaurant' && (
-              <div className="space-y-4 pt-4 border-t border-gray-200">
-                <h3 className="text-lg font-semibold text-gray-900">{dict.products?.restaurantInfo || 'Restaurant Information'}</h3>
+              <div className="space-y-4 pt-4 border-t border-gray-300">
+                <h3 className={eyebrowCls}>{dict.products?.restaurantInfo || 'Restaurant Information'}</h3>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{dict.products?.allergens || 'Allergens (comma-separated)'}</label>
+                  <label className={labelCls}>{dict.products?.allergens || 'Allergens (comma-separated)'}</label>
                   <input
                     type="text"
                     value={Array.isArray(formData.allergens) ? formData.allergens.join(', ') : formData.allergens || ''}
@@ -1283,14 +1364,14 @@ function ProductModal({
                       const allergens = e.target.value.split(',').map(a => a.trim()).filter(a => a);
                       updateFormData({ allergens });
                     }}
-                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-                    placeholder="e.g., gluten, dairy, nuts"
+                    className={inputCls}
+                    placeholder={dict.products?.allergensPlaceholder || 'e.g., gluten, dairy, nuts'}
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{dict.products?.calories || 'Calories'}</label>
+                    <label className={labelCls}>{dict.products?.calories || 'Calories'}</label>
                     <input
                       type="number"
                       min="0"
@@ -1299,11 +1380,11 @@ function ProductModal({
                         ...formData,
                         nutritionInfo: { ...formData.nutritionInfo, calories: parseInt(e.target.value) || undefined }
                       })}
-                      className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
+                      className={inputCls}
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{dict.products?.protein || 'Protein (g)'}</label>
+                    <label className={labelCls}>{dict.products?.protein || 'Protein (g)'}</label>
                     <input
                       type="number"
                       min="0"
@@ -1313,7 +1394,7 @@ function ProductModal({
                         ...formData,
                         nutritionInfo: { ...formData.nutritionInfo, protein: parseFloat(e.target.value) || undefined }
                       })}
-                      className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
+                      className={inputCls}
                     />
                   </div>
                 </div>
@@ -1321,7 +1402,7 @@ function ProductModal({
                 {/* Modifier Groups */}
                 <div className="pt-2">
                   <div className="flex items-center justify-between mb-2">
-                    <label className="text-sm font-semibold text-gray-700">{dict.products?.modifierGroups || 'Modifier Groups'}</label>
+                    <p className="text-xs font-medium text-gray-600">{dict.products?.modifierGroups || 'Modifier Groups'}</p>
                     <button
                       type="button"
                       onClick={() => updateFormData({
@@ -1330,14 +1411,14 @@ function ProductModal({
                           { name: '', options: [{ name: '', price: 0 }], required: false },
                         ],
                       })}
-                      className="text-xs px-2 py-1 bg-orange-50 border border-orange-300 text-orange-700 hover:bg-orange-100 font-semibold"
+                      className="px-3 py-1 text-xs font-semibold bg-brand text-white hover:brightness-110 transition-[filter]"
                     >
                       {dict.products?.addGroup || '+ Add Group'}
                     </button>
                   </div>
                   <div className="space-y-3">
                     {(formData.modifiers || []).map((group, gi) => (
-                      <div key={gi} className="border border-gray-200 p-3 bg-gray-50 space-y-2">
+                      <div key={gi} className="border border-gray-300 p-3 bg-gray-50 space-y-2">
                         <div className="flex items-center gap-2">
                           <input
                             type="text"
@@ -1347,8 +1428,9 @@ function ProductModal({
                               mods[gi] = { ...mods[gi], name: e.target.value };
                               updateFormData({ modifiers: mods });
                             }}
-                            placeholder="Group name (e.g. Temperature)"
-                            className="flex-1 px-2 py-1.5 text-sm border border-gray-300 bg-white focus:ring-1 focus:ring-orange-400 focus:outline-none"
+                            placeholder={dict.products?.modifierGroupPlaceholder || 'Group name (e.g. Temperature)'}
+                            aria-label={dict.products?.modifierGroupName || 'Modifier group name'}
+                            className="flex-1 px-2 py-1.5 text-sm border border-gray-300 bg-white"
                           />
                           <label className="flex items-center gap-1 text-xs text-gray-600 flex-shrink-0 cursor-pointer">
                             <input
@@ -1370,12 +1452,11 @@ function ProductModal({
                               mods.splice(gi, 1);
                               updateFormData({ modifiers: mods });
                             }}
-                            className="text-red-500 hover:text-red-700 p-1"
-                            title="Remove group"
+                            className="inline-flex items-center justify-center p-2 text-white bg-win8-danger hover:brightness-110 transition-[filter]"
+                            title={dict.products?.removeModifierGroup || 'Remove group'}
+                            aria-label={dict.products?.removeModifierGroup || 'Remove group'}
                           >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                            </svg>
+                            <CloseIcon className="w-4 h-4" />
                           </button>
                         </div>
                         {/* Options */}
@@ -1392,10 +1473,11 @@ function ProductModal({
                                   mods[gi] = { ...mods[gi], options: opts };
                                   updateFormData({ modifiers: mods });
                                 }}
-                                placeholder="Option (e.g. Rare)"
-                                className="flex-1 px-2 py-1 text-sm border border-gray-300 bg-white focus:ring-1 focus:ring-orange-400 focus:outline-none"
+                                placeholder={dict.products?.modifierOptionPlaceholder || 'Option (e.g. Rare)'}
+                                aria-label={dict.products?.modifierOptionName || 'Option name'}
+                                className="flex-1 px-2 py-1 text-sm border border-gray-300 bg-white"
                               />
-                              <span className="text-xs text-gray-400 flex-shrink-0">+$</span>
+                              <span className="text-xs text-gray-400 flex-shrink-0">+{currencySymbol}</span>
                               <input
                                 type="number"
                                 min="0"
@@ -1409,7 +1491,8 @@ function ProductModal({
                                   updateFormData({ modifiers: mods });
                                 }}
                                 placeholder="0.00"
-                                className="w-20 px-2 py-1 text-sm border border-gray-300 bg-white focus:ring-1 focus:ring-orange-400 focus:outline-none"
+                                aria-label={dict.products?.modifierOptionPrice || 'Option price'}
+                                className="w-20 px-2 py-1 text-sm border border-gray-300 bg-white tabular-nums"
                               />
                               <button
                                 type="button"
@@ -1420,12 +1503,11 @@ function ProductModal({
                                   mods[gi] = { ...mods[gi], options: opts };
                                   updateFormData({ modifiers: mods });
                                 }}
-                                className="text-red-400 hover:text-red-600 p-0.5"
-                                title="Remove option"
+                                className="inline-flex items-center justify-center p-2 text-win8-danger hover:bg-gray-100 transition-colors"
+                                title={dict.products?.removeModifierOption || 'Remove option'}
+                                aria-label={dict.products?.removeModifierOption || 'Remove option'}
                               >
-                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                </svg>
+                                <CloseIcon className="w-3.5 h-3.5" />
                               </button>
                             </div>
                           ))}
@@ -1436,7 +1518,7 @@ function ProductModal({
                               mods[gi] = { ...mods[gi], options: [...mods[gi].options, { name: '', price: 0 }] };
                               updateFormData({ modifiers: mods });
                             }}
-                            className="text-xs text-orange-600 hover:text-orange-800 font-medium"
+                            className="text-xs text-brand hover:underline font-medium"
                           >
                             {dict.products?.addOption || '+ Add option'}
                           </button>
@@ -1450,15 +1532,15 @@ function ProductModal({
 
             {/* Laundry-specific fields */}
             {settings?.businessType?.toLowerCase() === 'laundry' && (
-              <div className="space-y-4 pt-4 border-t border-gray-200">
-                <h3 className="text-lg font-semibold text-gray-900">{dict.products?.laundryInfo || 'Laundry Service Information'}</h3>
+              <div className="space-y-4 pt-4 border-t border-gray-300">
+                <h3 className={eyebrowCls}>{dict.products?.laundryInfo || 'Laundry Service Information'}</h3>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{dict.products?.serviceType || 'Service Type'}</label>
+                  <label className={labelCls}>{dict.products?.serviceType || 'Service Type'}</label>
                   <select
                     value={formData.serviceType}
                     onChange={(e) => updateFormData({ serviceType: e.target.value as any })} // eslint-disable-line @typescript-eslint/no-explicit-any
-                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
+                    className={inputCls}
                   >
                     <option value="wash">{dict.products?.serviceTypeWash || 'Wash'}</option>
                     <option value="dry-clean">{dict.products?.serviceTypeDryClean || 'Dry Clean'}</option>
@@ -1468,39 +1550,35 @@ function ProductModal({
                   </select>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={formData.weightBased}
-                        onChange={(e) => updateFormData({ weightBased: e.target.checked })}
-                        className="checkbox-win8 mr-2"
-                      />
-                      <span className="text-sm font-medium text-gray-700">{dict.products?.weightBased || 'Weight-based pricing'}</span>
-                    </label>
-                  </div>
-                  <div>
-                    <label className="flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={formData.pickupDelivery}
-                        onChange={(e) => updateFormData({ pickupDelivery: e.target.checked })}
-                        className="checkbox-win8 mr-2"
-                      />
-                      <span className="text-sm font-medium text-gray-700">{dict.products?.pickupDelivery || 'Pickup & Delivery'}</span>
-                    </label>
-                  </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.weightBased}
+                      onChange={(e) => updateFormData({ weightBased: e.target.checked })}
+                      className="checkbox-win8"
+                    />
+                    {dict.products?.weightBased || 'Weight-based pricing'}
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.pickupDelivery}
+                      onChange={(e) => updateFormData({ pickupDelivery: e.target.checked })}
+                      className="checkbox-win8"
+                    />
+                    {dict.products?.pickupDelivery || 'Pickup & Delivery'}
+                  </label>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{dict.products?.estimatedDuration || 'Estimated Duration (minutes)'}</label>
+                  <label className={labelCls}>{dict.products?.estimatedDuration || 'Estimated Duration (minutes)'}</label>
                   <input
                     type="number"
                     min="0"
                     value={formData.estimatedDuration || ''}
                     onChange={(e) => updateFormData({ estimatedDuration: parseInt(e.target.value) || undefined })}
-                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
+                    className={inputCls}
                   />
                 </div>
               </div>
@@ -1508,34 +1586,34 @@ function ProductModal({
 
             {/* Service-specific fields */}
             {settings?.businessType?.toLowerCase() === 'service' && (
-              <div className="space-y-4 pt-4 border-t border-gray-200">
-                <h3 className="text-lg font-semibold text-gray-900">{dict.products?.serviceInfo || 'Service Information'}</h3>
+              <div className="space-y-4 pt-4 border-t border-gray-300">
+                <h3 className={eyebrowCls}>{dict.products?.serviceInfo || 'Service Information'}</h3>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{dict.products?.serviceDuration || 'Service Duration (minutes)'}</label>
+                    <label className={labelCls}>{dict.products?.serviceDuration || 'Service Duration (minutes)'}</label>
                     <input
                       type="number"
                       min="0"
                       value={formData.serviceDuration || ''}
                       onChange={(e) => updateFormData({ serviceDuration: parseInt(e.target.value) || undefined })}
-                      className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
+                      className={inputCls}
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{dict.products?.staffRequired || 'Staff Required'}</label>
+                    <label className={labelCls}>{dict.products?.staffRequired || 'Staff Required'}</label>
                     <input
                       type="number"
                       min="1"
                       value={formData.staffRequired || 1}
                       onChange={(e) => updateFormData({ staffRequired: parseInt(e.target.value) || 1 })}
-                      className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
+                      className={inputCls}
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{dict.products?.equipmentRequired || 'Equipment Required (comma-separated)'}</label>
+                  <label className={labelCls}>{dict.products?.equipmentRequired || 'Equipment Required (comma-separated)'}</label>
                   <input
                     type="text"
                     value={Array.isArray(formData.equipmentRequired) ? formData.equipmentRequired.join(', ') : formData.equipmentRequired || ''}
@@ -1543,58 +1621,57 @@ function ProductModal({
                       const equipment = e.target.value.split(',').map(e => e.trim()).filter(e => e);
                       updateFormData({ equipmentRequired: equipment });
                     }}
-                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-                    placeholder="e.g., scissors, clippers, styling chair"
+                    className={inputCls}
+                    placeholder={dict.products?.equipmentPlaceholder || 'e.g., scissors, clippers, styling chair'}
                   />
                 </div>
               </div>
             )}
-            {error && (
-              <div className="bg-red-50 text-red-800 border border-red-300 p-3">
-                {error}
-              </div>
-            )}
-            <div className="flex gap-3 justify-end pt-4">
+            {error && <div className="bg-win8-danger text-white text-sm p-3">{error}</div>}
+        </div>
+        <div className="flex gap-3 px-6 py-4 border-t border-gray-300 justify-end shrink-0">
+          <button type="button" onClick={onClose} className={btnSecondary}>
+            {dict.common?.cancel || 'Cancel'}
+          </button>
+          <button type="submit" disabled={saving} className={btnPrimary}>
+            {saving ? (dict.common?.saving || 'Saving…') : (dict.common?.save || 'Save')}
+          </button>
+        </div>
+      </form>
+
+      {/* Image picker: portaled so the drawer's transformed panel doesn't trap `fixed` positioning */}
+      {showImagePicker && createPortal(
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[60] p-4" onClick={() => setShowImagePicker(false)}>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="image-picker-title"
+            className="bg-white border border-gray-300 w-full max-w-2xl flex flex-col max-h-[80vh]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-6 py-4 bg-brand-navy text-white shrink-0">
+              <h3 id="image-picker-title" className="text-base font-semibold">{dict.products?.selectImage || 'Select Image'}</h3>
               <button
                 type="button"
-                onClick={onClose}
-                className={btnSecondary}
+                onClick={() => setShowImagePicker(false)}
+                title={dict.common?.close || 'Close'}
+                aria-label={dict.common?.close || 'Close'}
+                className="text-white/70 hover:text-white"
               >
-                {dict.common?.cancel || 'Cancel'}
-              </button>
-              <button
-                type="submit"
-                disabled={saving}
-                className={btnPrimary}
-              >
-                {saving ? (dict.common?.loading || 'Saving...') : (dict.common?.save || 'Save')}
+                <CloseIcon />
               </button>
             </div>
-          </form>
-        </div>
-      </div>
-    </div>
-
-      {/* Image Picker Modal */}
-      {showImagePicker && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
-          <div className="bg-white border border-gray-200 w-full max-w-2xl flex flex-col max-h-[80vh]">
-            {/* Header */}
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
-              <h3 className="text-base font-semibold text-gray-900">{dict.products?.selectImage || 'Select Image'}</h3>
-              <button type="button" onClick={() => setShowImagePicker(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
-            </div>
-            {/* Toolbar */}
-            <div className="flex items-center gap-3 px-5 py-3 border-b border-gray-100">
+            <div className="flex items-center gap-3 px-5 py-3 border-b border-gray-300">
               <input
                 type="text"
-                placeholder={dict.products?.searchImages || 'Search images...'}
+                placeholder={dict.products?.searchImages || 'Search images…'}
+                aria-label={dict.products?.searchImages || 'Search images'}
                 value={pickerSearch}
                 onChange={e => setPickerSearch(e.target.value)}
                 className="flex-1 px-3 py-2 border border-gray-300 text-sm bg-white"
               />
-              <label className={`${btnPrimarySm} cursor-pointer ${pickerUploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                {pickerUploading ? (dict.products?.uploading || 'Uploading...') : (dict.products?.uploadNew || 'Upload New')}
+              <label className={`${btnPrimary} cursor-pointer ${pickerUploading ? 'opacity-50 pointer-events-none' : ''}`}>
+                {pickerUploading ? (dict.products?.uploading || 'Uploading…') : (dict.products?.uploadNew || 'Upload New')}
                 <input
                   ref={pickerFileInputRef}
                   type="file"
@@ -1608,8 +1685,8 @@ function ProductModal({
             {/* Grid */}
             <div className="flex-1 overflow-y-auto p-4">
               {pickerLoading ? (
-                <div className="flex items-center justify-center py-12">
-                  <div className="animate-spin h-6 w-6 border-2 border-gray-400 border-t-transparent" />
+                <div className="text-center py-12">
+                  <div className="win8-spinner text-brand mx-auto"><span /><span /><span /><span /><span /></div>
                 </div>
               ) : pickerFiles.filter(f => f.name.toLowerCase().includes(pickerSearch.toLowerCase())).length === 0 ? (
                 <div className="text-center py-12 text-gray-400 text-sm">
@@ -1627,16 +1704,18 @@ function ProductModal({
                           updateFormData({ image: file.url });
                           setShowImagePicker(false);
                         }}
-                        className={`relative group aspect-square border-2 overflow-hidden bg-gray-50 ${
-                          formData.image === file.url ? 'border-brand' : 'border-gray-200 hover:border-gray-400'
+                        title={file.name}
+                        aria-pressed={formData.image === file.url}
+                        className={`relative group aspect-square border-2 overflow-hidden bg-gray-50 transition-colors ${
+                          formData.image === file.url ? 'border-brand' : 'border-gray-300 hover:border-brand'
                         }`}
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={file.url} alt={file.name} className="w-full h-full object-cover" />
                         {formData.image === file.url && (
-                          <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
-                            <span className="text-white text-lg">✓</span>
-                          </div>
+                          <span className="absolute top-0 right-0 w-6 h-6 bg-brand text-white flex items-center justify-center" aria-hidden="true">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="m5 12 5 5L20 7" /></svg>
+                          </span>
                         )}
                         <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs px-1 py-0.5 truncate opacity-0 group-hover:opacity-100 transition-opacity">
                           {file.name}
@@ -1646,21 +1725,21 @@ function ProductModal({
                 </div>
               )}
             </div>
-            {/* Footer */}
-            <div className="flex justify-end px-5 py-3 border-t border-gray-200">
-              <button type="button" onClick={() => setShowImagePicker(false)} className={btnSecondarySm}>
+            <div className="flex justify-end px-5 py-3 border-t border-gray-300">
+              <button type="button" onClick={() => setShowImagePicker(false)} className={btnSecondary}>
                 {dict.common?.cancel || 'Cancel'}
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
       {DuplicateDialog}
     </>
   );
 }
 
-function BulkRestockModal({
+function BulkRestockForm({
   products,
   dict,
   onClose,
@@ -1705,58 +1784,60 @@ function BulkRestockModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-gray-900/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white border border-gray-300 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <form onSubmit={handleSubmit} className="p-6">
-          <h2 className="text-2xl font-bold text-gray-900 mb-1">
-            {dict.products?.restockSelected || 'Restock Selected'}
-          </h2>
-          <p className="text-sm text-gray-500 mb-4">
+    <>
+      <DrawerHeader
+        title={dict.products?.restockSelected || 'Restock Selected'}
+        subtitle={`${products.length} ${dict.admin?.selected || 'selected'}`}
+        onClose={onClose}
+        closeLabel={dict.common?.close || 'Close'}
+      />
+      <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+        <div className="p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
+          <p className="text-sm text-gray-500">
             {dict.products?.restockDescription ||
               `Enter the quantity received for each product (${products.length} selected). Leave blank to skip a product.`}
           </p>
 
-          {error && (
-            <div className="mb-4 p-3 bg-red-50 text-red-800 border border-red-300 text-sm">{error}</div>
-          )}
-
-          <div className="border border-gray-200 divide-y divide-gray-100 max-h-96 overflow-y-auto">
+          <div className="border border-gray-300 divide-y divide-gray-200">
             {products.map((product) => (
               <div key={product._id} className="flex items-center justify-between gap-3 px-3 py-2">
                 <div className="min-w-0 flex-1">
-                  <div className="text-sm font-medium text-gray-900 truncate">{product.name}</div>
-                  <div className="text-xs text-gray-500">
-                    {product.sku || '-'} · {dict.admin?.stock || 'Stock'}: {product.trackInventory ? product.stock : '∞'}
-                  </div>
+                  <p className="text-sm font-medium text-gray-900 truncate">{product.name}</p>
+                  <p className="text-xs text-gray-500">
+                    <span className="font-mono">{product.sku || '—'}</span> · {dict.admin?.stock || 'Stock'}:{' '}
+                    <span className="tabular-nums">{product.trackInventory ? product.stock.toLocaleString() : '∞'}</span>
+                  </p>
                 </div>
                 <input
                   type="number"
                   min={0}
                   step={1}
                   placeholder="0"
+                  aria-label={`${dict.products?.restockConfirm || 'Restock'} ${product.name}`}
                   value={quantities[product._id] || ''}
                   onChange={(e) => setQuantity(product._id, e.target.value)}
-                  className="w-24 px-2 py-1.5 border border-gray-300 text-sm text-right"
+                  className="w-24 px-2 py-1.5 border border-gray-300 text-sm text-right tabular-nums"
                 />
               </div>
             ))}
           </div>
 
-          <div className="flex justify-end gap-2 mt-6">
-            <button type="button" onClick={onClose} className={btnSecondarySm} disabled={saving}>
-              {dict.common?.cancel || 'Cancel'}
-            </button>
-            <button type="submit" className={btnPrimarySm} disabled={saving}>
-              {saving ? (dict.common?.saving || 'Saving...') : (dict.products?.restockConfirm || 'Restock')}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+          {error && <div className="bg-win8-danger text-white text-sm p-3">{error}</div>}
+        </div>
+        <div className="flex gap-3 px-6 py-4 border-t border-gray-300 justify-end shrink-0">
+          <button type="button" onClick={onClose} className={btnSecondary} disabled={saving}>
+            {dict.common?.cancel || 'Cancel'}
+          </button>
+          <button type="submit" className={btnPrimary} disabled={saving}>
+            {saving ? (dict.common?.saving || 'Saving…') : (dict.products?.restockConfirm || 'Restock')}
+          </button>
+        </div>
+      </form>
+    </>
   );
 }
 
-function BulkEditModal({
+function BulkEditForm({
   categories,
   dict,
   count,
@@ -1805,7 +1886,7 @@ function BulkEditModal({
   }, [categorySearch, categories]);
 
   const handleCategorySelect = (category: Category) => {
-    setCategoryId(category._id);
+    setCategoryId(category.id);
     setCategorySearch(category.name);
     setShowCategorySuggestions(false);
   };
@@ -1842,7 +1923,7 @@ function BulkEditModal({
     if (applyPrice) {
       const value = parseFloat(priceValue);
       if (isNaN(value)) {
-        setError(dict.admin?.price || 'Price' + ' is required');
+        setError((dict.products?.fieldRequired || '{field} is required').replace('{field}', dict.admin?.price || 'Price'));
         return;
       }
       updates.price = { mode: priceMode, value };
@@ -1851,7 +1932,7 @@ function BulkEditModal({
     if (applyStock && showInventory) {
       const value = parseInt(stockValue, 10);
       if (isNaN(value)) {
-        setError(dict.admin?.stock || 'Stock' + ' is required');
+        setError((dict.products?.fieldRequired || '{field} is required').replace('{field}', dict.admin?.stock || 'Stock'));
         return;
       }
       updates.stock = { mode: stockMode, value };
@@ -1864,7 +1945,7 @@ function BulkEditModal({
     if (applyLowStockThreshold && showInventory) {
       const value = parseInt(lowStockThreshold, 10);
       if (isNaN(value) || value < 0) {
-        setError(dict.admin?.lowStockThreshold || 'Low stock threshold' + ' is required');
+        setError((dict.products?.fieldRequired || '{field} is required').replace('{field}', dict.admin?.lowStockThreshold || 'Low stock threshold'));
         return;
       }
       updates.lowStockThreshold = value;
@@ -1884,25 +1965,20 @@ function BulkEditModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white border border-gray-200 w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900">
-              {dict.products?.bulkEditTitle || 'Bulk Edit Products'}
-            </h2>
-            <p className="text-sm text-gray-500 mt-1">
-              {(dict.products?.bulkEditSubtitle || 'Only checked fields will be applied.') + ` (${count})`}
-            </p>
+    <>
+      <DrawerHeader
+        title={dict.products?.bulkEditTitle || 'Bulk Edit Products'}
+        subtitle={`${count} ${dict.admin?.selected || 'selected'}`}
+        onClose={onClose}
+        closeLabel={dict.common?.close || 'Close'}
+      />
+      <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+        <div className="p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
+          <div className="bg-brand-soft border border-brand p-4 text-sm text-brand-navy">
+            {dict.products?.bulkEditSubtitle || 'Only checked fields will be applied.'}
           </div>
-          <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">
-            ×
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
           <div className="space-y-2">
-            <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
               <input
                 type="checkbox"
                 checked={applyCategory}
@@ -1923,11 +1999,11 @@ function BulkEditModal({
                     const match = categories.find(
                       (cat) => cat.name.toLowerCase() === value.toLowerCase()
                     );
-                    setCategoryId(match?._id || '');
+                    setCategoryId(match?.id || '');
                   }}
                   onFocus={() => setShowCategorySuggestions(true)}
                   placeholder={dict.admin?.searchCategory || 'Type to search categories...'}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
+                  className={inputCls}
                 />
                 {showCategorySuggestions && filteredCategories.length > 0 && (
                   <div
@@ -1936,11 +2012,11 @@ function BulkEditModal({
                   >
                     {filteredCategories.map((cat) => (
                       <button
-                        key={cat._id}
+                        key={cat.id}
                         type="button"
                         onClick={() => handleCategorySelect(cat)}
-                        className={`w-full text-left px-4 py-2 hover:bg-brand-soft focus:bg-brand-soft focus:outline-none ${
-                          categoryId === cat._id ? 'bg-brand-soft' : ''
+                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 transition-colors ${
+                          categoryId === cat.id ? 'bg-brand-soft font-medium text-brand-navy' : 'text-gray-700'
                         }`}
                       >
                         {cat.name}
@@ -1953,7 +2029,7 @@ function BulkEditModal({
           </div>
 
           <div className="space-y-2">
-            <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
               <input
                 type="checkbox"
                 checked={applyPrice}
@@ -1967,7 +2043,8 @@ function BulkEditModal({
                 <select
                   value={priceMode}
                   onChange={(e) => setPriceMode(e.target.value as 'set' | 'percent' | 'add')}
-                  className="px-3 py-2 border border-gray-300 bg-white"
+                  aria-label={dict.admin?.price || 'Price'}
+                  className="px-3 py-2 border border-gray-300 text-sm bg-white"
                 >
                   <option value="set">{dict.products?.priceModeSet || 'Set to'}</option>
                   <option value="percent">{dict.products?.priceModePercent || 'Increase by %'}</option>
@@ -1978,7 +2055,7 @@ function BulkEditModal({
                   step={priceMode === 'set' ? '0.01' : '1'}
                   value={priceValue}
                   onChange={(e) => setPriceValue(e.target.value)}
-                  className="flex-1 px-3 py-2 border border-gray-300 bg-white"
+                  className="flex-1 px-3 py-2 border border-gray-300 text-sm bg-white tabular-nums"
                   placeholder="0"
                 />
               </div>
@@ -1988,7 +2065,7 @@ function BulkEditModal({
           {showInventory && (
             <>
               <div className="space-y-2">
-                <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={applyStock}
@@ -2002,7 +2079,8 @@ function BulkEditModal({
                     <select
                       value={stockMode}
                       onChange={(e) => setStockMode(e.target.value as 'set' | 'add')}
-                      className="px-3 py-2 border border-gray-300 bg-white"
+                      aria-label={dict.admin?.stock || 'Stock'}
+                      className="px-3 py-2 border border-gray-300 text-sm bg-white"
                     >
                       <option value="set">{dict.products?.stockModeSet || 'Set to'}</option>
                       <option value="add">{dict.products?.stockModeAdd || 'Add'}</option>
@@ -2012,7 +2090,7 @@ function BulkEditModal({
                       step="1"
                       value={stockValue}
                       onChange={(e) => setStockValue(e.target.value)}
-                      className="flex-1 px-3 py-2 border border-gray-300 bg-white"
+                      className="flex-1 px-3 py-2 border border-gray-300 text-sm bg-white tabular-nums"
                       placeholder="0"
                     />
                   </div>
@@ -2020,7 +2098,7 @@ function BulkEditModal({
               </div>
 
               <div className="space-y-2">
-                <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={applyTrackInventory}
@@ -2043,7 +2121,7 @@ function BulkEditModal({
               </div>
 
               <div className="space-y-2">
-                <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={applyLowStockThreshold}
@@ -2058,36 +2136,25 @@ function BulkEditModal({
                     min="0"
                     value={lowStockThreshold}
                     onChange={(e) => setLowStockThreshold(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 bg-white"
+                    className={inputCls}
                   />
                 )}
               </div>
             </>
           )}
 
-          {error && (
-            <div className="bg-red-50 text-red-800 border border-red-300 p-3 text-sm">{error}</div>
-          )}
-
-          <div className="flex gap-3 justify-end pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className={btnSecondary}
-            >
-              {dict.common?.cancel || 'Cancel'}
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className={btnPrimary}
-            >
-              {saving ? (dict.common?.loading || 'Saving...') : (dict.common?.save || 'Save')}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+          {error && <div className="bg-win8-danger text-white text-sm p-3">{error}</div>}
+        </div>
+        <div className="flex gap-3 px-6 py-4 border-t border-gray-300 justify-end shrink-0">
+          <button type="button" onClick={onClose} className={btnSecondary}>
+            {dict.common?.cancel || 'Cancel'}
+          </button>
+          <button type="submit" disabled={saving} className={btnPrimary}>
+            {saving ? (dict.common?.saving || 'Saving…') : (dict.common?.save || 'Save')}
+          </button>
+        </div>
+      </form>
+    </>
   );
 }
 

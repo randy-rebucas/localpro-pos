@@ -3,9 +3,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { getDictionaryClient } from '@/app/[tenant]/[lang]/dictionaries-client';
-import LoadingSpinner from '@/components/ui/LoadingSpinner';
-import ErrorState from '@/components/ui/ErrorState';
-import EmptyState from '@/components/ui/EmptyState';
 import type { TranslationDict } from '@/types/dictionary';
 interface LowStockProduct {
   _id: string;
@@ -77,93 +74,92 @@ export default function LowStockAlerts({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenant, branchId, autoRefresh, refreshInterval, refreshTrigger]);
 
-  if (loading && alerts.length === 0) {
-    return (
-      <div className="bg-white border border-gray-300">
-        <LoadingSpinner size="sm" className="py-8" />
-      </div>
-    );
-  }
+  const renderBody = () => {
+    if (loading && alerts.length === 0) {
+      return (
+        <div className="text-center py-12">
+          <div className="win8-spinner text-brand mx-auto"><span /><span /><span /><span /><span /></div>
+          <p className="mt-3 text-gray-400 text-sm">{dict?.common?.loading || 'Loading…'}</p>
+        </div>
+      );
+    }
 
-  if (error) {
-    return (
-      <div className="bg-white border border-gray-300">
-        <ErrorState
-          title={error}
-          onRetry={fetchAlerts}
-          retryLabel={dict?.common?.retry || 'Retry'}
-          compact
-          className="py-4"
-        />
-      </div>
-    );
-  }
+    if (error) {
+      return (
+        <div className="text-center py-12" role="alert">
+          <p className="text-win8-danger text-sm font-medium">{error}</p>
+          <button
+            type="button"
+            onClick={fetchAlerts}
+            className="mt-4 px-4 py-2 bg-brand text-white text-sm hover:bg-brand-hover transition-colors"
+          >
+            {dict?.common?.retry || 'Retry'}
+          </button>
+        </div>
+      );
+    }
 
-  if (alerts.length === 0) {
+    if (alerts.length === 0) {
+      return (
+        <p className="px-4 py-12 text-center text-sm text-gray-400">
+          {dict?.components?.lowStockAlerts?.allProductsWellStocked || 'All products are well stocked'}
+        </p>
+      );
+    }
+
     return (
-      <div className="bg-white border border-gray-300">
-        <EmptyState
-          icon="products"
-          title={
-            dict?.components?.lowStockAlerts?.allProductsWellStocked ||
-            'All products are well stocked'
-          }
-          compact
-          className="py-4"
-        />
-      </div>
+      <ul className="divide-y divide-gray-200 max-h-[70vh] overflow-y-auto">
+        {alerts.map((alert) => {
+          const out = alert.currentStock === 0;
+          const content = (
+            <>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-900 truncate">{alert.name}</p>
+                {alert.sku && <p className="text-xs text-gray-400 font-mono mt-0.5">{alert.sku}</p>}
+              </div>
+              <div className="flex-shrink-0 text-right">
+                <span className={`inline-block px-2 py-0.5 text-xs font-semibold text-white tabular-nums ${out ? 'bg-win8-danger' : 'bg-win8-warning'}`}>
+                  {alert.currentStock.toLocaleString()} / {alert.threshold.toLocaleString()}
+                </span>
+                <p className="text-xs text-gray-500 mt-1">
+                  {out ? (dict?.common?.outOfStock || 'Out of stock') : (dict?.common?.lowStock || 'Low stock')}
+                </p>
+              </div>
+            </>
+          );
+          return (
+            <li key={alert._id}>
+              {onProductClick ? (
+                <button
+                  type="button"
+                  onClick={() => onProductClick(alert._id)}
+                  className="w-full text-left px-4 py-3 flex items-start justify-between gap-4 hover:bg-gray-100 transition-colors"
+                >
+                  {content}
+                </button>
+              ) : (
+                <div className="px-4 py-3 flex items-start justify-between gap-4">{content}</div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
     );
-  }
+  };
 
   return (
-    <div className="bg-white border border-gray-300">
-      <div className="p-4 border-b border-gray-200">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-gray-900">
-            {dict?.components?.lowStockAlerts?.title || 'Low Stock Alerts'}
-          </h3>
-          <span className="bg-red-100 text-red-800 text-xs font-semibold px-2.5 py-0.5 border border-red-300">
-            {alerts.length}
+    <section className="bg-white border border-gray-300">
+      <div className="px-4 py-3 border-b border-gray-300 flex items-center justify-between gap-3">
+        <h2 className="text-sm font-bold text-gray-900">
+          {dict?.components?.lowStockAlerts?.title || 'Low Stock Alerts'}
+        </h2>
+        {alerts.length > 0 && !error && (
+          <span className="px-2 py-0.5 text-xs font-semibold bg-win8-danger text-white tabular-nums">
+            {alerts.length.toLocaleString()}
           </span>
-        </div>
+        )}
       </div>
-      <div className="divide-y divide-gray-200 max-h-96 overflow-y-auto">
-        {alerts.map((alert) => (
-          <div
-            key={alert._id}
-            className={`p-4 hover:bg-gray-50 transition-colors ${
-              onProductClick ? 'cursor-pointer' : ''
-            }`}
-            onClick={() => onProductClick?.(alert._id)}
-          >
-            <div className="flex items-start justify-between">
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">
-                  {alert.name}
-                </p>
-                {alert.sku && (
-                  <p className="text-xs text-gray-500 mt-1">SKU: {alert.sku}</p>
-                )}
-              </div>
-              <div className="ml-4 flex-shrink-0 text-right">
-                <div
-                  className={`inline-flex items-center px-2.5 py-0.5 border border-gray-300 text-xs font-semibold ${
-                    alert.currentStock === 0
-                      ? 'bg-red-100 text-red-800'
-                      : 'bg-yellow-100 text-yellow-800'
-                  }`}
-                >
-                  {alert.currentStock} / {alert.threshold}
-                </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  {alert.currentStock === 0 ? (dict?.common?.outOfStock || 'Out of stock') : (dict?.common?.lowStock || 'Low stock')}
-                </p>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
+      {renderBody()}
+    </section>
   );
 }
-

@@ -3,15 +3,16 @@
  */
 
 export function getMovementTypeColor(type: string): string {
+  // Solid Win8 badges (white text on token fills).
   const colors: Record<string, string> = {
-    sale: 'bg-red-100 text-red-800',
-    purchase: 'bg-green-100 text-green-800',
-    adjustment: 'bg-brand-soft text-brand-navy',
-    return: 'bg-yellow-100 text-yellow-800',
-    damage: 'bg-orange-100 text-orange-800',
-    transfer: 'bg-purple-100 text-purple-800',
+    sale: 'bg-win8-info text-white',
+    purchase: 'bg-win8-success text-white',
+    adjustment: 'bg-brand text-white',
+    return: 'bg-win8-warning text-white',
+    damage: 'bg-win8-danger text-white',
+    transfer: 'bg-win8-accent text-white',
   };
-  return colors[type] || 'bg-gray-100 text-gray-800';
+  return colors[type] || 'bg-gray-500 text-white';
 }
 
 export function getFailedToFetchMovementsMessage(dict: any): string { // eslint-disable-line @typescript-eslint/no-explicit-any

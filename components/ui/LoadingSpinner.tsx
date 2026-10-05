@@ -1,9 +1,11 @@
 'use client';
 
+// Win8 five-dot spinner (globals.css `.win8-spinner`). It is em-sized and uses
+// currentColor, so size is set via font-size and color via text color.
 const SIZE_CLASS = {
-  sm: 'h-5 w-5 border-b-2',
-  md: 'h-8 w-8 border-b-2',
-  lg: 'h-12 w-12 border-b-2',
+  sm: 'text-xl win8-spinner-sm',
+  md: 'text-2xl',
+  lg: 'text-4xl',
 } as const;
 
 interface LoadingSpinnerProps {
@@ -21,13 +23,15 @@ export default function LoadingSpinner({
 }: LoadingSpinnerProps) {
   return (
     <div className={`text-center ${className}`}>
-      <div
-        className={`inline-block animate-spin rounded-full border-transparent ${SIZE_CLASS[size]} ${color ? '' : 'border-brand'}`}
-        style={color ? { borderBottomColor: color } : undefined}
+      <span
+        className={`win8-spinner ${SIZE_CLASS[size]} ${color ? '' : 'text-brand'}`}
+        style={color ? { color } : undefined}
         role="status"
         aria-label={label || 'Loading'}
-      />
-      {label && <p className="mt-4 text-gray-600 text-sm">{label}</p>}
+      >
+        <span /><span /><span /><span /><span />
+      </span>
+      {label && <p className="mt-3 text-gray-400 text-sm">{label}</p>}
     </div>
   );
 }

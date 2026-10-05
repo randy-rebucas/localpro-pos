@@ -1,8 +1,6 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { useTenantSettings } from '@/contexts/TenantSettingsContext';
-import { getDefaultTenantSettings } from '@/lib/currency';
 
 interface ConfirmDialogProps {
   isOpen: boolean;
@@ -15,6 +13,16 @@ interface ConfirmDialogProps {
   variant?: 'danger' | 'warning' | 'info';
 }
 
+const WARNING_ICON = 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z';
+const INFO_ICON = 'M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z';
+
+// Win8 flat variants: solid token fills, white text, brightness hover.
+const VARIANT_STYLES = {
+  danger: { confirm: 'bg-win8-danger hover:brightness-110 transition-[filter]', iconBg: 'bg-win8-danger', icon: WARNING_ICON },
+  warning: { confirm: 'bg-win8-warning hover:brightness-110 transition-[filter]', iconBg: 'bg-win8-warning', icon: WARNING_ICON },
+  info: { confirm: 'bg-brand hover:bg-brand-hover transition-colors', iconBg: 'bg-brand', icon: INFO_ICON },
+} as const;
+
 export default function ConfirmDialog({
   isOpen,
   title,
@@ -26,8 +34,6 @@ export default function ConfirmDialog({
   variant = 'info',
 }: ConfirmDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
-  const { settings } = useTenantSettings();
-  const primaryColor = (settings || getDefaultTenantSettings()).primaryColor || '#35979c';
 
   useEffect(() => {
     if (isOpen) {
@@ -53,34 +59,7 @@ export default function ConfirmDialog({
     }
   };
 
-  const variantStyles = {
-    danger: {
-      confirmButton: 'bg-red-600 hover:bg-red-700 border-red-700 text-white',
-      icon: (
-        <svg className="w-6 h-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-        </svg>
-      ),
-    },
-    warning: {
-      confirmButton: 'bg-yellow-600 hover:bg-yellow-700 border-yellow-700 text-white',
-      icon: (
-        <svg className="w-6 h-6 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-        </svg>
-      ),
-    },
-    info: {
-      confirmButton: 'text-white border',
-      icon: (
-        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" style={{ color: '#35979c' }}>
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-      ),
-    },
-  };
-
-  const styles = variantStyles[variant];
+  const styles = VARIANT_STYLES[variant];
 
   if (!isOpen) return null;
 
@@ -88,56 +67,38 @@ export default function ConfirmDialog({
     <dialog
       ref={dialogRef}
       onClick={handleBackdropClick}
-      className="backdrop:bg-black/50 backdrop:backdrop-blur-sm rounded-lg p-0 w-full max-w-md shadow-xl border border-gray-300"
+      onCancel={(e) => {
+        // Escape key: route through onCancel so the awaiting promise resolves.
+        e.preventDefault();
+        handleCancel();
+      }}
+      aria-labelledby="confirm-dialog-title"
+      className="backdrop:bg-black/40 p-0 w-full max-w-md border border-gray-300 bg-white"
     >
-      <div className="bg-white rounded-lg p-6">
+      <div className="p-6">
         <div className="flex items-start gap-4 mb-4">
-          <div className="flex-shrink-0">
-            {styles.icon}
-          </div>
-          <div className="flex-1">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">{title}</h3>
+          <span className={`w-9 h-9 shrink-0 ${styles.iconBg} text-white flex items-center justify-center`} aria-hidden="true">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d={styles.icon} />
+            </svg>
+          </span>
+          <div className="flex-1 min-w-0">
+            <h3 id="confirm-dialog-title" className="text-lg font-bold text-gray-900 mb-1">{title}</h3>
             <p className="text-sm text-gray-600 whitespace-pre-line">{message}</p>
           </div>
         </div>
         <div className="flex justify-end gap-3 mt-6">
           <button
+            type="button"
             onClick={handleCancel}
-            className="px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 bg-white rounded-md text-sm font-medium transition-colors"
+            className="px-4 py-2 border border-gray-300 text-gray-700 bg-white text-sm hover:bg-gray-100 transition-colors"
           >
             {cancelText}
           </button>
           <button
+            type="button"
             onClick={handleConfirm}
-            className="px-4 py-2.5 font-medium transition-colors border text-white"
-            style={variant === 'info' ? {
-              backgroundColor: primaryColor,
-              borderColor: primaryColor,
-            } : variant === 'warning' ? {
-              backgroundColor: '#ca8a04',
-              borderColor: '#ca8a04',
-            } : {
-              backgroundColor: '#dc2626',
-              borderColor: '#dc2626',
-            }}
-            onMouseEnter={(e) => {
-              if (variant === 'info') {
-                e.currentTarget.style.backgroundColor = `${primaryColor}dd`;
-              } else if (variant === 'warning') {
-                e.currentTarget.style.backgroundColor = '#b45309';
-              } else {
-                e.currentTarget.style.backgroundColor = '#b91c1c';
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (variant === 'info') {
-                e.currentTarget.style.backgroundColor = primaryColor;
-              } else if (variant === 'warning') {
-                e.currentTarget.style.backgroundColor = '#ca8a04';
-              } else {
-                e.currentTarget.style.backgroundColor = '#dc2626';
-              }
-            }}
+            className={`px-4 py-2 text-white text-sm font-semibold ${styles.confirm}`}
           >
             {confirmText}
           </button>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useMemo, useState } from 'react';
 import JsBarcode from 'jsbarcode';
 import type { Product } from '@/hooks/useProductsList';
 
@@ -55,9 +55,9 @@ function renderBarcodeToDataURL(
 }
 
 const btnPrimary =
-  'px-4 py-2 bg-brand text-white hover:bg-brand-hover font-medium border border-brand-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
+  'px-4 py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover disabled:opacity-50 transition-colors';
 const btnSecondary =
-  'px-4 py-2 border border-gray-300 text-gray-700 font-medium hover:bg-gray-50 bg-white transition-colors';
+  'px-4 py-2 border border-gray-300 text-gray-700 bg-white text-sm hover:bg-gray-100 disabled:opacity-50 transition-colors';
 
 interface BulkBarcodeModalProps {
   products: Product[];
@@ -69,19 +69,18 @@ export default function BulkBarcodeModal({ products, dict, onClose }: BulkBarcod
   const [format, setFormat] = useState<BarcodeFormat>('CODE128');
   const [labelSizeIdx, setLabelSizeIdx] = useState(0);
   const [copies, setCopies] = useState<Record<string, number>>({});
-  const [dataURLs, setDataURLs] = useState<Record<string, string>>({});
-
   const labelSize = LABEL_SIZES[labelSizeIdx];
   const getCopies = (id: string) => copies[id] ?? 1;
 
-  useEffect(() => {
+  // Derived from props/state, so compute during render (this modal is client-only via dynamic ssr:false).
+  const dataURLs = useMemo(() => {
     const urls: Record<string, string> = {};
     products.forEach((p) => {
       const val = p.barcode || p.sku || p._id;
       const url = renderBarcodeToDataURL(val, format, labelSize.barcodeHeight);
       if (url) urls[p._id] = url;
     });
-    setDataURLs(urls);
+    return urls;
   }, [products, format, labelSize]);
 
   const handlePrint = () => {
@@ -153,19 +152,33 @@ export default function BulkBarcodeModal({ products, dict, onClose }: BulkBarcod
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white border border-gray-200 shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="bulk-barcode-title"
+        className="bg-white border border-gray-300 w-full max-w-2xl max-h-[90vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-6 py-4 bg-brand-navy text-white shrink-0">
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">
+            <h2 id="bulk-barcode-title" className="text-base font-semibold">
               {dict.products?.printBarcodes || 'Print Barcodes'}
             </h2>
-            <p className="text-sm text-gray-500 mt-0.5">
+            <p className="text-xs text-white/70 mt-0.5 tabular-nums">
               {products.length} {dict.admin?.selected || 'selected'}
             </p>
           </div>
-          <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">
-            ×
+          <button
+            type="button"
+            onClick={onClose}
+            title={dict.common?.close || 'Close'}
+            aria-label={dict.common?.close || 'Close'}
+            className="text-white/70 hover:text-white"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+            </svg>
           </button>
         </div>
 
@@ -211,7 +224,7 @@ export default function BulkBarcodeModal({ products, dict, onClose }: BulkBarcod
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={dataURLs[p._id]} alt={p.name} className="max-w-full" />
                   ) : (
-                    <p className="text-xs text-red-500">Cannot render {format} for this value</p>
+                    <p className="text-xs text-win8-danger">Cannot render {format} for this value</p>
                   )}
                 </div>
               </div>

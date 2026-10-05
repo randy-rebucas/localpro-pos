@@ -42,6 +42,8 @@ export interface StockTransferFormData {
 interface UseStockTransferListReturn {
   stockTransfers: StockTransfer[];
   loading: boolean;
+  /** Set when the list itself failed to load (distinct from action messages). */
+  fetchError: string | null;
   message: { type: 'success' | 'error'; text: string } | null;
   fetchStockTransfers: () => Promise<void>;
   createStockTransfer: (form: StockTransferFormData) => Promise<true | string>;
@@ -56,20 +58,22 @@ interface UseStockTransferListReturn {
 export function useStockTransferList(): UseStockTransferListReturn {
   const [stockTransfers, setStockTransfers] = useState<StockTransfer[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const fetchStockTransfers = useCallback(async () => {
     setLoading(true);
+    setFetchError(null);
     try {
       const res = await fetch('/api/stock-transfers', { credentials: 'include' });
       const data = await res.json();
       if (data.success) {
         setStockTransfers(data.data || []);
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to fetch stock transfers' });
+        setFetchError(data.error || 'Failed to fetch stock transfers');
       }
     } catch {
-      setMessage({ type: 'error', text: 'Failed to fetch stock transfers' });
+      setFetchError('Failed to fetch stock transfers');
     } finally {
       setLoading(false);
     }
@@ -183,6 +187,7 @@ export function useStockTransferList(): UseStockTransferListReturn {
   return {
     stockTransfers,
     loading,
+    fetchError,
     message,
     fetchStockTransfers,
     createStockTransfer,

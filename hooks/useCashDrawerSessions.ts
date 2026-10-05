@@ -2,6 +2,26 @@ import { useCallback, useState } from 'react';
 import type { CashDrawerSession } from '@/types/cash-drawer';
 export type { CashDrawerSession };
 
+// Prisma serializes Decimal columns as strings and empty columns as null;
+// coerce them to the numeric/optional shape the UI expects.
+const toNum = (v: unknown): number | undefined =>
+  v === null || v === undefined || v === '' ? undefined : Number(v);
+
+function normalizeSession(raw: Record<string, unknown>): CashDrawerSession {
+  return {
+    ...(raw as unknown as CashDrawerSession),
+    openingAmount: toNum(raw.openingAmount) ?? 0,
+    closingAmount: toNum(raw.closingAmount),
+    expectedAmount: toNum(raw.expectedAmount),
+    shortage: toNum(raw.shortage),
+    overage: toNum(raw.overage),
+    totalVAT: toNum(raw.totalVAT),
+    totalDiscounts: toNum(raw.totalDiscounts),
+    closingTime: (raw.closingTime as string | null) ?? undefined,
+    notes: (raw.notes as string | null) ?? undefined,
+  };
+}
+
 export function useCashDrawerSessions() {
   const [sessions, setSessions] = useState<CashDrawerSession[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,7 +50,7 @@ export function useCashDrawerSessions() {
         const data = await res.json();
 
         if (res.ok && data.success) {
-          setSessions(data.data || []);
+          setSessions((data.data || []).map(normalizeSession));
           setTotalPages(data.pagination?.totalPages || 1);
         } else {
           const errorMsg = data.error || 'Failed to fetch cash drawer sessions';

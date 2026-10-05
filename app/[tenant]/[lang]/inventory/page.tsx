@@ -121,9 +121,8 @@ export default function InventoryPage() {
           <InlineBanner
             variant="warning"
             message={invDict.inventoryNotAvailable || 'Inventory Management Not Available'}
-            className="border border-yellow-300 bg-yellow-50 text-yellow-900"
           />
-          <p className="mt-3 text-sm text-yellow-800">
+          <p className="mt-3 text-sm text-gray-700">
             {invDict.inventoryNotAvailableDesc ||
               `Inventory tracking is not enabled for ${businessTypeConfig?.name || 'your business type'}. To enable it, update your business type in Settings.`}
           </p>

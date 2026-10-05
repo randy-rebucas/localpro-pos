@@ -2,11 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import PageLoading from '@/components/ui/PageLoading';
-import EmptyState from '@/components/ui/EmptyState';
-import ErrorState from '@/components/ui/ErrorState';
 import ReportsTabSkeleton from '@/components/reports/ReportsTabSkeleton';
-import { useParams } from 'next/navigation';
+import AdminPageHeader from '@/components/admin/AdminPageHeader';
+import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { getDictionaryClient } from '../../dictionaries-client';
 import Currency from '@/components/Currency';
 import { formatGrandTotalRegister } from '@/lib/bir-format';
@@ -31,7 +29,93 @@ import {
 } from '@/hooks/useReportsData';
 import type { TranslationDict } from '@/types/dictionary';
 
-const DEFAULT_COLORS = ['#35979c', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
+// Chart series palette: the Win8 token hexes (brand, success, accent, info, suspended).
+// The tenant's primaryColor, when set, leads the palette so charts stay on-brand.
+const DEFAULT_COLORS = ['#35979c', '#0b7a44', '#7a3fc9', '#1e70bf', '#b35900'];
+const REPORT_TABS: ReportTab[] = [
+  'sales', 'products', 'vat', 'profit-loss', 'cash-drawer', 'sales-journal', 'x-reading', 'z-reading', 'laundry',
+];
+
+const CASH_DRAWER_STATUS_BADGE: Record<string, string> = {
+  closed: 'bg-win8-success text-white',
+  open: 'bg-win8-warning text-white',
+};
+
+const JOURNAL_STATUS_BADGE: Record<string, string> = {
+  completed: 'bg-win8-success text-white',
+  refunded: 'bg-win8-suspended text-white',
+  voided: 'bg-win8-danger text-white',
+  cancelled: 'bg-win8-danger text-white',
+  pending: 'bg-win8-warning text-white',
+};
+
+const TOOLTIP_STYLE = { backgroundColor: '#fff', border: '1px solid #d1d5db', borderRadius: 0 };
+const AXIS_PROPS = { stroke: '#6b7280', style: { fontSize: '12px' } };
+
+const inputCls = 'px-3 py-2 border border-gray-300 text-sm bg-white';
+const labelCls = 'block text-xs font-medium text-gray-600 mb-1';
+const btnSecondary =
+  'px-4 py-2 border border-gray-300 text-gray-700 bg-white text-sm hover:bg-gray-100 disabled:opacity-50 transition-colors';
+const thCls = 'px-4 py-3 text-left font-medium';
+const thRight = 'px-4 py-3 text-right font-medium';
+
+/** Solid-color KPI tile (patterns.md "KPI tile" variant). */
+function KpiTile({ label, color, children, sub }: { label: string; color: string; children: React.ReactNode; sub?: React.ReactNode }) {
+  return (
+    <div className={`${color} text-white p-5`}>
+      <p className="text-xs font-semibold uppercase tracking-wide text-white/80 leading-tight">{label}</p>
+      <div className="text-3xl font-bold tabular-nums mt-2">{children}</div>
+      {sub && <div className="text-xs text-white/70 mt-1">{sub}</div>}
+    </div>
+  );
+}
+
+/** White chart/card panel with a small heading. */
+function ChartPanel({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="bg-white border border-gray-300 p-5">
+      <h2 className="text-sm font-bold text-gray-900 mb-4">{title}</h2>
+      {children}
+    </div>
+  );
+}
+
+function Pagination({
+  page, totalPages, total, pageSize, onPage, dict,
+}: { page: number; totalPages: number; total: number; pageSize: number; onPage: (p: number) => void; dict: any }) { // eslint-disable-line @typescript-eslint/no-explicit-any
+  if (totalPages <= 1) return null;
+  const start = (page - 1) * pageSize + 1;
+  const end = Math.min(page * pageSize, total);
+  return (
+    <div className="border-t border-gray-300 px-4 py-3 flex items-center justify-between text-sm text-gray-500">
+      <span className="tabular-nums">
+        {dict.admin?.showing || 'Showing'} {start}–{end} {dict.admin?.of || 'of'} {total.toLocaleString()}
+      </span>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => onPage(Math.max(1, page - 1))}
+          disabled={page === 1}
+          className="px-3 py-1 border border-gray-300 bg-white disabled:opacity-40 hover:bg-gray-100"
+        >
+          ← {dict.common?.previous || 'Prev'}
+        </button>
+        <button
+          type="button"
+          onClick={() => onPage(Math.min(totalPages, page + 1))}
+          disabled={page === totalPages}
+          className="px-3 py-1 border border-gray-300 bg-white disabled:opacity-40 hover:bg-gray-100"
+        >
+          {dict.common?.next || 'Next'} →
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function EmptyPanel({ text }: { text: string }) {
+  return <div className="text-center py-12 text-gray-400 bg-white border border-gray-300">{text}</div>;
+}
 
 export default function AdminReportsPage() {
   const params = useParams();
@@ -43,7 +127,23 @@ export default function AdminReportsPage() {
   const primaryColor = settings?.primaryColor || '#35979c';
   const COLORS = [primaryColor, ...DEFAULT_COLORS.filter(c => c !== primaryColor)].slice(0, 5);
   const [dict, setDict] = useState<TranslationDict | null>(null);
-  const [activeTab, setActiveTab] = useState<ReportTab>('sales');
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  // Laundry tab is only valid once settings confirm the feature; while settings load, keep it.
+  const laundryEnabled = supportsFeature(settings ?? undefined, 'laundryOrders');
+  const tabParam = searchParams.get('tab') as ReportTab | null;
+  const activeTab: ReportTab =
+    tabParam && REPORT_TABS.includes(tabParam) && (tabParam !== 'laundry' || !settings || laundryEnabled)
+      ? tabParam
+      : 'sales';
+  const setActiveTab = (tab: ReportTab) => {
+    const next = new URLSearchParams(searchParams.toString());
+    if (tab === 'sales') next.delete('tab');
+    else next.set('tab', tab);
+    const query = next.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  };
   const [period, setPeriod] = useState<'daily' | 'weekly' | 'monthly'>('daily');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -121,6 +221,10 @@ export default function AdminReportsPage() {
   };
 
   const handleGenerateZReading = async () => {
+    const confirmText =
+      (dict?.reports?.confirmZReading as string | undefined) ||
+      "Generate today's Z-Reading? This locks today's totals into the Grand Total and can only be done once per business day.";
+    if (!confirm(confirmText)) return;
     const result = await generateZReading();
     if (result.success) {
       toast.success(
@@ -129,19 +233,20 @@ export default function AdminReportsPage() {
           : ((dict?.reports?.zReadingGenerated as string | undefined) || 'Z-Reading generated')
       );
     } else {
-      toast.error(result.error || 'Failed to generate Z-Reading');
+      toast.error(result.error || (dict?.reports?.zReadingGenerationFailed as string | undefined) || 'Failed to generate Z-Reading');
     }
   };
 
   if (!dict) {
-    return <PageLoading label="Loading..." />;
+    return (
+      <div className="flex items-center justify-center py-24">
+        <div className="win8-spinner text-brand"><span /><span /><span /><span /><span /></div>
+      </div>
+    );
   }
 
   const reportsDict = dict.reports ?? {};
-
-  const renderEmptyState = (title: string) => (
-    <EmptyState icon="products" title={title} className="py-12" />
-  );
+  const noData = reportsDict.noData || 'No data available for the selected period.';
 
   const renderTabContent = () => {
     if (status === 'loading') {
@@ -150,12 +255,13 @@ export default function AdminReportsPage() {
 
     if (status === 'error') {
       return (
-        <ErrorState
-          title={reportsDict.failedToLoadReports || 'Failed to load report'}
-          description={error || undefined}
-          onRetry={refetch}
-          retryLabel={dict.common.retry || 'Retry'}
-        />
+        <div className="text-center py-12 bg-white border border-gray-300" role="alert">
+          <p className="text-win8-danger text-sm font-medium">{reportsDict.failedToLoadReports || 'Failed to load report'}</p>
+          {error && <p className="text-gray-500 text-sm mt-1">{error}</p>}
+          <button onClick={refetch} className="mt-4 px-4 py-2 bg-brand text-white text-sm hover:bg-brand-hover transition-colors">
+            {dict.common.retry || 'Retry'}
+          </button>
+        </div>
       );
     }
 
@@ -163,51 +269,36 @@ export default function AdminReportsPage() {
       case 'sales':
         return salesReport ? (
           <SalesReportView report={salesReport} dict={dict} primaryColor={primaryColor} colors={COLORS} />
-        ) : (
-          renderEmptyState(reportsDict.noData || 'No data available for the selected period')
-        );
+        ) : <EmptyPanel text={noData} />;
       case 'products':
         return productPerformance.length > 0 ? (
           <ProductPerformanceView data={productPerformance} dict={dict} primaryColor={primaryColor} />
-        ) : (
-          renderEmptyState(reportsDict.noData || 'No product performance data available for the selected period')
-        );
+        ) : <EmptyPanel text={noData} />;
       case 'vat':
         return vatReport ? (
-          <VATReportView report={vatReport} dict={dict} primaryColor={primaryColor} />
-        ) : (
-          renderEmptyState(reportsDict.noData || 'No VAT data available for the selected period')
-        );
+          <VATReportView report={vatReport} dict={dict} colors={COLORS} />
+        ) : <EmptyPanel text={noData} />;
       case 'profit-loss':
         return profitLoss ? (
           <ProfitLossView summary={profitLoss} dict={dict} primaryColor={primaryColor} colors={COLORS} />
-        ) : (
-          renderEmptyState(reportsDict.noData || 'No profit & loss data available for the selected period')
-        );
+        ) : <EmptyPanel text={noData} />;
       case 'cash-drawer':
         return cashDrawerReports.length > 0 ? (
           <CashDrawerReportView reports={cashDrawerReports} dict={dict} settings={settings} />
-        ) : (
-          renderEmptyState(reportsDict.noCashDrawerReports || 'No cash drawer reports found')
-        );
+        ) : <EmptyPanel text={reportsDict.noCashDrawerReports || 'No cash drawer reports found.'} />;
       case 'sales-journal':
         return salesJournal && salesJournal.entries.length > 0 ? (
-          <SalesJournalView data={salesJournal} dict={dict} primaryColor={primaryColor} onExport={exportSalesJournal} />
-        ) : (
-          renderEmptyState(reportsDict.noData || 'No sales journal data available for the selected period')
-        );
+          <SalesJournalView data={salesJournal} dict={dict} onExport={exportSalesJournal} />
+        ) : <EmptyPanel text={noData} />;
       case 'x-reading':
         return xReading ? (
-          <XReadingView data={xReading} dict={dict} primaryColor={primaryColor} />
-        ) : (
-          renderEmptyState(reportsDict.noData || 'No data available for the selected date')
-        );
+          <XReadingView data={xReading} dict={dict} />
+        ) : <EmptyPanel text={noData} />;
       case 'z-reading':
         return (
           <ZReadingView
             readings={zReadings}
             dict={dict}
-            primaryColor={primaryColor}
             onGenerate={handleGenerateZReading}
             generating={generatingZReading}
             settings={settings}
@@ -217,129 +308,85 @@ export default function AdminReportsPage() {
       case 'laundry':
         return laundryReport ? (
           <LaundryReportView report={laundryReport} dict={dict} primaryColor={primaryColor} colors={COLORS} />
-        ) : (
-          renderEmptyState(reportsDict.noData || 'No laundry data available for the selected period')
-        );
+        ) : <EmptyPanel text={noData} />;
       default:
         return null;
     }
   };
 
-  const laundryEnabled = supportsFeature(settings ?? undefined, 'laundryOrders');
-  const reportTabs: ReportTab[] = [
-    'sales', 'products', 'vat', 'profit-loss', 'cash-drawer', 'sales-journal', 'x-reading', 'z-reading',
-    ...(laundryEnabled ? (['laundry'] as const) : []),
-  ];
+  const reportTabs: ReportTab[] = laundryEnabled ? REPORT_TABS : REPORT_TABS.filter((tab) => tab !== 'laundry');
 
   return (
     <div className="px-4 sm:px-6 py-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 mb-1">
-          {dict.reports?.title || 'Reports & Analytics'}
-        </h1>
-        <p className="text-sm text-gray-500">
-          {dict.reports?.subtitle || 'View detailed reports and analytics for your business'}
-        </p>
-      </div>
+      <AdminPageHeader
+        title={dict.reports?.title || 'Reports & Analytics'}
+        description={dict.reports?.subtitle || 'View detailed reports and analytics for your business'}
+      />
 
-      <div className="flex flex-col lg:flex-row gap-6">
-        {/* Filters sidebar */}
-        <aside className="w-full lg:w-56 shrink-0">
-          <div className="bg-white border border-gray-300 p-4 lg:sticky lg:top-6">
-            <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">{dict.reports?.filters || 'Filters'}</h2>
-            <div className="flex flex-col gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict.reports?.startDate || 'Start Date'}
-                </label>
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 bg-white text-sm transition-all"
-                  onFocus={(e) => {
-                    e.currentTarget.style.borderColor = primaryColor;
-                    e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
-                  }}
-                  onBlur={(e) => {
-                    e.currentTarget.style.borderColor = '#d1d5db';
-                    e.currentTarget.style.boxShadow = 'none';
-                  }}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict.reports?.endDate || 'End Date'}
-                </label>
-                <input
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 bg-white text-sm transition-all"
-                  onFocus={(e) => {
-                    e.currentTarget.style.borderColor = primaryColor;
-                    e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
-                  }}
-                  onBlur={(e) => {
-                    e.currentTarget.style.borderColor = '#d1d5db';
-                    e.currentTarget.style.boxShadow = 'none';
-                  }}
-                />
-              </div>
-              {(activeTab === 'sales' || activeTab === 'laundry') && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {dict.reports?.period || 'Period'}
-                  </label>
-                  <select
-                    value={period}
-                    onChange={(e) => handlePeriodChange(e.target.value as 'daily' | 'weekly' | 'monthly')}
-                    className="w-full px-3 py-2 border border-gray-300 bg-white text-sm transition-all"
-                    onFocus={(e) => {
-                      e.currentTarget.style.borderColor = primaryColor;
-                      e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
-                    }}
-                    onBlur={(e) => {
-                      e.currentTarget.style.borderColor = '#d1d5db';
-                      e.currentTarget.style.boxShadow = 'none';
-                    }}
-                  >
-                    <option value="daily">{dict.reports?.daily || 'Daily'}</option>
-                    <option value="weekly">{dict.reports?.weekly || 'Weekly'}</option>
-                    <option value="monthly">{dict.reports?.monthly || 'Monthly'}</option>
-                  </select>
-                </div>
-              )}
-            </div>
+      <div className="space-y-4">
+        <div className="bg-white border border-gray-300 p-4 flex flex-wrap gap-3 items-end">
+          <div>
+            <label htmlFor="report-start" className={labelCls}>{dict.reports?.startDate || 'Start Date'}</label>
+            <input
+              id="report-start"
+              type="date"
+              value={startDate}
+              max={endDate || undefined}
+              onChange={(e) => setStartDate(e.target.value)}
+              className={inputCls}
+            />
           </div>
-        </aside>
+          <div>
+            <label htmlFor="report-end" className={labelCls}>{dict.reports?.endDate || 'End Date'}</label>
+            <input
+              id="report-end"
+              type="date"
+              value={endDate}
+              min={startDate || undefined}
+              onChange={(e) => setEndDate(e.target.value)}
+              className={inputCls}
+            />
+          </div>
+          {(activeTab === 'sales' || activeTab === 'laundry') && (
+            <div>
+              <label htmlFor="report-period" className={labelCls}>{dict.reports?.period || 'Period'}</label>
+              <select
+                id="report-period"
+                value={period}
+                onChange={(e) => handlePeriodChange(e.target.value as 'daily' | 'weekly' | 'monthly')}
+                className={`${inputCls} w-36 text-gray-900`}
+              >
+                <option value="daily">{dict.reports?.daily || 'Daily'}</option>
+                <option value="weekly">{dict.reports?.weekly || 'Weekly'}</option>
+                <option value="monthly">{dict.reports?.monthly || 'Monthly'}</option>
+              </select>
+            </div>
+          )}
+        </div>
 
-        {/* Tabs + Content */}
-        <div className="flex-1 min-w-0">
-          <div className="bg-white border border-gray-300 overflow-hidden">
-            <div className="border-b border-gray-200">
-              <nav className="flex overflow-x-auto" aria-label={dict?.common?.tabs || 'Tabs'}>
-                {reportTabs.map((tab) => (
-                  <button
-                    key={tab}
-                    onClick={() => setActiveTab(tab)}
-                    className={`px-5 py-3.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-                      activeTab === tab
-                        ? 'border-transparent text-gray-900'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                    }`}
-                    style={activeTab === tab ? { borderBottomColor: primaryColor, color: primaryColor } : undefined}
-                  >
-                    {dict.reports?.tabs?.[tab] || tab.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
-                  </button>
-                ))}
-              </nav>
-            </div>
-            <div className="p-5 sm:p-6">
-              {renderTabContent()}
-            </div>
+        <div className="bg-white border border-gray-300 overflow-x-auto">
+          <div className="flex" role="tablist" aria-label={dict?.common?.tabs || 'Tabs'}>
+            {reportTabs.map((tab) => {
+              const active = activeTab === tab;
+              return (
+                <button
+                  key={tab}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => setActiveTab(tab)}
+                  className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors ${
+                    active ? 'bg-brand text-white' : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  {dict.reports?.tabs?.[tab] || tab.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+                </button>
+              );
+            })}
           </div>
         </div>
+
+        <div role="tabpanel">{renderTabContent()}</div>
       </div>
     </div>
   );
@@ -354,74 +401,58 @@ function SalesReportView({ report, dict, primaryColor, colors }: { report: Sales
   ].filter((row) => row.value > 0);
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
-        <div className="p-5 sm:p-6 text-white" style={{ backgroundColor: primaryColor }}>
-          <div className="font-semibold mb-2 uppercase tracking-wide text-xs sm:text-sm text-white/80">
-            {dict.reports?.totalSales || 'Total Sales'}
-          </div>
-          <div className="text-2xl sm:text-3xl font-bold">
-            <Currency amount={report.totalSales} />
-          </div>
-        </div>
-        <div className="p-5 sm:p-6 text-white" style={{ backgroundColor: '#0f9d58' }}>
-          <div className="text-xs sm:text-sm text-white/80 font-semibold mb-2 uppercase tracking-wide">
-            {dict.reports?.totalTransactions || 'Total Transactions'}
-          </div>
-          <div className="text-2xl sm:text-3xl font-bold">{report.totalTransactions}</div>
-        </div>
-        <div className="p-5 sm:p-6 text-white" style={{ backgroundColor: '#7a3fc9' }}>
-          <div className="text-xs sm:text-sm text-white/80 font-semibold mb-2 uppercase tracking-wide">
-            {dict.reports?.averageTransaction || 'Average Transaction'}
-          </div>
-          <div className="text-2xl sm:text-3xl font-bold">
-            <Currency amount={report.averageTransaction} />
-          </div>
-        </div>
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <KpiTile label={dict.reports?.totalSales || 'Total Sales'} color="bg-brand">
+          <Currency amount={report.totalSales} />
+        </KpiTile>
+        <KpiTile label={dict.reports?.totalTransactions || 'Total Transactions'} color="bg-win8-success">
+          {report.totalTransactions.toLocaleString()}
+        </KpiTile>
+        <KpiTile label={dict.reports?.averageTransaction || 'Average Transaction'} color="bg-win8-accent">
+          <Currency amount={report.averageTransaction} />
+        </KpiTile>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {report.salesByDay && report.salesByDay.length > 0 && (
-          <div className="bg-white border border-gray-300 p-5 sm:p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-5">
-              {dict.reports?.salesByDay || 'Sales by Day'}
-            </h3>
+          <ChartPanel title={dict.reports?.salesByDay || 'Sales by Day'}>
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={report.salesByDay}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis dataKey="date" stroke="#6b7280" style={{ fontSize: '12px' }} />
-                <YAxis stroke="#6b7280" style={{ fontSize: '12px' }} />
-                <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: 0 }} />
+                <XAxis dataKey="date" {...AXIS_PROPS} />
+                <YAxis {...AXIS_PROPS} />
+                <Tooltip contentStyle={TOOLTIP_STYLE} />
                 <Legend />
                 <Line type="monotone" dataKey="sales" stroke={primaryColor} strokeWidth={2} name={dict.reports?.sales || 'Sales'} />
               </LineChart>
             </ResponsiveContainer>
-          </div>
+          </ChartPanel>
         )}
-        <div className="bg-white border border-gray-300 p-5 sm:p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-5">
-            {dict.reports?.paymentMethods || 'Payment Methods'}
-          </h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie
-                data={paymentMethodData}
-                cx="50%"
-                cy="50%"
-                labelLine={false}
-                label={({ name, percent }) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}
-                outerRadius={80}
-                fill="#8884d8"
-                dataKey="value"
-              >
-                {paymentMethodData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
-                ))}
-              </Pie>
-              <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: 0 }} />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
+        <ChartPanel title={dict.reports?.paymentMethods || 'Payment Methods'}>
+          {paymentMethodData.length === 0 ? (
+            <p className="text-sm text-gray-400 italic">{dict.reports?.noData || 'No data available for the selected period.'}</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie
+                  data={paymentMethodData}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={({ name, percent }) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}
+                  outerRadius={80}
+                  dataKey="value"
+                >
+                  {paymentMethodData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
+                  ))}
+                </Pie>
+                <Tooltip contentStyle={TOOLTIP_STYLE} />
+              </PieChart>
+            </ResponsiveContainer>
+          )}
+        </ChartPanel>
       </div>
     </div>
   );
@@ -429,41 +460,38 @@ function SalesReportView({ report, dict, primaryColor, colors }: { report: Sales
 
 function ProductPerformanceView({ data, dict, primaryColor }: { data: ProductPerformance[]; dict: any; primaryColor: string }) { // eslint-disable-line @typescript-eslint/no-explicit-any
   return (
-    <div className="space-y-6">
-      <div className="bg-white border border-gray-300 p-5 sm:p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-5">
-          {dict.reports?.topProducts || 'Top Products'}
-        </h3>
+    <div className="space-y-4">
+      <ChartPanel title={dict.reports?.topProducts || 'Top Products'}>
         <ResponsiveContainer width="100%" height={400}>
           <BarChart data={data.slice(0, 10)}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-            <XAxis dataKey="productName" angle={-45} textAnchor="end" height={100} stroke="#6b7280" style={{ fontSize: '12px' }} />
-            <YAxis stroke="#6b7280" style={{ fontSize: '12px' }} />
-            <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: 0 }} />
+            <XAxis dataKey="productName" angle={-45} textAnchor="end" height={100} {...AXIS_PROPS} />
+            <YAxis {...AXIS_PROPS} />
+            <Tooltip contentStyle={TOOLTIP_STYLE} />
             <Legend />
             <Bar dataKey="totalRevenue" fill={primaryColor} name={dict.reports?.revenue || 'Revenue'} />
           </BarChart>
         </ResponsiveContainer>
-      </div>
-      <div className="bg-white border border-gray-300 overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
+      </ChartPanel>
+      <div className="overflow-x-auto border border-gray-300 bg-white max-h-[70vh] overflow-y-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-brand-navy text-white text-xs uppercase tracking-wide sticky top-0 z-10">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.reports?.rank || 'Rank'}</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.products?.name || 'Product'}</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.reports?.quantitySold || 'Quantity Sold'}</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.reports?.totalRevenue || 'Revenue'}</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.reports?.averagePrice || 'Avg Price'}</th>
+              <th className={thCls}>{dict.reports?.rank || 'Rank'}</th>
+              <th className={thCls}>{dict.products?.name || 'Product'}</th>
+              <th className={thRight}>{dict.reports?.quantitySold || 'Quantity Sold'}</th>
+              <th className={thRight}>{dict.reports?.totalRevenue || 'Revenue'}</th>
+              <th className={thRight}>{dict.reports?.averagePrice || 'Avg Price'}</th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
+          <tbody className="divide-y divide-gray-200">
             {data.map((product, index) => (
-              <tr key={product.productId || `product-${index}`}>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">#{product.rank}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{product.productName}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{product.quantitySold}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900"><Currency amount={product.totalRevenue} /></td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500"><Currency amount={product.averagePrice} /></td>
+              <tr key={product.productId || `product-${index}`} className="hover:bg-gray-100 transition-colors">
+                <td className="px-4 py-3 whitespace-nowrap font-medium text-gray-500 tabular-nums">#{product.rank}</td>
+                <td className="px-4 py-3 font-medium text-gray-900">{product.productName}</td>
+                <td className="px-4 py-3 whitespace-nowrap text-right tabular-nums text-gray-700">{product.quantitySold.toLocaleString()}</td>
+                <td className="px-4 py-3 whitespace-nowrap text-right tabular-nums font-medium text-gray-900"><Currency amount={product.totalRevenue} /></td>
+                <td className="px-4 py-3 whitespace-nowrap text-right tabular-nums text-gray-700"><Currency amount={product.averagePrice} /></td>
               </tr>
             ))}
           </tbody>
@@ -478,116 +506,84 @@ function LaundryReportView({ report, dict, primaryColor, colors }: { report: Lau
     name: (dict.admin?.[status] as string) || status.replace(/_/g, ' '),
     value: count,
   }));
+  const pricingData = [
+    { name: dict.admin?.perItem || 'Per Item', value: report.revenueByPricingMethod.item },
+    { name: dict.admin?.perWeight || 'Per Weight', value: report.revenueByPricingMethod.weight },
+  ].filter((row) => row.value > 0);
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
-        <div className="p-5 sm:p-6 text-white" style={{ backgroundColor: primaryColor }}>
-          <div className="font-semibold mb-2 uppercase tracking-wide text-xs sm:text-sm text-white/80">
-            {dict.reports?.totalOrders || 'Total Orders'}
-          </div>
-          <div className="text-2xl sm:text-3xl font-bold">{report.totalOrders}</div>
-        </div>
-        <div className="p-5 sm:p-6 text-white" style={{ backgroundColor: '#0f9d58' }}>
-          <div className="text-xs sm:text-sm text-white/80 font-semibold mb-2 uppercase tracking-wide">
-            {dict.reports?.totalRevenue || 'Total Revenue'}
-          </div>
-          <div className="text-2xl sm:text-3xl font-bold">
-            <Currency amount={report.totalRevenue} />
-          </div>
-        </div>
-        <div className="p-5 sm:p-6 text-white" style={{ backgroundColor: '#7a3fc9' }}>
-          <div className="text-xs sm:text-sm text-white/80 font-semibold mb-2 uppercase tracking-wide">
-            {dict.reports?.averageTurnaround || 'Average Turnaround'}
-          </div>
-          <div className="text-2xl sm:text-3xl font-bold">
-            {report.averageTurnaroundHours !== null ? `${report.averageTurnaroundHours.toFixed(1)}h` : '—'}
-          </div>
-        </div>
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <KpiTile label={dict.reports?.totalOrders || 'Total Orders'} color="bg-brand">
+          {report.totalOrders.toLocaleString()}
+        </KpiTile>
+        <KpiTile label={dict.reports?.totalRevenue || 'Total Revenue'} color="bg-win8-success">
+          <Currency amount={report.totalRevenue} />
+        </KpiTile>
+        <KpiTile label={dict.reports?.averageTurnaround || 'Average Turnaround'} color="bg-win8-accent">
+          {report.averageTurnaroundHours !== null ? `${report.averageTurnaroundHours.toFixed(1)}h` : '—'}
+        </KpiTile>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-        <div className="bg-white border border-gray-300 p-5 sm:p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-5">
-            {dict.reports?.ordersByStatus || 'Orders by Status'}
-          </h3>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <ChartPanel title={dict.reports?.ordersByStatus || 'Orders by Status'}>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={statusData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis dataKey="name" stroke="#6b7280" style={{ fontSize: '12px' }} />
-              <YAxis stroke="#6b7280" style={{ fontSize: '12px' }} />
-              <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: 0 }} />
+              <XAxis dataKey="name" {...AXIS_PROPS} />
+              <YAxis {...AXIS_PROPS} />
+              <Tooltip contentStyle={TOOLTIP_STYLE} />
               <Bar dataKey="value" fill={primaryColor} name={dict.reports?.orders || 'Orders'} />
             </BarChart>
           </ResponsiveContainer>
-        </div>
-        <div className="bg-white border border-gray-300 p-5 sm:p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-5">
-            {dict.reports?.revenueByPricingMethod || 'Revenue by Pricing Method'}
-          </h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie
-                data={[
-                  { name: dict.admin?.perItem || 'Per Item', value: report.revenueByPricingMethod.item },
-                  { name: dict.admin?.perWeight || 'Per Weight', value: report.revenueByPricingMethod.weight },
-                ].filter((row) => row.value > 0)}
-                cx="50%"
-                cy="50%"
-                labelLine={false}
-                label={({ name, percent }) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}
-                outerRadius={80}
-                fill="#8884d8"
-                dataKey="value"
-              >
-                {[0, 1].map((index) => (
-                  <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
-                ))}
-              </Pie>
-              <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: 0 }} />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
+        </ChartPanel>
+        <ChartPanel title={dict.reports?.revenueByPricingMethod || 'Revenue by Pricing Method'}>
+          {pricingData.length === 0 ? (
+            <p className="text-sm text-gray-400 italic">{dict.reports?.noData || 'No data available for the selected period.'}</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie
+                  data={pricingData}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={({ name, percent }) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}
+                  outerRadius={80}
+                  dataKey="value"
+                >
+                  {pricingData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
+                  ))}
+                </Pie>
+                <Tooltip contentStyle={TOOLTIP_STYLE} />
+              </PieChart>
+            </ResponsiveContainer>
+          )}
+        </ChartPanel>
       </div>
     </div>
   );
 }
 
-function VATReportView({ report, dict, primaryColor }: { report: VATReport; dict: any; primaryColor: string }) { // eslint-disable-line @typescript-eslint/no-explicit-any
+function VATReportView({ report, dict, colors }: { report: VATReport; dict: any; colors: string[] }) { // eslint-disable-line @typescript-eslint/no-explicit-any
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-        <div className="p-5 sm:p-6 text-white" style={{ backgroundColor: primaryColor }}>
-          <div className="font-semibold mb-2 uppercase tracking-wide text-xs sm:text-sm text-white/80">
-            {dict.reports?.vatSales || 'VAT Sales'}
-          </div>
-          <div className="text-2xl sm:text-3xl font-bold">
-            <Currency amount={report.vatSales} />
-          </div>
-        </div>
-        <div className="p-5 sm:p-6 text-white" style={{ backgroundColor: '#0f9d58' }}>
-          <div className="text-xs sm:text-sm text-white/80 font-semibold mb-2 uppercase tracking-wide">
-            {dict.reports?.nonVatSales || 'Non-VAT Sales'}
-          </div>
-          <div className="text-2xl sm:text-3xl font-bold"><Currency amount={report.nonVatSales} /></div>
-        </div>
-        <div className="p-5 sm:p-6 text-white" style={{ backgroundColor: '#7a3fc9' }}>
-          <div className="text-xs sm:text-sm text-white/80 font-semibold mb-2 uppercase tracking-wide">
-            {dict.reports?.vatAmount || 'VAT Amount'}
-          </div>
-          <div className="text-2xl sm:text-3xl font-bold"><Currency amount={report.vatAmount} /></div>
-        </div>
-        <div className="p-5 sm:p-6 text-white" style={{ backgroundColor: '#e3a008' }}>
-          <div className="text-xs sm:text-sm text-white/80 font-semibold mb-2 uppercase tracking-wide">
-            {dict.reports?.vatRate || 'VAT Rate'}
-          </div>
-          <div className="text-2xl sm:text-3xl font-bold">{report.vatRate}%</div>
-        </div>
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <KpiTile label={dict.reports?.vatSales || 'VAT Sales'} color="bg-brand">
+          <Currency amount={report.vatSales} />
+        </KpiTile>
+        <KpiTile label={dict.reports?.nonVatSales || 'Non-VAT Sales'} color="bg-win8-success">
+          <Currency amount={report.nonVatSales} />
+        </KpiTile>
+        <KpiTile label={dict.reports?.vatAmount || 'VAT Amount'} color="bg-win8-accent">
+          <Currency amount={report.vatAmount} />
+        </KpiTile>
+        <KpiTile label={dict.reports?.vatRate || 'VAT Rate'} color="bg-brand-navy">
+          {report.vatRate}%
+        </KpiTile>
       </div>
-      <div className="bg-white border border-gray-300 p-5 sm:p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-5">
-          {dict.reports?.vatBreakdown || 'VAT Breakdown'}
-        </h3>
+      <ChartPanel title={dict.reports?.vatBreakdown || 'VAT Breakdown'}>
         <ResponsiveContainer width="100%" height={300}>
           <PieChart>
             <Pie
@@ -600,16 +596,15 @@ function VATReportView({ report, dict, primaryColor }: { report: VATReport; dict
               labelLine={false}
               label={({ name, percent }) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}
               outerRadius={80}
-              fill="#8884d8"
               dataKey="value"
             >
-              <Cell fill={primaryColor} />
-              <Cell fill="#10b981" />
+              <Cell fill={colors[0]} />
+              <Cell fill={colors[1]} />
             </Pie>
-            <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: 0 }} />
+            <Tooltip contentStyle={TOOLTIP_STYLE} />
           </PieChart>
         </ResponsiveContainer>
-      </div>
+      </ChartPanel>
     </div>
   );
 }
@@ -619,42 +614,26 @@ function ProfitLossView({ summary, dict, primaryColor, colors }: { summary: Prof
     name: cat.category,
     value: cat.amount,
   }));
+  const profitable = summary.netProfit >= 0;
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-        <div className="p-5 sm:p-6 text-white" style={{ backgroundColor: '#0f9d58' }}>
-          <div className="text-xs sm:text-sm text-white/80 font-semibold mb-2 uppercase tracking-wide">
-            {dict.reports?.totalRevenue || 'Total Revenue'}
-          </div>
-          <div className="text-2xl sm:text-3xl font-bold"><Currency amount={summary.revenue.total} /></div>
-        </div>
-        <div className="p-5 sm:p-6 text-white" style={{ backgroundColor: '#c0392b' }}>
-          <div className="text-xs sm:text-sm text-white/80 font-semibold mb-2 uppercase tracking-wide">
-            {dict.reports?.totalExpenses || 'Total Expenses'}
-          </div>
-          <div className="text-2xl sm:text-3xl font-bold"><Currency amount={summary.expenses.total} /></div>
-        </div>
-        <div className="p-5 sm:p-6 text-white" style={{ backgroundColor: primaryColor }}>
-          <div className="font-semibold mb-2 uppercase tracking-wide text-xs sm:text-sm text-white/80">
-            {dict.reports?.netProfit || 'Net Profit'}
-          </div>
-          <div className="text-2xl sm:text-3xl font-bold">
-            <Currency amount={summary.netProfit} />
-          </div>
-        </div>
-        <div className="p-5 sm:p-6 text-white" style={{ backgroundColor: '#7a3fc9' }}>
-          <div className="text-xs sm:text-sm text-white/80 font-semibold mb-2 uppercase tracking-wide">
-            {dict.reports?.profitMargin || 'Profit Margin'}
-          </div>
-          <div className="text-2xl sm:text-3xl font-bold">{summary.profitMargin.toFixed(2)}%</div>
-        </div>
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <KpiTile label={dict.reports?.totalRevenue || 'Total Revenue'} color="bg-win8-success">
+          <Currency amount={summary.revenue.total} />
+        </KpiTile>
+        <KpiTile label={dict.reports?.totalExpenses || 'Total Expenses'} color="bg-win8-danger">
+          <Currency amount={summary.expenses.total} />
+        </KpiTile>
+        <KpiTile label={dict.reports?.netProfit || 'Net Profit'} color={profitable ? 'bg-brand' : 'bg-win8-danger'}>
+          <Currency amount={summary.netProfit} />
+        </KpiTile>
+        <KpiTile label={dict.reports?.profitMargin || 'Profit Margin'} color="bg-win8-accent">
+          {summary.profitMargin.toFixed(2)}%
+        </KpiTile>
       </div>
 
-      <div className="bg-white border border-gray-300 p-5 sm:p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-5">
-          {dict.reports?.revenueByPaymentMethod || 'Revenue by Payment Method'}
-        </h3>
+      <ChartPanel title={dict.reports?.revenueByPaymentMethod || 'Revenue by Payment Method'}>
         <ResponsiveContainer width="100%" height={300}>
           <BarChart data={[
             { name: dict.pos?.cash || 'Cash', value: summary.revenue.cash },
@@ -662,19 +641,16 @@ function ProfitLossView({ summary, dict, primaryColor, colors }: { summary: Prof
             { name: dict.pos?.digital || 'Digital', value: summary.revenue.digital },
           ]}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-            <XAxis dataKey="name" stroke="#6b7280" style={{ fontSize: '12px' }} />
-            <YAxis stroke="#6b7280" style={{ fontSize: '12px' }} />
-            <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: 0 }} />
+            <XAxis dataKey="name" {...AXIS_PROPS} />
+            <YAxis {...AXIS_PROPS} />
+            <Tooltip contentStyle={TOOLTIP_STYLE} />
             <Bar dataKey="value" fill={primaryColor} />
           </BarChart>
         </ResponsiveContainer>
-      </div>
+      </ChartPanel>
 
       {expenseData.length > 0 && (
-        <div className="bg-white border border-gray-300 p-5 sm:p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-5">
-            {dict.reports?.expensesByCategory || 'Expenses by Category'}
-          </h3>
+        <ChartPanel title={dict.reports?.expensesByCategory || 'Expenses by Category'}>
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>
               <Pie
@@ -684,17 +660,16 @@ function ProfitLossView({ summary, dict, primaryColor, colors }: { summary: Prof
                 labelLine={false}
                 label={({ name, percent }) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}
                 outerRadius={80}
-                fill="#8884d8"
                 dataKey="value"
               >
                 {expenseData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
                 ))}
               </Pie>
-              <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: 0 }} />
+              <Tooltip contentStyle={TOOLTIP_STYLE} />
             </PieChart>
           </ResponsiveContainer>
-        </div>
+        </ChartPanel>
       )}
     </div>
   );
@@ -712,49 +687,46 @@ function CashDrawerReportView({ reports, dict, settings }: { reports: CashDrawer
   const totalPages = Math.max(1, Math.ceil(reports.length / CASH_DRAWER_PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
   const pagedReports = reports.slice((currentPage - 1) * CASH_DRAWER_PAGE_SIZE, currentPage * CASH_DRAWER_PAGE_SIZE);
+  const fmtSettings = settings || getDefaultTenantSettings();
 
   return (
-    <div className="space-y-6">
-      <div className="bg-white border border-gray-300 overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
+    <div className="border border-gray-300 bg-white">
+      <div className="overflow-x-auto max-h-[70vh] overflow-y-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-brand-navy text-white text-xs uppercase tracking-wide sticky top-0 z-10">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.reports?.openingTime || 'Opening Time'}</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.reports?.closingTime || 'Closing Time'}</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.reports?.openingAmount || 'Opening'}</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.reports?.expectedAmount || 'Expected'}</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.reports?.closingAmount || 'Closing'}</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.reports?.shortage || 'Shortage'}</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.reports?.overage || 'Overage'}</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.reports?.status || 'Status'}</th>
+              <th className={thCls}>{dict.reports?.openingTime || 'Opening Time'}</th>
+              <th className={thCls}>{dict.reports?.closingTime || 'Closing Time'}</th>
+              <th className={thRight}>{dict.reports?.openingAmount || 'Opening'}</th>
+              <th className={thRight}>{dict.reports?.expectedAmount || 'Expected'}</th>
+              <th className={thRight}>{dict.reports?.closingAmount || 'Closing'}</th>
+              <th className={thRight}>{dict.reports?.shortage || 'Shortage'}</th>
+              <th className={thRight}>{dict.reports?.overage || 'Overage'}</th>
+              <th className={thCls}>{dict.reports?.status || 'Status'}</th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
+          <tbody className="divide-y divide-gray-200">
             {pagedReports.map((report, index) => (
-              <tr key={report.sessionId || `session-${index}`}>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatDateTime(report.openingTime, settings || getDefaultTenantSettings())}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {report.closingTime ? formatDateTime(report.closingTime, settings || getDefaultTenantSettings()) : '-'}
+              <tr key={report.sessionId || `session-${index}`} className="hover:bg-gray-100 transition-colors">
+                <td className="px-4 py-3 whitespace-nowrap text-gray-900">{formatDateTime(report.openingTime, fmtSettings)}</td>
+                <td className="px-4 py-3 whitespace-nowrap text-gray-700">
+                  {report.closingTime ? formatDateTime(report.closingTime, fmtSettings) : '—'}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900"><Currency amount={report.openingAmount} /></td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {report.expectedAmount ? <Currency amount={report.expectedAmount} /> : '-'}
+                <td className="px-4 py-3 whitespace-nowrap text-right tabular-nums text-gray-900"><Currency amount={report.openingAmount} /></td>
+                <td className="px-4 py-3 whitespace-nowrap text-right tabular-nums text-gray-900">
+                  {report.expectedAmount ? <Currency amount={report.expectedAmount} /> : '—'}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {report.closingAmount ? <Currency amount={report.closingAmount} /> : '-'}
+                <td className="px-4 py-3 whitespace-nowrap text-right tabular-nums text-gray-900">
+                  {report.closingAmount ? <Currency amount={report.closingAmount} /> : '—'}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600">
-                  {report.shortage ? <Currency amount={report.shortage} /> : '-'}
+                <td className="px-4 py-3 whitespace-nowrap text-right tabular-nums">
+                  {report.shortage ? <span className="font-semibold text-win8-danger"><Currency amount={report.shortage} /></span> : <span className="text-gray-400">—</span>}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600">
-                  {report.overage ? <Currency amount={report.overage} /> : '-'}
+                <td className="px-4 py-3 whitespace-nowrap text-right tabular-nums">
+                  {report.overage ? <span className="font-semibold text-win8-success"><Currency amount={report.overage} /></span> : <span className="text-gray-400">—</span>}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`px-2 py-1 text-xs font-medium border ${
-                    report.status === 'closed'
-                      ? 'bg-green-100 text-green-800 border-green-300'
-                      : 'bg-yellow-100 text-yellow-800 border-yellow-300'
-                  }`}>
+                <td className="px-4 py-3 whitespace-nowrap">
+                  <span className={`px-2 py-0.5 text-xs font-semibold capitalize ${CASH_DRAWER_STATUS_BADGE[report.status] || 'bg-gray-500 text-white'}`}>
                     {report.status}
                   </span>
                 </td>
@@ -763,138 +735,138 @@ function CashDrawerReportView({ reports, dict, settings }: { reports: CashDrawer
           </tbody>
         </table>
       </div>
-      {totalPages > 1 && (
-        <div className="flex justify-center gap-2">
-          <button
-            onClick={() => setPage(p => Math.max(1, p - 1))}
-            disabled={currentPage === 1}
-            className="px-4 py-2 border border-gray-300 disabled:opacity-50 bg-white"
-          >
-            {dict.transactions?.previous || dict.common?.previous || 'Previous'}
-          </button>
-          <span className="px-4 py-2 text-sm text-gray-700">
-            {dict.transactions?.page || dict.admin?.page || 'Page'} {currentPage} {dict.transactions?.of || dict.admin?.of || 'of'} {totalPages}
-          </span>
-          <button
-            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-            disabled={currentPage === totalPages}
-            className="px-4 py-2 border border-gray-300 disabled:opacity-50 bg-white"
-          >
-            {dict.transactions?.next || dict.common?.next || 'Next'}
-          </button>
+      <Pagination
+        page={currentPage}
+        totalPages={totalPages}
+        total={reports.length}
+        pageSize={CASH_DRAWER_PAGE_SIZE}
+        onPage={setPage}
+        dict={dict}
+      />
+    </div>
+  );
+}
+
+function XReadingView({ data, dict }: { data: XReadingData; dict: any }) { // eslint-disable-line @typescript-eslint/no-explicit-any
+  const rows: Array<[string, React.ReactNode]> = [
+    [dict.reports?.vatableSales || 'VATable Sales', <Currency key="v" amount={data.vatableSales} />],
+    [dict.reports?.vatAmount || 'VAT Amount', <Currency key="va" amount={data.vatAmount} />],
+    [dict.reports?.vatExemptSales || 'VAT-Exempt Sales', <Currency key="ve" amount={data.vatExemptSales} />],
+    [dict.reports?.zeroRatedSales || 'Zero-Rated Sales', <Currency key="z" amount={data.zeroRatedSales} />],
+    [dict.reports?.totalDiscounts || 'Total Discounts', <Currency key="d" amount={data.discountTotal} />],
+    [dict.reports?.voidedTransactions || 'Voided/Refunded Transactions', data.voidCount.toLocaleString()],
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-brand-soft border border-brand p-4 text-sm text-brand-navy">
+        {dict.reports?.xReadingDesc || 'A repeatable shift/day sales summary. Does not reset or lock any totals — safe to run any time.'}
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <KpiTile label={dict.reports?.grossSales || 'Gross Sales (Today)'} color="bg-brand">
+          <Currency amount={data.grossSales} />
+        </KpiTile>
+        <KpiTile label={dict.reports?.totalTransactions || 'Transactions'} color="bg-win8-success">
+          {data.transactionCount.toLocaleString()}
+        </KpiTile>
+        <KpiTile
+          label={dict.reports?.currentGrandTotal || 'Current Grand Total (all-time)'}
+          color="bg-win8-accent"
+          sub={<span className="font-mono">GT: {formatGrandTotalRegister(data.currentGrandTotal)}</span>}
+        >
+          <Currency amount={data.currentGrandTotal} />
+        </KpiTile>
+      </div>
+      <div className="bg-white border border-gray-300">
+        <table className="w-full text-sm">
+          <tbody className="divide-y divide-gray-200">
+            {rows.map(([label, value]) => (
+              <tr key={label}>
+                <td className="px-4 py-3 text-gray-500">{label}</td>
+                <td className="px-4 py-3 text-right tabular-nums font-medium text-gray-900">{value}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function ZReadingView({ readings, dict, onGenerate, generating, settings, canGenerate }: { readings: ZReadingRecord[]; dict: any; onGenerate: () => void; generating: boolean; settings: ReturnType<typeof useTenantSettings>['settings']; canGenerate: boolean }) { // eslint-disable-line @typescript-eslint/no-explicit-any
+  const fmtSettings = settings || getDefaultTenantSettings();
+
+  return (
+    <div className="space-y-4">
+      <section className="bg-white border border-gray-300">
+        <div className="px-6 py-4 border-b border-gray-300 flex items-center justify-between gap-4 flex-wrap">
+          <div>
+            <h2 className="text-base font-bold text-gray-900">{dict.reports?.tabs?.['z-reading'] || 'Z-Reading'}</h2>
+            <p className="text-sm text-gray-500">{dict.reports?.zReadingSubtitle || 'Official end-of-day sales report'}</p>
+          </div>
+          {canGenerate && (
+            <button
+              type="button"
+              onClick={onGenerate}
+              disabled={generating}
+              className="px-4 py-2 bg-win8-danger text-white text-sm font-medium hover:brightness-110 disabled:opacity-50 transition-[filter]"
+            >
+              {generating
+                ? (dict.reports?.generating || 'Generating…')
+                : (dict.reports?.generateZReading || 'Generate Z-Reading for Today')}
+            </button>
+          )}
+        </div>
+        <div className="p-6">
+          <div className="p-3 bg-white border border-win8-danger text-win8-danger text-sm">
+            {dict.reports?.zReadingDesc || 'The official end-of-day sales report. Generating one locks in today\'s totals against the Grand Total accumulator — only one can be generated per business day.'}
+          </div>
+        </div>
+      </section>
+
+      {readings.length === 0 ? (
+        <EmptyPanel text={dict.reports?.noZReadings || 'No Z-Readings generated yet.'} />
+      ) : (
+        <div className="overflow-x-auto border border-gray-300 bg-white max-h-[70vh] overflow-y-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-brand-navy text-white text-xs uppercase tracking-wide sticky top-0 z-10">
+              <tr>
+                <th className={thCls}>{dict.reports?.date || 'Date'}</th>
+                <th className={thRight}>{dict.reports?.beginningGT || 'Beginning GT'}</th>
+                <th className={thRight}>{dict.reports?.endingGT || 'Ending GT'}</th>
+                <th className={thRight}>{dict.reports?.grossSales || 'Gross Sales'}</th>
+                <th className={thRight}>{dict.reports?.vatAmount || 'VAT'}</th>
+                <th className={thRight}>{dict.reports?.totalTransactions || 'Txns'}</th>
+                <th className={thCls}>{dict.reports?.generatedBy || 'Generated By'}</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {readings.map((r) => (
+                <tr key={r.id} className="hover:bg-gray-100 transition-colors">
+                  <td className="px-4 py-3 whitespace-nowrap font-medium text-gray-900">{formatTenantDate(r.businessDate, fmtSettings)}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-right tabular-nums text-gray-700"><Currency amount={r.beginningGT} /></td>
+                  <td className="px-4 py-3 whitespace-nowrap text-right tabular-nums font-medium text-gray-900"><Currency amount={r.endingGT} /></td>
+                  <td className="px-4 py-3 whitespace-nowrap text-right tabular-nums text-gray-900"><Currency amount={r.grossSales} /></td>
+                  <td className="px-4 py-3 whitespace-nowrap text-right tabular-nums text-gray-700"><Currency amount={r.vatAmount} /></td>
+                  <td className="px-4 py-3 whitespace-nowrap text-right tabular-nums text-gray-700">{r.transactionCount.toLocaleString()}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-gray-700">
+                    {typeof r.generatedBy === 'object' && r.generatedBy?.name ? r.generatedBy.name : '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
   );
 }
 
-function XReadingView({ data, dict, primaryColor }: { data: XReadingData; dict: any; primaryColor: string }) { // eslint-disable-line @typescript-eslint/no-explicit-any
-  return (
-    <div className="space-y-6">
-      <p className="text-sm text-gray-500">
-        {dict.reports?.xReadingDesc || 'A repeatable shift/day sales summary. Does not reset or lock any totals — safe to run any time.'}
-      </p>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
-        <div className="p-5 sm:p-6 text-white" style={{ backgroundColor: primaryColor }}>
-          <div className="font-semibold mb-2 uppercase tracking-wide text-xs sm:text-sm text-white/80">
-            {dict.reports?.grossSales || 'Gross Sales (Today)'}
-          </div>
-          <div className="text-2xl sm:text-3xl font-bold"><Currency amount={data.grossSales} /></div>
-        </div>
-        <div className="p-5 sm:p-6 text-white" style={{ backgroundColor: '#0f9d58' }}>
-          <div className="text-xs sm:text-sm text-white/80 font-semibold mb-2 uppercase tracking-wide">
-            {dict.reports?.totalTransactions || 'Transactions'}
-          </div>
-          <div className="text-2xl sm:text-3xl font-bold">{data.transactionCount}</div>
-        </div>
-        <div className="p-5 sm:p-6 text-white" style={{ backgroundColor: '#7a3fc9' }}>
-          <div className="text-xs sm:text-sm text-white/80 font-semibold mb-2 uppercase tracking-wide">
-            {dict.reports?.currentGrandTotal || 'Current Grand Total (all-time)'}
-          </div>
-          <div className="text-2xl sm:text-3xl font-bold"><Currency amount={data.currentGrandTotal} /></div>
-          <div className="text-xs text-white/70 font-mono mt-1">GT: {formatGrandTotalRegister(data.currentGrandTotal)}</div>
-        </div>
-      </div>
-      <div className="bg-white border border-gray-300 overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <tbody className="divide-y divide-gray-200">
-            <tr><td className="px-6 py-3 text-sm text-gray-500">{dict.reports?.vatableSales || 'VATable Sales'}</td><td className="px-6 py-3 text-sm text-right text-gray-900"><Currency amount={data.vatableSales} /></td></tr>
-            <tr><td className="px-6 py-3 text-sm text-gray-500">{dict.reports?.vatAmount || 'VAT Amount'}</td><td className="px-6 py-3 text-sm text-right text-gray-900"><Currency amount={data.vatAmount} /></td></tr>
-            <tr><td className="px-6 py-3 text-sm text-gray-500">{dict.reports?.vatExemptSales || 'VAT-Exempt Sales'}</td><td className="px-6 py-3 text-sm text-right text-gray-900"><Currency amount={data.vatExemptSales} /></td></tr>
-            <tr><td className="px-6 py-3 text-sm text-gray-500">{dict.reports?.zeroRatedSales || 'Zero-Rated Sales'}</td><td className="px-6 py-3 text-sm text-right text-gray-900"><Currency amount={data.zeroRatedSales} /></td></tr>
-            <tr><td className="px-6 py-3 text-sm text-gray-500">{dict.reports?.totalDiscounts || 'Total Discounts'}</td><td className="px-6 py-3 text-sm text-right text-gray-900"><Currency amount={data.discountTotal} /></td></tr>
-            <tr><td className="px-6 py-3 text-sm text-gray-500">{dict.reports?.voidedTransactions || 'Voided/Refunded Transactions'}</td><td className="px-6 py-3 text-sm text-right text-gray-900">{data.voidCount}</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-function ZReadingView({ readings, dict, primaryColor, onGenerate, generating, settings, canGenerate }: { readings: ZReadingRecord[]; dict: any; primaryColor: string; onGenerate: () => void; generating: boolean; settings: ReturnType<typeof useTenantSettings>['settings']; canGenerate: boolean }) { // eslint-disable-line @typescript-eslint/no-explicit-any
-  return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <p className="text-sm text-gray-500 max-w-2xl">
-          {dict.reports?.zReadingDesc || 'The official end-of-day sales report. Generating one locks in today\'s totals against the Grand Total accumulator — only one can be generated per business day.'}
-        </p>
-        {canGenerate && (
-          <button
-            onClick={onGenerate}
-            disabled={generating}
-            className="shrink-0 px-4 py-2 text-sm font-medium text-white transition-colors disabled:opacity-50"
-            style={{ backgroundColor: primaryColor }}
-          >
-            {generating ? (dict.common?.loading || 'Generating...') : (dict.reports?.generateZReading || 'Generate Z-Reading for Today')}
-          </button>
-        )}
-      </div>
-      <div className="bg-white border border-gray-300 overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.reports?.date || 'Date'}</th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">{dict.reports?.beginningGT || 'Beginning GT'}</th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">{dict.reports?.endingGT || 'Ending GT'}</th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">{dict.reports?.grossSales || 'Gross Sales'}</th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">{dict.reports?.vatAmount || 'VAT'}</th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">{dict.reports?.totalTransactions || 'Txns'}</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.reports?.generatedBy || 'Generated By'}</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {readings.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-sm text-gray-500">
-                  {dict.reports?.noZReadings || 'No Z-Readings generated yet'}
-                </td>
-              </tr>
-            ) : (
-              readings.map((r) => (
-                <tr key={r.id}>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{formatTenantDate(r.businessDate, settings || getDefaultTenantSettings())}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-500"><Currency amount={r.beginningGT} /></td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900 font-medium"><Currency amount={r.endingGT} /></td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900"><Currency amount={r.grossSales} /></td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-500"><Currency amount={r.vatAmount} /></td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-500">{r.transactionCount}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                    {typeof r.generatedBy === 'object' ? r.generatedBy?.name : '-'}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
 const SALES_JOURNAL_PAGE_SIZE = 10;
 
-function SalesJournalView({ data, dict, primaryColor, onExport }: { data: SalesJournalData; dict: any; primaryColor: string; onExport: (format: 'csv' | 'excel' | 'pdf') => void }) { // eslint-disable-line @typescript-eslint/no-explicit-any
+function SalesJournalView({ data, dict, onExport }: { data: SalesJournalData; dict: any; onExport: (format: 'csv' | 'excel' | 'pdf') => Promise<void> }) { // eslint-disable-line @typescript-eslint/no-explicit-any
   const [page, setPage] = useState(1);
+  const [exporting, setExporting] = useState<'csv' | 'excel' | 'pdf' | null>(null);
   const [prevEntries, setPrevEntries] = useState(data.entries);
   if (data.entries !== prevEntries) {
     setPrevEntries(data.entries);
@@ -904,120 +876,112 @@ function SalesJournalView({ data, dict, primaryColor, onExport }: { data: SalesJ
   const currentPage = Math.min(page, totalPages);
   const pagedEntries = data.entries.slice((currentPage - 1) * SALES_JOURNAL_PAGE_SIZE, currentPage * SALES_JOURNAL_PAGE_SIZE);
 
+  const runExport = async (format: 'csv' | 'excel' | 'pdf') => {
+    setExporting(format);
+    try {
+      await onExport(format);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : (dict.reports?.exportFailed || 'Export failed'));
+    } finally {
+      setExporting(null);
+    }
+  };
+
+  const exportLabel = (format: 'csv' | 'excel' | 'pdf', label: string) =>
+    exporting === format ? (dict.reports?.exporting || 'Exporting…') : label;
+
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 sm:gap-6">
-        <div className="p-5 sm:p-6 text-white" style={{ backgroundColor: primaryColor }}>
-          <div className="font-semibold mb-2 uppercase tracking-wide text-xs sm:text-sm text-white/80">
-            {dict.reports?.totalTransactions || 'Transactions'}
-          </div>
-          <div className="text-2xl sm:text-3xl font-bold">{data.summary.totalTransactions}</div>
-        </div>
-        <div className="p-5 sm:p-6 text-white" style={{ backgroundColor: '#0f9d58' }}>
-          <div className="text-xs sm:text-sm text-white/80 font-semibold mb-2 uppercase tracking-wide">
-            {dict.reports?.totalSales || 'Total Sales'}
-          </div>
-          <div className="text-2xl sm:text-3xl font-bold"><Currency amount={data.summary.totalSales} /></div>
-        </div>
-        <div className="p-5 sm:p-6 text-white" style={{ backgroundColor: '#7a3fc9' }}>
-          <div className="text-xs sm:text-sm text-white/80 font-semibold mb-2 uppercase tracking-wide">
-            {dict.reports?.totalTax || 'Total Tax'}
-          </div>
-          <div className="text-2xl sm:text-3xl font-bold"><Currency amount={data.summary.totalTax} /></div>
-        </div>
-        <div className="p-5 sm:p-6 text-white" style={{ backgroundColor: '#e3a008' }}>
-          <div className="text-xs sm:text-sm text-white/80 font-semibold mb-2 uppercase tracking-wide">
-            {dict.reports?.totalDiscounts || 'Total Discounts'}
-          </div>
-          <div className="text-2xl sm:text-3xl font-bold"><Currency amount={data.summary.totalDiscounts} /></div>
-        </div>
-        <div className="p-5 sm:p-6 text-white" style={{ backgroundColor: '#c0392b' }}>
-          <div className="text-xs sm:text-sm text-white/80 font-semibold mb-2 uppercase tracking-wide">
-            {dict.reports?.totalTaxExempt || 'Tax Exempt'}
-          </div>
-          <div className="text-2xl sm:text-3xl font-bold"><Currency amount={data.summary.totalTaxExempt} /></div>
-        </div>
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+        <KpiTile label={dict.reports?.totalTransactions || 'Transactions'} color="bg-brand">
+          {data.summary.totalTransactions.toLocaleString()}
+        </KpiTile>
+        <KpiTile label={dict.reports?.totalSales || 'Total Sales'} color="bg-win8-success">
+          <Currency amount={data.summary.totalSales} />
+        </KpiTile>
+        <KpiTile label={dict.reports?.totalTax || 'Total Tax'} color="bg-win8-accent">
+          <Currency amount={data.summary.totalTax} />
+        </KpiTile>
+        <KpiTile label={dict.reports?.totalDiscounts || 'Total Discounts'} color="bg-win8-warning">
+          <Currency amount={data.summary.totalDiscounts} />
+        </KpiTile>
+        <KpiTile label={dict.reports?.totalTaxExempt || 'Tax Exempt'} color="bg-win8-info">
+          <Currency amount={data.summary.totalTaxExempt} />
+        </KpiTile>
       </div>
 
-      <div className="flex gap-3">
-        <button onClick={() => onExport('csv')} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 transition-colors">
-          {dict.reports?.exportCSV || 'Export CSV'}
-        </button>
-        <button onClick={() => onExport('excel')} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 transition-colors">
-          {dict.reports?.exportExcel || 'Export Excel'}
-        </button>
-        <button onClick={() => onExport('pdf')} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 transition-colors">
-          {dict.reports?.exportPDF || 'Export PDF'}
-        </button>
-      </div>
-
-      <div className="bg-white border border-gray-300 overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.reports?.receiptNo || 'Receipt #'}</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.reports?.date || 'Date'}</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.reports?.time || 'Time'}</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.reports?.items || 'Items'}</th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">{dict.reports?.subtotal || 'Subtotal'}</th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">{dict.reports?.discount || 'Discount'}</th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">{dict.reports?.tax || 'Tax'}</th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">{dict.reports?.total || 'Total'}</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.reports?.payment || 'Payment'}</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.reports?.status || 'Status'}</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {pagedEntries.map((entry, index) => (
-              <tr key={entry.receiptNumber || `journal-${index}`}>
-                <td className="px-4 py-3 whitespace-nowrap text-sm font-mono text-gray-900">{entry.receiptNumber || '-'}</td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{entry.date}</td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{entry.time}</td>
-                <td className="px-4 py-3 text-sm text-gray-500 max-w-xs truncate" title={entry.items}>{entry.items || '-'}</td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900"><Currency amount={entry.subtotal} /></td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-orange-600">
-                  {entry.discountAmount > 0 ? <><Currency amount={entry.discountAmount} /> {entry.discountCategory && <span className="text-xs">({entry.discountCategory})</span>}</> : '-'}
-                </td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-purple-600">
-                  {entry.taxAmount > 0 ? <Currency amount={entry.taxAmount} /> : entry.taxExemptAmount > 0 ? <span className="text-xs text-red-500">EXEMPT</span> : '-'}
-                </td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-right font-semibold text-gray-900"><Currency amount={entry.total} /></td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 capitalize">{entry.paymentMethod}</td>
-                <td className="px-4 py-3 whitespace-nowrap">
-                  <span className={`px-2 py-1 text-xs font-medium border ${
-                    entry.status === 'completed' ? 'bg-green-100 text-green-800 border-green-300' :
-                    entry.status === 'refunded' ? 'bg-red-100 text-red-800 border-red-300' :
-                    'bg-yellow-100 text-yellow-800 border-yellow-300'
-                  }`}>
-                    {entry.status}
-                  </span>
-                </td>
+      <div className="border border-gray-300 bg-white">
+        <div className="flex items-center justify-end gap-2 flex-wrap p-3 border-b border-gray-300">
+          <button type="button" onClick={() => runExport('csv')} disabled={exporting !== null} className={btnSecondary}>
+            {exportLabel('csv', dict.reports?.exportCSV || 'Export CSV')}
+          </button>
+          <button type="button" onClick={() => runExport('excel')} disabled={exporting !== null} className={btnSecondary}>
+            {exportLabel('excel', dict.reports?.exportExcel || 'Export Excel')}
+          </button>
+          <button type="button" onClick={() => runExport('pdf')} disabled={exporting !== null} className={btnSecondary}>
+            {exportLabel('pdf', dict.reports?.exportPDF || 'Export PDF')}
+          </button>
+        </div>
+        <div className="overflow-x-auto max-h-[70vh] overflow-y-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-brand-navy text-white text-xs uppercase tracking-wide sticky top-0 z-10">
+              <tr>
+                <th className={thCls}>{dict.reports?.receiptNo || 'Receipt #'}</th>
+                <th className={thCls}>{dict.reports?.date || 'Date'}</th>
+                <th className={thCls}>{dict.reports?.time || 'Time'}</th>
+                <th className={thCls}>{dict.reports?.items || 'Items'}</th>
+                <th className={thRight}>{dict.reports?.subtotal || 'Subtotal'}</th>
+                <th className={thRight}>{dict.reports?.discount || 'Discount'}</th>
+                <th className={thRight}>{dict.reports?.tax || 'Tax'}</th>
+                <th className={thRight}>{dict.reports?.total || 'Total'}</th>
+                <th className={thCls}>{dict.reports?.payment || 'Payment'}</th>
+                <th className={thCls}>{dict.reports?.status || 'Status'}</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {totalPages > 1 && (
-        <div className="flex justify-center gap-2">
-          <button
-            onClick={() => setPage(p => Math.max(1, p - 1))}
-            disabled={currentPage === 1}
-            className="px-4 py-2 border border-gray-300 disabled:opacity-50 bg-white"
-          >
-            {dict.transactions?.previous || dict.common?.previous || 'Previous'}
-          </button>
-          <span className="px-4 py-2 text-sm text-gray-700">
-            {dict.transactions?.page || dict.admin?.page || 'Page'} {currentPage} {dict.transactions?.of || dict.admin?.of || 'of'} {totalPages}
-          </span>
-          <button
-            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-            disabled={currentPage === totalPages}
-            className="px-4 py-2 border border-gray-300 disabled:opacity-50 bg-white"
-          >
-            {dict.transactions?.next || dict.common?.next || 'Next'}
-          </button>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {pagedEntries.map((entry, index) => (
+                <tr key={entry.receiptNumber || `journal-${index}`} className="hover:bg-gray-100 transition-colors">
+                  <td className="px-4 py-3 whitespace-nowrap font-mono text-xs text-gray-900">{entry.receiptNumber || '—'}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-gray-900">{entry.date}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-gray-500">{entry.time}</td>
+                  <td className="px-4 py-3 text-gray-700 max-w-[240px] truncate" title={entry.items}>{entry.items || '—'}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-right tabular-nums text-gray-900"><Currency amount={entry.subtotal} /></td>
+                  <td className="px-4 py-3 whitespace-nowrap text-right tabular-nums">
+                    {entry.discountAmount > 0 ? (
+                      <>
+                        <span className="font-medium text-win8-warning"><Currency amount={entry.discountAmount} /></span>
+                        {entry.discountCategory && <span className="block text-xs text-gray-500">{entry.discountCategory}</span>}
+                      </>
+                    ) : <span className="text-gray-400">—</span>}
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap text-right tabular-nums">
+                    {entry.taxAmount > 0 ? (
+                      <span className="text-gray-900"><Currency amount={entry.taxAmount} /></span>
+                    ) : entry.taxExemptAmount > 0 ? (
+                      <span className="px-2 py-0.5 text-xs font-semibold bg-win8-info text-white">{dict.reports?.exempt || 'EXEMPT'}</span>
+                    ) : <span className="text-gray-400">—</span>}
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap text-right tabular-nums font-semibold text-gray-900"><Currency amount={entry.total} /></td>
+                  <td className="px-4 py-3 whitespace-nowrap text-gray-700 capitalize">{entry.paymentMethod?.replace(/_/g, ' ') || '—'}</td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <span className={`px-2 py-0.5 text-xs font-semibold capitalize ${JOURNAL_STATUS_BADGE[entry.status] || 'bg-gray-500 text-white'}`}>
+                      {entry.status}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-      )}
+        <Pagination
+          page={currentPage}
+          totalPages={totalPages}
+          total={data.entries.length}
+          pageSize={SALES_JOURNAL_PAGE_SIZE}
+          onPage={setPage}
+          dict={dict}
+        />
+      </div>
     </div>
   );
 }

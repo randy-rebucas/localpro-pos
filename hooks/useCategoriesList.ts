@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 
 export interface Category {
-  _id: string;
+  id: string;
   name: string;
   description?: string;
   isActive: boolean;
@@ -63,7 +63,7 @@ export function useCategoriesList() {
 
         if (data.success) {
           setCategories((prev) =>
-            prev.map((c) => (c._id === categoryId ? { ...c, isActive: newStatus } : c))
+            prev.map((c) => (c.id === categoryId ? { ...c, isActive: newStatus } : c))
           );
           onSuccess?.(data.message || 'Category status updated successfully');
         } else {

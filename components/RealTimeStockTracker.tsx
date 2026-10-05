@@ -106,18 +106,19 @@ export default function RealTimeStockTracker({
 
   return (
     <div className="flex items-center gap-2 text-xs">
-      <div
-        className={`w-2 h-2 border border-gray-300 ${
-          connected ? 'bg-green-500 animate-pulse' : 'bg-red-500'
-        }`}
-        title={connected ? (dict?.components?.realtimeStockTracker?.connected || 'Connected') : (dict?.components?.realtimeStockTracker?.disconnected || 'Disconnected')}
+      <span
+        className={`inline-block w-2.5 h-2.5 ${connected ? 'bg-win8-success' : 'bg-win8-danger'}`}
+        aria-hidden="true"
       />
-      <span className="text-gray-500">
+      <span
+        className={`font-semibold ${connected ? 'text-win8-success' : 'text-win8-danger'}`}
+        title={connected ? (dict?.components?.realtimeStockTracker?.connected || 'Connected') : (dict?.components?.realtimeStockTracker?.disconnected || 'Disconnected')}
+      >
         {connected ? (dict?.components?.realtimeStockTracker?.live || 'Live') : (dict?.components?.realtimeStockTracker?.offline || 'Offline')}
       </span>
       {lastUpdate && (
-        <span className="text-gray-400">
-          • {(dict?.components?.realtimeStockTracker?.updated || 'Updated {time}').replace('{time}', lastUpdate.toLocaleTimeString())}
+        <span className="text-gray-400 tabular-nums">
+          · {(dict?.components?.realtimeStockTracker?.updated || 'Updated {time}').replace('{time}', lastUpdate.toLocaleTimeString())}
         </span>
       )}
     </div>

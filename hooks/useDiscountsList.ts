@@ -25,6 +25,8 @@ export interface Discount {
 interface UseDiscountsListReturn {
   discounts: Discount[];
   loading: boolean;
+  /** Set when the list itself failed to load (distinct from action feedback in `message`). */
+  error: string | null;
   message: { type: 'success' | 'error'; text: string } | null;
   fetchDiscounts: () => Promise<void>;
   /** Resolves `true` on success, or the server's specific error message on failure. */
@@ -40,6 +42,7 @@ interface UseDiscountsListReturn {
 export function useDiscountsList(): UseDiscountsListReturn {
   const [discounts, setDiscounts] = useState<Discount[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const fetchDiscounts = useCallback(async () => {
@@ -58,17 +61,18 @@ export function useDiscountsList(): UseDiscountsListReturn {
       const data = await res.json();
       if (data.success) {
         setDiscounts(data.data || []);
+        setError(null);
         // Note: intentionally not clearing `message` here — callers commonly
         // set a success/error message right before triggering a refetch
         // (delete, toggle, save), and clearing it here would wipe that
         // feedback out from under them. Use clearMessage() explicitly instead.
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to fetch discounts' });
+        setError(data.error || 'Failed to fetch discounts');
       }
-    } catch (error) {
-      if (error instanceof Error && error.name !== 'AbortError') {
-        console.error('Failed to fetch discounts:', error);
-        setMessage({ type: 'error', text: 'Failed to fetch discounts' });
+    } catch (err) {
+      if (err instanceof Error && err.name !== 'AbortError') {
+        console.error('Failed to fetch discounts:', err);
+        setError('Failed to fetch discounts');
       }
     } finally {
       setLoading(false);
@@ -173,6 +177,7 @@ export function useDiscountsList(): UseDiscountsListReturn {
   return {
     discounts,
     loading,
+    error,
     message,
     fetchDiscounts,
     createDiscount,

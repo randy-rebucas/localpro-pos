@@ -22,7 +22,7 @@ export default function ErrorState({
   return (
     <div className={`text-center ${py} ${className}`} role="alert">
       <svg
-        className={`mx-auto ${compact ? 'h-10 w-10' : 'h-14 w-14'} text-red-300 mb-4`}
+        className={`mx-auto ${compact ? 'h-10 w-10' : 'h-14 w-14'} text-win8-danger mb-4`}
         fill="none"
         viewBox="0 0 24 24"
         stroke="currentColor"
@@ -43,7 +43,7 @@ export default function ErrorState({
         <button
           type="button"
           onClick={onRetry}
-          className="mt-4 px-4 py-2 text-sm font-semibold bg-red-600 text-white hover:bg-red-700 transition-colors border border-red-700"
+          className="mt-4 px-4 py-2 text-sm font-semibold bg-brand text-white hover:bg-brand-hover transition-colors"
         >
           {retryLabel}
         </button>

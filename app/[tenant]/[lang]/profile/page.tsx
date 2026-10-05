@@ -223,14 +223,9 @@ export default function ProfilePage() {
         {message && (
           <div className="mb-6">
             <InlineBanner
-              variant={message.type === 'error' ? 'error' : 'info'}
+              variant={message.type === 'error' ? 'error' : message.type === 'success' ? 'success' : 'info'}
               message={message.text}
               onDismiss={() => setMessage(null)}
-              className={
-                message.type === 'success'
-                  ? 'bg-green-50 text-green-800 border-green-300'
-                  : undefined
-              }
             />
           </div>
         )}

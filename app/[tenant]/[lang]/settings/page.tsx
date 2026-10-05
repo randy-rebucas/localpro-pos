@@ -335,14 +335,9 @@ export default function SettingsPage() {
         {message && (
           <div className="mb-6">
             <InlineBanner
-              variant={message.type === 'error' ? 'error' : 'info'}
+              variant={message.type === 'error' ? 'error' : message.type === 'success' ? 'success' : 'info'}
               message={message.text}
               onDismiss={() => setMessage(null)}
-              className={
-                message.type === 'success'
-                  ? 'bg-green-50 text-green-800 border-green-300'
-                  : undefined
-              }
             />
           </div>
         )}
@@ -473,10 +468,9 @@ export default function SettingsPage() {
                   {detectedInfo && (
                     <div className="mb-5">
                       <InlineBanner
-                        variant="info"
+                        variant="success"
                         message={detectedInfo}
                         onDismiss={() => setDetectedInfo(null)}
-                        className="bg-green-50 text-green-800 border-green-300"
                       />
                     </div>
                   )}

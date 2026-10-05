@@ -2,37 +2,52 @@ import type { Discount } from '@/hooks/useDiscountsList';
 
 type Dict = Record<string, Record<string, string | undefined> | undefined>;
 
-export function getStatusBadgeClass(discount: Discount): string {
-  const now = new Date();
-  const validFrom = new Date(discount.validFrom);
-  const validUntil = new Date(discount.validUntil);
-  const isValid = now >= validFrom && now <= validUntil && discount.isActive;
+type DiscountStatus = 'valid' | 'inactive' | 'scheduled' | 'expired';
 
-  if (isValid) {
-    return 'bg-green-100 text-green-800 border-green-300';
-  }
-  if (!discount.isActive) {
-    return 'bg-red-100 text-red-800 border-red-300';
-  }
-  return 'bg-yellow-100 text-yellow-800 border-yellow-300';
+export function getDiscountStatus(discount: Discount, now: Date = new Date()): DiscountStatus {
+  if (!discount.isActive) return 'inactive';
+  if (now < new Date(discount.validFrom)) return 'scheduled';
+  if (now > new Date(discount.validUntil)) return 'expired';
+  return 'valid';
+}
+
+const STATUS_BADGE: Record<DiscountStatus, string> = {
+  valid: 'bg-win8-success text-white',
+  inactive: 'bg-win8-danger text-white',
+  scheduled: 'bg-win8-info text-white',
+  expired: 'bg-win8-warning text-white',
+};
+
+export function getStatusBadgeClass(discount: Discount): string {
+  return STATUS_BADGE[getDiscountStatus(discount)] || 'bg-gray-500 text-white';
 }
 
 export function getStatusLabel(discount: Discount, dict: Dict): string {
-  const now = new Date();
-  const validFrom = new Date(discount.validFrom);
-  const validUntil = new Date(discount.validUntil);
-  const isValid = now >= validFrom && now <= validUntil && discount.isActive;
-
-  if (isValid) return dict?.admin?.valid || 'Valid';
-  if (!discount.isActive) return dict?.admin?.inactive || 'Inactive';
-  return dict?.admin?.expired || 'Expired';
+  switch (getDiscountStatus(discount)) {
+    case 'valid': return dict?.admin?.valid || 'Valid';
+    case 'inactive': return dict?.admin?.inactive || 'Inactive';
+    case 'scheduled': return dict?.admin?.scheduled || 'Scheduled';
+    default: return dict?.admin?.expired || 'Expired';
+  }
 }
 
-export function getTypeBadgeClass(_type: 'percentage' | 'fixed'): string {
-  return 'px-2 py-1 text-xs font-semibold border border-teal-300 bg-brand-soft text-brand-navy';
+const TYPE_BADGE: Record<Discount['type'], string> = {
+  percentage: 'bg-brand text-white',
+  fixed: 'bg-brand-navy text-white',
+};
+
+export function getTypeBadgeClass(type: Discount['type']): string {
+  return TYPE_BADGE[type] || 'bg-gray-500 text-white';
 }
 
-export function getDeleteConfirmMessage(dict: Dict): string {
+export function getTypeLabel(type: Discount['type'], dict: Dict): string {
+  return type === 'percentage' ? (dict?.admin?.percentage || 'Percentage') : (dict?.admin?.fixed || 'Fixed');
+}
+
+export function getDeleteConfirmMessage(dict: Dict, code?: string): string {
+  if (code) {
+    return (dict?.admin?.deleteDiscountNamed || 'Delete discount "{code}"? This cannot be undone.').replace('{code}', code);
+  }
   return dict?.admin?.deleteConfirm || 'Are you sure you want to delete this discount?';
 }
 
@@ -46,9 +61,9 @@ export function getDeleteErrorMessage(dict: Dict): string {
 
 export function getSaveSuccessMessage(isEdit: boolean, dict: Dict): string {
   if (isEdit) {
-    return dict?.admin?.updateSuccess || 'Discount updated successfully';
+    return dict?.admin?.discountUpdated || 'Discount updated successfully';
   }
-  return dict?.admin?.saveSuccess || 'Discount created successfully';
+  return dict?.admin?.discountCreated || 'Discount created successfully';
 }
 
 export function getSaveErrorMessage(dict: Dict): string {
@@ -66,7 +81,7 @@ export function getToggleButtonLabel(isActive: boolean, dict: Dict): string {
 }
 
 export function getToggleButtonClass(isActive: boolean): string {
-  return isActive ? 'text-orange-600 hover:text-orange-900' : 'text-green-600 hover:text-green-900';
+  return isActive ? 'bg-win8-danger' : 'bg-win8-success';
 }
 
 export function formatDiscountValue(discount: Discount): string {

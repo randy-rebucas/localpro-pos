@@ -25,7 +25,7 @@ export function useCategoryForm(categoryToEdit?: Category | null) {
       const timeout = setTimeout(() => controller.abort(), 25000);
 
       try {
-        const url = categoryToEdit ? `/api/categories/${categoryToEdit._id}` : '/api/categories';
+        const url = categoryToEdit ? `/api/categories/${categoryToEdit.id}` : '/api/categories';
         const method = categoryToEdit ? 'PUT' : 'POST';
         const body = {
           name: formData.name,

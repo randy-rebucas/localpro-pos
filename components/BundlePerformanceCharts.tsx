@@ -23,15 +23,17 @@ interface BundlePerformanceChartsProps {
   dict: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 }
 
-const DEFAULT_COLORS = ['#35979c', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
+// Win8 token hexes: brand, success, accent, info, suspended, navy, warning, danger
+const DEFAULT_COLORS = ['#35979c', '#0b7a44', '#7a3fc9', '#1e70bf', '#b35900', '#1e3a4c', '#8a6206', '#c0392b'];
+const TOOLTIP_STYLE = { backgroundColor: '#fff', border: '1px solid #d1d5db', borderRadius: 0 };
 
 const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ color: string; name: string; value: number; payload: { fullName: string } }>; label?: string }) => {
   if (active && payload && payload.length) {
     return (
-      <div className="bg-white border border-gray-300 rounded-lg p-3 shadow-lg">
-        <p className="font-semibold text-gray-900 mb-2">{label || payload[0].payload.fullName}</p>
+      <div className="bg-white border border-gray-300 p-3">
+        <p className="text-sm font-semibold text-gray-900 mb-1">{label || payload[0].payload.fullName}</p>
         {payload.map((entry, index: number) => (
-          <p key={index} className="text-sm" style={{ color: entry.color }}>
+          <p key={index} className="text-sm tabular-nums" style={{ color: entry.color }}>
             {entry.name}: <Currency amount={entry.value} />
           </p>
         ))}
@@ -97,10 +99,10 @@ export default memo(function BundlePerformanceCharts({ analytics, dict }: Bundle
   }
 
   return (
-    <div className="space-y-6 mb-6">
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       {/* Sales by Bundle - Bar Chart */}
-      <div className="bg-gray-50 border border-gray-200 p-4 rounded-lg">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">
+      <div className="bg-white border border-gray-300 p-5">
+        <h3 className="text-sm font-bold text-gray-900 mb-4">
           {dict.admin?.salesByBundle || 'Sales by Bundle'}
         </h3>
         <ResponsiveContainer width="100%" height={350}>
@@ -127,8 +129,8 @@ export default memo(function BundlePerformanceCharts({ analytics, dict }: Bundle
       </div>
 
       {/* Quantity Sold by Bundle - Bar Chart */}
-      <div className="bg-gray-50 border border-gray-200 p-4 rounded-lg">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">
+      <div className="bg-white border border-gray-300 p-5">
+        <h3 className="text-sm font-bold text-gray-900 mb-4">
           {dict.admin?.quantityByBundle || 'Quantity Sold by Bundle'}
         </h3>
         <ResponsiveContainer width="100%" height={350}>
@@ -147,23 +149,18 @@ export default memo(function BundlePerformanceCharts({ analytics, dict }: Bundle
               style={{ fontSize: '12px' }}
             />
             <Tooltip
-              contentStyle={{
-                backgroundColor: '#fff',
-                border: '1px solid #e5e7eb',
-                borderRadius: '8px',
-                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-              }}
+              contentStyle={TOOLTIP_STYLE}
             />
             <Legend />
-            <Bar dataKey="quantity" fill="#10b981" name={dict.admin?.quantity || 'Quantity'} />
+            <Bar dataKey="quantity" fill={COLORS[1]} name={dict.admin?.quantity || 'Quantity'} />
           </BarChart>
         </ResponsiveContainer>
       </div>
 
       {/* Sales Distribution - Pie Chart */}
       {pieData.length > 0 && (
-        <div className="bg-gray-50 border border-gray-200 p-4 rounded-lg">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
+        <div className="bg-white border border-gray-300 p-5 lg:col-span-2">
+          <h3 className="text-sm font-bold text-gray-900 mb-4">
             {dict.admin?.salesDistribution || 'Sales Distribution'}
           </h3>
           <ResponsiveContainer width="100%" height={400}>
@@ -175,7 +172,6 @@ export default memo(function BundlePerformanceCharts({ analytics, dict }: Bundle
                 labelLine={false}
                 label={({ name, percent }) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}
                 outerRadius={120}
-                fill="#8884d8"
                 dataKey="value"
               >
                 {pieData.map((entry, index) => (
@@ -183,12 +179,7 @@ export default memo(function BundlePerformanceCharts({ analytics, dict }: Bundle
                 ))}
               </Pie>
               <Tooltip
-                contentStyle={{
-                  backgroundColor: '#fff',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '8px',
-                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-                }}
+                contentStyle={TOOLTIP_STYLE}
                 formatter={(value: any) => <Currency amount={value} />} // eslint-disable-line @typescript-eslint/no-explicit-any
               />
               <Legend />

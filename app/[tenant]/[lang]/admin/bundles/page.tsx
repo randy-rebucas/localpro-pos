@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { useParams } from 'next/navigation';
@@ -7,27 +7,56 @@ import toast from 'react-hot-toast';
 import { getDictionaryClient } from '../../dictionaries-client';
 import Currency from '@/components/Currency';
 import dynamic from 'next/dynamic';
+import AdminPageHeader from '@/components/admin/AdminPageHeader';
+import Win8Drawer from '@/components/admin/Win8Drawer';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import { getBusinessTypeConfig } from '@/lib/business-types';
 import { getBusinessType } from '@/lib/business-type-helpers';
-import { useBundlesList, type Bundle, type BundleItem } from '@/hooks/useBundlesList';
+import { useBundlesList, type Bundle, type BundleItem, type BundleFilters } from '@/hooks/useBundlesList';
 import { useBundleForm } from '@/hooks/useBundleForm';
 import { useBundlesAnalytics } from '@/hooks/useBundlesAnalytics';
-import {
-  getDeleteConfirmMessage,
-  getBulkActionConfirmMessage,
-} from '@/lib/bundles-helpers';
+import { getBulkActionConfirmMessage } from '@/lib/bundles-helpers';
+
+const SPINNER = <div className="win8-spinner text-brand mx-auto"><span /><span /><span /><span /><span /></div>;
+const SPINNER_SM = <span className="win8-spinner win8-spinner-sm"><span /><span /><span /><span /><span /></span>;
 
 // Dynamically import charts to avoid SSR issues
 const BundlePerformanceCharts = dynamic(() => import('@/components/BundlePerformanceCharts'), {
   ssr: false,
-  loading: () => (
-    <div className="w-full h-64 flex items-center justify-center">
-      <div className="inline-block animate-spin h-8 w-8 border-b-2 border-brand"></div>
-    </div>
-  ),
+  loading: () => <div className="w-full h-64 flex items-center justify-center">{SPINNER}</div>,
 });
+
+const btnPrimary =
+  'px-4 py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover disabled:opacity-50 transition-colors';
+const btnSecondary =
+  'px-4 py-2 border border-gray-300 text-gray-700 bg-white text-sm hover:bg-gray-100 disabled:opacity-50 transition-colors';
+const btnDropdownItem =
+  'block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-50';
+const btnRowIcon =
+  'inline-flex items-center justify-center p-2.5 text-white hover:brightness-110 disabled:opacity-50 transition-[filter]';
+const inputCls = 'w-full border border-gray-300 px-3 py-2 text-sm bg-white';
+const labelCls = 'block text-xs font-medium text-gray-600 mb-1';
+const thCls = 'px-4 py-3 text-left font-medium';
+const thRight = 'px-4 py-3 text-right font-medium';
+
+const ICON = {
+  edit: 'M11 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z',
+  delete: 'M6 7h12M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m2 0-.7 12.1a2 2 0 0 1-2 1.9H9.7a2 2 0 0 1-2-1.9L7 7h10Z',
+  activate: 'm5 12 5 5L20 7',
+  deactivate: 'M18.36 6.64a9 9 0 1 1-12.73 0M12 2v10',
+  close: 'M6 18 18 6M6 6l12 12',
+  search: 'm21 21-4.34-4.34M19 11a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z',
+  upload: 'M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12',
+};
+
+function Icon({ d, className = 'w-4 h-4' }: { d: string; className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d={d} />
+    </svg>
+  );
+}
 
 interface Product {
   _id: string;
@@ -41,7 +70,7 @@ interface Product {
 }
 
 interface Category {
-  _id: string;
+  id: string;
   name: string;
 }
 
@@ -53,7 +82,8 @@ export default function BundlesPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [productsLoading, setProductsLoading] = useState(true);
-  const [showBundleModal, setShowBundleModal] = useState(false);
+  const [showBundleForm, setShowBundleForm] = useState(false);
+  const [bundleFormKey, setBundleFormKey] = useState(0);
   const [editingBundle, setEditingBundle] = useState<Bundle | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterActive, setFilterActive] = useState<boolean | null>(null);
@@ -67,6 +97,10 @@ export default function BundlesPage() {
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [analyticsStartDate, setAnalyticsStartDate] = useState('');
   const [analyticsEndDate, setAnalyticsEndDate] = useState('');
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const filtersMounted = useRef(false);
 
   const { settings } = useTenantSettings();
   const businessTypeConfig = settings ? getBusinessTypeConfig(getBusinessType(settings)) : null;
@@ -74,23 +108,29 @@ export default function BundlesPage() {
   const { canAccess } = usePermissions();
   const canManage = canAccess('bundles.manage');
 
-  const { bundles, loading, fetchBundles, deleteBundle, toggleBundleStatus, bulkToggleStatus } = useBundlesList();
+  const { bundles, loading, error, fetchBundles, deleteBundle, toggleBundleStatus, bulkToggleStatus } = useBundlesList();
   const { analytics, loading: analyticsLoading, fetchAnalytics: fetchAnalyticsData } = useBundlesAnalytics();
+
+  const currentFilters = (): BundleFilters => ({
+    search: searchTerm,
+    isActive: filterActive,
+    categoryId: filterCategory,
+    minPrice: filterMinPrice,
+    maxPrice: filterMaxPrice,
+    startDate: filterStartDate,
+    endDate: filterEndDate,
+  });
+  const reload = () => fetchBundles(currentFilters());
+
+  const advancedFilterCount = [filterCategory, filterMinPrice, filterMaxPrice, filterStartDate, filterEndDate].filter(Boolean).length;
+  const hasFilters = !!searchTerm || filterActive !== null || advancedFilterCount > 0;
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
   }, [lang]);
 
   useEffect(() => {
-    fetchBundles({
-      search: searchTerm,
-      isActive: filterActive,
-      categoryId: filterCategory,
-      minPrice: filterMinPrice,
-      maxPrice: filterMaxPrice,
-      startDate: filterStartDate,
-      endDate: filterEndDate,
-    });
+    fetchBundles(currentFilters());
     fetchProducts();
     fetchCategories();
     // Set default analytics date range (last 30 days)
@@ -102,19 +142,19 @@ export default function BundlesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Refetch on any filter change (including clearing them), debounced for typing.
   useEffect(() => {
-    if (!loading && (searchTerm || filterActive !== null || filterCategory || filterMinPrice || filterMaxPrice || filterStartDate || filterEndDate)) {
-      fetchBundles({
-        search: searchTerm,
-        isActive: filterActive,
-        categoryId: filterCategory,
-        minPrice: filterMinPrice,
-        maxPrice: filterMaxPrice,
-        startDate: filterStartDate,
-        endDate: filterEndDate,
-      });
+    if (!filtersMounted.current) {
+      filtersMounted.current = true;
+      return;
     }
+    const timer = setTimeout(() => fetchBundles(currentFilters()), 300);
+    return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchTerm, filterActive, filterCategory, filterMinPrice, filterMaxPrice, filterStartDate, filterEndDate]);
+
+  useEffect(() => {
+    setSelectedBundles(new Set());
   }, [searchTerm, filterActive, filterCategory, filterMinPrice, filterMaxPrice, filterStartDate, filterEndDate]);
 
   useEffect(() => {
@@ -157,49 +197,47 @@ export default function BundlesPage() {
     }
   };
 
-  const handleDeleteBundle = async (bundleId: string) => {
-    if (!dict) return;
-    if (!confirm(getDeleteConfirmMessage(dict))) return;
+  const openBundleForm = (bundle: Bundle | null) => {
+    setEditingBundle(bundle);
+    setBundleFormKey((k) => k + 1);
+    setShowBundleForm(true);
+  };
 
+  const handleDeleteBundle = async (bundle: Bundle) => {
+    if (!dict) return;
+    const message = (dict.admin?.deleteBundleNamed || 'Delete bundle "{name}"?').replace('{name}', bundle.name);
+    if (!confirm(message)) return;
+
+    setBusyId(bundle._id);
     await deleteBundle(
-      bundleId,
+      bundle._id,
       async (message) => {
         toast.success(message);
-        await fetchBundles({
-          search: searchTerm,
-          isActive: filterActive,
-          categoryId: filterCategory,
-          minPrice: filterMinPrice,
-          maxPrice: filterMaxPrice,
-          startDate: filterStartDate,
-          endDate: filterEndDate,
-        });
+        await reload();
       },
       (error) => toast.error(error)
     );
+    setBusyId(null);
   };
 
   const handleToggleStatus = async (bundle: Bundle) => {
     if (!dict) return;
-    if (!confirm(getDeleteConfirmMessage(dict))) return;
+    if (bundle.isActive) {
+      const message = (dict.admin?.deactivateBundleNamed || 'Deactivate bundle "{name}"? It will no longer be sold.').replace('{name}', bundle.name);
+      if (!confirm(message)) return;
+    }
 
+    setBusyId(bundle._id);
     await toggleBundleStatus(
       bundle._id,
       bundle.isActive,
       (message) => {
         toast.success(message);
-        fetchBundles({
-          search: searchTerm,
-          isActive: filterActive,
-          categoryId: filterCategory,
-          minPrice: filterMinPrice,
-          maxPrice: filterMaxPrice,
-          startDate: filterStartDate,
-          endDate: filterEndDate,
-        });
+        reload();
       },
       (error) => toast.error(error)
     );
+    setBusyId(null);
   };
 
   const handleBulkOperation = async (action: 'activate' | 'deactivate') => {
@@ -213,24 +251,18 @@ export default function BundlesPage() {
       return;
     }
 
+    setBulkBusy(true);
     await bulkToggleStatus(
       Array.from(selectedBundles),
       action,
       async (message) => {
         toast.success(message);
         setSelectedBundles(new Set());
-        await fetchBundles({
-          search: searchTerm,
-          isActive: filterActive,
-          categoryId: filterCategory,
-          minPrice: filterMinPrice,
-          maxPrice: filterMaxPrice,
-          startDate: filterStartDate,
-          endDate: filterEndDate,
-        });
+        await reload();
       },
       (error) => toast.error(error)
     );
+    setBulkBusy(false);
   };
 
   const handleSelectAll = () => {
@@ -252,7 +284,7 @@ export default function BundlesPage() {
   };
 
   const handleExport = async (format: 'csv' | 'excel' | 'pdf' = 'csv') => {
-    if (!dict) return;
+    if (!dict || exporting) return;
 
     const hName = dict.admin?.name || 'Name';
     const hSku = dict.admin?.sku || 'SKU';
@@ -277,15 +309,22 @@ export default function BundlesPage() {
     }));
 
     const baseFilename = `bundles_export_${new Date().toISOString().split('T')[0]}`;
-    
-    const { arrayToCSV, downloadCSV, downloadExcel, downloadPDF } = await import('@/lib/export');
-    if (format === 'csv') {
-      const csv = arrayToCSV(exportData, headers);
-      downloadCSV(csv, `${baseFilename}.csv`);
-    } else if (format === 'excel') {
-      await downloadExcel(exportData, headers, baseFilename);
-    } else if (format === 'pdf') {
-      await downloadPDF(exportData, headers, baseFilename, dict.admin?.bundles || 'Bundles');
+
+    setExporting(true);
+    try {
+      const { arrayToCSV, downloadCSV, downloadExcel, downloadPDF } = await import('@/lib/export');
+      if (format === 'csv') {
+        const csv = arrayToCSV(exportData, headers);
+        downloadCSV(csv, `${baseFilename}.csv`);
+      } else if (format === 'excel') {
+        await downloadExcel(exportData, headers, baseFilename);
+      } else if (format === 'pdf') {
+        await downloadPDF(exportData, headers, baseFilename, dict.admin?.bundles || 'Bundles');
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Export failed');
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -305,506 +344,505 @@ export default function BundlesPage() {
     }
   };
 
-  if (!dict || loading) {
-    return (
-      <div className="flex items-center justify-center py-24">
-        <div className="text-center">
-          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-brand"></div>
-          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
-        </div>
-      </div>
-    );
+  if (!dict) {
+    return <div className="flex items-center justify-center py-24">{SPINNER}</div>;
   }
+
+  const header = (
+    <AdminPageHeader
+      title={dict.admin?.bundles || 'Product Bundles'}
+      description={dict.admin?.bundlesDescription || 'Manage product bundles and packages'}
+    />
+  );
 
   if (!canManage) {
     return (
       <div className="px-4 sm:px-6 py-6">
-        <div className="bg-red-50 border-2 border-red-300 p-6">
-          <h2 className="text-lg font-bold text-red-800 mb-1">{dict?.admin?.accessRestricted || 'Access Restricted'}</h2>
-          <p className="text-sm text-red-700">
-            {dict?.admin?.accessRestrictedBundles || "You don't have permission to manage bundles. Contact an admin or owner."}
+        {header}
+        <div className="p-4 bg-white border border-win8-danger text-sm" role="alert">
+          <p className="font-bold text-win8-danger">{dict.admin?.accessRestricted || 'Access Restricted'}</p>
+          <p className="text-gray-700 mt-1">
+            {dict.admin?.accessRestrictedBundles || "You don't have permission to manage bundles. Contact an admin or owner."}
           </p>
         </div>
       </div>
     );
   }
 
-  return (
-    <div>
-      <div className="px-4 sm:px-6 py-6">
-        <div className="mb-6 sm:mb-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-2">
-                {dict.admin?.bundles || 'Product Bundles'}
-              </h1>
-              <p className="text-gray-600">{dict.admin?.bundlesDescription || 'Manage product bundles and packages'}</p>
-            </div>
-          </div>
+  const renderList = () => {
+    if (loading) {
+      return (
+        <div className="text-center py-12 bg-white border border-gray-300">
+          {SPINNER}
+          <p className="mt-3 text-gray-400 text-sm">{dict.admin?.loadingBundles || 'Loading bundles…'}</p>
         </div>
+      );
+    }
 
-        {!bundlesAllowed && (
-          <div className="mb-6 p-4 bg-yellow-50 border-2 border-yellow-300 text-yellow-800">
-            <div className="flex items-start gap-3">
-              <svg className="w-6 h-6 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-              <div>
-                <h3 className="text-lg font-semibold text-yellow-900 mb-2">
-                  {dict.admin?.bundlesNotAvailable || 'Bundles Not Available'}
-                </h3>
-                <p className="text-yellow-800">
-                  {(dict.admin?.bundlesNotAvailableDesc || 'Product bundles are not available for {businessType}. This feature is typically used for retail and restaurant businesses.').replace('{businessType}', businessTypeConfig?.name || 'your business type')}
-                </p>
-                <p className="text-sm text-yellow-700 mt-2">
-                  {dict.admin?.bundlesNotAvailableHint || 'If you need bundles, please update your business type in Settings.'}
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
+    if (error) {
+      return (
+        <div className="text-center py-12 bg-white border border-gray-300">
+          <p className="text-win8-danger text-sm font-medium">{error}</p>
+          <button onClick={reload} className="mt-4 px-4 py-2 bg-brand text-white text-sm hover:bg-brand-hover transition-colors">
+            {dict.common?.retry || 'Retry'}
+          </button>
+        </div>
+      );
+    }
 
-        {/* Bundle Analytics Section */}
-        <div className="bg-white border border-gray-300 p-6 mb-6">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-bold text-gray-900">{dict.admin?.bundleAnalytics || 'Bundle Analytics'}</h2>
-            <button
-              onClick={() => setShowAnalytics(!showAnalytics)}
-              className="px-4 py-2 border border-gray-300 hover:bg-gray-50 bg-white"
-            >
-              {showAnalytics ? (dict.common?.hide || 'Hide') : (dict.admin?.viewAnalytics || 'View Analytics')}
-            </button>
-          </div>
-          {showAnalytics && (
-            <div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {dict.reports?.startDate || 'Start Date'}
-                  </label>
-                  <input
-                    type="date"
-                    value={analyticsStartDate}
-                    onChange={(e) => setAnalyticsStartDate(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {dict.reports?.endDate || 'End Date'}
-                  </label>
-                  <input
-                    type="date"
-                    value={analyticsEndDate}
-                    onChange={(e) => setAnalyticsEndDate(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-                  />
-                </div>
-                <div className="flex items-end">
-                  <button
-                    onClick={handleLoadAnalytics}
-                    className="w-full px-4 py-2 bg-brand text-white hover:bg-brand-hover font-medium border border-brand-hover"
-                  >
-                    {dict.admin?.loadAnalytics || 'Load Analytics'}
-                  </button>
-                </div>
-              </div>
-              
-              {analyticsLoading ? (
-                <div className="text-center py-8">
-                  <div className="inline-block animate-spin h-8 w-8 border-b-2 border-brand"></div>
-                  <p className="mt-4 text-gray-600">{dict.common?.loading || 'Loading...'}</p>
-                </div>
-              ) : analytics && (
-                <div>
-                  {/* Summary Cards */}
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                    <div className="p-4 text-white" style={{ backgroundColor: settings?.primaryColor || '#35979c' }}>
-                      <div className="text-sm mb-1 text-white/80">{dict.admin?.totalBundles || 'Total Bundles'}</div>
-                      <div className="text-2xl font-bold">{analytics.summary.totalBundles}</div>
-                    </div>
-                    <div className="p-4 text-white" style={{ backgroundColor: '#0f9d58' }}>
-                      <div className="text-sm mb-1 text-white/80">{dict.admin?.totalSales || 'Total Sales'}</div>
-                      <div className="text-2xl font-bold">
-                        <Currency amount={analytics.summary.totalSales} />
-                      </div>
-                    </div>
-                    <div className="p-4 text-white" style={{ backgroundColor: '#7a3fc9' }}>
-                      <div className="text-sm mb-1 text-white/80">{dict.admin?.totalQuantity || 'Total Quantity'}</div>
-                      <div className="text-2xl font-bold">{analytics.summary.totalQuantity}</div>
-                    </div>
-                    <div className="p-4 text-white" style={{ backgroundColor: '#e3a008' }}>
-                      <div className="text-sm mb-1 text-white/80">{dict.admin?.totalTransactions || 'Transactions'}</div>
-                      <div className="text-2xl font-bold">{analytics.summary.totalTransactions}</div>
-                    </div>
-                  </div>
+    if (bundles.length === 0) {
+      return (
+        <div className="text-center py-12 text-gray-400 bg-white border border-gray-300">
+          {hasFilters
+            ? (dict.admin?.noBundlesMatch || 'No bundles match your filters.')
+            : (dict.admin?.noBundlesYet || 'No bundles yet.')}
+        </div>
+      );
+    }
 
-                  {/* Bundle Performance Charts */}
-                  {analytics.analytics && analytics.analytics.length > 0 && (
-                    <BundlePerformanceCharts
-                      analytics={analytics.analytics.map((item: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
-                        bundleId: item.bundleId,
-                        bundleName: item.bundleName,
-                        bundlePrice: item.bundlePrice,
-                        totalSales: item.totalSales,
-                        totalQuantity: item.totalQuantity,
-                        transactionCount: item.transactionCount,
-                        averageOrderValue: item.averageOrderValue,
-                        averageQuantity: item.averageQuantity,
-                        revenuePerUnit: item.revenuePerUnit,
-                      }))}
-                      dict={dict}
+    return (
+      <div className="overflow-x-auto border border-gray-300 bg-white max-h-[70vh] overflow-y-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-brand-navy text-white text-xs uppercase tracking-wide sticky top-0 z-10">
+            <tr>
+              <th className={`${thCls} w-10`}>
+                <input
+                  type="checkbox"
+                  checked={selectedBundles.size === bundles.length && bundles.length > 0}
+                  onChange={handleSelectAll}
+                  className="checkbox-win8"
+                  aria-label={dict.common?.selectAll || 'Select all'}
+                />
+              </th>
+              <th className={thCls}>{dict.admin?.name || 'Name'}</th>
+              <th className={thCls}>{dict.admin?.sku || 'SKU'}</th>
+              <th className={thCls}>{dict.admin?.category || 'Category'}</th>
+              <th className={thRight}>{dict.admin?.price || 'Price'}</th>
+              <th className={thRight}>{dict.admin?.items || 'Items'}</th>
+              <th className={thCls}>{dict.admin?.status || 'Status'}</th>
+              <th className={thRight}>{dict.common?.actions || 'Actions'}</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-200">
+            {bundles.map((bundle) => {
+              const selected = selectedBundles.has(bundle._id);
+              const busy = busyId === bundle._id;
+              const toggleLabel = bundle.isActive ? (dict.admin?.deactivate || 'Deactivate') : (dict.admin?.activate || 'Activate');
+              return (
+                <tr key={bundle._id} className={`hover:bg-gray-100 transition-colors ${selected ? 'bg-brand-soft' : ''}`}>
+                  <td className="px-4 py-3 w-10">
+                    <input
+                      type="checkbox"
+                      checked={selected}
+                      onChange={() => handleSelectBundle(bundle._id)}
+                      className="checkbox-win8"
+                      aria-label={`${dict.common?.select || 'Select'} ${bundle.name}`}
                     />
-                  )}
-
-                  {/* Analytics Table */}
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.bundle || 'Bundle'}</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.price || 'Price'}</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.totalSales || 'Total Sales'}</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.quantity || 'Quantity'}</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.transactions || 'Transactions'}</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.avgOrderValue || 'Avg Order Value'}</th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        {analytics.analytics.map((item: any) => ( // eslint-disable-line @typescript-eslint/no-explicit-any
-                          <tr key={item.bundleId}>
-                            <td className="px-4 py-4 text-sm font-medium text-gray-900">{item.bundleName}</td>
-                            <td className="px-4 py-4 text-sm text-gray-500"><Currency amount={item.bundlePrice} /></td>
-                            <td className="px-4 py-4 text-sm font-medium text-gray-900"><Currency amount={item.totalSales} /></td>
-                            <td className="px-4 py-4 text-sm text-gray-500">{item.totalQuantity}</td>
-                            <td className="px-4 py-4 text-sm text-gray-500">{item.transactionCount}</td>
-                            <td className="px-4 py-4 text-sm text-gray-500"><Currency amount={item.averageOrderValue} /></td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    {analytics.analytics.length === 0 && (
-                      <div className="text-center py-8 text-gray-500">
-                        {dict.admin?.noAnalyticsData || 'No sales data for selected period'}
-                      </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <p className="font-medium text-gray-900">{bundle.name}</p>
+                    {bundle.description && (
+                      <p className="text-xs text-gray-500 mt-0.5 max-w-[240px] truncate" title={bundle.description}>{bundle.description}</p>
                     )}
-                  </div>
-                </div>
-              )}
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap font-mono text-xs text-gray-700">{bundle.sku || '—'}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-gray-700">
+                    {typeof bundle.categoryId === 'object' && bundle.categoryId?.name ? bundle.categoryId.name : '—'}
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap text-right tabular-nums font-medium text-gray-900">
+                    <Currency amount={bundle.price} />
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap text-right tabular-nums text-gray-700">
+                    {bundle.items.length} {bundle.items.length !== 1 ? (dict.admin?.items || 'items') : (dict.admin?.item || 'item')}
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <span className={`px-2 py-0.5 text-xs font-semibold ${bundle.isActive ? 'bg-win8-success text-white' : 'bg-gray-500 text-white'}`}>
+                      {bundle.isActive ? (dict.admin?.active || 'Active') : (dict.admin?.inactive || 'Inactive')}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex justify-end gap-1.5">
+                      {bundlesAllowed && (
+                        <button
+                          type="button"
+                          onClick={() => openBundleForm(bundle)}
+                          title={dict.common?.edit || 'Edit'}
+                          aria-label={`${dict.common?.edit || 'Edit'} ${bundle.name}`}
+                          className={`${btnRowIcon} bg-brand`}
+                        >
+                          <Icon d={ICON.edit} />
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleToggleStatus(bundle)}
+                        disabled={busy}
+                        title={toggleLabel}
+                        aria-label={`${toggleLabel} ${bundle.name}`}
+                        className={`${btnRowIcon} ${bundle.isActive ? 'bg-win8-danger' : 'bg-win8-success'}`}
+                      >
+                        {busy ? SPINNER_SM : <Icon d={bundle.isActive ? ICON.deactivate : ICON.activate} />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteBundle(bundle)}
+                        disabled={busy}
+                        title={dict.common?.delete || 'Delete'}
+                        aria-label={`${dict.common?.delete || 'Delete'} ${bundle.name}`}
+                        className={`${btnRowIcon} bg-win8-danger`}
+                      >
+                        <Icon d={ICON.delete} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  return (
+    <>
+      <div className="px-4 sm:px-6 py-6">
+        {header}
+
+        <div className="space-y-4">
+          {!bundlesAllowed && (
+            <div className="p-4 bg-white border border-win8-warning text-sm" role="status">
+              <p className="font-bold text-win8-warning">{dict.admin?.bundlesNotAvailable || 'Bundles Not Available'}</p>
+              <p className="text-gray-700 mt-1">
+                {(dict.admin?.bundlesNotAvailableDesc || 'Product bundles are not available for {businessType}. This feature is typically used for retail and restaurant businesses.').replace('{businessType}', businessTypeConfig?.name || 'your business type')}
+              </p>
+              <p className="text-gray-500 mt-1">
+                {dict.admin?.bundlesNotAvailableHint || 'If you need bundles, please update your business type in Settings.'}
+              </p>
             </div>
           )}
-        </div>
 
-        <div className="bg-white border border-gray-300 p-6">
-          <div className="flex justify-between items-center mb-4 flex-wrap gap-4">
-            <div className="flex-1 max-w-md">
-              <input
-                type="text"
-                placeholder={dict.common?.search || 'Search bundles...'}
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-              />
-            </div>
-            <div className="flex gap-2">
-              <select
-                value={filterActive === null ? 'all' : filterActive.toString()}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  setFilterActive(value === 'all' ? null : value === 'true');
-                }}
-                className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-              >
-                <option value="all">{dict.common?.all || 'All'}</option>
-                <option value="true">{dict.admin?.active || 'Active'}</option>
-                <option value="false">{dict.admin?.inactive || 'Inactive'}</option>
-              </select>
+          {/* Bundle Analytics */}
+          <section className="bg-white border border-gray-300">
+            <div className={`px-6 py-4 flex items-center justify-between gap-3 ${showAnalytics ? 'border-b border-gray-300' : ''}`}>
+              <h2 className="text-base font-bold text-gray-900">{dict.admin?.bundleAnalytics || 'Bundle Analytics'}</h2>
               <button
-                onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-                className="px-4 py-2 border border-gray-300 hover:bg-gray-50 bg-white"
+                type="button"
+                onClick={() => setShowAnalytics(!showAnalytics)}
+                aria-expanded={showAnalytics}
+                className={btnSecondary}
               >
-                {dict.admin?.advancedFilters || 'Advanced Filters'}
+                {showAnalytics ? (dict.common?.hide || 'Hide') : (dict.admin?.viewAnalytics || 'View Analytics')}
               </button>
-              <div className="relative group">
-                <button
-                  onClick={() => handleExport('csv')}
-                  className="px-4 py-2 border border-gray-300 hover:bg-gray-50 bg-white"
-                >
-                  {dict.admin?.export || 'Export'} ▼
-                </button>
-                <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-300 hidden group-hover:block z-10">
-                  <button
-                    onClick={() => handleExport('csv')}
-                    className="block w-full text-left px-4 py-2 hover:bg-gray-100 text-sm"
-                  >
-                    {dict.admin?.exportCSV || 'Export CSV'}
-                  </button>
-                  <button
-                    onClick={() => handleExport('excel')}
-                    className="block w-full text-left px-4 py-2 hover:bg-gray-100 text-sm"
-                  >
-                    {dict.admin?.exportExcel || 'Export Excel'}
-                  </button>
-                  <button
-                    onClick={() => handleExport('pdf')}
-                    className="block w-full text-left px-4 py-2 hover:bg-gray-100 text-sm"
-                  >
-                    {dict.admin?.exportPDF || 'Export PDF'}
+            </div>
+            {showAnalytics && (
+              <div className="p-6 space-y-4">
+                <div className="flex flex-wrap gap-3 items-end">
+                  <div>
+                    <label htmlFor="analytics-start" className={labelCls}>{dict.reports?.startDate || 'Start Date'}</label>
+                    <input
+                      id="analytics-start"
+                      type="date"
+                      value={analyticsStartDate}
+                      max={analyticsEndDate || undefined}
+                      onChange={(e) => setAnalyticsStartDate(e.target.value)}
+                      className="border border-gray-300 px-3 py-2 text-sm bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="analytics-end" className={labelCls}>{dict.reports?.endDate || 'End Date'}</label>
+                    <input
+                      id="analytics-end"
+                      type="date"
+                      value={analyticsEndDate}
+                      min={analyticsStartDate || undefined}
+                      onChange={(e) => setAnalyticsEndDate(e.target.value)}
+                      className="border border-gray-300 px-3 py-2 text-sm bg-white"
+                    />
+                  </div>
+                  <button type="button" onClick={handleLoadAnalytics} disabled={analyticsLoading} className={btnPrimary}>
+                    {analyticsLoading ? (dict.common?.loading || 'Loading…') : (dict.admin?.loadAnalytics || 'Load Analytics')}
                   </button>
                 </div>
-              </div>
-              {bundlesAllowed && (
-                <>
-                  <Link
-                    href={`/${tenant}/${lang}/admin/file-upload`}
-                    className="px-4 py-2 bg-gray-100 text-gray-700 hover:bg-gray-200 font-medium border border-gray-300 inline-flex items-center gap-2 transition-colors"
-                  >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                    </svg>
-                    {dict.admin?.uploadImages || 'Upload Images'}
-                  </Link>
-                  <button
-                    onClick={() => {
-                      setEditingBundle(null);
-                      setShowBundleModal(true);
-                    }}
-                    className="px-4 py-2 bg-brand text-white hover:bg-brand-hover font-medium border border-brand-hover"
-                  >
-                    {dict.common?.add || 'Add'} {dict.admin?.bundle || 'Bundle'}
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
 
-          {/* Advanced Filters */}
-          {showAdvancedFilters && (
-            <div className="mb-4 p-4 bg-gray-50 border border-gray-200">
-              <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                {analyticsLoading ? (
+                  <div className="text-center py-12">
+                    {SPINNER}
+                    <p className="mt-3 text-gray-400 text-sm">{dict.common?.loading || 'Loading…'}</p>
+                  </div>
+                ) : analytics && (
+                  <>
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                      {[
+                        { label: dict.admin?.totalBundles || 'Total Bundles', color: 'bg-brand', value: analytics.summary.totalBundles.toLocaleString() },
+                        { label: dict.admin?.totalSales || 'Total Sales', color: 'bg-win8-success', value: <Currency amount={analytics.summary.totalSales} /> },
+                        { label: dict.admin?.totalQuantity || 'Total Quantity', color: 'bg-win8-accent', value: analytics.summary.totalQuantity.toLocaleString() },
+                        { label: dict.admin?.totalTransactions || 'Transactions', color: 'bg-brand-navy', value: analytics.summary.totalTransactions.toLocaleString() },
+                      ].map((tile) => (
+                        <div key={tile.label} className={`${tile.color} text-white p-5`}>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-white/80 leading-tight">{tile.label}</p>
+                          <div className="text-3xl font-bold tabular-nums mt-2">{tile.value}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {analytics.analytics && analytics.analytics.length > 0 ? (
+                      <>
+                        <BundlePerformanceCharts
+                          analytics={analytics.analytics.map((item: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+                            bundleId: item.bundleId,
+                            bundleName: item.bundleName,
+                            bundlePrice: item.bundlePrice,
+                            totalSales: item.totalSales,
+                            totalQuantity: item.totalQuantity,
+                            transactionCount: item.transactionCount,
+                            averageOrderValue: item.averageOrderValue,
+                            averageQuantity: item.averageQuantity,
+                            revenuePerUnit: item.revenuePerUnit,
+                          }))}
+                          dict={dict}
+                        />
+                        <div className="overflow-x-auto border border-gray-300 bg-white max-h-[70vh] overflow-y-auto">
+                          <table className="w-full text-sm">
+                            <thead className="bg-brand-navy text-white text-xs uppercase tracking-wide sticky top-0 z-10">
+                              <tr>
+                                <th className={thCls}>{dict.admin?.bundle || 'Bundle'}</th>
+                                <th className={thRight}>{dict.admin?.price || 'Price'}</th>
+                                <th className={thRight}>{dict.admin?.totalSales || 'Total Sales'}</th>
+                                <th className={thRight}>{dict.admin?.quantity || 'Quantity'}</th>
+                                <th className={thRight}>{dict.admin?.transactions || 'Transactions'}</th>
+                                <th className={thRight}>{dict.admin?.avgOrderValue || 'Avg Order Value'}</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-200">
+                              {analytics.analytics.map((item: any) => ( // eslint-disable-line @typescript-eslint/no-explicit-any
+                                <tr key={item.bundleId} className="hover:bg-gray-100 transition-colors">
+                                  <td className="px-4 py-3 font-medium text-gray-900">{item.bundleName}</td>
+                                  <td className="px-4 py-3 whitespace-nowrap text-right tabular-nums text-gray-700"><Currency amount={item.bundlePrice} /></td>
+                                  <td className="px-4 py-3 whitespace-nowrap text-right tabular-nums font-medium text-gray-900"><Currency amount={item.totalSales} /></td>
+                                  <td className="px-4 py-3 whitespace-nowrap text-right tabular-nums text-gray-700">{Number(item.totalQuantity).toLocaleString()}</td>
+                                  <td className="px-4 py-3 whitespace-nowrap text-right tabular-nums text-gray-700">{Number(item.transactionCount).toLocaleString()}</td>
+                                  <td className="px-4 py-3 whitespace-nowrap text-right tabular-nums text-gray-700"><Currency amount={item.averageOrderValue} /></td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-sm text-gray-400 italic">{dict.admin?.noAnalyticsData || 'No sales data for selected period'}</p>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+          </section>
+
+          {/* Toolbar */}
+          <div className="bg-white border border-gray-300">
+            <div className="flex items-center justify-between gap-3 flex-wrap p-3">
+              <div className="flex gap-3 flex-wrap">
+                <div className="relative">
+                  <Icon d={ICON.search} className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder={dict.common?.search || 'Search bundles…'}
+                    aria-label={dict.common?.search || 'Search bundles'}
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-8 pr-3 py-2 border border-gray-300 text-sm w-56"
+                  />
+                </div>
+                <select
+                  value={filterActive === null ? 'all' : filterActive.toString()}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setFilterActive(value === 'all' ? null : value === 'true');
+                  }}
+                  aria-label={dict.admin?.status || 'Status'}
+                  className="px-3 py-2 border border-gray-300 text-sm bg-white text-gray-900"
+                >
+                  <option value="all">{dict.common?.all || 'All'}</option>
+                  <option value="true">{dict.admin?.active || 'Active'}</option>
+                  <option value="false">{dict.admin?.inactive || 'Inactive'}</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                  aria-expanded={showAdvancedFilters}
+                  className={`${btnSecondary} ${showAdvancedFilters ? 'bg-gray-100' : ''}`}
+                >
+                  {dict.admin?.advancedFilters || 'Advanced Filters'}
+                  {advancedFilterCount > 0 && (
+                    <span className="ml-2 px-1.5 py-0.5 text-xs bg-brand text-white tabular-nums">{advancedFilterCount}</span>
+                  )}
+                </button>
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                <div className="relative group">
+                  <button
+                    type="button"
+                    onClick={() => handleExport('csv')}
+                    disabled={exporting}
+                    aria-haspopup="menu"
+                    className={btnSecondary}
+                  >
+                    {exporting ? (dict.admin?.exporting || 'Exporting…') : `${dict.admin?.export || 'Export'} ▼`}
+                  </button>
+                  <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-300 hidden group-hover:block group-focus-within:block z-20" role="menu">
+                    <button type="button" role="menuitem" onClick={() => handleExport('csv')} disabled={exporting} className={btnDropdownItem}>
+                      {dict.admin?.exportCSV || 'Export CSV'}
+                    </button>
+                    <button type="button" role="menuitem" onClick={() => handleExport('excel')} disabled={exporting} className={btnDropdownItem}>
+                      {dict.admin?.exportExcel || 'Export Excel'}
+                    </button>
+                    <button type="button" role="menuitem" onClick={() => handleExport('pdf')} disabled={exporting} className={btnDropdownItem}>
+                      {dict.admin?.exportPDF || 'Export PDF'}
+                    </button>
+                  </div>
+                </div>
+                {bundlesAllowed && (
+                  <>
+                    <Link href={`/${tenant}/${lang}/admin/file-upload`} className={`${btnSecondary} inline-flex items-center gap-2`}>
+                      <Icon d={ICON.upload} />
+                      {dict.admin?.uploadImages || 'Upload Images'}
+                    </Link>
+                    <button type="button" onClick={() => openBundleForm(null)} className={btnPrimary}>
+                      + {dict.admin?.addBundle || 'Add Bundle'}
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {showAdvancedFilters && (
+              <div className="border-t border-gray-300 p-4 flex flex-wrap gap-3 items-end">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {dict.admin?.category || 'Category'}
-                  </label>
+                  <label htmlFor="bf-category" className={labelCls}>{dict.admin?.category || 'Category'}</label>
                   <select
+                    id="bf-category"
                     value={filterCategory}
                     onChange={(e) => setFilterCategory(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
+                    className="px-3 py-2 border border-gray-300 text-sm bg-white w-44"
                   >
                     <option value="">{dict.common?.all || 'All'}</option>
                     {categories.map((cat) => (
-                      <option key={cat._id} value={cat._id}>
-                        {cat.name}
-                      </option>
+                      <option key={cat.id} value={cat.id}>{cat.name}</option>
                     ))}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {dict.admin?.minPrice || 'Min Price'}
-                  </label>
+                  <label htmlFor="bf-min" className={labelCls}>{dict.admin?.minPrice || 'Min Price'}</label>
                   <input
+                    id="bf-min"
                     type="number"
                     step="0.01"
+                    min="0"
                     value={filterMinPrice}
                     onChange={(e) => setFilterMinPrice(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
+                    className="px-3 py-2 border border-gray-300 text-sm bg-white w-32 tabular-nums"
                     placeholder="0.00"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {dict.admin?.maxPrice || 'Max Price'}
-                  </label>
+                  <label htmlFor="bf-max" className={labelCls}>{dict.admin?.maxPrice || 'Max Price'}</label>
                   <input
+                    id="bf-max"
                     type="number"
                     step="0.01"
+                    min="0"
                     value={filterMaxPrice}
                     onChange={(e) => setFilterMaxPrice(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-                    placeholder="999999.99"
+                    className="px-3 py-2 border border-gray-300 text-sm bg-white w-32 tabular-nums"
+                    placeholder="—"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {dict.reports?.startDate || 'Start Date'}
-                  </label>
+                  <label htmlFor="bf-start" className={labelCls}>{dict.reports?.startDate || 'Start Date'}</label>
                   <input
+                    id="bf-start"
                     type="date"
                     value={filterStartDate}
+                    max={filterEndDate || undefined}
                     onChange={(e) => setFilterStartDate(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
+                    className="px-3 py-2 border border-gray-300 text-sm bg-white"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {dict.reports?.endDate || 'End Date'}
-                  </label>
+                  <label htmlFor="bf-end" className={labelCls}>{dict.reports?.endDate || 'End Date'}</label>
                   <input
+                    id="bf-end"
                     type="date"
                     value={filterEndDate}
+                    min={filterStartDate || undefined}
                     onChange={(e) => setFilterEndDate(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
+                    className="px-3 py-2 border border-gray-300 text-sm bg-white"
                   />
                 </div>
-                <div className="flex items-end">
-                  <button
-                    onClick={clearFilters}
-                    className="w-full px-4 py-2 border border-gray-300 hover:bg-gray-50 bg-white"
-                  >
-                    {dict.common?.clear || 'Clear'}
+                {hasFilters && (
+                  <button type="button" onClick={clearFilters} className="px-3 py-2 text-sm text-gray-500 hover:text-gray-700">
+                    {dict.admin?.clearFilters || dict.common?.clear || 'Clear'}
                   </button>
-                </div>
+                )}
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
-          {/* Bulk Actions */}
           {selectedBundles.size > 0 && (
-            <div className="mb-4 p-3 bg-brand-soft border border-teal-200 flex items-center justify-between">
-              <span className="text-sm font-medium text-brand-navy-deep">
+            <div className="p-3 bg-brand-soft border border-brand flex items-center justify-between flex-wrap gap-2">
+              <span className="text-sm font-semibold text-brand-navy tabular-nums">
                 {selectedBundles.size} {dict.admin?.selected || 'selected'}
               </span>
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
                 <button
+                  type="button"
                   onClick={() => handleBulkOperation('activate')}
-                  className="px-4 py-2 bg-green-600 text-white hover:bg-green-700 text-sm"
+                  disabled={bulkBusy}
+                  className="px-4 py-2 bg-win8-success text-white text-sm font-medium hover:brightness-110 disabled:opacity-50 transition-[filter]"
                 >
                   {dict.admin?.bulkActivate || 'Activate Selected'}
                 </button>
                 <button
+                  type="button"
                   onClick={() => handleBulkOperation('deactivate')}
-                  className="px-4 py-2 bg-yellow-600 text-white hover:bg-yellow-700 text-sm"
+                  disabled={bulkBusy}
+                  className="px-4 py-2 bg-win8-danger text-white text-sm font-medium hover:brightness-110 disabled:opacity-50 transition-[filter]"
                 >
                   {dict.admin?.bulkDeactivate || 'Deactivate Selected'}
                 </button>
-                <button
-                  onClick={() => setSelectedBundles(new Set())}
-                  className="px-4 py-2 border border-gray-300 hover:bg-gray-50 bg-white text-sm"
-                >
+                <button type="button" onClick={() => setSelectedBundles(new Set())} className={btnSecondary}>
                   {dict.common?.cancel || 'Cancel'}
                 </button>
               </div>
             </div>
           )}
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-12">
-                    <input
-                      type="checkbox"
-                      checked={selectedBundles.size === bundles.length && bundles.length > 0}
-                      onChange={handleSelectAll}
-                      className="border-gray-300"
-                    />
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.name || 'Name'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.sku || 'SKU'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.category || 'Category'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.price || 'Price'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.items || 'Items'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.status || 'Status'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.common?.actions || 'Actions'}</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {bundles.map((bundle) => (
-                  <tr key={bundle._id}>
-                    <td className="px-4 py-4">
-                      <input
-                        type="checkbox"
-                        checked={selectedBundles.has(bundle._id)}
-                        onChange={() => handleSelectBundle(bundle._id)}
-                        className="border-gray-300"
-                      />
-                    </td>
-                    <td className="px-4 py-4">
-                      <div className="text-sm font-medium text-gray-900">{bundle.name}</div>
-                      {bundle.description && (
-                        <div className="text-xs text-gray-500 mt-1">{bundle.description.substring(0, 50)}...</div>
-                      )}
-                    </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{bundle.sku || '-'}</td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {typeof bundle.categoryId === 'object' && bundle.categoryId?.name ? bundle.categoryId.name : '-'}
-                    </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      <Currency amount={bundle.price} />
-                    </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {bundle.items.length} {bundle.items.length !== 1 ? (dict.admin?.items || 'items') : (dict.admin?.item || 'item')}
-                    </td>
-                    <td className="px-4 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 text-xs font-semibold border ${
-                        bundle.isActive
-                          ? 'bg-green-100 text-green-800 border-green-300'
-                          : 'bg-gray-100 text-gray-800 border-gray-300'
-                      }`}>
-                        {bundle.isActive ? (dict.admin?.active || 'Active') : (dict.admin?.inactive || 'Inactive')}
-                      </span>
-                    </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => {
-                            setEditingBundle(bundle);
-                            setShowBundleModal(true);
-                          }}
-                          className="text-brand hover:text-brand-navy-deep"
-                        >
-                          {dict.common?.edit || 'Edit'}
-                        </button>
-                        <button
-                          onClick={() => handleToggleStatus(bundle)}
-                          className={`${bundle.isActive ? 'text-yellow-600 hover:text-yellow-900' : 'text-green-600 hover:text-green-900'}`}
-                        >
-                          {bundle.isActive ? (dict.admin?.deactivate || 'Deactivate') : (dict.admin?.activate || 'Activate')}
-                        </button>
-                        <button
-                          onClick={() => handleDeleteBundle(bundle._id)}
-                          className="text-red-600 hover:text-red-900"
-                        >
-                          {dict.common?.delete || 'Delete'}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {bundles.length === 0 && (
-              <div className="text-center py-8 text-gray-500">
-                {searchTerm || filterActive !== null ? (dict.common?.noResults || 'No bundles found') : (dict.common?.noData || 'No bundles yet')}
-              </div>
-            )}
-          </div>
-        </div>
 
-        {showBundleModal && bundlesAllowed && (
-          <BundleModal
+          {renderList()}
+        </div>
+      </div>
+
+      {bundlesAllowed && (
+        <Win8Drawer open={showBundleForm} onClose={() => setShowBundleForm(false)} widthClass="max-w-2xl">
+          <BundleForm
+            key={bundleFormKey}
             bundle={editingBundle}
             products={products}
             productsLoading={productsLoading}
             categories={categories}
-            onClose={() => {
-              setShowBundleModal(false);
-              setEditingBundle(null);
-            }}
+            onClose={() => setShowBundleForm(false)}
             onSave={() => {
-              fetchBundles();
-              setShowBundleModal(false);
-              setEditingBundle(null);
+              setShowBundleForm(false);
+              reload();
             }}
             dict={dict}
           />
-        )}
-      </div>
-    </div>
+        </Win8Drawer>
+      )}
+    </>
   );
 }
 
-function BundleModal({
+function BundleForm({
   bundle,
   products,
   productsLoading,
@@ -827,7 +865,7 @@ function BundleModal({
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [itemQuantity, setItemQuantity] = useState(1);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
-  const [, setLocalError] = useState(''); // Local error for product validation
+  const [localError, setLocalError] = useState(''); // Local error for product validation
   const searchInputRef = useRef<HTMLInputElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
   const suggestionItemsRef = useRef<(HTMLButtonElement | null)[]>([]);
@@ -837,49 +875,49 @@ function BundleModal({
       // Show all products when search is empty (limit to first 20 for performance)
       return products.slice(0, 20);
     }
-    
+
     const searchLower = productSearch.toLowerCase().trim();
     const searchTerms = searchLower.split(/\s+/);
-    
+
     // Get products that match, with scoring for better sorting
     const scored = products
       .map(product => {
         const nameLower = (product.name || '').toLowerCase();
         const skuLower = (product.sku || '').toLowerCase();
         const descLower = (product.description || '').toLowerCase();
-        
+
         let score = 0;
         let matches = false;
-        
+
         // Check if all search terms match
-        const allTermsMatch = searchTerms.every(term => 
-          nameLower.includes(term) || 
-          skuLower.includes(term) || 
+        const allTermsMatch = searchTerms.every(term =>
+          nameLower.includes(term) ||
+          skuLower.includes(term) ||
           descLower.includes(term)
         );
-        
+
         if (!allTermsMatch) return null;
-        
+
         matches = true;
-        
+
         // Exact match gets highest score
         if (nameLower === searchLower) score += 1000;
         else if (nameLower.startsWith(searchLower)) score += 50;
         else if (nameLower.includes(searchLower)) score += 10;
-        
+
         // SKU exact match
         if (skuLower === searchLower) score += 500;
         else if (skuLower.includes(searchLower)) score += 20;
-        
+
         // Description match
         if (descLower.includes(searchLower)) score += 5;
-        
+
         return { product, score, matches };
       })
       .filter((item): item is { product: Product; score: number; matches: boolean } => item !== null)
       .sort((a, b) => b.score - a.score)
       .map(item => item.product);
-    
+
     return scored;
   }, [products, productSearch]);
 
@@ -924,44 +962,26 @@ function BundleModal({
     };
   }, []);
 
-  const handleAddItem = () => {
-    // Use highlighted product, selected product, or try to find match
-    let productToAdd = highlightedIndex >= 0 
-      ? filteredProducts[highlightedIndex]
-      : selectedProduct;
-    
-    if (!productToAdd && productSearch.trim()) {
-      const exactMatch = products.find(
-        p => p.name.toLowerCase() === productSearch.toLowerCase()
-      );
-      if (exactMatch) {
-        productToAdd = exactMatch;
-      } else if (filteredProducts.length === 1) {
-        productToAdd = filteredProducts[0];
-      }
-    }
-    
-    if (!productToAdd) {
+  const flashLocalError = () => {
+    setLocalError(dict?.admin?.productAlreadyInBundle || 'This product is already in the bundle');
+    setTimeout(() => setLocalError(''), 3000);
+  };
+
+  const isInBundle = (productId: string) =>
+    formData.items.some(item => (typeof item.productId === 'string' ? item.productId : item.productId._id) === productId);
+
+  const addProduct = (product: Product) => {
+    if (isInBundle(product._id)) {
+      flashLocalError();
       return;
     }
-    
-    // Check if product is already in bundle
-    const alreadyAdded = formData.items.some(
-      item => (typeof item.productId === 'string' ? item.productId : item.productId._id) === productToAdd._id
-    );
-    
-    if (alreadyAdded) {
-      setLocalError(dict?.admin?.productAlreadyInBundle || 'This product is already in the bundle');
-      setTimeout(() => setLocalError(''), 3000);
-      return;
-    }
-    
+
     const newItem: BundleItem = {
-      productId: productToAdd._id,
-      productName: productToAdd.name,
+      productId: product._id,
+      productName: product.name,
       quantity: itemQuantity,
     };
-    
+
     setFormData({
       ...formData,
       items: [...formData.items, newItem],
@@ -975,11 +995,35 @@ function BundleModal({
     setTimeout(() => searchInputRef.current?.focus(), 100);
   };
 
+  const handleAddItem = () => {
+    // Use highlighted product, selected product, or try to find match
+    let productToAdd = highlightedIndex >= 0
+      ? filteredProducts[highlightedIndex]
+      : selectedProduct;
+
+    if (!productToAdd && productSearch.trim()) {
+      const exactMatch = products.find(
+        p => p.name.toLowerCase() === productSearch.toLowerCase()
+      );
+      if (exactMatch) {
+        productToAdd = exactMatch;
+      } else if (filteredProducts.length === 1) {
+        productToAdd = filteredProducts[0];
+      }
+    }
+
+    if (!productToAdd) {
+      return;
+    }
+
+    addProduct(productToAdd);
+  };
+
   const handleProductSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       setShowProductSuggestions(true);
-      setHighlightedIndex(prev => 
+      setHighlightedIndex(prev =>
         prev < filteredProducts.length - 1 ? prev + 1 : prev
       );
       // Scroll into view
@@ -1001,41 +1045,14 @@ function BundleModal({
       }
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      const productToSelect = highlightedIndex >= 0 
+      const productToSelect = highlightedIndex >= 0
         ? filteredProducts[highlightedIndex]
-        : filteredProducts.length > 0 
+        : filteredProducts.length > 0
           ? filteredProducts[0]
           : selectedProduct;
-      
+
       if (productToSelect) {
-        // Check if product is already in bundle
-        const alreadyAdded = formData.items.some(
-          item => (typeof item.productId === 'string' ? item.productId : item.productId._id) === productToSelect._id
-        );
-        
-        if (alreadyAdded) {
-          setLocalError(dict?.admin?.productAlreadyInBundle || 'This product is already in the bundle');
-          setTimeout(() => setLocalError(''), 3000);
-          return;
-        }
-        
-        const newItem: BundleItem = {
-          productId: productToSelect._id,
-          productName: productToSelect.name,
-          quantity: itemQuantity,
-        };
-        
-        setFormData({
-          ...formData,
-          items: [...formData.items, newItem],
-        });
-        setSelectedProduct(null);
-        setProductSearch('');
-        setItemQuantity(1);
-        setShowProductSuggestions(false);
-        setHighlightedIndex(-1);
-        // Focus back on search input
-        setTimeout(() => searchInputRef.current?.focus(), 100);
+        addProduct(productToSelect);
       }
     } else if (e.key === 'Escape') {
       setShowProductSuggestions(false);
@@ -1053,295 +1070,281 @@ function BundleModal({
   // Helper function to highlight matching text
   const highlightMatch = (text: string, search: string) => {
     if (!search.trim()) return text;
-    
+
     const parts = text.split(new RegExp(`(${search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'));
-    return parts.map((part, i) => 
+    return parts.map((part, i) =>
       part.toLowerCase() === search.toLowerCase() ? (
-        <mark key={i} className="bg-yellow-200 font-semibold">{part}</mark>
+        <mark key={i} className="bg-brand-soft text-brand-navy font-semibold">{part}</mark>
       ) : part
     );
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    
-    await submitForm(
-      async () => {
-        toast.success(dict?.admin?.bundleSavedSuccessfully || 'Bundle saved successfully');
-        onSave();
-      },
-      (errorMsg) => {
-        toast.error(errorMsg);
-      }
-    );
+
+    // Save errors are shown inline via `error` from useBundleForm.
+    await submitForm(async () => {
+      toast.success(dict?.admin?.bundleSavedSuccessfully || 'Bundle saved successfully');
+      onSave();
+    });
   };
 
+  const closeLabel = dict.common?.close || 'Close';
+
   return (
-    <div className="fixed inset-0 bg-gray-900/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white border border-gray-300 max-w-3xl w-full max-h-[90vh] overflow-y-auto overflow-x-hidden">
-        <div className="p-6">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">
-            {bundle ? (dict.admin?.editBundle || 'Edit Bundle') : (dict.admin?.addBundle || 'Add Bundle')}
-          </h2>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict.admin?.name || 'Name'} *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{dict.admin?.sku || 'SKU'}</label>
-                <input
-                  type="text"
-                  value={formData.sku}
-                  onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-                />
-              </div>
-            </div>
+    <>
+      <div className="flex items-center justify-between px-6 py-4 bg-brand-navy text-white shrink-0">
+        <h2 className="text-base font-semibold">
+          {bundle ? (dict.admin?.editBundle || 'Edit Bundle') : (dict.admin?.addBundle || 'Add Bundle')}
+        </h2>
+        <button type="button" onClick={onClose} title={closeLabel} aria-label={closeLabel} className="text-white/70 hover:text-white">
+          <Icon d={ICON.close} className="w-5 h-5" />
+        </button>
+      </div>
+      <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+        <div className="p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.description || 'Description'}
+              <label htmlFor="bundle-name" className={labelCls}>
+                {dict.admin?.name || 'Name'} <span className="text-win8-danger">*</span>
               </label>
-              <textarea
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
+              <input
+                id="bundle-name"
+                type="text"
+                required
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                className={inputCls}
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict.admin?.price || 'Price'} *
-                </label>
+            <div>
+              <label htmlFor="bundle-sku" className={labelCls}>{dict.admin?.sku || 'SKU'}</label>
+              <input
+                id="bundle-sku"
+                type="text"
+                value={formData.sku}
+                onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
+                className={`${inputCls} font-mono`}
+              />
+            </div>
+          </div>
+          <div>
+            <label htmlFor="bundle-description" className={labelCls}>{dict.admin?.description || 'Description'}</label>
+            <textarea
+              id="bundle-description"
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              rows={3}
+              className={`${inputCls} resize-none`}
+            />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label htmlFor="bundle-price" className={labelCls}>
+                {dict.admin?.price || 'Price'} <span className="text-win8-danger">*</span>
+              </label>
+              <input
+                id="bundle-price"
+                type="number"
+                step="0.01"
+                min="0"
+                required
+                value={formData.price}
+                onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) || 0 })}
+                className={`${inputCls} tabular-nums`}
+              />
+            </div>
+            <div>
+              <label htmlFor="bundle-category" className={labelCls}>{dict.admin?.category || 'Category'}</label>
+              <select
+                id="bundle-category"
+                value={formData.categoryId || ''}
+                onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
+                className={inputCls}
+              >
+                <option value="">{dict.common?.none || 'None'}</option>
+                {categories.map((cat) => (
+                  <option key={cat.id} value={cat.id}>{cat.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <hr className="border-gray-300" />
+
+          {/* Bundle Items */}
+          <div className="space-y-3">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+              {dict.admin?.bundleItems || 'Bundle Items'} <span className="text-win8-danger">*</span>
+            </p>
+
+            <div className="p-3 border border-gray-300 bg-gray-50">
+              <div className="flex gap-2">
+                <div className="flex-1 relative">
+                  <input
+                    ref={searchInputRef}
+                    type="text"
+                    value={productSearch}
+                    onChange={(e) => {
+                      setProductSearch(e.target.value);
+                      setShowProductSuggestions(true);
+                    }}
+                    onFocus={() => {
+                      if (!productsLoading) {
+                        setShowProductSuggestions(true);
+                      }
+                    }}
+                    onKeyDown={handleProductSearchKeyDown}
+                    placeholder={dict.admin?.searchProduct || 'Search products…'}
+                    aria-label={dict.admin?.searchProduct || 'Search products'}
+                    className={inputCls}
+                    autoComplete="off"
+                  />
+                  {showProductSuggestions && (
+                    <div
+                      ref={suggestionsRef}
+                      className="absolute z-30 w-full mt-1 bg-white border border-gray-300 max-h-60 overflow-y-auto"
+                      style={{ top: '100%' }}
+                    >
+                      {productsLoading ? (
+                        <div className="px-4 py-3 text-sm text-gray-500 flex items-center gap-2">
+                          <span className="text-brand">{SPINNER_SM}</span>
+                          {dict.admin?.loadingProducts || 'Loading products…'}
+                        </div>
+                      ) : products.length === 0 ? (
+                        <div className="px-4 py-2 text-sm text-gray-500">
+                          {dict.admin?.noProductsAvailable || 'No products available'}
+                        </div>
+                      ) : filteredProducts.length > 0 ? (
+                        filteredProducts.map((product, index) => {
+                          const isHighlighted = index === highlightedIndex;
+                          const isAlreadyAdded = isInBundle(product._id);
+
+                          return (
+                            <button
+                              key={product._id}
+                              ref={el => { suggestionItemsRef.current[index] = el; }}
+                              type="button"
+                              onClick={() => {
+                                if (isAlreadyAdded) {
+                                  flashLocalError();
+                                  return;
+                                }
+                                setSelectedProduct(product);
+                                setProductSearch(product.name);
+                                setShowProductSuggestions(false);
+                                setHighlightedIndex(-1);
+                              }}
+                              onMouseEnter={() => setHighlightedIndex(index)}
+                              className={`w-full text-left px-4 py-2 transition-colors border-b border-gray-200 last:border-b-0 ${
+                                isHighlighted ? 'bg-gray-100' : 'hover:bg-gray-100'
+                              } ${isAlreadyAdded ? 'opacity-50 cursor-not-allowed' : ''}`}
+                              disabled={isAlreadyAdded}
+                            >
+                              <div className="text-sm font-medium text-gray-900 flex items-center justify-between">
+                                <span>{highlightMatch(product.name, productSearch)}</span>
+                                {isAlreadyAdded && (
+                                  <span className="text-xs text-gray-400 ml-2">{dict?.admin?.alreadyAdded || 'Already added'}</span>
+                                )}
+                              </div>
+                              <div className="text-xs text-gray-500 flex items-center gap-2 mt-0.5 tabular-nums">
+                                <Currency amount={product.price} />
+                                {product.sku && (
+                                  <span className="font-mono">{highlightMatch(product.sku, productSearch)}</span>
+                                )}
+                                {product.stock !== undefined && (
+                                  <span className={product.stock === 0 ? 'font-semibold text-win8-danger' : ''}>
+                                    · {dict?.admin?.stock || 'Stock'}: {product.stock.toLocaleString()}
+                                  </span>
+                                )}
+                              </div>
+                            </button>
+                          );
+                        })
+                      ) : (
+                        <div className="px-4 py-2 text-sm text-gray-500">
+                          {dict.admin?.noProductsFound || 'No products found'}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
                 <input
                   type="number"
-                  step="0.01"
-                  min="0"
-                  required
-                  value={formData.price}
-                  onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) || 0 })}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
+                  min="1"
+                  value={itemQuantity}
+                  onChange={(e) => setItemQuantity(parseInt(e.target.value) || 1)}
+                  placeholder={dict.admin?.quantity || 'Qty'}
+                  aria-label={dict.admin?.quantity || 'Quantity'}
+                  className="w-20 border border-gray-300 px-3 py-2 text-sm bg-white text-right tabular-nums"
                 />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict.admin?.category || 'Category'}
-                </label>
-                <select
-                  value={formData.categoryId || ''}
-                  onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
+                <button
+                  type="button"
+                  onClick={handleAddItem}
+                  disabled={
+                    !selectedProduct &&
+                    highlightedIndex < 0 &&
+                    filteredProducts.length !== 1 &&
+                    !productSearch.trim()
+                  }
+                  className={btnPrimary}
                 >
-                  <option value="">{dict.common?.none || 'None'}</option>
-                  {categories.map((cat) => (
-                    <option key={cat._id} value={cat._id}>
-                      {cat.name}
-                    </option>
-                  ))}
-                </select>
+                  {dict.common?.add || 'Add'}
+                </button>
               </div>
+              {localError && (
+                <p className="mt-2 text-xs font-medium text-win8-danger" role="alert">{localError}</p>
+              )}
             </div>
 
-            {/* Bundle Items */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                {dict.admin?.bundleItems || 'Bundle Items'} *
-              </label>
-              
-              {/* Add Item Section */}
-              <div className="mb-4 p-4 border border-gray-300 bg-gray-50">
-                <div className="grid grid-cols-3 gap-2 mb-2">
-                  <div className="col-span-2 relative z-10">
-                    <input
-                      ref={searchInputRef}
-                      type="text"
-                      value={productSearch}
-                      onChange={(e) => {
-                        setProductSearch(e.target.value);
-                        setShowProductSuggestions(true);
-                      }}
-                      onFocus={() => {
-                        if (!productsLoading) {
-                          setShowProductSuggestions(true);
-                        }
-                      }}
-                      onKeyDown={handleProductSearchKeyDown}
-                      placeholder={dict.admin?.searchProduct || 'Search products...'}
-                      className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-                      autoComplete="off"
-                    />
-                    {showProductSuggestions && (
-                      <div 
-                        ref={suggestionsRef}
-                        className="absolute z-[100] w-full mt-1 bg-white border border-gray-300 max-h-60 overflow-y-auto"
-                        style={{ top: '100%' }}
-                      >
-                        {productsLoading ? (
-                          <div className="px-4 py-2 text-sm text-gray-500">
-                            {dict.admin?.loadingProducts || 'Loading products...'}
-                          </div>
-                        ) : products.length === 0 ? (
-                          <div className="px-4 py-2 text-sm text-gray-500">
-                            {dict.admin?.noProductsAvailable || 'No products available'}
-                          </div>
-                        ) : filteredProducts.length > 0 ? (
-                          filteredProducts.map((product, index) => {
-                            const isHighlighted = index === highlightedIndex;
-                            const isAlreadyAdded = formData.items.some(
-                              item => (typeof item.productId === 'string' ? item.productId : item.productId._id) === product._id
-                            );
-                            
-                            return (
-                              <button
-                                key={product._id}
-                                ref={el => { suggestionItemsRef.current[index] = el; }}
-                                type="button"
-                                onClick={() => {
-                                  if (isAlreadyAdded) {
-                                    setLocalError(dict?.admin?.productAlreadyInBundle || 'This product is already in the bundle');
-                                    setTimeout(() => setLocalError(''), 3000);
-                                    return;
-                                  }
-                                  setSelectedProduct(product);
-                                  setProductSearch(product.name);
-                                  setShowProductSuggestions(false);
-                                  setHighlightedIndex(-1);
-                                }}
-                                onMouseEnter={() => setHighlightedIndex(index)}
-                                className={`w-full text-left px-4 py-2 focus:outline-none transition-colors border-b border-gray-100 last:border-b-0 ${
-                                  isHighlighted 
-                                    ? 'bg-brand-soft border-teal-300' 
-                                    : 'hover:bg-brand-soft'
-                                } ${isAlreadyAdded ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                disabled={isAlreadyAdded}
-                              >
-                                <div className="font-medium flex items-center justify-between">
-                                  <span>{highlightMatch(product.name, productSearch)}</span>
-                                  {isAlreadyAdded && (
-                                    <span className="text-xs text-gray-400 ml-2">({dict?.admin?.alreadyAdded || 'Already added'})</span>
-                                  )}
-                                </div>
-                                <div className="text-sm text-gray-500 flex items-center gap-2 mt-1">
-                                  <Currency amount={product.price} />
-                                  {product.sku && (
-                                    <span className="text-xs">{dict?.admin?.sku || 'SKU'}: {highlightMatch(product.sku, productSearch)}</span>
-                                  )}
-                                  {product.stock !== undefined && (
-                                    <span className={`ml-2 ${product.stock === 0 ? 'text-red-500' : ''}`}>
-                                      • {dict?.admin?.stock || 'Stock'}: {product.stock}
-                                    </span>
-                                  )}
-                                </div>
-                              </button>
-                            );
-                          })
-                        ) : (
-                          <div className="px-4 py-2 text-sm text-gray-500">
-                            {dict.admin?.noProductsFound || 'No products found'}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <input
-                      type="number"
-                      min="1"
-                      value={itemQuantity}
-                      onChange={(e) => setItemQuantity(parseInt(e.target.value) || 1)}
-                      placeholder={dict.admin?.quantity || 'Qty'}
-                      className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleAddItem}
-                    disabled={
-                      !selectedProduct && 
-                      highlightedIndex < 0 && 
-                      filteredProducts.length !== 1 &&
-                      !productSearch.trim()
-                    }
-                    className="px-4 py-2 bg-brand text-white hover:bg-brand-hover disabled:opacity-50 disabled:cursor-not-allowed border border-brand-hover transition-colors"
-                  >
-                    {dict.common?.add || 'Add'}
-                  </button>
-                </div>
-              </div>
-
-              {/* Items List */}
-              <div className="space-y-2">
+            {formData.items.length === 0 ? (
+              <p className="text-sm text-gray-400 italic">
+                {dict.admin?.noItems || 'No items added. Add products to create a bundle.'}
+              </p>
+            ) : (
+              <div className="border border-gray-300 divide-y divide-gray-200">
                 {formData.items.map((item, index) => (
-                  <div key={index} className="flex items-center justify-between p-3 border border-gray-300 bg-white">
-                    <div className="flex-1">
-                      <span className="font-medium">{item.productName}</span>
-                      <span className="ml-2 text-sm text-gray-500">x {item.quantity}</span>
+                  <div key={index} className="flex items-center justify-between gap-3 px-3 py-2 bg-white">
+                    <p className="text-sm font-medium text-gray-900 min-w-0 truncate">{item.productName}</p>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <span className="text-sm text-gray-500 tabular-nums">× {item.quantity}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveItem(index)}
+                        title={dict.common?.remove || 'Remove'}
+                        aria-label={`${dict.common?.remove || 'Remove'} ${item.productName}`}
+                        className="inline-flex items-center justify-center p-2 text-win8-danger hover:bg-gray-100 transition-colors"
+                      >
+                        <Icon d={ICON.close} />
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveItem(index)}
-                      className="text-red-600 hover:text-red-900 ml-4"
-                    >
-                      {dict.common?.remove || 'Remove'}
-                    </button>
                   </div>
                 ))}
-                {formData.items.length === 0 && (
-                  <div className="text-center py-4 text-gray-500 text-sm">
-                    {dict.admin?.noItems || 'No items added. Add products to create a bundle.'}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div>
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={formData.trackInventory}
-                  onChange={(e) => setFormData({ ...formData, trackInventory: e.target.checked })}
-                  className="mr-2"
-                />
-                <span className="text-sm font-medium text-gray-700">
-                  {dict.admin?.trackInventory || 'Track Inventory'}
-                </span>
-              </label>
-            </div>
-
-            {error && (
-              <div className="bg-red-50 text-red-800 border border-red-300 p-3">
-                {error}
               </div>
             )}
-            <div className="flex gap-3 justify-end pt-4">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 bg-white"
-              >
-                {dict.common?.cancel || 'Cancel'}
-              </button>
-              <button
-                type="submit"
-                disabled={submitting}
-                className="px-4 py-2 bg-brand text-white hover:bg-brand-hover disabled:opacity-50 border border-brand-hover"
-              >
-                {submitting ? (dict.common?.loading || 'Saving...') : (dict.common?.save || 'Save')}
-              </button>
-            </div>
-          </form>
+          </div>
+
+          <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={formData.trackInventory}
+              onChange={(e) => setFormData({ ...formData, trackInventory: e.target.checked })}
+              className="checkbox-win8"
+            />
+            {dict.admin?.trackInventory || 'Track Inventory'}
+          </label>
+
+          {error && <div className="bg-win8-danger text-white text-sm p-3">{error}</div>}
         </div>
-      </div>
-    </div>
+        <div className="flex gap-3 px-6 py-4 border-t border-gray-300 justify-end shrink-0">
+          <button type="button" onClick={onClose} className={btnSecondary}>
+            {dict.common?.cancel || 'Cancel'}
+          </button>
+          <button type="submit" disabled={submitting} className={btnPrimary}>
+            {submitting ? (dict.common?.saving || 'Saving…') : (dict.common?.save || 'Save')}
+          </button>
+        </div>
+      </form>
+    </>
   );
 }

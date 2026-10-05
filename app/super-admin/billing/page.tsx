@@ -78,6 +78,12 @@ const TYPE_BADGE: Record<string, string> = {
   subscription_resumed: 'bg-win8-success text-white',
 };
 
+const INVOICE_STATUS_BADGE: Record<string, string> = {
+  paid: 'bg-win8-success text-white',
+  overdue: 'bg-win8-danger text-white',
+  sent: 'bg-win8-info text-white',
+};
+
 export default function BillingPage() {
   const [tenantSlugFilter, setTenantSlugFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
@@ -88,7 +94,11 @@ export default function BillingPage() {
   const [pagination, setPagination] = useState<Pagination>({ page: 1, limit: 20, total: 0, pages: 0 });
   const [loading, setLoading] = useState(false);
 
+  // invoiceEvent stays set after close so the drawer content doesn't blank
+  // while it slides out; invoiceOpen drives visibility.
   const [invoiceEvent, setInvoiceEvent] = useState<BillingEvent | null>(null);
+  const [invoiceOpen, setInvoiceOpen] = useState(false);
+  const [invoiceReload, setInvoiceReload] = useState(0);
   const [invoiceDetail, setInvoiceDetail] = useState<InvoiceDetail | null>(null);
   const [invoiceLoading, setInvoiceLoading] = useState(false);
   const [invoiceError, setInvoiceError] = useState('');
@@ -110,7 +120,12 @@ export default function BillingPage() {
       })
       .catch(() => setInvoiceError('Failed to load invoice'))
       .finally(() => setInvoiceLoading(false));
-  }, [invoiceEvent]);
+  }, [invoiceEvent, invoiceReload]);
+
+  const openInvoice = (ev: BillingEvent) => {
+    setInvoiceEvent(ev);
+    setInvoiceOpen(true);
+  };
 
   const [showForm, setShowForm] = useState(false);
   const [formTenantSlug, setFormTenantSlug] = useState('');
@@ -221,7 +236,7 @@ export default function BillingPage() {
               value={tenantSlugFilter}
               onChange={(e) => setTenantSlugFilter(e.target.value)}
               placeholder="All tenants"
-              className="px-3 py-2 border border-gray-300 text-sm w-44 focus:outline-none bg-white"
+              className="px-3 py-2 border border-gray-300 text-sm w-44 bg-white"
             />
           </div>
           <div>
@@ -266,7 +281,7 @@ export default function BillingPage() {
           <button
             type="button"
             onClick={openRecordForm}
-            className="ml-auto px-4 py-2 border border-gray-300 text-sm text-gray-600 hover:bg-gray-50 bg-white transition-colors"
+            className="ml-auto px-4 py-2 border border-gray-300 text-sm text-gray-600 hover:bg-gray-100 bg-white transition-colors"
           >
             + Record Billing Event
           </button>
@@ -277,17 +292,20 @@ export default function BillingPage() {
             <div className="win8-spinner text-brand mx-auto">
               <span /><span /><span /><span /><span />
             </div>
-            <p className="mt-3 text-gray-500 text-sm">Loading billing events…</p>
+            <p className="mt-3 text-gray-400 text-sm">Loading billing events…</p>
           </div>
         ) : events.length === 0 ? (
-          <div className="text-center py-12 text-gray-500 bg-white border border-gray-300">No billing events found.</div>
+          <div className="text-center py-12 text-gray-400 bg-white border border-gray-300">
+            {tenantSlugFilter || typeFilter || startDate || endDate ? 'No billing events match your filters.' : 'No billing events yet.'}
+          </div>
         ) : (
-          <div className="overflow-x-auto border border-gray-300 bg-white">
+          <div className="border border-gray-300 bg-white">
+            <div className="overflow-x-auto max-h-[70vh] overflow-y-auto">
             <table className="w-full text-sm">
-              <thead className="bg-brand-navy text-white text-xs uppercase tracking-wide">
+              <thead className="bg-brand-navy text-white text-xs uppercase tracking-wide sticky top-0 z-10">
                 <tr>
                   {['Date', 'Tenant', 'Type', 'Amount', 'Description', 'Transaction ID', 'Invoice'].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left font-medium">{h}</th>
+                    <th key={h} className={`px-4 py-3 font-medium ${h === 'Amount' ? 'text-right' : 'text-left'}`}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -304,7 +322,7 @@ export default function BillingPage() {
                         {ev.type.replace(/_/g, ' ')}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-gray-900 font-medium">
+                    <td className="px-4 py-3 text-right tabular-nums whitespace-nowrap text-gray-900 font-medium">
                       {ev.currency} {ev.amount.toLocaleString()}
                     </td>
                     <td className="px-4 py-3 text-gray-600 text-xs max-w-[240px] truncate" title={ev.description}>
@@ -315,7 +333,7 @@ export default function BillingPage() {
                       {ev.invoiceUrl ? (
                         <button
                           type="button"
-                          onClick={() => setInvoiceEvent(ev)}
+                          onClick={() => openInvoice(ev)}
                           className="text-brand hover:underline text-xs"
                         >
                           View
@@ -328,22 +346,25 @@ export default function BillingPage() {
                 ))}
               </tbody>
             </table>
+            </div>
 
             {pagination.pages > 1 && (
-              <div className="border-t border-gray-200 px-4 py-3 flex items-center justify-between text-sm text-gray-500">
-                <span>Page {pagination.page} of {pagination.pages} ({pagination.total} total)</span>
+              <div className="border-t border-gray-300 px-4 py-3 flex items-center justify-between text-sm text-gray-500">
+                <span className="tabular-nums">
+                  Showing {((pagination.page - 1) * pagination.limit + 1).toLocaleString()}–{Math.min(pagination.page * pagination.limit, pagination.total).toLocaleString()} of {pagination.total.toLocaleString()}
+                </span>
                 <div className="flex gap-2">
                   <button
                     disabled={pagination.page <= 1}
                     onClick={() => fetchEvents(pagination.page - 1, pagination.limit)}
-                    className="px-3 py-1 border border-gray-300 disabled:opacity-40 hover:bg-gray-50 bg-white transition-colors"
+                    className="px-3 py-1 border border-gray-300 disabled:opacity-40 hover:bg-gray-100 bg-white transition-colors"
                   >
                     ← Prev
                   </button>
                   <button
                     disabled={pagination.page >= pagination.pages}
                     onClick={() => fetchEvents(pagination.page + 1, pagination.limit)}
-                    className="px-3 py-1 border border-gray-300 disabled:opacity-40 hover:bg-gray-50 bg-white transition-colors"
+                    className="px-3 py-1 border border-gray-300 disabled:opacity-40 hover:bg-gray-100 bg-white transition-colors"
                   >
                     Next →
                   </button>
@@ -354,15 +375,9 @@ export default function BillingPage() {
         )}
       </div>
 
-      {invoiceEvent && (
-        <div
-          className="fixed inset-0 bg-black/40 z-50"
-          onClick={() => setInvoiceEvent(null)}
-        >
-          <div
-            className="absolute inset-y-0 right-0 w-full max-w-2xl bg-white border-l border-gray-300 flex flex-col animate-slide-in-right"
-            onClick={(e) => e.stopPropagation()}
-          >
+      <Win8Drawer open={invoiceOpen} onClose={() => setInvoiceOpen(false)} widthClass="max-w-2xl">
+        {invoiceEvent && (
+          <>
             <div className="flex items-center justify-between px-6 py-4 bg-brand-navy text-white shrink-0">
               <div>
                 <h2 className="text-base font-semibold">Invoice</h2>
@@ -381,33 +396,40 @@ export default function BillingPage() {
                     Open in new tab
                   </a>
                 )}
-                <button onClick={() => setInvoiceEvent(null)} title="Close" aria-label="Close" className="text-white/70 hover:text-white">
+                <button type="button" onClick={() => setInvoiceOpen(false)} title="Close" aria-label="Close" className="text-white/70 hover:text-white">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
                 </button>
               </div>
             </div>
-            <div className="flex-1 bg-gray-50 overflow-y-auto">
+            <div className="flex-1 min-h-0 bg-gray-50 overflow-y-auto">
               {!invoiceEvent.invoiceUrl ? (
-                <div className="p-6 text-sm text-gray-400">No invoice URL on this event.</div>
+                <p className="p-6 text-sm text-gray-400 italic">No invoice URL on this event.</p>
               ) : invoiceEvent.invoiceUrl.startsWith('http') ? (
                 <iframe src={invoiceEvent.invoiceUrl} title="Invoice" className="w-full h-full border-0" />
               ) : invoiceLoading ? (
-                <div className="p-6 text-sm text-gray-400">Loading invoice…</div>
+                <div className="text-center py-12">
+                  <div className="win8-spinner text-brand mx-auto"><span /><span /><span /><span /><span /></div>
+                  <p className="mt-3 text-gray-400 text-sm">Loading invoice…</p>
+                </div>
               ) : invoiceError ? (
-                <div className="p-6 text-sm text-red-500">{invoiceError}</div>
+                <div className="text-center py-12">
+                  <p className="text-win8-danger text-sm font-medium">{invoiceError}</p>
+                  <button
+                    type="button"
+                    onClick={() => setInvoiceReload((n) => n + 1)}
+                    className="mt-4 px-4 py-2 bg-brand text-white text-sm hover:bg-brand-hover transition-colors"
+                  >
+                    Retry
+                  </button>
+                </div>
               ) : invoiceDetail ? (
-                <div className="p-6 bg-white m-4 border border-gray-200 space-y-6">
+                <div className="p-6 bg-white m-4 border border-gray-300 space-y-6">
                   <div className="flex items-start justify-between">
                     <div>
-                      <p className="text-lg font-bold text-gray-900">Invoice {invoiceDetail.invoiceNumber}</p>
+                      <p className="text-lg font-bold text-gray-900">Invoice <span className="font-mono">{invoiceDetail.invoiceNumber}</span></p>
                       <p className="text-sm text-gray-500">{invoiceDetail.tenant?.name || invoiceDetail.tenant?.slug}</p>
                     </div>
-                    <span className={`px-2 py-0.5 text-xs font-semibold capitalize ${
-                      invoiceDetail.status === 'paid' ? 'bg-win8-success text-white' :
-                      invoiceDetail.status === 'overdue' ? 'bg-win8-danger text-white' :
-                      invoiceDetail.status === 'sent' ? 'bg-win8-info text-white' :
-                      'bg-gray-500 text-white'
-                    }`}>
+                    <span className={`px-2 py-0.5 text-xs font-semibold capitalize ${INVOICE_STATUS_BADGE[invoiceDetail.status] || 'bg-gray-500 text-white'}`}>
                       {invoiceDetail.status}
                     </span>
                   </div>
@@ -438,19 +460,19 @@ export default function BillingPage() {
                         <th className="pb-2 font-medium text-right">Subtotal</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-100">
+                    <tbody className="divide-y divide-gray-200">
                       {invoiceDetail.items.map((it) => (
                         <tr key={it.id}>
                           <td className="py-2 text-gray-800">{it.name}</td>
-                          <td className="py-2 text-right text-gray-500">{it.quantity}</td>
-                          <td className="py-2 text-right text-gray-500">{it.price.toLocaleString()}</td>
-                          <td className="py-2 text-right text-gray-800">{it.subtotal.toLocaleString()}</td>
+                          <td className="py-2 text-right tabular-nums text-gray-500">{it.quantity.toLocaleString()}</td>
+                          <td className="py-2 text-right tabular-nums text-gray-500">{it.price.toLocaleString()}</td>
+                          <td className="py-2 text-right tabular-nums text-gray-800">{it.subtotal.toLocaleString()}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
 
-                  <div className="border-t border-gray-200 pt-3 space-y-1 text-sm ml-auto max-w-[220px]">
+                  <div className="border-t border-gray-200 pt-3 space-y-1 text-sm tabular-nums ml-auto max-w-[220px]">
                     <div className="flex justify-between text-gray-500">
                       <span>Subtotal</span><span>{invoiceDetail.subtotal.toLocaleString()}</span>
                     </div>
@@ -485,35 +507,35 @@ export default function BillingPage() {
                 </div>
               ) : null}
             </div>
-          </div>
-        </div>
-      )}
+          </>
+        )}
+      </Win8Drawer>
 
       <Win8Drawer open={showForm} onClose={() => setShowForm(false)}>
         <div className="flex items-center justify-between px-6 py-4 bg-brand-navy text-white shrink-0">
           <h2 className="text-base font-semibold">Record Billing Event</h2>
-          <button onClick={() => setShowForm(false)} title="Close" aria-label="Close" className="text-white/70 hover:text-white">
+          <button type="button" onClick={() => setShowForm(false)} title="Close" aria-label="Close" className="text-white/70 hover:text-white">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
           </button>
         </div>
         <form onSubmit={submitEvent} className="flex flex-col flex-1 min-h-0">
           <div className="p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Tenant Slug *</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Tenant Slug <span className="text-win8-danger">*</span></label>
               <input
                 type="text" required
                 value={formTenantSlug}
                 onChange={(e) => setFormTenantSlug(e.target.value)}
-                className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none bg-white"
+                className="w-full border border-gray-300 px-3 py-2 text-sm bg-white"
                 placeholder="my-store"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Type *</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Type <span className="text-win8-danger">*</span></label>
               <select
                 value={formType}
                 onChange={(e) => setFormType(e.target.value)}
-                className="w-full border border-gray-300 px-3 py-2 text-sm bg-white capitalize focus:outline-none"
+                className="w-full border border-gray-300 px-3 py-2 text-sm bg-white capitalize"
               >
                 {RECORDABLE_EVENT_TYPES.map((t) => (
                   <option key={t} value={t} className="capitalize">{t.replace(/_/g, ' ')}</option>
@@ -521,12 +543,12 @@ export default function BillingPage() {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Amount (₱) *</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Amount (₱) <span className="text-win8-danger">*</span></label>
               <input
                 type="number" min="0" step="0.01" required
                 value={formAmount}
                 onChange={(e) => setFormAmount(e.target.value)}
-                className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none bg-white"
+                className="w-full border border-gray-300 px-3 py-2 text-sm bg-white"
                 placeholder="0.00"
               />
             </div>
@@ -535,7 +557,7 @@ export default function BillingPage() {
               <input
                 value={formDescription}
                 onChange={(e) => setFormDescription(e.target.value)}
-                className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none bg-white"
+                className="w-full border border-gray-300 px-3 py-2 text-sm bg-white"
                 placeholder="Optional"
               />
             </div>
@@ -544,7 +566,7 @@ export default function BillingPage() {
               <input
                 value={formTxId}
                 onChange={(e) => setFormTxId(e.target.value)}
-                className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none bg-white"
+                className="w-full border border-gray-300 px-3 py-2 text-sm bg-white"
                 placeholder="Optional"
               />
             </div>
@@ -553,7 +575,7 @@ export default function BillingPage() {
               <input
                 value={formInvoiceUrl}
                 onChange={(e) => setFormInvoiceUrl(e.target.value)}
-                className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none bg-white"
+                className="w-full border border-gray-300 px-3 py-2 text-sm bg-white"
                 placeholder="Optional"
               />
             </div>
@@ -563,13 +585,13 @@ export default function BillingPage() {
                 value={formNotes}
                 onChange={(e) => setFormNotes(e.target.value)}
                 rows={2}
-                className="w-full border border-gray-300 px-3 py-2 text-sm resize-none focus:outline-none bg-white"
+                className="w-full border border-gray-300 px-3 py-2 text-sm resize-none bg-white"
                 placeholder="Optional"
               />
             </div>
           </div>
-          <div className="flex gap-3 px-6 py-4 border-t border-gray-200 justify-end shrink-0">
-            <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 border border-gray-300 text-gray-700 bg-white text-sm hover:bg-gray-50 transition-colors">
+          <div className="flex gap-3 px-6 py-4 border-t border-gray-300 justify-end shrink-0">
+            <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 border border-gray-300 text-gray-700 bg-white text-sm hover:bg-gray-100 transition-colors">
               Cancel
             </button>
             <button

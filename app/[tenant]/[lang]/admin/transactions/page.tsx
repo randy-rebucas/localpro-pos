@@ -1,14 +1,13 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
+import { useParams } from 'next/navigation';
 import { getDictionaryClient } from '../../dictionaries-client';
 import Currency from '@/components/Currency';
 import FormattedDate from '@/components/FormattedDate';
-import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { usePermissions } from '@/hooks/usePermissions';
-import { getDefaultTenantSettings } from '@/lib/currency';
+import AdminPageHeader from '@/components/admin/AdminPageHeader';
+import Win8Drawer from '@/components/admin/Win8Drawer';
 
 interface Transaction {
   _id: string;
@@ -33,6 +32,14 @@ interface Transaction {
   createdAt: string;
 }
 
+const PAGE_SIZE = 10;
+
+const STATUS_BADGE: Record<string, string> = {
+  completed: 'bg-win8-success text-white',
+  refunded: 'bg-win8-suspended text-white',
+  cancelled: 'bg-win8-danger text-white',
+};
+
 function getPaymentMethodLabel(method: Transaction['paymentMethod'], dict: any): string { // eslint-disable-line @typescript-eslint/no-explicit-any
   const labels: Record<Transaction['paymentMethod'], string> = {
     cash: dict.admin?.cash || dict.pos?.cash || 'Cash',
@@ -47,9 +54,25 @@ function getPaymentMethodLabel(method: Transaction['paymentMethod'], dict: any):
   return labels[method] || method;
 }
 
+function getStatusLabel(status: Transaction['status'], dict: any): string { // eslint-disable-line @typescript-eslint/no-explicit-any
+  const labels: Record<Transaction['status'], string> = {
+    completed: dict.transactions?.completed || dict.admin?.completed || 'completed',
+    cancelled: dict.transactions?.cancelled || dict.admin?.cancelled || 'cancelled',
+    refunded: dict.transactions?.refunded || 'refunded',
+  };
+  return labels[status] || status;
+}
+
+function StatusBadge({ status, dict }: { status: Transaction['status']; dict: any }) { // eslint-disable-line @typescript-eslint/no-explicit-any
+  return (
+    <span className={`px-2 py-0.5 text-xs font-semibold capitalize ${STATUS_BADGE[status] || 'bg-gray-500 text-white'}`}>
+      {getStatusLabel(status, dict)}
+    </span>
+  );
+}
+
 export default function TransactionsPage() {
   const params = useParams();
-  const router = useRouter(); // eslint-disable-line @typescript-eslint/no-unused-vars
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -57,10 +80,10 @@ export default function TransactionsPage() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [error, setError] = useState<string | null>(null);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const { settings: tenantSettings } = useTenantSettings();
-  const primaryColor = (tenantSettings || getDefaultTenantSettings()).primaryColor || '#35979c';
+  const [detailOpen, setDetailOpen] = useState(false);
   const { canAccess } = usePermissions();
   const canView = canAccess('transactions.view');
 
@@ -73,41 +96,35 @@ export default function TransactionsPage() {
   const fetchTransactions = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/transactions?page=${page}&limit=10`, { credentials: 'include' });
+      const res = await fetch(`/api/transactions?page=${page}&limit=${PAGE_SIZE}`, { credentials: 'include' });
       const data = await res.json();
       if (data.success) {
         setTransactions(data.data || []);
         setTotalPages(data.pagination?.pages || 1);
-        setMessage(null);
+        setTotal(data.pagination?.total ?? (data.data || []).length);
+        setError(null);
       } else {
-        setMessage({ type: 'error', text: data.error || dict?.common?.failedToFetchTransactions || 'Failed to fetch transactions' });
+        setError(data.error || dict?.common?.failedToFetchTransactions || 'Failed to fetch transactions');
         setTransactions([]);
       }
-    } catch (error) {
-      console.error('Error fetching transactions:', error);
-      setMessage({ type: 'error', text: dict?.common?.failedToFetchTransactions || 'Failed to fetch transactions' });
+    } catch (err) {
+      console.error('Error fetching transactions:', err);
+      setError(dict?.common?.failedToFetchTransactions || 'Failed to fetch transactions');
       setTransactions([]);
     } finally {
       setLoading(false);
     }
   };
 
-  if (!dict || loading) {
+  const openDetail = (transaction: Transaction) => {
+    setSelectedTransaction(transaction);
+    setDetailOpen(true);
+  };
+
+  if (!dict) {
     return (
       <div className="flex items-center justify-center py-24">
-        <div className="text-center">
-          <div
-            className="inline-block animate-spin h-8 w-8"
-            style={{
-              borderTop: `2px solid ${primaryColor}`,
-              borderRight: `2px solid ${primaryColor}`,
-              borderBottom: '2px solid transparent',
-              borderLeft: `2px solid ${primaryColor}`,
-              borderRadius: '50%',
-            }}
-          />
-          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
-        </div>
+        <div className="win8-spinner text-brand"><span /><span /><span /><span /><span /></div>
       </div>
     );
   }
@@ -115,276 +132,314 @@ export default function TransactionsPage() {
   if (!canView) {
     return (
       <div className="px-4 sm:px-6 py-6">
-        <div className="bg-red-50 border-2 border-red-300 p-6">
-          <h2 className="text-lg font-bold text-red-800 mb-1">{dict?.admin?.accessRestricted || 'Access Restricted'}</h2>
-          <p className="text-sm text-red-700">
-            {dict?.admin?.accessRestrictedTransactions || "You don't have permission to view transactions. Contact an admin or owner."}
+        <div className="p-4 bg-white border border-win8-danger">
+          <h2 className="text-base font-bold text-win8-danger mb-1">{dict.admin?.accessRestricted || 'Access Restricted'}</h2>
+          <p className="text-sm text-gray-700">
+            {dict.admin?.accessRestrictedTransactions || "You don't have permission to view transactions. Contact an admin or owner."}
           </p>
         </div>
       </div>
     );
   }
 
-  return (
-    <div>
-      <div className="px-4 sm:px-6 py-6">
-        <div className="mb-6 sm:mb-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-2">
-                {dict.admin?.transactions || 'Transactions'}
-              </h1>
-              <p className="text-gray-600">{dict.admin?.transactionsSubtitle || 'View and manage all sales transactions'}</p>
-            </div>
-          </div>
+  const start = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const end = Math.min(page * PAGE_SIZE, total);
+
+  const renderBody = () => {
+    if (loading) {
+      return (
+        <div className="text-center py-12 bg-white border border-gray-300">
+          <div className="win8-spinner text-brand mx-auto"><span /><span /><span /><span /><span /></div>
+          <p className="mt-3 text-gray-400 text-sm">{dict.admin?.loadingTransactions || 'Loading transactions…'}</p>
         </div>
+      );
+    }
 
-        {message && (
-          <div className={`mb-6 p-4 border ${message.type === 'success' ? 'bg-green-50 text-green-800 border-green-300' : 'bg-red-50 text-red-800 border-red-300'}`}>
-            {message.text}
-          </div>
-        )}
+    if (error) {
+      return (
+        <div className="text-center py-12 bg-white border border-gray-300">
+          <p className="text-win8-danger text-sm font-medium">{error}</p>
+          <button
+            onClick={() => fetchTransactions()}
+            className="mt-4 px-4 py-2 bg-brand text-white text-sm hover:bg-brand-hover transition-colors"
+          >
+            {dict.common?.retry || 'Retry'}
+          </button>
+        </div>
+      );
+    }
 
-        <div className="bg-white border border-gray-300 p-6">
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.receiptNumber || 'Receipt #'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.transactions?.date || dict.admin?.date || 'Date'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.transactions?.items || 'Items'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.subtotal || 'Subtotal'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.discount || 'Discount'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.common?.total || 'Total'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.transactions?.payment || 'Payment'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.status || 'Status'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.common?.actions || 'Actions'}</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {transactions.map((transaction) => (
-                  <tr key={transaction._id}>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm font-mono text-gray-900">
-                      {transaction.receiptNumber || '-'}
-                    </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+    if (transactions.length === 0) {
+      return (
+        <div className="text-center py-12 text-gray-400 bg-white border border-gray-300">
+          {dict.admin?.noTransactionsYet || 'No transactions yet.'}
+        </div>
+      );
+    }
+
+    return (
+      <div className="border border-gray-300 bg-white">
+        <div className="overflow-x-auto max-h-[70vh] overflow-y-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-brand-navy text-white text-xs uppercase tracking-wide sticky top-0 z-10">
+              <tr>
+                <th className="px-4 py-3 text-left font-medium">{dict.admin?.receiptNumber || 'Receipt #'}</th>
+                <th className="px-4 py-3 text-left font-medium">{dict.transactions?.date || dict.admin?.date || 'Date'}</th>
+                <th className="px-4 py-3 text-left font-medium">{dict.transactions?.items || 'Items'}</th>
+                <th className="px-4 py-3 text-right font-medium">{dict.admin?.subtotal || 'Subtotal'}</th>
+                <th className="px-4 py-3 text-right font-medium">{dict.admin?.discount || 'Discount'}</th>
+                <th className="px-4 py-3 text-right font-medium">{dict.common?.total || 'Total'}</th>
+                <th className="px-4 py-3 text-left font-medium">{dict.transactions?.payment || 'Payment'}</th>
+                <th className="px-4 py-3 text-left font-medium">{dict.admin?.status || 'Status'}</th>
+                <th className="px-4 py-3 text-right font-medium">{dict.common?.actions || 'Actions'}</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {transactions.map((transaction) => {
+                const viewLabel = dict.common?.view || 'View';
+                const receipt = transaction.receiptNumber || '—';
+                return (
+                  <tr
+                    key={transaction._id}
+                    className={`hover:bg-gray-100 transition-colors ${detailOpen && selectedTransaction?._id === transaction._id ? 'bg-brand-soft' : ''}`}
+                  >
+                    <td className="px-4 py-3 whitespace-nowrap font-mono text-xs text-gray-900">{receipt}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-700">
                       <FormattedDate date={transaction.createdAt} includeTime={true} />
                     </td>
-                    <td className="px-4 py-4 text-sm text-gray-500">
-                      {transaction.items.length} {transaction.items.length === 1 ? (dict.transactions?.item || 'item') : (dict.transactions?.items || 'items')}
+                    <td className="px-4 py-3 whitespace-nowrap text-gray-700 tabular-nums">
+                      {transaction.items.length.toLocaleString()} {transaction.items.length === 1 ? (dict.transactions?.item || 'item') : (dict.transactions?.items || 'items')}
                     </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <td className="px-4 py-3 whitespace-nowrap text-right tabular-nums text-gray-900">
                       <Currency amount={transaction.subtotal} />
                     </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-4 py-3 whitespace-nowrap text-right tabular-nums">
                       {transaction.discountAmount ? (
-                        <div>
-                          <div className="text-xs text-gray-400">{transaction.discountCode}</div>
-                          <div className="text-red-600">-<Currency amount={transaction.discountAmount} /></div>
-                        </div>
-                      ) : '-'}
+                        <>
+                          <p className="text-win8-danger">-<Currency amount={transaction.discountAmount} /></p>
+                          {transaction.discountCode && (
+                            <p className="text-xs text-gray-400 font-mono">{transaction.discountCode}</p>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-gray-400">—</span>
+                      )}
                     </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                    <td className="px-4 py-3 whitespace-nowrap text-right tabular-nums font-semibold text-gray-900">
                       <Currency amount={transaction.total} />
                     </td>
-                    <td className="px-4 py-4 whitespace-nowrap">
-                      <span
-                        className="px-2 py-1 text-xs font-semibold border"
-                        style={{
-                          backgroundColor: `${primaryColor}20`,
-                          color: primaryColor,
-                          borderColor: primaryColor,
-                        }}
-                      >
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <span className="px-2 py-0.5 text-xs font-semibold bg-brand-navy text-white">
                         {getPaymentMethodLabel(transaction.paymentMethod, dict)}
                       </span>
                       {transaction.paymentMethod === 'cash' && transaction.change !== undefined && (
-                        <div className="text-xs text-gray-500 mt-1">{dict.transactions?.change || dict.admin?.change || 'Change'}: <Currency amount={transaction.change} /></div>
+                        <p className="text-xs text-gray-500 mt-1 tabular-nums">
+                          {dict.transactions?.change || dict.admin?.change || 'Change'}: <Currency amount={transaction.change} />
+                        </p>
                       )}
                     </td>
-                    <td className="px-4 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 text-xs font-semibold border ${
-                        transaction.status === 'completed' ? 'bg-green-100 text-green-800' :
-                        transaction.status === 'refunded' ? 'bg-orange-100 text-orange-800' :
-                        'bg-red-100 text-red-800'
-                      }`}>
-                        {transaction.status === 'completed' ? (dict.transactions?.completed || dict.admin?.completed || 'completed') :
-                         transaction.status === 'cancelled' ? (dict.transactions?.cancelled || dict.admin?.cancelled || 'cancelled') :
-                         transaction.status === 'refunded' ? (dict.transactions?.refunded || 'refunded') :
-                         transaction.status}
-                      </span>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <StatusBadge status={transaction.status} dict={dict} />
                     </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
-                      <button
-                        onClick={() => setSelectedTransaction(transaction)}
-                        style={{ color: primaryColor }}
-                        className="hover:opacity-70 transition-opacity"
-                      >
-                        {dict.common?.view || 'View'}
-                      </button>
+                    <td className="px-4 py-3">
+                      <div className="flex justify-end gap-1.5">
+                        <button
+                          onClick={() => openDetail(transaction)}
+                          title={viewLabel}
+                          aria-label={`${viewLabel} ${receipt}`}
+                          className="inline-flex items-center justify-center p-2.5 text-white bg-brand hover:brightness-110 transition-[filter]"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
+                          </svg>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        {totalPages > 1 && (
+          <div className="border-t border-gray-300 px-4 py-3 flex items-center justify-between text-sm text-gray-500">
+            <span className="tabular-nums">
+              {dict.admin?.showing || 'Showing'} {start.toLocaleString()}–{end.toLocaleString()} {dict.admin?.of || 'of'} {total.toLocaleString()}
+            </span>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="px-3 py-1 border border-gray-300 bg-white disabled:opacity-40 hover:bg-gray-100"
+              >
+                ← {dict.transactions?.previous || dict.common?.previous || 'Prev'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={page >= totalPages}
+                className="px-3 py-1 border border-gray-300 bg-white disabled:opacity-40 hover:bg-gray-100"
+              >
+                {dict.transactions?.next || dict.common?.next || 'Next'} →
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <>
+      <div className="px-4 sm:px-6 py-6">
+        <AdminPageHeader
+          title={dict.admin?.transactions || 'Transactions'}
+          description={dict.admin?.transactionsSubtitle || 'View and manage all sales transactions'}
+        />
+        <div className="space-y-4">
+          {renderBody()}
+        </div>
+      </div>
+
+      <TransactionDetailDrawer
+        open={detailOpen}
+        transaction={selectedTransaction}
+        onClose={() => setDetailOpen(false)}
+        dict={dict}
+      />
+    </>
+  );
+}
+
+function TransactionDetailDrawer({
+  open,
+  transaction,
+  onClose,
+  dict,
+}: {
+  open: boolean;
+  transaction: Transaction | null;
+  onClose: () => void;
+  dict: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+}) {
+  const closeLabel = dict.common?.close || 'Close';
+
+  return (
+    <Win8Drawer open={open} onClose={onClose}>
+      <div className="flex items-center justify-between px-6 py-4 bg-brand-navy text-white shrink-0">
+        <div className="min-w-0">
+          <h2 className="text-base font-semibold">{dict.admin?.transactionDetails || 'Transaction Details'}</h2>
+          {transaction?.receiptNumber && (
+            <p className="text-xs text-white/70 font-mono truncate">{transaction.receiptNumber}</p>
+          )}
+        </div>
+        <button type="button" onClick={onClose} title={closeLabel} aria-label={closeLabel} className="text-white/70 hover:text-white">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      {transaction && (
+        <div className="p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
+          <dl className="grid grid-cols-2 gap-3">
+            <div>
+              <dt className="text-xs font-medium text-gray-600 mb-1">{dict.admin?.receiptNumber || 'Receipt #'}</dt>
+              <dd className="text-sm font-mono text-gray-900">{transaction.receiptNumber || '—'}</dd>
+            </div>
+            <div>
+              <dt className="text-xs font-medium text-gray-600 mb-1">{dict.transactions?.date || dict.admin?.date || 'Date'}</dt>
+              <dd className="text-sm text-gray-900"><FormattedDate date={transaction.createdAt} includeTime={true} /></dd>
+            </div>
+            <div>
+              <dt className="text-xs font-medium text-gray-600 mb-1">{dict.admin?.status || 'Status'}</dt>
+              <dd><StatusBadge status={transaction.status} dict={dict} /></dd>
+            </div>
+            <div>
+              <dt className="text-xs font-medium text-gray-600 mb-1">{dict.transactions?.payment || 'Payment'}</dt>
+              <dd>
+                <span className="px-2 py-0.5 text-xs font-semibold bg-brand-navy text-white">
+                  {getPaymentMethodLabel(transaction.paymentMethod, dict)}
+                </span>
+              </dd>
+            </div>
+          </dl>
+
+          <hr className="border-gray-300" />
+
+          <div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">{dict.transactions?.items || 'Items'}</p>
+            <table className="min-w-full text-sm">
+              <tbody className="divide-y divide-gray-200">
+                {transaction.items.map((item, idx) => (
+                  <tr key={idx}>
+                    <td className="py-2 pr-3">
+                      <p className="font-medium text-gray-900">{item.name}</p>
+                      <p className="text-xs text-gray-500 tabular-nums">
+                        {dict.transactions?.qty || 'Qty'}: {item.quantity.toLocaleString()} × <Currency amount={item.price} />
+                      </p>
+                    </td>
+                    <td className="py-2 text-right font-medium tabular-nums text-gray-900 whitespace-nowrap">
+                      <Currency amount={item.subtotal} />
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            {transactions.length === 0 && (
-              <div className="text-center py-8 text-gray-500">{dict.common?.noResults || 'No transactions found'}</div>
+          </div>
+
+          <div className="border-t border-gray-300 pt-3 space-y-2 text-sm tabular-nums">
+            <div className="flex justify-between">
+              <span className="text-gray-600">{dict.admin?.subtotal || 'Subtotal'}</span>
+              <span className="font-medium text-gray-900"><Currency amount={transaction.subtotal} /></span>
+            </div>
+            {transaction.discountAmount ? (
+              <div className="flex justify-between text-win8-danger">
+                <span>
+                  {dict.transactions?.discountLabel || dict.admin?.discount || 'Discount'}
+                  {transaction.discountCode && <span className="font-mono text-xs"> ({transaction.discountCode})</span>}
+                </span>
+                <span>-<Currency amount={transaction.discountAmount} /></span>
+              </div>
+            ) : null}
+            <div className="flex justify-between text-base font-bold text-gray-900 border-t border-gray-200 pt-2">
+              <span>{dict.common?.total || 'Total'}</span>
+              <span><Currency amount={transaction.total} /></span>
+            </div>
+            {transaction.paymentMethod === 'cash' && transaction.cashReceived ? (
+              <div className="flex justify-between text-xs text-gray-500">
+                <span>{dict.transactions?.cashReceived || 'Cash Received'}</span>
+                <span><Currency amount={transaction.cashReceived} /></span>
+              </div>
+            ) : null}
+            {transaction.paymentMethod === 'cash' && transaction.change !== undefined && (
+              <div className="flex justify-between text-xs text-gray-500">
+                <span>{dict.transactions?.change || 'Change'}</span>
+                <span><Currency amount={transaction.change} /></span>
+              </div>
             )}
           </div>
-          {totalPages > 1 && (
-            <div className="mt-4 flex justify-center gap-2">
-              <button
-                onClick={() => setPage(p => Math.max(1, p - 1))}
-                disabled={page === 1}
-                className="px-4 py-2 border border-gray-300 disabled:opacity-50 bg-white"
-              >
-                {dict.transactions?.previous || dict.common?.previous || 'Previous'}
-              </button>
-              <span className="px-4 py-2 text-sm text-gray-700">
-                {dict.transactions?.page || dict.admin?.page || 'Page'} {page} {dict.transactions?.of || dict.admin?.of || 'of'} {totalPages}
-              </span>
-              <button
-                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                disabled={page === totalPages}
-                className="px-4 py-2 border border-gray-300 disabled:opacity-50 bg-white"
-              >
-                {dict.transactions?.next || dict.common?.next || 'Next'}
-              </button>
+
+          {transaction.notes && (
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">{dict.common?.notes || 'Notes'}</p>
+              <div className="p-3 bg-gray-100 border border-gray-300 text-sm text-gray-700 whitespace-pre-wrap">{transaction.notes}</div>
             </div>
           )}
         </div>
+      )}
 
-        {selectedTransaction && (
-          <TransactionDetailModal
-            transaction={selectedTransaction}
-            primaryColor={primaryColor}
-            onClose={() => setSelectedTransaction(null)}
-            dict={dict}
-          />
-        )}
+      <div className="flex gap-3 px-6 py-4 border-t border-gray-300 justify-end shrink-0 mt-auto">
+        <button
+          type="button"
+          onClick={onClose}
+          className="px-4 py-2 border border-gray-300 text-gray-700 bg-white text-sm hover:bg-gray-100 transition-colors"
+        >
+          {closeLabel}
+        </button>
       </div>
-    </div>
+    </Win8Drawer>
   );
 }
-
-function TransactionDetailModal({
-  transaction,
-  primaryColor: _primaryColor = '#35979c',
-  onClose,
-  dict,
-}: {
-  transaction: Transaction;
-  primaryColor?: string;
-  onClose: () => void;
-  dict: any; // eslint-disable-line @typescript-eslint/no-explicit-any
-}) {
-  return (
-    <div className="fixed inset-0 bg-gray-900/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white border border-gray-300 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="p-6">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-2xl font-bold text-gray-900">
-              {dict.admin?.transactionDetails || 'Transaction Details'}
-            </h2>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600"
-            >
-              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium text-gray-500">{dict.admin?.receiptNumber || 'Receipt Number'}</label>
-                <div className="text-lg font-mono">{transaction.receiptNumber || '-'}</div>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-500">{dict.transactions?.date || dict.admin?.date || 'Date'}</label>
-                <div className="text-lg"><FormattedDate date={transaction.createdAt} includeTime={true} /></div>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-500">{dict.admin?.status || 'Status'}</label>
-                <div>
-                  <span className={`px-2 py-1 text-xs font-semibold border ${
-                    transaction.status === 'completed' ? 'bg-green-100 text-green-800 border-green-300' :
-                    transaction.status === 'refunded' ? 'bg-orange-100 text-orange-800 border-orange-300' :
-                    'bg-red-100 text-red-800 border-red-300'
-                  }`}>
-                    {transaction.status === 'completed' ? (dict.transactions?.completed || dict.admin?.completed || 'completed') :
-                     transaction.status === 'cancelled' ? (dict.transactions?.cancelled || dict.admin?.cancelled || 'cancelled') :
-                     transaction.status === 'refunded' ? (dict.transactions?.refunded || 'refunded') :
-                     transaction.status}
-                  </span>
-                </div>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-500">{dict.transactions?.payment || 'Payment Method'}</label>
-                <div className="text-lg">{getPaymentMethodLabel(transaction.paymentMethod, dict)}</div>
-              </div>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-gray-500 mb-2 block">{dict.transactions?.items || 'Items'}</label>
-              <div className="border border-gray-300 divide-y">
-                {transaction.items.map((item, idx) => (
-                  <div key={idx} className="p-3 flex justify-between">
-                    <div>
-                      <div className="font-medium">{item.name}</div>
-                      <div className="text-sm text-gray-500">{dict.transactions?.qty || 'Qty'}: {item.quantity} × <Currency amount={item.price} /></div>
-                    </div>
-                    <div className="font-medium"><Currency amount={item.subtotal} /></div>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="border-t pt-4 space-y-2">
-              <div className="flex justify-between">
-                <span className="text-gray-600">{dict.admin?.subtotal || 'Subtotal'}:</span>
-                <span className="font-medium"><Currency amount={transaction.subtotal} /></span>
-              </div>
-              {transaction.discountAmount && (
-                <div className="flex justify-between text-red-600">
-                  <span>{dict.transactions?.discountLabel || dict.admin?.discount || 'Discount'} ({transaction.discountCode}):</span>
-                  <span>-<Currency amount={transaction.discountAmount} /></span>
-                </div>
-              )}
-              <div className="flex justify-between text-lg font-bold border-t pt-2">
-                <span>{dict.common?.total || 'Total'}:</span>
-                <span><Currency amount={transaction.total} /></span>
-              </div>
-              {transaction.paymentMethod === 'cash' && transaction.cashReceived && (
-                <div className="flex justify-between text-sm text-gray-500">
-                  <span>{dict.transactions?.cashReceived || 'Cash Received'}:</span>
-                  <span><Currency amount={transaction.cashReceived} /></span>
-                </div>
-              )}
-              {transaction.paymentMethod === 'cash' && transaction.change !== undefined && (
-                <div className="flex justify-between text-sm text-gray-500">
-                  <span>{dict.transactions?.change || 'Change'}:</span>
-                  <span><Currency amount={transaction.change} /></span>
-                </div>
-              )}
-            </div>
-            {transaction.notes && (
-              <div>
-                <label className="text-sm font-medium text-gray-500 mb-1 block">{dict.common?.notes || 'Notes'}</label>
-                <div className="p-3 bg-gray-50 border border-gray-300">{transaction.notes}</div>
-              </div>
-            )}
-          </div>
-          <div className="mt-6 flex justify-end">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 bg-gray-200 text-gray-700 hover:bg-gray-300 border border-gray-400"
-            >
-              {dict.common?.close || 'Close'}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-

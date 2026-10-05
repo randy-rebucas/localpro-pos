@@ -13,21 +13,17 @@ export const STOCK_TRANSFER_STATUSES = [
 
 export type StockTransferStatus = typeof STOCK_TRANSFER_STATUSES[number]['value'];
 
+// Solid Win8 status badges (white text on token fills).
+const STATUS_BADGE: Record<StockTransferStatus, string> = {
+  pending: 'bg-gray-500 text-white',
+  in_transit: 'bg-win8-info text-white',
+  partially_received: 'bg-win8-suspended text-white',
+  received: 'bg-win8-success text-white',
+  cancelled: 'bg-win8-danger text-white',
+};
+
 export function getStatusColor(status: StockTransferStatus): string {
-  switch (status) {
-    case 'pending':
-      return 'bg-gray-100 text-gray-800';
-    case 'in_transit':
-      return 'bg-blue-100 text-blue-800';
-    case 'partially_received':
-      return 'bg-orange-100 text-orange-800';
-    case 'received':
-      return 'bg-green-100 text-green-800';
-    case 'cancelled':
-      return 'bg-red-100 text-red-800';
-    default:
-      return 'bg-gray-100 text-gray-800';
-  }
+  return STATUS_BADGE[status] || 'bg-gray-500 text-white';
 }
 
 type Dict = Record<string, Record<string, string | undefined> | undefined>;
@@ -68,9 +64,9 @@ export function isStockTransferStatusEditable(status: StockTransferStatus): bool
   return getAllowedNextStatuses(status).length > 1;
 }
 
-export function formatStockTransferDate(dateString: string | Date): string {
+export function formatStockTransferDate(dateString: string | Date, locale: string = 'en-US'): string {
   const date = new Date(dateString);
-  return date.toLocaleDateString('en-US', {
+  return date.toLocaleDateString(locale, {
     year: 'numeric',
     month: 'short',
     day: 'numeric',

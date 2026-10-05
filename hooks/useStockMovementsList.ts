@@ -30,6 +30,8 @@ export const useStockMovementsList = () => {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<StockMovementsFilters>({
     type: '',
     productId: '',
@@ -44,6 +46,7 @@ export const useStockMovementsList = () => {
 
     try {
       setLoading(true);
+      setError(null);
       let url = `/api/stock-movements?page=${page}&limit=50`;
       if (filters.type) url += `&type=${filters.type}`;
       if (filters.productId) url += `&productId=${filters.productId}`;
@@ -53,12 +56,16 @@ export const useStockMovementsList = () => {
       if (data.success) {
         setMovements(data.data);
         setTotalPages(data.pagination?.pages || 1);
+        setTotal(data.pagination?.total ?? data.data.length);
         setMessage(null);
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to fetch stock movements' });
+        const text = data.error || 'Failed to fetch stock movements';
+        setError(text);
+        setMessage({ type: 'error', text });
       }
     } catch (error) {
       if ((error as Error).name !== 'AbortError') {
+        setError('Failed to fetch stock movements');
         setMessage({ type: 'error', text: 'Failed to fetch stock movements' });
       }
     } finally {
@@ -85,6 +92,9 @@ export const useStockMovementsList = () => {
     loading,
     page,
     totalPages,
+    total,
+    limit: 50,
+    error,
     filters,
     message,
     fetchMovements,

@@ -1,6 +1,7 @@
 export interface CashDrawerSession {
-  _id: string;
-  userId: string | { _id: string; name: string; email: string };
+  id: string;
+  userId: string;
+  user?: { name: string; email: string } | null;
   openingAmount: number;
   closingAmount?: number;
   expectedAmount?: number;
