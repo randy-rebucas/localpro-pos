@@ -8,13 +8,33 @@ import ProductCardSkeleton from '@/components/ui/ProductCardSkeleton';
 import ProductCard from '@/components/pos/ProductCard';
 import { useInfiniteScroll } from '@/hooks/useInfiniteScroll';
 import type { TranslationDict } from '@/types/dictionary';
-import type { PosProduct, ProductsSource, ProductsStatus } from '@/hooks/usePosProducts';
+import type {
+  PosProduct,
+  ProductsFailureReason,
+  ProductsSource,
+  ProductsStatus,
+} from '@/hooks/usePosProducts';
+
+const FAILURE_MESSAGES: Record<ProductsFailureReason, { key: string; fallback: string }> = {
+  offline: { key: 'productsFailureOffline', fallback: 'You are offline' },
+  timeout: { key: 'productsFailureTimeout', fallback: 'The server took too long to respond' },
+  unreachable: { key: 'productsFailureUnreachable', fallback: 'Cannot reach the server' },
+  unauthorized: { key: 'productsFailureUnauthorized', fallback: 'Your session has expired. Please sign in again' },
+  forbidden: { key: 'productsFailureForbidden', fallback: 'You do not have permission to view products' },
+  'not-found': { key: 'productsFailureNotFound', fallback: 'Store or products service not found' },
+  'rate-limited': { key: 'productsFailureRateLimited', fallback: 'Too many requests. Please wait a moment' },
+  'server-error': { key: 'productsFailureServerError', fallback: 'The server hit an error while loading products' },
+  'http-error': { key: 'productsFailureHttpError', fallback: 'The server rejected the request' },
+  'invalid-response': { key: 'productsFailureInvalidResponse', fallback: 'The server sent an unexpected response' },
+  'api-error': { key: 'productsFailureApiError', fallback: 'The server could not load products' },
+};
 
 interface ProductGridProps {
   products: PosProduct[];
   status: ProductsStatus;
   source: ProductsSource;
   error: string | null;
+  failureReason?: ProductsFailureReason | null;
   search: string;
   gridClassName: string;
   listClassName?: string;
@@ -40,6 +60,7 @@ export default function ProductGrid({
   status,
   source,
   error,
+  failureReason = null,
   search,
   gridClassName,
   listClassName = 'flex flex-col gap-2',
@@ -67,6 +88,15 @@ export default function ProductGrid({
     rootRef: scrollRootRef,
   });
 
+  // "<reason>: <server detail>" — detail is the API's own error text when it sent one
+  const failureMessage = (() => {
+    if (!failureReason) return error || null;
+    const { key, fallback } = FAILURE_MESSAGES[failureReason];
+    const reasonText = dict.pos?.[key] || fallback;
+    const detail = error?.trim().slice(0, 160);
+    return detail && detail !== reasonText ? `${reasonText}: ${detail}` : reasonText;
+  })();
+
   if (status === 'loading') {
     return (
       <ProductCardSkeleton
@@ -83,7 +113,12 @@ export default function ProductGrid({
       <div className="bg-white border border-gray-300">
         <ErrorState
           title={dict.pos?.failedToLoadProducts || 'Failed to load products'}
-          description={error || undefined}
+          description={
+            failureReason === 'offline'
+              ? dict.pos?.productsFailureOfflineNoCache ||
+                'You are offline and no products are saved on this device yet'
+              : failureMessage || undefined
+          }
           onRetry={onRetry}
           retryLabel={dict.common?.retry || 'Retry'}
         />
@@ -96,7 +131,11 @@ export default function ProductGrid({
       {source === 'cache' && (
         <InlineBanner
           variant="warning"
-          message={dict.pos?.showingCachedProducts || 'Showing cached products — connection unavailable'}
+          message={`${dict.pos?.showingCachedProducts || 'Showing products saved on this device'} — ${
+            failureMessage || dict.pos?.productsFailureApiError || 'The server could not load products'
+          }`}
+          onRetry={onRetry}
+          retryLabel={dict.common?.retry || 'Retry'}
         />
       )}
 

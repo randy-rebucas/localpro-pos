@@ -32,7 +32,68 @@ export interface PosProduct {
 export type ProductsStatus = 'idle' | 'loading' | 'ready' | 'error';
 export type ProductsSource = 'server' | 'cache' | 'none';
 
+/** Why products could not be loaded from the server (null when they were). */
+export type ProductsFailureReason =
+  | 'offline' // browser reports no network
+  | 'timeout' // request aborted after the timeout
+  | 'unreachable' // fetch itself failed (DNS, server down, CORS, dropped connection)
+  | 'unauthorized' // 401 — session expired
+  | 'forbidden' // 403 — no permission for products
+  | 'not-found' // 404 — tenant or endpoint not found
+  | 'rate-limited' // 429
+  | 'server-error' // 5xx
+  | 'http-error' // other non-2xx
+  | 'invalid-response' // body was not valid JSON
+  | 'api-error'; // 2xx but { success: false }
+
 const PAGE_SIZE = 40;
+
+/** Pull a readable message out of an error body such as `{"success":false,"error":"..."}`. */
+function extractErrorDetail(body: string): string {
+  try {
+    const parsed = JSON.parse(body);
+    if (parsed && typeof parsed.error === 'string') return parsed.error;
+    if (parsed && typeof parsed.message === 'string') return parsed.message;
+  } catch {
+    // not JSON — use the raw text
+  }
+  return body.trim();
+}
+
+class ApiResponseError extends Error {}
+class NetworkUnreachableError extends Error {}
+
+function classifyFetchError(err: unknown): { reason: ProductsFailureReason; detail: string | null } {
+  if (err instanceof DOMException && err.name === 'AbortError') {
+    return { reason: 'timeout', detail: null };
+  }
+  if (err instanceof NetworkUnreachableError) {
+    return { reason: 'unreachable', detail: null };
+  }
+  if (err instanceof ApiResponseError) {
+    return { reason: 'api-error', detail: err.message || null };
+  }
+  if (err instanceof SyntaxError || err instanceof TypeError) {
+    // Body was not JSON, or it didn't have the expected shape
+    return { reason: 'invalid-response', detail: null };
+  }
+  if (err instanceof Error) {
+    // fetchWithTimeout throws `HTTP <status>: <body>`
+    const match = /^HTTP (\d{3}):?\s*([\s\S]*)$/.exec(err.message);
+    if (match) {
+      const statusCode = Number(match[1]);
+      const detail = extractErrorDetail(match[2]) || null;
+      if (statusCode === 401) return { reason: 'unauthorized', detail };
+      if (statusCode === 403) return { reason: 'forbidden', detail };
+      if (statusCode === 404) return { reason: 'not-found', detail };
+      if (statusCode === 429) return { reason: 'rate-limited', detail };
+      if (statusCode >= 500) return { reason: 'server-error', detail: detail || `HTTP ${statusCode}` };
+      return { reason: 'http-error', detail: detail || `HTTP ${statusCode}` };
+    }
+    return { reason: 'api-error', detail: err.message || null };
+  }
+  return { reason: 'api-error', detail: null };
+}
 
 interface UsePosProductsOptions {
   tenant: string;
@@ -59,6 +120,7 @@ export function usePosProducts({
   const [status, setStatus] = useState<ProductsStatus>('idle');
   const [source, setSource] = useState<ProductsSource>('none');
   const [error, setError] = useState<string | null>(null);
+  const [failureReason, setFailureReason] = useState<ProductsFailureReason | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
 
@@ -115,6 +177,7 @@ export function usePosProducts({
       } else {
         setStatus('loading');
         setError(null);
+        setFailureReason(null);
         setHasMore(false);
         pageRef.current = 1;
       }
@@ -126,21 +189,29 @@ export function usePosProducts({
           }
           if (fetchId !== fetchIdRef.current) return;
 
+          setFailureReason('offline');
           if (offlineCatalogRef.current.length > 0) {
             applyOfflinePage(offlineCatalogRef.current, page, append);
           } else {
             setProducts([]);
             setSource('none');
             setStatus('error');
-            setError('No cached products available offline');
+            setError(null);
             setHasMore(false);
           }
           return;
         }
 
-        const res = await fetchWithTimeout(
-          `/api/products?search=${encodeURIComponent(debouncedSearch)}&tenant=${tenant}&page=${page}&limit=${PAGE_SIZE}`
-        );
+        let res: Response;
+        try {
+          res = await fetchWithTimeout(
+            `/api/products?search=${encodeURIComponent(debouncedSearch)}&tenant=${tenant}&page=${page}&limit=${PAGE_SIZE}`
+          );
+        } catch (requestErr) {
+          // fetch() rejects with TypeError only when no response was received at all
+          if (requestErr instanceof TypeError) throw new NetworkUnreachableError(requestErr.message);
+          throw requestErr;
+        }
         const data = await res.json();
         if (fetchId !== fetchIdRef.current) return;
 
@@ -154,8 +225,14 @@ export function usePosProducts({
           setHasMore(page < pages);
           pageRef.current = page;
           setError(null);
+          setFailureReason(null);
 
-          await cacheProductsMerged(incoming);
+          // Best-effort: a local cache write failure must not discard fresh server data
+          try {
+            await cacheProductsMerged(incoming);
+          } catch {
+            // ignore cache write errors
+          }
 
           if (page === 1) {
             try {
@@ -172,9 +249,11 @@ export function usePosProducts({
           return;
         }
 
-        throw new Error(data.error || 'Failed to fetch products');
+        throw new ApiResponseError(data.error || '');
       } catch (fetchErr) {
         if (fetchId !== fetchIdRef.current) return;
+
+        const { reason, detail } = classifyFetchError(fetchErr);
 
         if (!append) {
           try {
@@ -183,6 +262,8 @@ export function usePosProducts({
 
             if (offlineCatalogRef.current.length > 0) {
               applyOfflinePage(offlineCatalogRef.current, 1, false);
+              setFailureReason(reason);
+              setError(detail);
               return;
             }
           } catch {
@@ -194,7 +275,8 @@ export function usePosProducts({
           setProducts([]);
           setSource('none');
           setStatus('error');
-          setError(fetchErr instanceof Error ? fetchErr.message : 'Failed to load products');
+          setFailureReason(reason);
+          setError(detail);
           setHasMore(false);
         }
       } finally {
@@ -233,6 +315,7 @@ export function usePosProducts({
     status,
     source,
     error,
+    failureReason,
     hasMore,
     loadingMore,
     loadMore,

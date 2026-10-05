@@ -228,6 +228,7 @@ export default function Dashboard() {
     status: productsStatus,
     source: productsSource,
     error: productsError,
+    failureReason: productsFailureReason,
     hasMore: productsHasMore,
     loadingMore: productsLoadingMore,
     loadMore: loadMoreProducts,
@@ -1918,6 +1919,7 @@ export default function Dashboard() {
               status={productsStatus}
               source={productsSource}
               error={productsError}
+              failureReason={productsFailureReason}
               search={search}
               gridClassName={productGridClass}
               listClassName={productListClass}
