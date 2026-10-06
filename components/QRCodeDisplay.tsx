@@ -32,7 +32,7 @@ export default function QRCodeDisplay({ qrToken, name, onRegenerate }: QRCodeDis
   };
 
   return (
-    <div className="flex flex-col items-center space-y-4 p-6 bg-white border-2 border-gray-300">
+    <div className="flex flex-col items-center space-y-4 p-6 bg-white border border-gray-300">
       {name && (
         <div className="text-center">
           <h3 className="text-lg font-semibold text-gray-900">{name}</h3>
@@ -40,7 +40,7 @@ export default function QRCodeDisplay({ qrToken, name, onRegenerate }: QRCodeDis
         </div>
       )}
       
-      <div className="p-4 bg-white border-2 border-gray-300">
+      <div className="p-4 bg-white border border-gray-300">
         <QRCodeSVG
           value={qrToken}
           size={200}
@@ -52,22 +52,18 @@ export default function QRCodeDisplay({ qrToken, name, onRegenerate }: QRCodeDis
       <div className="w-full space-y-2">
         <button
           onClick={copyToClipboard}
-          className="w-full px-4 py-2 text-sm font-medium transition-colors border"
-          style={{
-            color: primaryColor,
-            backgroundColor: `${primaryColor}10`,
-            borderColor: primaryColor
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = `${primaryColor}20`; }}
-          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = `${primaryColor}10`; }}
+          type="button"
+          className="w-full px-4 py-2 text-sm font-semibold text-white hover:brightness-110 transition-[filter]"
+          style={{ backgroundColor: primaryColor }}
         >
           {copied ? (dict?.components?.qrCodeDisplay?.copied || '✓ Copied!') : (dict?.components?.qrCodeDisplay?.copyToken || 'Copy Token')}
         </button>
         
         {onRegenerate && (
           <button
+            type="button"
             onClick={onRegenerate}
-            className="w-full px-4 py-2 text-sm font-medium text-gray-600 bg-gray-50 hover:bg-gray-100 transition-colors border border-gray-300"
+            className="w-full px-4 py-2 text-sm text-gray-700 bg-white hover:bg-gray-100 transition-colors border border-gray-300"
           >
             {dict?.components?.qrCodeDisplay?.regenerateQRCode || 'Regenerate QR Code'}
           </button>

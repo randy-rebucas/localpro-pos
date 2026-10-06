@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
-import { getTenantIdFromRequest } from '@/lib/api-tenant';
+import { getTenantIdForUser } from '@/lib/api-tenant';
 import { getCurrentUser } from '@/lib/auth';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { requireBookingSchedulingAccess } from '@/lib/booking-scheduling-access';
@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const tenantId = await getTenantIdFromRequest(request);
+    const tenantId = await getTenantIdForUser(request, user);
     if (!tenantId) {
       return NextResponse.json(
         { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },

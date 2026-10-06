@@ -63,7 +63,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
-    if (!(await hasTenantPermission(user.role, oldTenant.id, 'tenant_profile.manage'))) {
+    if (!(await hasTenantPermission(user.role, oldTenant.id, 'tenant_profile.edit'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
@@ -191,7 +191,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
-    if (!(await hasTenantPermission(user.role, tenant.id, 'tenant_profile.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenant.id, 'tenant_profile.delete'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 

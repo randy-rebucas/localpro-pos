@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma, { dbTransaction } from '@/lib/db';
-import { getTenantIdFromRequest } from '@/lib/api-tenant';
+import { getTenantIdForUser } from '@/lib/api-tenant';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -11,7 +11,7 @@ import { requireBookingSchedulingAccess } from '@/lib/booking-scheduling-access'
 import { getClosedHolidayForDate } from '@/lib/holidays';
 import { isValidBookingStatusTransition, type BookingStatus } from '@/lib/bookings-helpers';
 import { logger } from '@/lib/logger';
-import { serializeBooking } from '@/lib/booking-serializer';
+import { serializeBooking, toAppBookingStatus, toDbBookingStatus } from '@/lib/booking-serializer';
 
 class BookingConflictError extends Error {
   conflicts: unknown;
@@ -20,13 +20,6 @@ class BookingConflictError extends Error {
     this.name = 'BookingConflictError';
     this.conflicts = conflicts;
   }
-}
-
-// Prisma's BookingStatus enum stores `no_show` (mapped to the db value
-// 'no-show'); the rest of the app (lib/bookings-helpers.ts, UI) uses the
-// hyphenated literal 'no-show'. Normalize at the boundary.
-function toAppStatus(status: string): BookingStatus {
-  return (status === 'no_show' ? 'no-show' : status) as BookingStatus;
 }
 
 /**
@@ -46,12 +39,18 @@ export async function GET(
       );
     }
 
-    const tenantId = await getTenantIdFromRequest(request);
+    const tenantId = await getTenantIdForUser(request, user);
     if (!tenantId) {
       return NextResponse.json(
         { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
         { status: 404 }
       );
+    }
+
+    // Same gate as the list endpoint and PUT/DELETE here: a booking carries
+    // customer contact details, so not every logged-in role may read it.
+    if (!(await hasTenantPermission(user.role, tenantId, 'bookings.view'))) {
+      return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
     }
 
     const { id } = await params;
@@ -95,7 +94,7 @@ export async function PUT(
       );
     }
 
-    const tenantId = await getTenantIdFromRequest(request);
+    const tenantId = await getTenantIdForUser(request, user);
 
     if (!tenantId) {
       return NextResponse.json(
@@ -104,7 +103,7 @@ export async function PUT(
       );
     }
 
-    if (!(await hasTenantPermission(user.role, tenantId, 'bookings.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenantId, 'bookings.edit'))) {
       return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
     }
 
@@ -142,7 +141,7 @@ export async function PUT(
     const oldStatus = existingBooking.status;
     const oldStartTime = existingBooking.startTime;
 
-    if (status !== undefined && !isValidBookingStatusTransition(toAppStatus(oldStatus), status)) {
+    if (status !== undefined && !isValidBookingStatusTransition(toAppBookingStatus(oldStatus as string) as BookingStatus, status)) {
       return NextResponse.json(
         {
           success: false,
@@ -212,7 +211,7 @@ export async function PUT(
     if (startTime !== undefined || duration !== undefined) updateData.endTime = newEndTime;
     if (staffId !== undefined) updateData.staffId = staffId;
     if (notes !== undefined) updateData.notes = notes;
-    if (status !== undefined) updateData.status = status;
+    if (status !== undefined) updateData.status = toDbBookingStatus(status);
 
     let updatedBooking;
     try {
@@ -332,7 +331,7 @@ export async function DELETE(
       );
     }
 
-    const tenantId = await getTenantIdFromRequest(request);
+    const tenantId = await getTenantIdForUser(request, user);
 
     if (!tenantId) {
       return NextResponse.json(
@@ -341,7 +340,7 @@ export async function DELETE(
       );
     }
 
-    if (!(await hasTenantPermission(user.role, tenantId, 'bookings.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenantId, 'bookings.delete'))) {
       return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
     }
 

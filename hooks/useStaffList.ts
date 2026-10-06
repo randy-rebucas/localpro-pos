@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { getFetchErrorMessage } from '@/lib/fetch-error';
 
 export interface User {
   _id: string;
@@ -34,7 +35,7 @@ export function useStaffList(tenant: string) {
         onError?.(errorMsg);
       }
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to fetch staff';
+      const errorMsg = getFetchErrorMessage(err, 'Failed to fetch staff');
       setError(errorMsg);
       onError?.(errorMsg);
     } finally {

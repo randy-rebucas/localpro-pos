@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import prisma from '@/lib/db';
-import { getTenantIdFromRequest } from '@/lib/api-tenant';
+import { getTenantIdForUser } from '@/lib/api-tenant';
 import { requireAuth, getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { checkRateLimit } from '@/lib/rate-limit';
@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const tenantId = await getTenantIdFromRequest(request);
+    const tenantId = await getTenantIdForUser(request, user);
     if (!tenantId) {
       return NextResponse.json(
         { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
@@ -44,8 +44,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (
-      !(await hasTenantPermission(user.role, tenantId, 'laundry_orders.view')) &&
-      !(await hasTenantPermission(user.role, tenantId, 'laundry_orders.manage'))
+      !(await hasTenantPermission(user.role, tenantId, 'laundry_orders.view'))
     ) {
       return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
     }
@@ -92,7 +91,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const tenantId = await getTenantIdFromRequest(request);
+    const tenantId = await getTenantIdForUser(request, user);
     if (!tenantId) {
       return NextResponse.json(
         { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
@@ -100,7 +99,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!(await hasTenantPermission(user.role, tenantId, 'laundry_orders.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenantId, 'laundry_orders.create'))) {
       return NextResponse.json(
         { success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') },
         { status: 403 }

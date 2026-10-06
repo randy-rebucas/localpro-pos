@@ -60,9 +60,9 @@ export function getRoleLabel(role: UserRole, dict?: Dict): string {
  */
 export function getStatusClasses(isActive: boolean): string {
   if (isActive) {
-    return 'bg-green-100 text-green-800 border-green-300';
+    return 'bg-win8-success text-white';
   }
-  return 'bg-red-100 text-red-800 border-red-300';
+  return 'bg-win8-danger text-white';
 }
 
 /**
@@ -86,13 +86,13 @@ export function getToggleActionLabel(isActive: boolean, dict?: Dict): string {
 }
 
 /**
- * Get toggle action button CSS classes
+ * Get toggle action button background (solid Win8 fill; pair with white text)
  */
 export function getToggleActionClasses(isActive: boolean): string {
   if (isActive) {
-    return 'text-orange-600 hover:text-orange-900';
+    return 'bg-win8-danger';
   }
-  return 'text-green-600 hover:text-green-900';
+  return 'bg-win8-success';
 }
 
 /**

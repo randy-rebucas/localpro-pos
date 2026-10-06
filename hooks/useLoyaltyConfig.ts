@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { getFetchErrorMessage, isAbortError } from '@/lib/fetch-error';
 
 export interface LoyaltyConfig {
   pointsPerPeso: number;
@@ -18,6 +19,8 @@ export const useLoyaltyConfig = () => {
     isEnabled: true,
   });
   const [loading, setLoading] = useState(true);
+  /** Set when loading the config failed — the form must not be saved over unknown values. */
+  const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -42,11 +45,15 @@ export const useLoyaltyConfig = () => {
         setConfig(json.data);
         setConfigForm(json.data);
         setDirty(false);
+        setError(null);
+      } else {
+        setError(json.error || 'Failed to load configuration');
       }
-    } catch (error: unknown) {
-      if (error instanceof Error && error.name !== 'AbortError') {
-        console.error('Error fetching config:', error);
+    } catch (err: unknown) {
+      if (!isAbortError(err)) {
+        console.error('Error fetching config:', err);
       }
+      setError(getFetchErrorMessage(err, 'Failed to load configuration'));
     } finally {
       setLoading(false);
     }
@@ -84,12 +91,11 @@ export const useLoyaltyConfig = () => {
       } else {
         return { success: false, error: json.error || 'Failed to save config' };
       }
-    } catch (error: unknown) {
-      if (error instanceof Error && error.name !== 'AbortError') {
-        console.error('Error saving config:', error);
-        return { success: false, error: 'Failed to save config' };
+    } catch (err: unknown) {
+      if (!isAbortError(err)) {
+        console.error('Error saving config:', err);
       }
-      return { success: false, error: 'Request cancelled' };
+      return { success: false, error: getFetchErrorMessage(err, 'Failed to save config') };
     } finally {
       setSaving(false);
     }
@@ -105,6 +111,7 @@ export const useLoyaltyConfig = () => {
     config,
     configForm,
     loading,
+    error,
     saving,
     dirty,
     fetchConfig,

@@ -35,7 +35,7 @@ export default function StockMovementsPage() {
   const inventoryEnabled = supportsFeature(settings ?? undefined, 'inventory');
   const businessTypeConfig = settings ? getBusinessTypeConfig(getBusinessType(settings)) : null;
   const { canAccess } = usePermissions();
-  const canManage = canAccess('stock_movements.manage');
+  const canManage = canAccess('stock_movements.view');
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);

@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { validateNotificationTemplate } from '@/lib/notification-templates';
 import { getCurrentUser } from '@/lib/auth';
+import { hasTenantPermission } from '@/lib/permissions-server';
 import { logger } from '@/lib/logger';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -83,7 +84,9 @@ export async function PUT(
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (user.role !== 'admin' && user.role !== 'manager' && user.role !== 'owner' && user.role !== 'super_admin') {
+    // Same permission key the admin sidebar/page gate on (default floor:
+    // manager), so tenant role-permission overrides apply server-side too.
+    if (!(await hasTenantPermission(user.role, user.tenantId, 'notifications.manage'))) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 

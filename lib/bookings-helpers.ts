@@ -18,23 +18,21 @@ export const BOOKING_STATUSES = [
 export type BookingStatus = typeof BOOKING_STATUSES[number]['value'];
 
 /**
+ * Solid Win8 badge classes per status (white text on a flat fill).
+ */
+export const BOOKING_STATUS_BADGE: Record<string, string> = {
+  pending: 'bg-win8-warning text-white',
+  confirmed: 'bg-win8-info text-white',
+  completed: 'bg-win8-success text-white',
+  cancelled: 'bg-win8-danger text-white',
+  'no-show': 'bg-gray-500 text-white',
+};
+
+/**
  * Get CSS classes for status badge
  */
 export function getStatusColor(status: BookingStatus): string {
-  switch (status) {
-    case 'confirmed':
-      return 'bg-green-100 text-green-800';
-    case 'pending':
-      return 'bg-yellow-100 text-yellow-800';
-    case 'completed':
-      return 'bg-brand-soft text-brand-navy';
-    case 'cancelled':
-      return 'bg-red-100 text-red-800';
-    case 'no-show':
-      return 'bg-gray-100 text-gray-800';
-    default:
-      return 'bg-gray-100 text-gray-800';
-  }
+  return BOOKING_STATUS_BADGE[status] || 'bg-gray-500 text-white';
 }
 
 /**
@@ -48,7 +46,7 @@ export function getStatusLabel(status: BookingStatus, dict?: Dict): string {
     confirmed: dict?.admin?.confirmed || 'Confirmed',
     completed: dict?.admin?.completed || 'Completed',
     cancelled: dict?.admin?.cancelled || 'Cancelled',
-    'no-show': 'No Show',
+    'no-show': dict?.admin?.noShow || 'No Show',
   };
   return labels[status] || status;
 }
@@ -127,8 +125,9 @@ export function isBookingStatusEditable(status: BookingStatus): boolean {
  * The "delete" action is actually a soft-cancel (status set to 'cancelled',
  * isActive: false) — the record and its history are preserved, not removed.
  */
-export function getDeleteBookingConfirmMessage(dict?: Dict): string {
-  return dict?.common?.cancelBookingConfirm || 'Are you sure you want to cancel this booking?';
+export function getDeleteBookingConfirmMessage(dict?: Dict, customerName = ''): string {
+  return (dict?.admin?.cancelBookingConfirm || 'Cancel the booking for "{name}"? The record is kept with status Cancelled.')
+    .replace('{name}', customerName);
 }
 
 /**

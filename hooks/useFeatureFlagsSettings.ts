@@ -2,10 +2,29 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { ITenantSettings } from '@/types/tenant';
+import { FEATURE_FLAGS } from '@/lib/feature-flags-helpers';
+import { getBusinessTypeConfig } from '@/lib/business-types';
+import { getBusinessType } from '@/lib/business-type-helpers';
 
 export interface FeatureFlagsMessage {
   type: 'success' | 'error';
   text: string;
+}
+
+type FlagMap = Record<string, boolean>;
+
+// Several flag columns are nullable (`Boolean?` in prisma/schema.prisma) and a
+// null/missing value means "follow the business type". Resolve them the same
+// way supportsFeature() in lib/business-type-helpers.ts does, so the toggles
+// show what the rest of the app actually does.
+function resolveFlags(data: Record<string, unknown>): { settings: ITenantSettings; flags: FlagMap } {
+  const defaults = getBusinessTypeConfig(getBusinessType(data as unknown as ITenantSettings)).defaultFeatures as FlagMap;
+  const flags: FlagMap = {};
+  for (const key of FEATURE_FLAGS) {
+    const value = data[key];
+    flags[key] = typeof value === 'boolean' ? value : defaults[key] ?? false;
+  }
+  return { settings: { ...data, ...flags } as unknown as ITenantSettings, flags };
 }
 
 export const useFeatureFlagsSettings = (tenant: string) => {
@@ -14,6 +33,9 @@ export const useFeatureFlagsSettings = (tenant: string) => {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<FeatureFlagsMessage | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  // Resolved values as last loaded/saved — save sends only what differs, so an
+  // untouched null flag keeps following the business type instead of being pinned.
+  const loadedFlagsRef = useRef<FlagMap>({});
 
   const fetchSettings = useCallback(async () => {
     try {
@@ -32,16 +54,9 @@ export const useFeatureFlagsSettings = (tenant: string) => {
       const data = await res.json();
 
       if (data.success) {
-        const defaultSettings: ITenantSettings = {
-          enableInventory: true,
-          enableCategories: true,
-          enableDiscounts: false,
-          enableLoyaltyProgram: false,
-          enableCustomerManagement: false,
-          enableBookingScheduling: false,
-          ...data.data,
-        };
-        setSettings(defaultSettings);
+        const { settings: resolved, flags } = resolveFlags(data.data || {});
+        loadedFlagsRef.current = flags;
+        setSettings(resolved);
       } else {
         setMessage({ type: 'error', text: data.error || 'Failed to load settings' });
       }
@@ -85,6 +100,20 @@ export const useFeatureFlagsSettings = (tenant: string) => {
         const timeoutId = setTimeout(() => controller.abort(), 20000);
         abortControllerRef.current = controller;
 
+        // Send only the flags the admin actually changed: the PUT checks
+        // feature_flags.manage for these keys and settings.manage for anything
+        // else, echoing the whole (possibly stale) object back would clobber
+        // other pages, and re-sending unchanged resolved defaults would pin
+        // null flags that should keep following the business type.
+        const current = settingsToSave as unknown as Record<string, unknown>;
+        const flags = Object.fromEntries(
+          FEATURE_FLAGS.filter((key) => current[key] !== loadedFlagsRef.current[key]).map((key) => [key, current[key]])
+        );
+        if (Object.keys(flags).length === 0) {
+          clearTimeout(timeoutId);
+          return { success: true, data: settingsToSave };
+        }
+
         setSaving(true);
         setMessage(null);
 
@@ -92,7 +121,7 @@ export const useFeatureFlagsSettings = (tenant: string) => {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
-          body: JSON.stringify({ settings: settingsToSave }),
+          body: JSON.stringify({ settings: flags }),
           signal: controller.signal,
         });
 
@@ -100,8 +129,10 @@ export const useFeatureFlagsSettings = (tenant: string) => {
         const data = await res.json();
 
         if (data.success) {
-          setSettings(data.data);
-          return { success: true, data: data.data };
+          const { settings: resolved, flags: savedFlags } = resolveFlags(data.data || {});
+          loadedFlagsRef.current = savedFlags;
+          setSettings(resolved);
+          return { success: true, data: resolved };
         } else {
           const errorMessage =
             res.status === 401 || res.status === 403

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
-import { getTenantIdFromRequest } from '@/lib/api-tenant';
+import { getTenantIdForUser } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { getTenantSettingsById } from '@/lib/tenant';
@@ -10,7 +10,7 @@ import { ensureLegalDiscounts, LEGAL_DISCOUNT_CODES } from '@/lib/discount-seeds
 
 export async function POST(request: NextRequest) {
   try {
-    await requireAuth(request);
+    const user = await requireAuth(request);
 
     // Rate limit: 20 attempts per minute per IP
     const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const tenantId = await getTenantIdFromRequest(request);
+    const tenantId = await getTenantIdForUser(request, user);
     const t = await getValidationTranslatorFromRequest(request);
 
     if (!tenantId) {

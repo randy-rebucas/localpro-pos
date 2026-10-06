@@ -49,7 +49,8 @@ export default function SubscriptionPage() {
   const tenantSettings = settings || getDefaultTenantSettings();
   const primaryColor = tenantSettings.primaryColor || '#35979c';
   const { canAccess } = usePermissions();
-  const canManageSubscription = canAccess('subscriptions.manage');
+  // This page exists to choose/pay for a plan; viewing billing lives on the admin subscriptions page.
+  const canManageSubscription = canAccess('subscriptions.change_plan');
 
   const currentPlan = plans.find((p) => p.name === currentPlanName);
   const currentPlanId = currentPlan?._id ?? null;

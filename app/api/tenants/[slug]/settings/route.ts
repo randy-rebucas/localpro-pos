@@ -8,7 +8,8 @@ import { getValidationTranslatorFromRequest } from '@/lib/validation-translation
 import { applyBusinessTypeDefaults, omitFeatureFlagDefaults, FEATURE_FLAG_KEYS } from '@/lib/business-types';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
-import { flattenSettingsForPrisma } from '@/lib/tenant-settings-flatten';
+import { flattenSettingsForPrisma, reshapeHardwareConfig } from '@/lib/tenant-settings-flatten';
+import { settingsPermissionRequirement } from '@/lib/settings-section-permissions';
 import { runWithBypass } from '@/lib/tenant-context';
 import { suggestCurrencyForCountry } from '@/lib/country-currency';
 
@@ -103,8 +104,10 @@ export async function GET(
       (settingsWithoutApiKey as { addressCountry?: string }).addressCountry
     );
 
+    // Printer/scanner/drawer columns are nested back under `hardwareConfig`,
+    // the shape every client reads (see lib/tenant-settings-flatten.ts).
     const data = {
-      ...settingsWithoutApiKey,
+      ...reshapeHardwareConfig(settingsWithoutApiKey),
       exchangeRateApiKeyConfigured: !!exchangeRateApiKey,
       suggestedCurrency: currencySuggestion,
       rolePermissionOverrides,
@@ -140,9 +143,8 @@ export async function PUT(
       return NextResponse.json({ success: false, error: t('validation.tooManyRequests', 'Too many requests') }, { status: 429 });
     }
 
-    if (!(await hasTenantPermission(user.role, user.tenantId, 'settings.manage'))) {
-      return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
-    }
+    // Permission is checked per settings section once the stored row is loaded
+    // (below, after tenant isolation) — see lib/settings-section-permissions.ts.
 
     const body = await request.json();
     const settings = body.settings || body;
@@ -163,10 +165,10 @@ export async function PUT(
     }
 
     // businessHours has its own granular permission (the Business Hours admin
-    // page gates on it, not settings.manage) — enforce it here too, since this
-    // shared settings endpoint is the only thing that actually persists
-    // `businessHours.timezone` (schedule/specialHours are handled by the
-    // dedicated business-hours route).
+    // page gates on it, not settings.manage) — enforce it here too. Note that
+    // flattenSettingsForPrisma drops `businessHours` entirely, so nothing is
+    // persisted from it here: timezone, schedule and specialHours are all
+    // written by the dedicated business-hours route.
     if (Object.prototype.hasOwnProperty.call(settings, 'businessHours')
       && !(await hasTenantPermission(user.role, user.tenantId, 'business_hours.manage'))) {
       return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
@@ -196,6 +198,33 @@ export async function PUT(
     // Tenant isolation: verify the authenticated user belongs to this tenant
     if (user.role !== 'super_admin' && user.tenantId !== existingTenant.id) {
       return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden') }, { status: 403 });
+    }
+
+    // Section permissions: Hardware/Branding/Multi-Currency/Feature Flags each
+    // have their own key; anything else needs settings.manage. Only keys whose
+    // stored value would actually change are checked, so posting the whole
+    // settings object with an untouched section doesn't need that section's key.
+    const permissionCache = new Map<string, boolean>();
+    const can = async (key: string) => {
+      if (!permissionCache.has(key)) {
+        permissionCache.set(key, await hasTenantPermission(user.role, user.tenantId, key));
+      }
+      return permissionCache.get(key)!;
+    };
+    const canAny = async (keys: string[]) => {
+      for (const key of keys) if (await can(key)) return true;
+      return false;
+    };
+    const requirement = settingsPermissionRequirement(settings, existingSettings);
+    let permitted = requirement.changedKeys.length > 0
+      ? true
+      : await canAny(requirement.anyOfWhenUnchanged);
+    for (const anyOf of requirement.required) {
+      if (!permitted) break;
+      permitted = await canAny(anyOf);
+    }
+    if (!permitted) {
+      return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
     }
 
     // Three-way merge: defaults → existing → incoming (incoming wins on conflict)

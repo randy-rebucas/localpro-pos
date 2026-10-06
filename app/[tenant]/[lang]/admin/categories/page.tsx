@@ -31,7 +31,9 @@ export default function CategoriesPage() {
   const [search, setSearch] = useState('');
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const { canAccess } = usePermissions();
-  const canManage = canAccess('categories.manage');
+  const canCreate = canAccess('categories.create');
+  // Row actions (edit, activate/deactivate) all go through PUT /api/categories/[id].
+  const canEdit = canAccess('categories.edit');
 
   const { categories, loading, error, fetchCategories, toggleCategoryStatus } = useCategoriesList();
 
@@ -126,7 +128,7 @@ export default function CategoriesPage() {
               <th className="px-4 py-3 text-left font-medium">{dict.admin?.name || 'Name'}</th>
               <th className="px-4 py-3 text-left font-medium">{dict.admin?.description || 'Description'}</th>
               <th className="px-4 py-3 text-left font-medium">{dict.admin?.status || 'Status'}</th>
-              {canManage && (
+              {canEdit && (
                 <th className="px-4 py-3 text-right font-medium">{dict.common?.actions || 'Actions'}</th>
               )}
             </tr>
@@ -146,7 +148,7 @@ export default function CategoriesPage() {
                       {getStatusLabel(category.isActive, dict)}
                     </span>
                   </td>
-                  {canManage && (
+                  {canEdit && (
                     <td className="px-4 py-3">
                       <div className="flex justify-end gap-1.5">
                         <button
@@ -211,7 +213,7 @@ export default function CategoriesPage() {
                 className="pl-8 pr-3 py-2 border border-gray-300 text-sm w-56"
               />
             </div>
-            {canManage && (
+            {canCreate && (
               <button
                 onClick={() => openForm(null)}
                 className="px-4 py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover transition-colors"

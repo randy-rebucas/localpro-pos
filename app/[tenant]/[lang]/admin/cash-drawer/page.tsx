@@ -35,7 +35,7 @@ export default function CashDrawerPage() {
 
   const { sessions, loading, error, totalPages, fetchSessions } = useCashDrawerSessions();
   const { canAccess } = usePermissions();
-  const canView = canAccess('cash_drawer.manage');
+  const canView = canAccess('cash_drawer.view');
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);

@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { getFetchErrorMessage } from '@/lib/fetch-error';
 
 export interface Booking {
   _id: string;
@@ -65,7 +66,7 @@ export function useBookingsList(tenant: string, filters: BookingFilters) {
         onError?.(errorMsg);
       }
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to fetch bookings';
+      const errorMsg = getFetchErrorMessage(err, 'Failed to fetch bookings');
       setError(errorMsg);
       onError?.(errorMsg);
     } finally {
@@ -96,7 +97,7 @@ export function useBookingsList(tenant: string, filters: BookingFilters) {
           onError?.(errorMsg);
         }
       } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'Failed to delete booking';
+        const errorMsg = getFetchErrorMessage(err, 'Failed to delete booking');
         onError?.(errorMsg);
       } finally {
         clearTimeout(timeout);
@@ -126,7 +127,7 @@ export function useBookingsList(tenant: string, filters: BookingFilters) {
           onError?.(errorMsg);
         }
       } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'Failed to send reminder';
+        const errorMsg = getFetchErrorMessage(err, 'Failed to send reminder');
         onError?.(errorMsg);
       } finally {
         clearTimeout(timeout);

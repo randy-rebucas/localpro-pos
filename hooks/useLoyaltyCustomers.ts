@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import type { Customer } from '@/types/customer';
+import { getFetchErrorMessage, isAbortError } from '@/lib/fetch-error';
 
 /** List row from loyalty admin — subset of `Customer` from the model. */
 export type LoyaltyCustomer = Pick<
@@ -14,6 +15,8 @@ export interface PaginationInfo {
   total: number;
 }
 
+const PAGE_SIZE = 20;
+
 export const useLoyaltyCustomers = () => {
   const [customers, setCustomers] = useState<LoyaltyCustomer[]>([]);
   const [search, setSearch] = useState('');
@@ -24,7 +27,9 @@ export const useLoyaltyCustomers = () => {
   const [enrolledCount, setEnrolledCount] = useState(0);
   const [totalPoints, setTotalPoints] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const controllerUnmounted = useRef(false);
 
   useEffect(() => {
     const id = setTimeout(() => setDebouncedSearch(search), 350);
@@ -39,7 +44,7 @@ export const useLoyaltyCustomers = () => {
 
       setLoading(true);
 
-      const qs = new URLSearchParams({ page: String(pageNum), limit: '20' });
+      const qs = new URLSearchParams({ page: String(pageNum), limit: String(PAGE_SIZE) });
       if (searchTerm) qs.set('search', searchTerm);
 
       const res = await fetch(`/api/customers?${qs}`, {
@@ -54,11 +59,17 @@ export const useLoyaltyCustomers = () => {
         setCustomers(json.data || []);
         setTotalPages(json.pagination?.pages ?? 1);
         setTotalCustomers(json.pagination?.total ?? 0);
+        setError(null);
+      } else {
+        setError(json.error || 'Failed to load customers');
       }
-    } catch (error: unknown) {
-      if (error instanceof Error && error.name !== 'AbortError') {
-        console.error('Error fetching customers:', error);
+    } catch (err: unknown) {
+      // Unmount aborts are expected; only a timeout abort is reported.
+      if (controllerUnmounted.current) return;
+      if (!isAbortError(err)) {
+        console.error('Error fetching customers:', err);
       }
+      setError(getFetchErrorMessage(err, 'Failed to load customers'));
     } finally {
       setLoading(false);
     }
@@ -79,8 +90,12 @@ export const useLoyaltyCustomers = () => {
     fetchCustomers(page, debouncedSearch);
   }, [page, debouncedSearch, fetchCustomers]);
 
+  const refetch = useCallback(() => fetchCustomers(page, debouncedSearch), [fetchCustomers, page, debouncedSearch]);
+
   useEffect(() => {
+    controllerUnmounted.current = false;
     return () => {
+      controllerUnmounted.current = true;
       abortControllerRef.current?.abort();
     };
   }, []);
@@ -113,6 +128,9 @@ export const useLoyaltyCustomers = () => {
     totalPages,
     totalCustomers,
     loading,
+    error,
+    limit: PAGE_SIZE,
+    refetch,
     enrolledCount,
     totalPoints,
     setSearch: handleSearch,

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
-import { getTenantIdFromRequest } from '@/lib/api-tenant';
+import { getTenantIdForUser } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { sendAttendanceNotification } from '@/lib/notifications';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
@@ -24,8 +24,8 @@ interface AttendanceNotification {
  */
 export async function GET(request: NextRequest) {
   try {
-    await requireAuth(request);
-    const tenantId = await getTenantIdFromRequest(request);
+    const user = await requireAuth(request);
+    const tenantId = await getTenantIdForUser(request, user);
     const t = await getValidationTranslatorFromRequest(request);
 
     if (!tenantId) {
@@ -151,8 +151,8 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    await requireAuth(request);
-    const tenantId = await getTenantIdFromRequest(request);
+    const user = await requireAuth(request);
+    const tenantId = await getTenantIdForUser(request, user);
     const t = await getValidationTranslatorFromRequest(request);
 
     if (!tenantId) {

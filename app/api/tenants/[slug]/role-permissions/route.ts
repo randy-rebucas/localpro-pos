@@ -9,7 +9,13 @@ import prisma from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
-import { PERMISSIONS, OVERRIDABLE_ROLES, type RolePermissionOverrides } from '@/lib/permissions';
+import {
+  PERMISSIONS,
+  PERMISSION_FEATURES,
+  OVERRIDABLE_ROLES,
+  normalizeOverrides,
+  type RolePermissionOverrides,
+} from '@/lib/permissions';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 
@@ -47,8 +53,12 @@ export async function GET(
     return NextResponse.json({
       success: true,
       data: {
-        overrides: (override?.overrides as RolePermissionOverrides | undefined) || {},
+        // Expressed in current action keys: overrides saved before features were
+        // split into actions (e.g. `products.manage`) are expanded here, so the
+        // editor never has to know about the old umbrella keys.
+        overrides: normalizeOverrides(override?.overrides as RolePermissionOverrides | undefined),
         permissions: PERMISSIONS,
+        features: PERMISSION_FEATURES,
         overridableRoles: OVERRIDABLE_ROLES,
       },
     });
@@ -86,22 +96,10 @@ export async function PUT(
       return NextResponse.json({ success: false, error: 'overrides object is required' }, { status: 400 });
     }
 
-    // Validate shape: only overridable roles, only known permission keys, only booleans.
-    const validKeys = new Set(PERMISSIONS.map((p) => p.key));
-    const sanitized: RolePermissionOverrides = {};
-    for (const role of OVERRIDABLE_ROLES) {
-      const roleOverrides = overrides[role];
-      if (!roleOverrides || typeof roleOverrides !== 'object') continue;
-      const cleanRole: Record<string, boolean> = {};
-      for (const [key, value] of Object.entries(roleOverrides)) {
-        if (validKeys.has(key) && typeof value === 'boolean') {
-          cleanRole[key] = value;
-        }
-      }
-      if (Object.keys(cleanRole).length > 0) {
-        sanitized[role] = cleanRole;
-      }
-    }
+    // Validate shape: only overridable roles, only known (non-locked) action keys,
+    // only booleans. Legacy umbrella keys from an older client are expanded onto
+    // their actions rather than rejected.
+    const sanitized = normalizeOverrides(overrides);
 
     const tenant = await prisma.tenant.findFirst({ where: { slug } });
     if (!tenant) {

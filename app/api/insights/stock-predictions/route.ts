@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId, user } = authResult;
 
-    if (!(await hasTenantPermission(user.role, tenantId, 'inventory.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenantId, 'inventory.view'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 

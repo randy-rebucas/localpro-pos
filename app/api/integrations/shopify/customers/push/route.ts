@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
   try {
     const user = await getCurrentUser(request);
     if (!user) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    if (!(await hasTenantPermission(user.role, user.tenantId, 'integrations.manage'))) {
+    if (!(await hasTenantPermission(user.role, user.tenantId, 'integrations.sync'))) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 

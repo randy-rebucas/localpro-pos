@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import prisma from '@/lib/db';
 import { Prisma, PaymentMethodType } from '@prisma/client';
-import { getTenantIdFromRequest } from '@/lib/api-tenant';
+import { getTenantIdForUser } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { generateReceiptNumber } from '@/lib/receipt';
@@ -22,9 +22,9 @@ export async function POST(request: NextRequest) {
 
     let tenantId: string;
     try {
-      tenantId = (await getTenantIdFromRequest(request)) as string;
-      if (!tenantId) throw new Error('Tenant not found');
       const user = await requireAuth(request);
+      tenantId = (await getTenantIdForUser(request, user)) as string;
+      if (!tenantId) throw new Error('Tenant not found');
       if (!(await hasTenantPermission(user.role, tenantId, 'transactions.create_manual'))) {
         throw new Error('Forbidden: Insufficient permissions');
       }

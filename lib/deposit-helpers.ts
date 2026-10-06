@@ -15,23 +15,18 @@ export const DEPOSIT_STATUSES = [
 
 export type DepositStatus = typeof DEPOSIT_STATUSES[number]['value'];
 
+/** Solid Win8 badge fill per status (white text on every token). */
+const DEPOSIT_STATUS_BADGE: Record<DepositStatus, string> = {
+  pending: 'bg-win8-warning text-white',
+  paid: 'bg-win8-info text-white',
+  applied: 'bg-win8-success text-white',
+  refunded: 'bg-win8-suspended text-white',
+  forfeited: 'bg-win8-danger text-white',
+  cancelled: 'bg-gray-500 text-white',
+};
+
 export function getDepositStatusColor(status: DepositStatus): string {
-  switch (status) {
-    case 'pending':
-      return 'bg-yellow-100 text-yellow-800';
-    case 'paid':
-      return 'bg-blue-100 text-blue-800';
-    case 'applied':
-      return 'bg-green-100 text-green-800';
-    case 'refunded':
-      return 'bg-purple-100 text-purple-800';
-    case 'forfeited':
-      return 'bg-red-100 text-red-800';
-    case 'cancelled':
-      return 'bg-gray-100 text-gray-800';
-    default:
-      return 'bg-gray-100 text-gray-800';
-  }
+  return DEPOSIT_STATUS_BADGE[status] || 'bg-gray-500 text-white';
 }
 
 type Dict = Record<string, Record<string, string | undefined> | undefined>;

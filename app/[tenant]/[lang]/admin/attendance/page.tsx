@@ -52,7 +52,7 @@ export default function AttendancePage() {
   const { selectedUserId, setSelectedUserId, startDate, setStartDate, endDate, setEndDate, initializeDateRange } = useAttendanceFilters();
   const { currentSessions, fetchCurrentSessions, calculateSessionHours } = useCurrentSessions();
   const { canAccess } = usePermissions();
-  const canManage = canAccess('attendance.manage');
+  const canManage = canAccess('attendance.view');
 
   // Load dictionary
   useEffect(() => {

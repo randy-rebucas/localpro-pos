@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
-import { getTenantIdFromRequest } from '@/lib/api-tenant';
+import { getTenantIdForUser } from '@/lib/api-tenant';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { checkRateLimit } from '@/lib/rate-limit';
@@ -32,7 +32,7 @@ export async function GET(
       );
     }
 
-    const tenantId = await getTenantIdFromRequest(request);
+    const tenantId = await getTenantIdForUser(request, user);
     if (!tenantId) {
       return NextResponse.json(
         { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
@@ -41,8 +41,7 @@ export async function GET(
     }
 
     if (
-      !(await hasTenantPermission(user.role, tenantId, 'delivery.view')) &&
-      !(await hasTenantPermission(user.role, tenantId, 'delivery.manage'))
+      !(await hasTenantPermission(user.role, tenantId, 'delivery.view'))
     ) {
       return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
     }
@@ -88,7 +87,7 @@ export async function PATCH(
       );
     }
 
-    const tenantId = await getTenantIdFromRequest(request);
+    const tenantId = await getTenantIdForUser(request, user);
     if (!tenantId) {
       return NextResponse.json(
         { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
@@ -96,7 +95,7 @@ export async function PATCH(
       );
     }
 
-    if (!(await hasTenantPermission(user.role, tenantId, 'delivery.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenantId, 'delivery.edit'))) {
       return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
     }
 
@@ -213,7 +212,7 @@ export async function DELETE(
       );
     }
 
-    const tenantId = await getTenantIdFromRequest(request);
+    const tenantId = await getTenantIdForUser(request, user);
     if (!tenantId) {
       return NextResponse.json(
         { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
@@ -221,7 +220,7 @@ export async function DELETE(
       );
     }
 
-    if (!(await hasTenantPermission(user.role, tenantId, 'delivery.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenantId, 'delivery.delete'))) {
       return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
     }
 

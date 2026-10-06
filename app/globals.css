@@ -108,6 +108,17 @@ input[type="checkbox"].checkbox-win8:checked {
   border-color: var(--primary-color);
 }
 
+/* Value differs from its default (e.g. a per-role permission override):
+   amber instead of brand, in both states, so granted and revoked overrides
+   both stand out. Set with data-custom="true". */
+input[type="checkbox"].checkbox-win8[data-custom="true"] {
+  border-color: var(--color-win8-warning);
+}
+
+input[type="checkbox"].checkbox-win8[data-custom="true"]:checked {
+  background: var(--color-win8-warning);
+}
+
 input[type="checkbox"].checkbox-win8:checked::after {
   content: '';
   position: absolute;

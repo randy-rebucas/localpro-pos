@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
-import { getTenantIdFromRequest } from '@/lib/api-tenant';
+import { getTenantIdForUser } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
@@ -29,7 +29,7 @@ export async function GET(
 ) {
   try {
     const user = await requireAuth(request);
-    const tenantId = await getTenantIdFromRequest(request);
+    const tenantId = await getTenantIdForUser(request, user);
     const { id } = await params;
     const t = await getValidationTranslatorFromRequest(request);
 
@@ -63,7 +63,7 @@ export async function DELETE(
 ) {
   try {
     const user = await requireAuth(request);
-    const tenantId = await getTenantIdFromRequest(request);
+    const tenantId = await getTenantIdForUser(request, user);
     const { id } = await params;
     const t = await getValidationTranslatorFromRequest(request);
 

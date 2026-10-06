@@ -11,7 +11,19 @@ vi.mock('@/app/[tenant]/[lang]/dictionaries-client', () => ({
   getDictionaryClient: vi.fn().mockResolvedValue({}),
 }));
 
+// Grants every holidays action (holidays.create/edit/delete); the page checks each one separately.
+const mockCanAccess = vi.fn((key: string) => key.startsWith('holidays.'));
+vi.mock('@/hooks/usePermissions', () => ({
+  usePermissions: () => ({ canAccess: (key: string) => mockCanAccess(key), isAlwaysAllowed: false }),
+}));
+
 vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+const mockToastSuccess = vi.fn();
+const mockToastError = vi.fn();
+vi.mock('@/lib/toast', () => ({
+  showToast: { success: (...args: unknown[]) => mockToastSuccess(...args), error: (...args: unknown[]) => mockToastError(...args) },
+}));
 
 import HolidaysAdminPage from '@/app/[tenant]/[lang]/admin/holidays/page';
 
@@ -29,6 +41,7 @@ const sampleHoliday = {
 describe('HolidaysAdminPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockCanAccess.mockImplementation((key: string) => key.startsWith('holidays.'));
     mockFetch.mockResolvedValue({
       json: () => Promise.resolve({ success: true, data: [] }),
     });
@@ -63,6 +76,34 @@ describe('HolidaysAdminPage', () => {
     // infinite outer spinner.
     await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
     expect(await screen.findByText('boom')).toBeInTheDocument();
+  });
+
+  it('is read-only without holidays.manage: shows a notice and disables every write control', async () => {
+    mockCanAccess.mockReturnValue(false);
+    mockFetch.mockResolvedValue({
+      json: () => Promise.resolve({ success: true, data: [sampleHoliday] }),
+    });
+    render(<HolidaysAdminPage />);
+
+    expect(await screen.findByText("New Year's Day")).toBeInTheDocument();
+    expect(screen.getByText(/don't have permission to change holidays/i)).toBeInTheDocument();
+    for (const button of screen.getAllByRole('button')) {
+      expect(button).toBeDisabled();
+    }
+  });
+
+  it('gates each row action on its own permission (edit without delete)', async () => {
+    mockCanAccess.mockImplementation((key: string) => key === 'holidays.edit');
+    mockFetch.mockResolvedValue({
+      json: () => Promise.resolve({ success: true, data: [sampleHoliday] }),
+    });
+    render(<HolidaysAdminPage />);
+
+    expect(await screen.findByText("New Year's Day")).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Edit' })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument();
+    // Add + Suggest are create actions.
+    expect(screen.getByRole('button', { name: 'Add Holiday' })).toBeDisabled();
   });
 
   it('shows the empty state when there are no holidays', async () => {
@@ -110,7 +151,7 @@ describe('HolidaysAdminPage', () => {
       );
     });
 
-    expect(await screen.findByText('Holiday created successfully')).toBeInTheDocument();
+    await waitFor(() => expect(mockToastSuccess).toHaveBeenCalledWith('Holiday created successfully'));
   });
 
   it('shows the server error message when create fails', async () => {
@@ -161,7 +202,7 @@ describe('HolidaysAdminPage', () => {
         })
       );
     });
-    expect(await screen.findByText('Holiday updated successfully')).toBeInTheDocument();
+    await waitFor(() => expect(mockToastSuccess).toHaveBeenCalledWith('Holiday updated successfully'));
   });
 
   it('deletes a holiday after confirmation', async () => {
@@ -182,7 +223,7 @@ describe('HolidaysAdminPage', () => {
         expect.objectContaining({ method: 'DELETE' })
       );
     });
-    expect(await screen.findByText('Holiday deleted successfully')).toBeInTheDocument();
+    await waitFor(() => expect(mockToastSuccess).toHaveBeenCalledWith('Holiday deleted successfully'));
   });
 
   it('does not call the delete endpoint when the confirmation is dismissed', async () => {
@@ -315,9 +356,9 @@ describe('HolidaysAdminPage', () => {
         );
       });
 
-      expect(await screen.findByText('1 holiday(s) imported')).toBeInTheDocument();
+      await waitFor(() => expect(mockToastSuccess).toHaveBeenCalledWith('1 holiday(s) imported'));
       // Panel closes after a successful import.
-      expect(screen.queryByRole('button', { name: /Import \d+ selected/i })).not.toBeInTheDocument();
+      await waitFor(() => expect(screen.queryByRole('button', { name: /Import \d+ selected/i })).not.toBeInTheDocument());
     });
 
     it('shows a country picker and refetches when the tenant country could not be auto-resolved', async () => {

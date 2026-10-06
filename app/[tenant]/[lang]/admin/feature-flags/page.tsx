@@ -1,14 +1,14 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { getBusinessTypeConfig } from '@/lib/business-types';
 import { getBusinessType } from '@/lib/business-type-helpers';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useFeatureFlagsSettings } from '@/hooks/useFeatureFlagsSettings';
+import AdminPageHeader from '@/components/admin/AdminPageHeader';
 import {
   getSaveSuccessMessage,
   getSaveErrorMessage,
@@ -25,7 +25,7 @@ export default function FeatureFlagsPage() {
   const { settings: tenantSettings } = useTenantSettings();
   const businessTypeConfig = tenantSettings ? getBusinessTypeConfig(getBusinessType(tenantSettings)) : null;
   const { canAccess } = usePermissions();
-  const canManage = canAccess('settings.manage');
+  const canManage = canAccess('feature_flags.manage');
 
   const { settings, loading, saving, message, setMessage, fetchSettings, updateSetting, saveSettings } =
     useFeatureFlagsSettings(tenant);
@@ -48,139 +48,130 @@ export default function FeatureFlagsPage() {
     }
   };
 
-  if (!dict || loading) {
+  if (!dict) {
     return (
       <div className="flex items-center justify-center py-24">
-        <div className="text-center">
-          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-brand"></div>
-          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
-        </div>
+        <div className="win8-spinner text-brand"><span /><span /><span /><span /><span /></div>
       </div>
     );
   }
 
-  if (!settings) {
-    return (
-      <div>
-        <div className="px-4 sm:px-6 py-6">
-          <div className="bg-red-50 border-2 border-red-300 p-5 sm:p-6">
-            <h2 className="text-xl font-bold text-red-800 mb-2">{dict?.common?.failedToLoadSettingsTitle || 'Failed to Load Settings'}</h2>
-            <p className="text-red-700 mb-4">
+  // useFeatureFlagsSettings resolves null/missing flags to the business-type default.
+  const isEnabled = (flagKey: string) => (settings as any)?.[flagKey] === true; // eslint-disable-line @typescript-eslint/no-explicit-any
+  const enabledCount = settings ? FEATURE_FLAGS.filter(isEnabled).length : 0;
+
+  return (
+    <div className="px-4 sm:px-6 py-6">
+      <AdminPageHeader
+        title={dict?.admin?.featureFlags || 'Feature Flags'}
+        description={dict?.admin?.featureFlagsSubtitle || 'Enable or disable system-wide features. Changes affect the entire application.'}
+      />
+
+      <div className="space-y-6">
+        {loading ? (
+          <div className="text-center py-12 bg-white border border-gray-300">
+            <div className="win8-spinner text-brand mx-auto"><span /><span /><span /><span /><span /></div>
+            <p className="mt-3 text-gray-400 text-sm">{dict?.admin?.loadingFeatureFlags || 'Loading feature flags…'}</p>
+          </div>
+        ) : !settings ? (
+          <div className="text-center py-12 bg-white border border-gray-300 px-4">
+            <p className="text-sm font-bold text-gray-900">{dict?.common?.failedToLoadSettingsTitle || 'Failed to Load Settings'}</p>
+            <p className="mt-1 text-win8-danger text-sm font-medium">
               {message?.text || dict?.common?.unableToLoadSettings || 'Unable to load tenant settings. Please check your connection and try again.'}
             </p>
             <button
               onClick={() => fetchSettings()}
-              className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 font-medium transition-colors border border-red-700"
+              className="mt-4 px-4 py-2 bg-brand text-white text-sm hover:bg-brand-hover transition-colors"
             >
               {dict?.common?.retry || 'Retry'}
             </button>
           </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div>
-      <div className="px-4 sm:px-6 py-6">
-        <div className="mb-6 sm:mb-8">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">
-            {dict?.admin?.featureFlags || 'Feature Flags'}
-          </h1>
-          <p className="text-gray-600">
-            {dict?.admin?.featureFlagsSubtitle || 'Enable or disable system-wide features. Changes affect the entire application.'}
-          </p>
-        </div>
-
-        {message && (
-          <div
-            className={`mb-6 p-4 border ${
-              message.type === 'success'
-                ? 'bg-green-50 text-green-800 border-green-300'
-                : 'bg-red-50 text-red-800 border-red-300'
-            }`}
-          >
-            {message.text}
-          </div>
-        )}
-
-        {businessTypeConfig && (
-          <div className="mb-6 p-4 bg-brand-soft border-2 border-teal-300">
-            <div className="flex items-start gap-3">
-              <svg className="w-6 h-6 flex-shrink-0 mt-0.5 text-brand" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <div>
-                <h3 className="text-lg font-semibold text-brand-navy-deep mb-2">
+        ) : (
+          <>
+            {businessTypeConfig && (
+              <div className="bg-brand-soft border border-brand p-4 text-sm text-brand-navy">
+                <p className="font-semibold">
                   {(dict?.admin?.currentBusinessTypeLabel || 'Current Business Type: {name}').replace('{name}', businessTypeConfig.name)}
-                </h3>
-                <p className="text-brand-navy mb-2">
-                  {businessTypeConfig.description}
                 </p>
-                <p className="text-sm text-brand-hover">
+                <p className="mt-1">{businessTypeConfig.description}</p>
+                <p className="mt-1 text-xs">
                   {dict?.admin?.businessTypeAutoConfiguredNote || 'Default features for this business type are auto-configured. You can override them below.'}
                 </p>
               </div>
-            </div>
-          </div>
-        )}
+            )}
 
-        <div className="bg-white border border-gray-300 p-5 sm:p-6 lg:p-8">
-                <section>
-                  <h2 className="text-xl font-bold text-gray-900 mb-5">{dict?.admin?.systemFeatures || 'System Features'}</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {FEATURE_FLAGS.map((flagKey) => {
-                const isChecked =
-                  (settings as any)[flagKey] !== false; // eslint-disable-line @typescript-eslint/no-explicit-any
-                return (
-                  <div key={flagKey} className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
-                    <input
-                      type="checkbox"
-                      id={flagKey}
-                      checked={isChecked}
-                      disabled={!canManage}
-                      onChange={(e) => updateSetting(flagKey, e.target.checked)}
-                      className="checkbox-win8 h-5 w-5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                    />
-                    <label htmlFor={flagKey} className="ml-3 flex-1">
-                      <div className="text-sm font-medium text-gray-900">
-                        {getFeatureFlagLabel(flagKey, dict)}
-                      </div>
-                      <div className="text-xs text-gray-500 mt-1">
-                        {getFeatureFlagDescription(flagKey, dict)}
-                      </div>
+            {!canManage && (
+              <div className="bg-brand-soft border border-brand p-4 text-sm text-brand-navy">
+                {dict?.settings?.readOnlyNotice || "You don't have permission to change settings. Contact an admin or manager."}
+              </div>
+            )}
+
+            <section className="bg-white border border-gray-300">
+              <div className="px-6 py-4 border-b border-gray-300 flex items-center justify-between gap-3 flex-wrap">
+                <h2 className="text-base font-bold text-gray-900">{dict?.admin?.systemFeatures || 'System Features'}</h2>
+                <span className="px-2 py-0.5 text-xs font-semibold bg-brand-navy text-white tabular-nums">
+                  {(dict?.admin?.featuresEnabledCount || '{enabled} of {total} enabled')
+                    .replace('{enabled}', String(enabledCount))
+                    .replace('{total}', String(FEATURE_FLAGS.length))}
+                </span>
+              </div>
+              <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-3">
+                {FEATURE_FLAGS.map((flagKey) => {
+                  const isChecked = isEnabled(flagKey);
+                  const description = getFeatureFlagDescription(flagKey, dict);
+                  return (
+                    <label
+                      key={flagKey}
+                      htmlFor={flagKey}
+                      className={`flex items-start gap-3 p-4 border transition-colors ${
+                        isChecked ? 'border-brand bg-brand-soft' : 'border-gray-300 bg-white'
+                      } ${canManage ? 'cursor-pointer hover:border-brand' : 'cursor-not-allowed'}`}
+                    >
+                      <input
+                        type="checkbox"
+                        id={flagKey}
+                        checked={isChecked}
+                        disabled={!canManage}
+                        onChange={(e) => updateSetting(flagKey, e.target.checked)}
+                        className="checkbox-win8 mt-0.5 shrink-0 disabled:opacity-50"
+                      />
+                      <span className="min-w-0">
+                        <span className="block text-sm font-semibold text-gray-900">
+                          {getFeatureFlagLabel(flagKey, dict)}
+                        </span>
+                        {description && (
+                          <span className="block text-xs text-gray-500 mt-0.5 leading-snug">{description}</span>
+                        )}
+                      </span>
                     </label>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
+                  );
+                })}
+              </div>
+            </section>
 
-          {/* Save Button */}
-          {canManage && (
-            <div className="flex justify-end pt-6 mt-8 border-t border-gray-200">
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="px-6 py-3 bg-brand text-white hover:bg-brand-hover font-semibold transition-all duration-200 border border-brand-hover disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-              >
-                {saving ? (
-                  <>
-                    <div className="animate-spin h-5 w-5 border-b-2 border-white"></div>
-                    <span>{dict?.settings?.saving || 'Saving...'}</span>
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    <span>{dict?.admin?.saveFeatureFlags || 'Save Feature Flags'}</span>
-                  </>
+            {(canManage || message) && (
+              <div className="flex items-center justify-end gap-4 flex-wrap">
+                {message && (
+                  <p
+                    role={message.type === 'error' ? 'alert' : 'status'}
+                    className={`mr-auto text-sm font-medium ${message.type === 'success' ? 'text-win8-success' : 'text-win8-danger'}`}
+                  >
+                    {message.text}
+                  </p>
                 )}
-              </button>
-            </div>
-          )}
-        </div>
+                {canManage && (
+                  <button
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="px-4 py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover disabled:opacity-50 transition-colors"
+                  >
+                    {saving ? (dict?.settings?.saving || 'Saving…') : (dict?.admin?.saveFeatureFlags || 'Save Feature Flags')}
+                  </button>
+                )}
+              </div>
+            )}
+          </>
+        )}
       </div>
     </div>
   );

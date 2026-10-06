@@ -18,7 +18,10 @@ function toGroupJSON(g: { id: string; _count?: { members: number }; [key: string
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { tenantId } = await requireTenantAccess(request);
+    const { tenantId, user } = await requireTenantAccess(request);
+    if (!(await hasTenantPermission(user.role, tenantId, 'customer_groups.view'))) {
+      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
+    }
     const { id } = await params;
 
     const group = await prisma.customerGroup.findFirst({
@@ -51,7 +54,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const { id } = await params;
     const t = await getValidationTranslatorFromRequest(request);
 
-    if (!(await hasTenantPermission(user.role, tenantId, 'customer_groups.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenantId, 'customer_groups.edit'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
@@ -119,7 +122,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     const { id } = await params;
     const t = await getValidationTranslatorFromRequest(request);
 
-    if (!(await hasTenantPermission(user.role, tenantId, 'customer_groups.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenantId, 'customer_groups.delete'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 

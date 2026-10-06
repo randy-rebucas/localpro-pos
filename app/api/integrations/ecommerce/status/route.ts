@@ -9,7 +9,7 @@ import { getTenantEcommerceIntegrationPolicy } from '@/lib/ecommerce/tenant-inte
 export async function GET(request: NextRequest) {
   try {
     const { tenantId, user } = await requireTenantAccess(request);
-    if (!(await hasTenantPermission(user.role, tenantId, 'integrations.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenantId, 'integrations.view'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 

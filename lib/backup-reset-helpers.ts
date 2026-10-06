@@ -1,52 +1,16 @@
+import { BACKUP_COLLECTION_SPECS, type CollectionGroup } from './backup-reset-collections';
+
 export interface CollectionOption {
   key: string;
   label: string;
+  group: CollectionGroup;
 }
 
-export const BACKUP_RESET_COLLECTIONS: CollectionOption[] = [
-  // Products & Inventory
-  { key: 'products', label: 'Products' },
-  { key: 'productBundles', label: 'Product Bundles' },
-  { key: 'categories', label: 'Categories' },
-  { key: 'stockMovements', label: 'Stock Movements' },
-  
-  // Sales & Transactions
-  { key: 'transactions', label: 'Transactions' },
-  { key: 'payments', label: 'Payments' },
-  { key: 'invoices', label: 'Invoices' },
-  
-  // Customer Management
-  { key: 'customers', label: 'Customers' },
-  { key: 'addresses', label: 'Customer Addresses' },
-  { key: 'customerOTPs', label: 'Customer OTPs' },
-  
-  // Discounts & Promotions
-  { key: 'discounts', label: 'Discounts' },
-  { key: 'savedCarts', label: 'Saved Carts' },
-  
-  // Loyalty Program
-  { key: 'loyaltyConfigs', label: 'Loyalty Program Config' },
-  { key: 'loyaltyTransactions', label: 'Loyalty Transactions' },
-  
-  // Tax & Compliance
-  { key: 'taxRules', label: 'Tax Rules' },
-  
-  // Organizational
-  { key: 'branches', label: 'Branches' },
-  { key: 'expenses', label: 'Expenses' },
-  
-  // Cash Management
-  { key: 'cashDrawerSessions', label: 'Cash Drawer Sessions' },
-  
-  // Staff & Operations
-  { key: 'attendance', label: 'Attendance Records' },
-  
-  // Bookings & Services
-  { key: 'bookings', label: 'Bookings' },
-  
-  // Audit & Compliance
-  { key: 'auditLogs', label: 'Audit Logs' },
-];
+// Derived from the schema-checked registry so the UI can't drift from what
+// the API accepts.
+export const BACKUP_RESET_COLLECTIONS: CollectionOption[] = BACKUP_COLLECTION_SPECS.map(
+  ({ key, label, group }) => ({ key, label, group })
+);
 
 export function formatCollectionName(collectionKey: string): string {
   return collectionKey.replace(/([A-Z])/g, ' $1').trim();
@@ -107,13 +71,16 @@ export function canReset(selected: string[], resetting: boolean): boolean {
   return selected.length > 0 && !resetting;
 }
 
-export function formatResultsMessage(collection: string, result: { restored?: number; deleted?: number; cleared?: number }): string {
+export function formatResultsMessage(collection: string, result: { restored?: number; deleted?: number; cleared?: number; skipped?: number }): string {
   const formatted = formatCollectionName(collection);
 
   if (result.restored !== undefined) {
     let msg = `${formatted}: ${result.restored} record(s) restored`;
     if (result.cleared && result.cleared > 0) {
       msg += `, ${result.cleared} cleared`;
+    }
+    if (result.skipped && result.skipped > 0) {
+      msg += `, ${result.skipped} skipped (parent not in this store)`;
     }
     return msg;
   }

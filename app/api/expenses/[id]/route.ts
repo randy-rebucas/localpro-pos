@@ -16,7 +16,10 @@ export async function GET(
   try {
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
-    const { tenantId } = authResult;
+    const { tenantId, user } = authResult;
+    if (!(await hasTenantPermission(user.role, tenantId, 'expenses.view'))) {
+      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
+    }
     const { id } = await params;
     const t = await getValidationTranslatorFromRequest(request);
 
@@ -46,7 +49,7 @@ export async function PUT(
     const { id } = await params;
     const t = await getValidationTranslatorFromRequest(request);
 
-    if (!(await hasTenantPermission(authResult.user.role, authResult.tenantId, 'expenses.manage'))) {
+    if (!(await hasTenantPermission(authResult.user.role, authResult.tenantId, 'expenses.edit'))) {
       return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
     }
 
@@ -111,7 +114,7 @@ export async function DELETE(
     const { id } = await params;
     const t = await getValidationTranslatorFromRequest(request);
 
-    if (!(await hasTenantPermission(authResult.user.role, authResult.tenantId, 'expenses.manage'))) {
+    if (!(await hasTenantPermission(authResult.user.role, authResult.tenantId, 'expenses.delete'))) {
       return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
     }
 

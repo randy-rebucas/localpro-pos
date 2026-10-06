@@ -35,47 +35,7 @@ export async function getTenantIdFromRequest(request: NextRequest): Promise<stri
   try {
     const user = await getCurrentUser(request);
     if (user && user.tenantId) {
-      // User is authenticated - use their tenantId and validate it matches request
-      const requestTenantId = await getTenantIdFromRequestParams(request);
-      
-      // If request specifies a different tenant, reject it for security
-      if (requestTenantId && requestTenantId !== user.tenantId) {
-        console.warn(`Security: User ${user.userId} from tenant ${user.tenantId} attempted to access tenant ${requestTenantId}`);
-        
-        // Get the tenant slug for redirect - try to get it from the request first
-        let tenantSlug = 'default';
-        try {
-          const requestedTenantSlug = await getTenantSlugFromRequest(request);
-          if (requestedTenantSlug && requestedTenantSlug !== 'default') {
-            tenantSlug = requestedTenantSlug;
-          } else {
-            // If we can't get the slug from request, get it from the tenant ID
-            const tenant = await prisma.tenant.findUnique({ where: { id: requestTenantId }, select: { slug: true } });
-            if (tenant && tenant.slug) {
-              tenantSlug = tenant.slug;
-            }
-          }
-        } catch (e) {
-          // If we can't get the slug, try to get it from the tenant ID
-          try {
-            const tenant = await prisma.tenant.findUnique({ where: { id: requestTenantId }, select: { slug: true } });
-            if (tenant && tenant.slug) {
-              tenantSlug = tenant.slug;
-            }
-          } catch (err) {
-            // Fallback to default - will redirect to /default/forbidden
-          }
-        }
-        
-        // Throw error that includes tenant slug for redirect
-        throw new TenantAccessViolationError(
-          tenantSlug,
-          `Forbidden: Access denied to tenant ${tenantSlug}`
-        );
-      }
-      
-      // Return the authenticated user's tenantId (most secure)
-      return user.tenantId;
+      return await getTenantIdForUser(request, user);
     }
   } catch (error) {
     // Re-throw TenantAccessViolationError so it can be handled by the caller
@@ -88,6 +48,66 @@ export async function getTenantIdFromRequest(request: NextRequest): Promise<stri
   
   // For unauthenticated requests, use fallback methods
   return await getTenantIdFromRequestParams(request);
+}
+
+/**
+ * Same result as `getTenantIdFromRequest`, for a route that has already
+ * authenticated the caller. `getCurrentUser` costs four sequential DB queries
+ * (revocation checks, user, tenant), so a route that calls `requireAuth` and
+ * then `getTenantIdFromRequest` pays for it twice — pass the user in instead.
+ *
+ * Users with a tenant get their own tenantId back, and a request that names a
+ * different tenant throws TenantAccessViolationError. A user without one
+ * (super_admin) falls back to the tenant named by the request.
+ */
+export async function getTenantIdForUser(
+  request: NextRequest,
+  user: { userId: string; tenantId?: string | null }
+): Promise<string | null> {
+  if (!user.tenantId) {
+    return await getTenantIdFromRequestParams(request);
+  }
+
+  const requestTenantId = await getTenantIdFromRequestParams(request);
+
+  // If request specifies a different tenant, reject it for security
+  if (requestTenantId && requestTenantId !== user.tenantId) {
+    console.warn(`Security: User ${user.userId} from tenant ${user.tenantId} attempted to access tenant ${requestTenantId}`);
+
+    // Get the tenant slug for redirect - try to get it from the request first
+    let tenantSlug = 'default';
+    try {
+      const requestedTenantSlug = await getTenantSlugFromRequest(request);
+      if (requestedTenantSlug && requestedTenantSlug !== 'default') {
+        tenantSlug = requestedTenantSlug;
+      } else {
+        // If we can't get the slug from request, get it from the tenant ID
+        const tenant = await prisma.tenant.findUnique({ where: { id: requestTenantId }, select: { slug: true } });
+        if (tenant && tenant.slug) {
+          tenantSlug = tenant.slug;
+        }
+      }
+    } catch (e) {
+      // If we can't get the slug, try to get it from the tenant ID
+      try {
+        const tenant = await prisma.tenant.findUnique({ where: { id: requestTenantId }, select: { slug: true } });
+        if (tenant && tenant.slug) {
+          tenantSlug = tenant.slug;
+        }
+      } catch (err) {
+        // Fallback to default - will redirect to /default/forbidden
+      }
+    }
+
+    // Throw error that includes tenant slug for redirect
+    throw new TenantAccessViolationError(
+      tenantSlug,
+      `Forbidden: Access denied to tenant ${tenantSlug}`
+    );
+  }
+
+  // Return the authenticated user's tenantId (most secure)
+  return user.tenantId;
 }
 
 /**

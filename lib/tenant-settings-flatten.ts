@@ -165,10 +165,65 @@ const KNOWN_SCALAR_KEYS = new Set([
   'enableSuppliers', 'enableExpenses', 'enableEmployees',
 ]);
 
+type HardwareConfigInput = {
+  printer?: { type?: string; profile?: string; vendorId?: number; productId?: number; ipAddress?: string; portNumber?: number };
+  barcodeScanner?: { type?: string; enabled?: boolean };
+  qrReader?: { enabled?: boolean; cameraId?: string };
+  cashDrawer?: { enabled?: boolean; connectedToPrinter?: boolean };
+  touchscreen?: { enabled?: boolean };
+};
+
+const toIntOrNull = (v: unknown): number | null => {
+  const n = typeof v === 'string' ? parseInt(v, 10) : (v as number);
+  return Number.isInteger(n) ? n : null;
+};
+
+/**
+ * Maps the client's nested `hardwareConfig` (ITenantSettings['hardwareConfig'],
+ * sent by the admin Hardware page) onto the flat printer/scanner/drawer
+ * columns. Each sub-object that is present is written in full (missing fields
+ * → null) so clearing e.g. the printer IP actually clears the column; absent
+ * sub-objects leave their columns untouched. `cashDrawer.direct` is per-device
+ * pairing state and has no column — it stays in the browser's localStorage.
+ */
+export function flattenHardwareConfig(hc: HardwareConfigInput): Record<string, unknown> {
+  const flat: Record<string, unknown> = {};
+  if (hc.printer) {
+    flat.printerType = hc.printer.type ?? null;
+    flat.printerProfile = hc.printer.profile ?? null;
+    flat.printerVendorId = toIntOrNull(hc.printer.vendorId);
+    flat.printerProductId = toIntOrNull(hc.printer.productId);
+    flat.printerIpAddress = hc.printer.ipAddress || null;
+    flat.printerPortNumber = toIntOrNull(hc.printer.portNumber);
+  }
+  if (hc.barcodeScanner) {
+    flat.barcodeScannerType = hc.barcodeScanner.type ?? null;
+    flat.barcodeScannerEnabled = hc.barcodeScanner.enabled ?? null;
+  }
+  if (hc.qrReader) {
+    flat.qrReaderEnabled = hc.qrReader.enabled ?? null;
+    flat.qrReaderCameraId = hc.qrReader.cameraId || null;
+  }
+  if (hc.cashDrawer) {
+    flat.cashDrawerEnabled = hc.cashDrawer.enabled ?? null;
+    flat.cashDrawerConnectedToPrinter = hc.cashDrawer.connectedToPrinter ?? null;
+  }
+  if (hc.touchscreen) {
+    flat.touchscreenEnabled = hc.touchscreen.enabled ?? null;
+  }
+  return flat;
+}
+
 export function flattenSettingsForPrisma(settings: Record<string, unknown>): Record<string, unknown> {
   const flat: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(settings)) {
     if (EXCLUDED_TOP_LEVEL_KEYS.has(key)) continue;
+    if (key === 'hardwareConfig') {
+      if (value && typeof value === 'object' && !Array.isArray(value)) {
+        Object.assign(flat, flattenHardwareConfig(value as HardwareConfigInput));
+      }
+      continue;
+    }
     const nestedMap = NESTED_FLATTEN_MAP[key];
     if (nestedMap && value && typeof value === 'object' && !Array.isArray(value)) {
       for (const [nestedKey, nestedVal] of Object.entries(value as Record<string, unknown>)) {
@@ -224,4 +279,45 @@ export function reshapeAdvancedBranding(data: Record<string, unknown>): Record<s
       customBorderRadius: customBorderRadius ?? undefined,
     },
   };
+}
+
+/**
+ * Reverse of flattenHardwareConfig(): nests the flat printer/scanner/drawer
+ * columns back under `hardwareConfig` (the ITenantSettings shape every
+ * consumer reads — the admin Hardware page, TenantSettingsContext, and
+ * /api/hardware/cash-drawer-kick). Applied server-side in GET
+ * /api/tenants/[slug]/settings and lib/tenant.ts getTenantSettingsById.
+ * Sub-objects with no stored values are omitted.
+ */
+export function reshapeHardwareConfig(data: Record<string, unknown>): Record<string, unknown> {
+  if (data.hardwareConfig) return data;
+  const {
+    printerType, printerProfile, printerVendorId, printerProductId, printerIpAddress, printerPortNumber,
+    barcodeScannerType, barcodeScannerEnabled, qrReaderEnabled, qrReaderCameraId,
+    cashDrawerEnabled, cashDrawerConnectedToPrinter, touchscreenEnabled,
+    ...rest
+  } = data;
+  const defined = (o: Record<string, unknown>) =>
+    Object.fromEntries(Object.entries(o).filter(([, v]) => v !== null && v !== undefined));
+
+  const hardwareConfig: Record<string, unknown> = {};
+  if (printerType) {
+    hardwareConfig.printer = defined({
+      type: printerType, profile: printerProfile, vendorId: printerVendorId, productId: printerProductId,
+      ipAddress: printerIpAddress, portNumber: printerPortNumber,
+    });
+  }
+  if (barcodeScannerEnabled != null || barcodeScannerType) {
+    hardwareConfig.barcodeScanner = { type: barcodeScannerType || 'keyboard', enabled: !!barcodeScannerEnabled };
+  }
+  if (qrReaderEnabled != null || qrReaderCameraId) {
+    hardwareConfig.qrReader = defined({ enabled: !!qrReaderEnabled, cameraId: qrReaderCameraId });
+  }
+  if (cashDrawerEnabled != null || cashDrawerConnectedToPrinter != null) {
+    hardwareConfig.cashDrawer = { enabled: !!cashDrawerEnabled, connectedToPrinter: !!cashDrawerConnectedToPrinter };
+  }
+  if (touchscreenEnabled != null) {
+    hardwareConfig.touchscreen = { enabled: !!touchscreenEnabled };
+  }
+  return { ...rest, hardwareConfig };
 }

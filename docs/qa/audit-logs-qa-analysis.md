@@ -13,7 +13,7 @@
 | Layer | File | Role |
 |---|---|---|
 | Nav entry | [components/admin/AdminSidebar.tsx:165](components/admin/AdminSidebar.tsx#L165) | `permission: 'audit_logs.view'` — matches the page's own gate |
-| Page | [app/[tenant]/[lang]/admin/audit-logs/page.tsx](app/[tenant]/[lang]/admin/audit-logs/page.tsx) | Client component: filter sidebar (action/entity type/user/date range) + paginated table + CSV/JSON export |
+| Page | [app/[tenant]/[lang]/admin/audit-logs/page.tsx](app/[tenant]/[lang]/admin/audit-logs/page.tsx) | Client component (Win8 flat styling): horizontal filter bar (action/entity type/user/date range + Today/7d/30d presets) + paginated table with expandable "Changes" rows + CSV/JSON export |
 | List fetch | `GET /api/audit-logs` (via `useAuditLogs`) | Tenant-scoped (`where: { tenantId: user.tenantId }`), paginated (max 200/page), filterable |
 | User filter options | `GET /api/users` (via `useAuditUsers`) | **Gated on `users.manage`, not `audit_logs.view`** — see finding #3 |
 | Export | `GET /api/audit-logs/export` | Tenant-scoped, rate-limited (10/min), writes its own audit log entry (`AuditActions.AUDIT_LOG_EXPORT`) for the export action itself |
@@ -71,7 +71,8 @@ Items marked `[x]` are now automated in `__tests__/audit-logs-page.test.tsx` (8 
 - [ ] Next disabled on the last page (component logic (`canGoToNextPage`) already covers this and is exercised by the Previous-button test's counterpart data, but no dedicated last-page test was added — low-risk, pure function already covered indirectly).
 
 ### Data integrity
-- [x] Empty result set renders the "No audit logs found" empty state instead of an empty table.
+- [x] Empty result set renders an empty state instead of an empty table, and distinguishes "No audit logs match your filters." from "No audit logs yet.".
+- [ ] Fetch error renders an inline message with a Retry button (not covered by a dedicated test).
 - [ ] Export CSV/JSON endpoint's actual downloaded content matches the table for the same date range, modulo finding #4's other-filters gap (integration-level — the export route isn't unit-testable through the page's mocked-fetch harness).
 
 ### Regression triggers (tie to CLAUDE.md's known incident class)

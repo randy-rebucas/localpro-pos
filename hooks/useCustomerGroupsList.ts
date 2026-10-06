@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useState } from 'react';
+import { getFetchErrorMessage, isAbortError } from '@/lib/fetch-error';
 
 export interface CustomerGroup {
   _id: string;
@@ -20,20 +21,33 @@ export interface CustomerGroupFormData {
 interface UseCustomerGroupsListReturn {
   groups: CustomerGroup[];
   loading: boolean;
-  message: { type: 'success' | 'error'; text: string } | null;
+  /** Set when the last list fetch failed; cleared on the next successful fetch. */
+  error: string | null;
   fetchGroups: () => Promise<void>;
+  /** Mutations resolve `true` on success, or the server's specific error message on failure. */
   createGroup: (form: CustomerGroupFormData) => Promise<true | string>;
   updateGroup: (id: string, form: CustomerGroupFormData) => Promise<true | string>;
-  deleteGroup: (id: string) => Promise<boolean>;
-  toggleGroupStatus: (id: string, isActive: boolean) => Promise<boolean>;
-  clearMessage: () => void;
-  setMessage: (message: { type: 'success' | 'error'; text: string } | null) => void;
+  deleteGroup: (id: string) => Promise<true | string>;
+  toggleGroupStatus: (id: string, isActive: boolean) => Promise<true | string>;
 }
+
+async function mutate(url: string, init: RequestInit, fallback: string): Promise<true | string> {
+  try {
+    const res = await fetch(url, { credentials: 'include', ...init });
+    const data = await res.json();
+    if (data.success) return true;
+    return data.error || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
 export function useCustomerGroupsList(): UseCustomerGroupsListReturn {
   const [groups, setGroups] = useState<CustomerGroup[]>([]);
   const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchGroups = useCallback(async () => {
     setLoading(true);
@@ -51,124 +65,51 @@ export function useCustomerGroupsList(): UseCustomerGroupsListReturn {
       const data = await res.json();
       if (data.success) {
         setGroups(data.data || []);
+        setError(null);
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to fetch customer groups' });
+        setError(data.error || 'Failed to fetch customer groups');
       }
-    } catch (error) {
-      if (error instanceof Error && error.name !== 'AbortError') {
-        console.error('Failed to fetch customer groups:', error);
-        setMessage({ type: 'error', text: 'Failed to fetch customer groups' });
+    } catch (err) {
+      if (!isAbortError(err)) {
+        console.error('Failed to fetch customer groups:', err);
       }
+      setError(getFetchErrorMessage(err, 'Failed to fetch customer groups'));
     } finally {
       setLoading(false);
     }
   }, []);
 
-  const createGroup = useCallback(async (form: CustomerGroupFormData) => {
-    try {
-      const res = await fetch('/api/customer-groups', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(form),
-      });
+  const createGroup = useCallback(
+    (form: CustomerGroupFormData) =>
+      mutate('/api/customer-groups', { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(form) }, 'Failed to save customer group'),
+    []
+  );
 
-      const data = await res.json();
-      if (data.success) {
-        setMessage({ type: 'success', text: 'Customer group created successfully' });
-        return true;
-      }
-      const errorText = data.error || 'Failed to save customer group';
-      setMessage({ type: 'error', text: errorText });
-      return errorText;
-    } catch {
-      const errorText = 'Failed to save customer group';
-      setMessage({ type: 'error', text: errorText });
-      return errorText;
-    }
-  }, []);
+  const updateGroup = useCallback(
+    (id: string, form: CustomerGroupFormData) =>
+      mutate(`/api/customer-groups/${id}`, { method: 'PUT', headers: JSON_HEADERS, body: JSON.stringify(form) }, 'Failed to update customer group'),
+    []
+  );
 
-  const updateGroup = useCallback(async (id: string, form: CustomerGroupFormData) => {
-    try {
-      const res = await fetch(`/api/customer-groups/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(form),
-      });
+  const deleteGroup = useCallback(
+    (id: string) => mutate(`/api/customer-groups/${id}`, { method: 'DELETE' }, 'Failed to delete customer group'),
+    []
+  );
 
-      const data = await res.json();
-      if (data.success) {
-        setMessage({ type: 'success', text: 'Customer group updated successfully' });
-        return true;
-      }
-      const errorText = data.error || 'Failed to update customer group';
-      setMessage({ type: 'error', text: errorText });
-      return errorText;
-    } catch {
-      const errorText = 'Failed to update customer group';
-      setMessage({ type: 'error', text: errorText });
-      return errorText;
-    }
-  }, []);
-
-  const deleteGroup = useCallback(async (id: string) => {
-    try {
-      const res = await fetch(`/api/customer-groups/${id}`, {
-        method: 'DELETE',
-        credentials: 'include',
-      });
-
-      const data = await res.json();
-      if (data.success) {
-        setMessage({ type: 'success', text: 'Customer group deleted successfully' });
-        return true;
-      }
-      setMessage({ type: 'error', text: data.error || 'Failed to delete customer group' });
-      return false;
-    } catch {
-      setMessage({ type: 'error', text: 'Failed to delete customer group' });
-      return false;
-    }
-  }, []);
-
-  const toggleGroupStatus = useCallback(async (id: string, isActive: boolean) => {
-    try {
-      const res = await fetch(`/api/customer-groups/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ isActive }),
-      });
-
-      const data = await res.json();
-      if (data.success) {
-        setMessage({
-          type: 'success',
-          text: isActive ? 'Customer group activated successfully' : 'Customer group deactivated successfully',
-        });
-        return true;
-      }
-      setMessage({ type: 'error', text: data.error || 'Failed to update customer group' });
-      return false;
-    } catch {
-      setMessage({ type: 'error', text: 'Failed to update customer group' });
-      return false;
-    }
-  }, []);
-
-  const clearMessage = useCallback(() => setMessage(null), []);
+  const toggleGroupStatus = useCallback(
+    (id: string, isActive: boolean) =>
+      mutate(`/api/customer-groups/${id}`, { method: 'PUT', headers: JSON_HEADERS, body: JSON.stringify({ isActive }) }, 'Failed to update customer group'),
+    []
+  );
 
   return {
     groups,
     loading,
-    message,
+    error,
     fetchGroups,
     createGroup,
     updateGroup,
     deleteGroup,
     toggleGroupStatus,
-    clearMessage,
-    setMessage,
   };
 }

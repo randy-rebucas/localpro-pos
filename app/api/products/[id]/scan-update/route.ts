@@ -39,7 +39,7 @@ export async function PATCH(
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId } = authResult;
 
-    if (!(await hasTenantPermission(authResult.user.role, tenantId, 'products.manage'))) {
+    if (!(await hasTenantPermission(authResult.user.role, tenantId, 'products.edit'))) {
       return NextResponse.json(
         { success: false, error: 'Forbidden: Insufficient permissions' },
         { status: 403 }

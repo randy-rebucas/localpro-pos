@@ -31,7 +31,7 @@ function shopifyOAuthScopeParam(): string {
 export async function GET(request: NextRequest) {
   try {
     const { tenantId, user } = await requireTenantAccess(request);
-    if (!(await hasTenantPermission(user.role, tenantId, 'integrations.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenantId, 'integrations.connect'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
     await requireEcommerceIntegrationFeature(tenantId);

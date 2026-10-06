@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
       const tenantAccess = await requireTenantAccess(request);
       tenantId = tenantAccess.tenantId;
       // Also check role
-      if (!(await hasTenantPermission(tenantAccess.user.role, tenantId, 'users.manage'))) {
+      if (!(await hasTenantPermission(tenantAccess.user.role, tenantId, 'users.view'))) {
         throw new Error('Forbidden: Insufficient permissions');
       }
     } catch (authError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
       const tenantAccess = await requireTenantAccess(request);
       tenantId = tenantAccess.tenantId;
       // Also check role
-      if (!(await hasTenantPermission(tenantAccess.user.role, tenantId, 'users.manage'))) {
+      if (!(await hasTenantPermission(tenantAccess.user.role, tenantId, 'users.create'))) {
         throw new Error('Forbidden: Insufficient permissions');
       }
       actingUser = tenantAccess.user;

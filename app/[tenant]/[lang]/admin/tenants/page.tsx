@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
@@ -40,7 +40,7 @@ export default function TenantsPage() {
   const { settings: tenantSettings } = useTenantSettings();
   const primaryColor = (tenantSettings || getDefaultTenantSettings()).primaryColor || '#35979c';
   const { canAccess } = usePermissions();
-  const canManage = canAccess('tenant_profile.manage');
+  const canManage = canAccess('tenant_profile.edit');
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);

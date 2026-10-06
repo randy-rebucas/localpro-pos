@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import prisma, { dbTransaction } from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
-import { getTenantIdFromRequest } from '@/lib/api-tenant';
+import { getTenantIdForUser } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { capturePayment } from '@/lib/paypal';
 import { validateCoupon, applyCouponDiscount, incrementCouponUsage, CouponError } from '@/lib/coupons';
@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
 
     // Require authentication
     const user = await requireAuth(request);
-    const tenantId = await getTenantIdFromRequest(request);
+    const tenantId = await getTenantIdForUser(request, user);
 
     if (!tenantId) {
       return NextResponse.json(
@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!(await hasTenantPermission(user.role, tenantId, 'subscriptions.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenantId, 'subscriptions.change_plan'))) {
       return NextResponse.json(
         { success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') },
         { status: 403 }

@@ -1,4 +1,9 @@
 import { useCallback, useState } from 'react';
+import { getFetchErrorMessage } from '@/lib/fetch-error';
+
+// The ledger routes run several sequential queries (auth, permissions, lazy
+// chart-of-accounts seed), so allow more than the usual 20s.
+const LEDGER_FETCH_TIMEOUT_MS = 30000;
 
 export interface LedgerAccount {
   id: string;
@@ -13,7 +18,7 @@ export interface LedgerAccount {
   updatedAt: string;
 }
 
-export function useLedgerAccounts(tenant: string) {
+export function useLedgerAccounts(tenant: string, { includeInactive = false }: { includeInactive?: boolean } = {}) {
   const [accounts, setAccounts] = useState<LedgerAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -23,10 +28,11 @@ export function useLedgerAccounts(tenant: string) {
     setError(null);
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 20000);
+    const timeout = setTimeout(() => controller.abort(), LEDGER_FETCH_TIMEOUT_MS);
 
     try {
-      const res = await globalThis.fetch(`/api/ledger/accounts?tenant=${tenant}`, {
+      const inactiveParam = includeInactive ? '&includeInactive=true' : '';
+      const res = await globalThis.fetch(`/api/ledger/accounts?tenant=${tenant}${inactiveParam}`, {
         credentials: 'include',
         signal: controller.signal,
       });
@@ -40,14 +46,14 @@ export function useLedgerAccounts(tenant: string) {
         onError?.(errorMsg);
       }
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to fetch ledger accounts';
+      const errorMsg = getFetchErrorMessage(err, 'Failed to fetch ledger accounts');
       setError(errorMsg);
       onError?.(errorMsg);
     } finally {
       clearTimeout(timeout);
       setLoading(false);
     }
-  }, [tenant]);
+  }, [tenant, includeInactive]);
 
   const createAccount = useCallback(
     async (
@@ -56,7 +62,7 @@ export function useLedgerAccounts(tenant: string) {
       onError?: (error: string) => void
     ) => {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 20000);
+      const timeout = setTimeout(() => controller.abort(), LEDGER_FETCH_TIMEOUT_MS);
       try {
         const res = await globalThis.fetch(`/api/ledger/accounts?tenant=${tenant}`, {
           method: 'POST',
@@ -73,7 +79,7 @@ export function useLedgerAccounts(tenant: string) {
           onError?.(data.error || 'Failed to create ledger account');
         }
       } catch (err) {
-        onError?.(err instanceof Error ? err.message : 'Failed to create ledger account');
+        onError?.(getFetchErrorMessage(err, 'Failed to create ledger account'));
       } finally {
         clearTimeout(timeout);
       }
@@ -89,7 +95,7 @@ export function useLedgerAccounts(tenant: string) {
       onError?: (error: string) => void
     ) => {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 20000);
+      const timeout = setTimeout(() => controller.abort(), LEDGER_FETCH_TIMEOUT_MS);
       try {
         const res = await globalThis.fetch(`/api/ledger/accounts/${id}?tenant=${tenant}`, {
           method: 'PATCH',
@@ -106,7 +112,7 @@ export function useLedgerAccounts(tenant: string) {
           onError?.(data.error || 'Failed to update ledger account');
         }
       } catch (err) {
-        onError?.(err instanceof Error ? err.message : 'Failed to update ledger account');
+        onError?.(getFetchErrorMessage(err, 'Failed to update ledger account'));
       } finally {
         clearTimeout(timeout);
       }
@@ -117,7 +123,7 @@ export function useLedgerAccounts(tenant: string) {
   const deleteAccount = useCallback(
     async (id: string, onSuccess?: (message: string) => void, onError?: (error: string) => void) => {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 20000);
+      const timeout = setTimeout(() => controller.abort(), LEDGER_FETCH_TIMEOUT_MS);
       try {
         const res = await globalThis.fetch(`/api/ledger/accounts/${id}?tenant=${tenant}`, {
           method: 'DELETE',
@@ -132,7 +138,7 @@ export function useLedgerAccounts(tenant: string) {
           onError?.(data.error || 'Failed to delete ledger account');
         }
       } catch (err) {
-        onError?.(err instanceof Error ? err.message : 'Failed to delete ledger account');
+        onError?.(getFetchErrorMessage(err, 'Failed to delete ledger account'));
       } finally {
         clearTimeout(timeout);
       }

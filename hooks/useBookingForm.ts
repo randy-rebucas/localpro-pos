@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { getFetchErrorMessage } from '@/lib/fetch-error';
 
 export interface BookingFormData {
   customerName: string;
@@ -93,7 +94,7 @@ export function useBookingForm(tenant: string) {
 
         onSuccess?.(message);
       } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'Failed to create booking';
+        const errorMsg = getFetchErrorMessage(err, 'Failed to create booking');
         setError(errorMsg);
         onError?.(errorMsg);
       } finally {

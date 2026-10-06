@@ -4,8 +4,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { hardwareStatusChecker, DeviceStatus, HardwareStatus } from '@/lib/hardware/status-checker';
 import { useParams } from 'next/navigation';
 import { getDictionaryClient } from '@/app/[tenant]/[lang]/dictionaries-client';
-import { useTenantSettings } from '@/contexts/TenantSettingsContext';
-import { getDefaultTenantSettings } from '@/lib/currency';
 import { showToast } from '@/lib/toast';
 
 interface HardwareStatusProps {
@@ -16,6 +14,31 @@ interface HardwareStatusProps {
   sidebar?: boolean;
 }
 
+// Win8 flat status colors: solid fill, white text.
+const DEVICE_STATUS_BADGE: Record<string, string> = {
+  connected: 'bg-win8-success text-white',
+  available: 'bg-win8-success text-white',
+  disconnected: 'bg-win8-warning text-white',
+  error: 'bg-win8-danger text-white',
+  'not-configured': 'bg-gray-500 text-white',
+};
+
+const DEVICE_STATUS_DOT: Record<string, string> = {
+  connected: 'bg-win8-success',
+  available: 'bg-win8-success',
+  disconnected: 'bg-win8-warning',
+  error: 'bg-win8-danger',
+  'not-configured': 'bg-gray-300',
+};
+
+const OVERALL_STATUS_BADGE: Record<string, string> = {
+  'all-connected': 'bg-win8-success text-white',
+  partial: 'bg-win8-warning text-white',
+  none: 'bg-win8-danger text-white',
+};
+
+const SMALL_SPINNER = <span className="win8-spinner win8-spinner-sm"><span /><span /><span /><span /><span /></span>;
+
 export default function HardwareStatusChecker({
   compact = false,
   showActions = true,
@@ -24,14 +47,11 @@ export default function HardwareStatusChecker({
   sidebar = false,
 }: HardwareStatusProps) {
   const params = useParams();
-  const tenant = params.tenant as string; // eslint-disable-line @typescript-eslint/no-unused-vars
   const lang = (params?.lang as 'en' | 'es') || 'en';
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [status, setStatus] = useState<HardwareStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [testing, setTesting] = useState<string | null>(null);
-  const { settings } = useTenantSettings();
-  const primaryColor = (settings || getDefaultTenantSettings()).primaryColor || '#35979c';
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -76,97 +96,65 @@ export default function HardwareStatusChecker({
     }
   }, [checkStatus, dict]);
 
-  const getStatusColor = (deviceStatus: DeviceStatus) => {
-    switch (deviceStatus.status) {
-      case 'connected':
-      case 'available':
-        return 'text-green-600 bg-green-50 border-green-200';
-      case 'disconnected':
-        return 'text-yellow-600 bg-yellow-50 border-yellow-200';
-      case 'error':
-        return 'text-red-600 bg-red-50 border-red-200';
-      case 'not-configured':
-        return 'text-gray-600 bg-gray-50 border-gray-200';
-      default:
-        return 'text-gray-600 bg-gray-50 border-gray-200';
-    }
-  };
-
-  const getStatusIcon = (deviceStatus: DeviceStatus) => {
-    switch (deviceStatus.status) {
-      case 'connected':
-      case 'available':
-        return (
-          <svg className="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-        );
-      case 'disconnected':
-        return (
-          <svg className="w-5 h-5 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-          </svg>
-        );
-      case 'error':
-        return (
-          <svg className="w-5 h-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-        );
-      case 'not-configured':
-        return (
-          <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-          </svg>
-        );
-      default:
-        return null;
-    }
-  };
+  const t = (key: string, fallback: string): string =>
+    dict?.components?.hardwareStatus?.[key] || dict?.common?.[key] || fallback;
 
   const getDeviceStatusLabel = (deviceStatus: string) => {
     switch (deviceStatus) {
-      case 'connected': return dict?.components?.hardwareStatus?.statusConnected || 'Connected';
-      case 'available': return dict?.components?.hardwareStatus?.statusAvailable || 'Available';
-      case 'disconnected': return dict?.components?.hardwareStatus?.statusDisconnected || 'Disconnected';
-      case 'error': return dict?.components?.hardwareStatus?.statusError || 'Error';
-      case 'not-configured': return dict?.components?.hardwareStatus?.statusNotConfigured || 'Not Configured';
+      case 'connected': return t('statusConnected', 'Connected');
+      case 'available': return t('statusAvailable', 'Available');
+      case 'disconnected': return t('statusDisconnected', 'Disconnected');
+      case 'error': return t('statusError', 'Error');
+      case 'not-configured': return t('statusNotConfigured', 'Not Configured');
       default: return deviceStatus.replace('-', ' ');
     }
   };
 
-  const getOverallStatusColor = () => {
-    if (!status) return 'bg-gray-100';
+  const getOverallLabel = (short = false) => {
+    if (!status) return '';
     switch (status.overallStatus) {
-      case 'all-connected':
-        return 'bg-green-100 text-green-800';
-      case 'partial':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'none':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
+      case 'all-connected': return t('allConnected', 'All Connected');
+      case 'partial': return short ? t('partial', 'Partial') : t('partialConnection', 'Partial Connection');
+      default: return t('notConfigured', 'Not Configured');
     }
   };
+
+  const overallBadge = status ? (OVERALL_STATUS_BADGE[status.overallStatus] || 'bg-gray-500 text-white') : 'bg-gray-500 text-white';
+
+  const refreshButton = (
+    <button
+      type="button"
+      onClick={checkStatus}
+      disabled={loading}
+      title={t('refreshStatus', 'Refresh status')}
+      aria-label={t('refreshStatus', 'Refresh status')}
+      className="inline-flex items-center justify-center p-2.5 border border-gray-300 bg-white text-gray-600 hover:bg-gray-100 disabled:opacity-50 transition-colors"
+    >
+      {loading ? SMALL_SPINNER : (
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+      )}
+    </button>
+  );
 
   if (compact) {
     return (
       <div className="flex items-center gap-2">
-        {loading ? (
-          <div className="animate-spin h-4 w-4 border-b-2" style={{ borderBottomColor: primaryColor }}></div>
+        {loading && !status ? (
+          <span className="text-brand">{SMALL_SPINNER}</span>
         ) : status ? (
           <>
-            <div className={`px-2 py-1 border border-gray-300 text-xs font-medium ${getOverallStatusColor()}`}>
-              {status.overallStatus === 'all-connected' ? (dict?.components?.hardwareStatus?.allConnected || dict?.common?.allConnected || 'All Connected') :
-               status.overallStatus === 'partial' ? (dict?.components?.hardwareStatus?.partial || dict?.common?.partial || 'Partial') : (dict?.components?.hardwareStatus?.notConfigured || dict?.common?.notConfigured || 'Not Configured')}
-            </div>
+            <span className={`px-2 py-0.5 text-xs font-semibold ${overallBadge}`}>{getOverallLabel(true)}</span>
             <button
+              type="button"
               onClick={checkStatus}
               className="text-gray-500 hover:text-gray-700"
-              title={dict?.common?.refreshStatus || 'Refresh status'}
+              title={t('refreshStatus', 'Refresh status')}
+              aria-label={t('refreshStatus', 'Refresh status')}
             >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
             </button>
           </>
@@ -177,175 +165,115 @@ export default function HardwareStatusChecker({
 
   if (loading && !status) {
     return (
-      <div className={`bg-white border border-gray-300 ${sidebar ? 'p-4' : 'p-6'}`}>
-        <div className={`flex items-center justify-center ${sidebar ? 'py-4' : 'py-8'}`}>
-          <div className={`animate-spin border-b-2 ${sidebar ? 'h-6 w-6' : 'h-8 w-8'}`} style={{ borderBottomColor: primaryColor }}></div>
-          {!sidebar && <span className="ml-3 text-gray-600">{dict?.components?.hardwareStatus?.checkingHardwareStatus || 'Checking hardware status...'}</span>}
-        </div>
+      <div className="text-center py-12 bg-white border border-gray-300">
+        <div className="win8-spinner text-brand mx-auto"><span /><span /><span /><span /><span /></div>
+        <p className="mt-3 text-gray-400 text-sm">{t('checkingHardwareStatus', 'Checking hardware status…')}</p>
       </div>
     );
   }
 
   if (!status) {
     return (
-      <div className={`bg-white border border-gray-300 ${sidebar ? 'p-4' : 'p-6'}`}>
-        <p className={`text-gray-600 ${sidebar ? 'text-sm' : ''}`}>
-          {sidebar ? (dict?.common?.unableToCheckStatus || 'Unable to check status') : (dict?.common?.unableToCheckHardwareStatus || 'Unable to check hardware status')}
+      <div className="text-center py-12 bg-white border border-gray-300">
+        <p className="text-win8-danger text-sm font-medium">
+          {sidebar ? t('unableToCheckStatus', 'Unable to check status') : t('unableToCheckHardwareStatus', 'Unable to check hardware status')}
         </p>
+        <button
+          type="button"
+          onClick={checkStatus}
+          className="mt-4 inline-flex items-center justify-center px-4 py-2 bg-brand text-white text-sm hover:bg-brand-hover transition-colors"
+        >
+          {dict?.common?.retry || 'Retry'}
+        </button>
       </div>
     );
   }
 
   if (sidebar) {
     return (
-      <div className="bg-white border border-gray-300 p-4">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-bold text-gray-900">{dict?.common?.status || 'Status'}</h3>
-          <button
-            onClick={checkStatus}
-            disabled={loading}
-            className="p-1.5 text-gray-500 hover:text-gray-700 disabled:opacity-50"
-            title={dict?.common?.refreshStatus || 'Refresh status'}
-          >
-            <svg className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-          </button>
-        </div>
-
-        <div className="mb-3">
-          <div className={`px-2 py-1 border border-gray-300 text-xs font-medium text-center ${getOverallStatusColor()}`}>
-            {status.overallStatus === 'all-connected' ? (dict?.common?.allConnected || 'All Connected') :
-             status.overallStatus === 'partial' ? (dict?.common?.partialConnection || 'Partial Connection') : (dict?.common?.notConfigured || 'Not Configured')}
+      <section className="bg-white border border-gray-300">
+        <div className="px-5 py-4 border-b border-gray-300 flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-base font-bold text-gray-900">{t('sidebarTitle', 'Device Status')}</h2>
+            <p className="text-xs text-gray-400 tabular-nums">
+              {t('lastChecked', 'Last checked: {time}').replace('{time}', status.lastCheck.toLocaleTimeString())}
+            </p>
           </div>
+          {refreshButton}
         </div>
 
-        <div className="space-y-2">
-          {status.devices.map((device, index) => (
-            <div
-              key={index}
-              className={`border border-gray-300 p-2.5 ${getStatusColor(device)}`}
-            >
-              <div className="flex items-center gap-2">
-                <div className="flex-shrink-0">
-                  {getStatusIcon(device)}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5 mb-0.5">
-                    <h4 className="text-sm font-semibold text-gray-900 truncate">{device.name}</h4>
-                  </div>
-                  <span className={`px-1.5 py-0.5 border border-gray-300 text-xs font-medium ${
-                    device.status === 'connected' || device.status === 'available'
-                      ? 'bg-green-100 text-green-800'
-                      : device.status === 'disconnected'
-                      ? 'bg-yellow-100 text-yellow-800'
-                      : device.status === 'error'
-                      ? 'bg-red-100 text-red-800'
-                      : 'bg-gray-100 text-gray-800'
-                  }`}>
-                    {getDeviceStatusLabel(device.status)}
-                  </span>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+        <div className={`px-5 py-2 text-xs font-semibold text-center ${overallBadge}`}>{getOverallLabel()}</div>
 
-        {status.devices.length === 0 && (
-          <div className="text-center py-4 text-gray-500 text-sm">
-            <p>{dict?.components?.hardwareStatus?.noDevices || 'No devices'}</p>
-          </div>
+        {status.devices.length === 0 ? (
+          <p className="px-5 py-6 text-sm text-gray-400 italic text-center">{t('noDevices', 'No devices')}</p>
+        ) : (
+          <ul className="divide-y divide-gray-200">
+            {status.devices.map((device, index) => (
+              <li key={index} className="px-5 py-3 flex items-center gap-3">
+                <span className={`inline-block w-2.5 h-2.5 shrink-0 ${DEVICE_STATUS_DOT[device.status] || 'bg-gray-300'}`} aria-hidden="true" />
+                <span className="flex-1 min-w-0 text-sm font-medium text-gray-900 truncate" title={device.message || device.name}>
+                  {device.name}
+                </span>
+                <span className={`px-2 py-0.5 text-xs font-semibold shrink-0 ${DEVICE_STATUS_BADGE[device.status] || 'bg-gray-500 text-white'}`}>
+                  {getDeviceStatusLabel(device.status)}
+                </span>
+              </li>
+            ))}
+          </ul>
         )}
-      </div>
+      </section>
     );
   }
 
   return (
-    <div className="bg-white border border-gray-300 p-6">
-      <div className="flex justify-between items-center mb-6">
+    <section className="bg-white border border-gray-300">
+      <div className="px-6 py-4 border-b border-gray-300 flex items-center justify-between gap-3 flex-wrap">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">{dict?.components?.hardwareStatus?.title || 'Hardware Status'}</h2>
-          <p className="text-sm text-gray-500 mt-1">
-            {(dict?.components?.hardwareStatus?.lastChecked || 'Last checked: {time}').replace('{time}', status.lastCheck.toLocaleTimeString())}
+          <h2 className="text-base font-bold text-gray-900">{t('title', 'Hardware Status')}</h2>
+          <p className="text-sm text-gray-500 tabular-nums">
+            {t('lastChecked', 'Last checked: {time}').replace('{time}', status.lastCheck.toLocaleTimeString())}
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <div className={`px-3 py-1 border border-gray-300 text-sm font-medium ${getOverallStatusColor()}`}>
-            {status.overallStatus === 'all-connected' ? (dict?.components?.hardwareStatus?.allConnected || dict?.common?.allConnected || 'All Connected') :
-             status.overallStatus === 'partial' ? (dict?.components?.hardwareStatus?.partialConnection || dict?.common?.partialConnection || 'Partial Connection') : (dict?.components?.hardwareStatus?.notConfigured || dict?.common?.notConfigured || 'Not Configured')}
-          </div>
-          <button
-            onClick={checkStatus}
-            disabled={loading}
-            className="p-2 text-gray-500 hover:text-gray-700 disabled:opacity-50"
-            title={dict?.common?.refreshStatus || 'Refresh status'}
-          >
-            <svg className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-          </button>
+          <span className={`px-2 py-0.5 text-xs font-semibold ${overallBadge}`}>{getOverallLabel()}</span>
+          {refreshButton}
         </div>
       </div>
 
-      <div className="space-y-3">
-        {status.devices.map((device, index) => (
-          <div
-            key={index}
-            className={`border border-gray-300 p-4 ${getStatusColor(device)}`}
-          >
-            <div className="flex items-start justify-between">
-              <div className="flex items-start gap-3 flex-1">
-                {getStatusIcon(device)}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h3 className="font-semibold text-gray-900">{device.name}</h3>
-                    <span className={`px-2 py-0.5 border border-gray-300 text-xs font-medium ${
-                      device.status === 'connected' || device.status === 'available'
-                        ? 'bg-green-100 text-green-800'
-                        : device.status === 'disconnected'
-                        ? 'bg-yellow-100 text-yellow-800'
-                        : device.status === 'error'
-                        ? 'bg-red-100 text-red-800'
-                        : 'bg-gray-100 text-gray-800'
-                    }`}>
+      {status.devices.length === 0 ? (
+        <div className="text-center py-12 text-gray-400 text-sm">
+          {t('noHardwareDevicesConfigured', 'No hardware devices configured')}
+        </div>
+      ) : (
+        <ul className="divide-y divide-gray-200">
+          {status.devices.map((device: DeviceStatus, index) => (
+            <li key={index} className="px-6 py-4 flex items-start justify-between gap-4 hover:bg-gray-100 transition-colors">
+              <div className="flex items-start gap-3 min-w-0">
+                <span className={`inline-block w-2.5 h-2.5 mt-1.5 shrink-0 ${DEVICE_STATUS_DOT[device.status] || 'bg-gray-300'}`} aria-hidden="true" />
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-sm font-semibold text-gray-900">{device.name}</h3>
+                    <span className={`px-2 py-0.5 text-xs font-semibold ${DEVICE_STATUS_BADGE[device.status] || 'bg-gray-500 text-white'}`}>
                       {getDeviceStatusLabel(device.status)}
                     </span>
                   </div>
-                  {device.message && (
-                    <p className="text-sm text-gray-600 mt-1">{device.message}</p>
-                  )}
+                  {device.message && <p className="text-xs text-gray-500 mt-1">{device.message}</p>}
                 </div>
               </div>
-              {showActions && (
-                <div className="flex items-center gap-2 ml-4">
-                  {(device.type === 'printer' || device.type === 'cash-drawer') && (
-                    <button
-                      onClick={() => testDevice(device.type)}
-                      disabled={testing === device.type || device.status === 'not-configured'}
-                      className="px-3 py-1.5 text-sm text-white disabled:opacity-50 disabled:cursor-not-allowed border transition-colors"
-                      style={{
-                        backgroundColor: primaryColor,
-                        borderColor: primaryColor
-                      }}
-                      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = `${primaryColor}dd`; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = primaryColor; }}
-                    >
-                      {testing === device.type ? (dict?.components?.hardwareStatus?.testing || 'Testing...') : (dict?.components?.hardwareStatus?.test || 'Test')}
-                    </button>
-                  )}
-                </div>
+              {showActions && (device.type === 'printer' || device.type === 'cash-drawer') && (
+                <button
+                  type="button"
+                  onClick={() => testDevice(device.type)}
+                  disabled={testing === device.type || device.status === 'not-configured'}
+                  className="inline-flex items-center justify-center px-4 py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0"
+                >
+                  {testing === device.type ? t('testing', 'Testing…') : t('test', 'Test')}
+                </button>
               )}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {status.devices.length === 0 && (
-        <div className="text-center py-8 text-gray-500">
-          <p>{dict?.components?.hardwareStatus?.noHardwareDevicesConfigured || 'No hardware devices configured'}</p>
-        </div>
+            </li>
+          ))}
+        </ul>
       )}
-    </div>
+    </section>
   );
 }
-

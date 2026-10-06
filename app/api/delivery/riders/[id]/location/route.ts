@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
-import { getTenantIdFromRequest } from '@/lib/api-tenant';
+import { getTenantIdForUser } from '@/lib/api-tenant';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { checkRateLimit } from '@/lib/rate-limit';
@@ -26,7 +26,7 @@ export async function PATCH(
       );
     }
 
-    const tenantId = await getTenantIdFromRequest(request);
+    const tenantId = await getTenantIdForUser(request, user);
     if (!tenantId) {
       return NextResponse.json(
         { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
@@ -38,7 +38,7 @@ export async function PATCH(
 
     // A rider may update their own live location; anyone else needs delivery.manage.
     const isSelf = user.userId === id;
-    if (!isSelf && !(await hasTenantPermission(user.role, tenantId, 'delivery.manage'))) {
+    if (!isSelf && !(await hasTenantPermission(user.role, tenantId, 'delivery.edit'))) {
       return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
     }
 

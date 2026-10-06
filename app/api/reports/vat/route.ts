@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
-import { getTenantIdFromRequest } from '@/lib/api-tenant';
+import { getTenantIdForUser } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { getVATReport } from '@/lib/analytics';
@@ -13,7 +13,7 @@ import { resolveTenantDateRange, DEFAULT_TENANT_TIMEZONE } from '@/lib/timezone'
 export async function GET(request: NextRequest) {
   try {
     const user = await requireAuth(request);
-    const tenantId = await getTenantIdFromRequest(request);
+    const tenantId = await getTenantIdForUser(request, user);
     const t = await getValidationTranslatorFromRequest(request);
 
     if (!tenantId) {

@@ -135,11 +135,14 @@ export const useMultiCurrencySettings = (tenant: string) => {
         setSaving(true);
         setMessage(null);
 
+        // Send only the keys this page edits (the PUT checks multi_currency.manage
+        // for them); echoing the whole settings object would clobber other pages.
+        const { multiCurrency, currency, currencySymbol } = settingsToSave;
         const res = await fetch(`/api/tenants/${tenant}/settings`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
-          body: JSON.stringify({ settings: settingsToSave }),
+          body: JSON.stringify({ settings: { multiCurrency, currency, currencySymbol } }),
           signal: controller.signal,
         });
 
@@ -148,7 +151,17 @@ export const useMultiCurrencySettings = (tenant: string) => {
 
         if (data.success) {
           const reshaped = mergeDefaultSettings(reshapeMultiCurrency(data.data));
-          setSettings(reshaped);
+          // Rates live in their own table and never come back from the settings
+          // PUT (reshape always yields `{}`) — keep the ones on screen instead of
+          // blanking every rate input after a successful save.
+          setSettings((prev) => ({
+            ...reshaped,
+            multiCurrency: {
+              ...reshaped.multiCurrency!,
+              exchangeRates: prev?.multiCurrency?.exchangeRates ?? {},
+              lastUpdated: reshaped.multiCurrency?.lastUpdated ?? prev?.multiCurrency?.lastUpdated,
+            },
+          }));
           return { success: true, data: reshaped };
         } else {
           const errorMessage =

@@ -15,6 +15,9 @@ export async function GET(
     if (!user) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
+    if (!(await hasTenantPermission(user.role, user.tenantId, 'prescriptions.view'))) {
+      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
+    }
 
     const { id } = await params;
 

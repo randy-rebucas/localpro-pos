@@ -6,8 +6,39 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma, { dbTransaction } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
-import { roleAtLeast } from '@/lib/permissions';
+import { hasTenantPermission } from '@/lib/permissions-server';
+import { checkRateLimit } from '@/lib/rate-limit';
+import { createAuditLog, AuditActions } from '@/lib/audit';
 import { logger } from '@/lib/logger';
+
+// Rows are keyed by dayOfWeek (0=Sun..6=Sat), but clients (BusinessHoursManager,
+// lib/business-hours.ts) use the legacy Mongoose day-name keys, so the schedule
+// is reshaped at this boundary in both directions.
+const DAY_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+
+function dayKeyToIndex(key: string): number | null {
+  const byName = DAY_NAMES.indexOf(key.toLowerCase());
+  if (byName !== -1) return byName;
+  const n = Number(key);
+  return Number.isInteger(n) && n >= 0 && n <= 6 ? n : null;
+}
+
+type BusinessHourRow = { dayOfWeek: number; enabled: boolean; openTime: string | null; closeTime: string | null; breaks: { start: string; end: string }[] };
+
+function toScheduleJSON(rows: BusinessHourRow[]): Record<string, unknown> {
+  const schedule: Record<string, unknown> = {};
+  for (const day of rows) {
+    const name = DAY_NAMES[day.dayOfWeek];
+    if (!name) continue;
+    schedule[name] = {
+      enabled: day.enabled,
+      openTime: day.openTime,
+      closeTime: day.closeTime,
+      breaks: day.breaks.map((b) => ({ start: b.start, end: b.end })),
+    };
+  }
+  return schedule;
+}
 
 export async function GET(
   request: NextRequest,
@@ -36,21 +67,11 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
-    const schedule: Record<string, unknown> = {};
-    for (const day of tenant.businessHours) {
-      schedule[String(day.dayOfWeek)] = {
-        enabled: day.enabled,
-        openTime: day.openTime,
-        closeTime: day.closeTime,
-        breaks: day.breaks.map((b) => ({ start: b.start, end: b.end })),
-      };
-    }
-
     return NextResponse.json({
       success: true,
       data: {
         timezone: tenant.settings?.businessHoursTimezone ?? null,
-        schedule,
+        schedule: toScheduleJSON(tenant.businessHours),
         specialHours: tenant.specialHours.map((sh) => ({
           date: sh.date,
           enabled: sh.enabled,
@@ -76,11 +97,19 @@ export async function PUT(
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (!roleAtLeast(user.role, 'manager')) {
+    const { slug } = await params;
+
+    const rl = checkRateLimit(`business-hours:${slug}`, 30, 60_000);
+    if (!rl.allowed) {
+      return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
+    }
+
+    // Same granular permission the Business Hours admin page gates on
+    // (default floor: manager, but tenant role-permission overrides apply).
+    if (!(await hasTenantPermission(user.role, user.tenantId, 'business_hours.manage'))) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
-    const { slug } = await params;
     const body = await request.json();
     const { schedule, specialHours, timezone } = body;
 
@@ -104,8 +133,8 @@ export async function PUT(
 
       if (schedule !== undefined) {
         for (const [dayKey, dayValueRaw] of Object.entries(schedule as Record<string, any>)) { // eslint-disable-line @typescript-eslint/no-explicit-any
-          const dayOfWeek = Number(dayKey);
-          if (Number.isNaN(dayOfWeek)) continue;
+          const dayOfWeek = dayKeyToIndex(dayKey);
+          if (dayOfWeek === null) continue;
           const dayValue = dayValueRaw as { enabled?: boolean; openTime?: string; closeTime?: string; breaks?: { start: string; end: string }[] };
 
           const businessHour = await tx.tenantBusinessHour.upsert({
@@ -161,26 +190,25 @@ export async function PUT(
       }
     });
 
+    await createAuditLog(request, {
+      tenantId: tenant.id,
+      userId: user.userId,
+      action: AuditActions.UPDATE,
+      entityType: 'tenant',
+      entityId: tenant.id,
+      changes: { businessHours: { timezone, schedule, specialHours } },
+    });
+
     const updated = await prisma.tenant.findFirst({
       where: { id: tenant.id },
       include: { settings: true, businessHours: { include: { breaks: true } }, specialHours: true },
     });
 
-    const responseSchedule: Record<string, unknown> = {};
-    for (const day of updated?.businessHours ?? []) {
-      responseSchedule[String(day.dayOfWeek)] = {
-        enabled: day.enabled,
-        openTime: day.openTime,
-        closeTime: day.closeTime,
-        breaks: day.breaks.map((b) => ({ start: b.start, end: b.end })),
-      };
-    }
-
     return NextResponse.json({
       success: true,
       data: {
         timezone: updated?.settings?.businessHoursTimezone ?? null,
-        schedule: responseSchedule,
+        schedule: toScheduleJSON(updated?.businessHours ?? []),
         specialHours: (updated?.specialHours ?? []).map((sh) => ({
           date: sh.date,
           enabled: sh.enabled,

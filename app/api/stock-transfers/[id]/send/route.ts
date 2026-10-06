@@ -20,7 +20,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const { id } = await params;
     const t = await getValidationTranslatorFromRequest(request);
 
-    if (!(await hasTenantPermission(user.role, tenantId, 'stock_transfers.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenantId, 'stock_transfers.send'))) {
       return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
     }
 

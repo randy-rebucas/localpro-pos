@@ -34,7 +34,7 @@ export default function InventoryPage() {
   const [auditGenerating, setAuditGenerating] = useState(false);
   const [auditError, setAuditError] = useState<string | null>(null);
   const { canAccess } = usePermissions();
-  const canViewPredictions = canAccess('inventory.manage');
+  const canViewPredictions = canAccess('inventory.view');
 
   const {
     branches,

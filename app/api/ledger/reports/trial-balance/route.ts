@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
-import { getTenantIdFromRequest } from '@/lib/api-tenant';
+import { getTenantIdForUser } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { computeAccountBalance, type AccountType } from '@/lib/ledger-helpers';
@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const tenantId = await getTenantIdFromRequest(request);
+    const tenantId = await getTenantIdForUser(request, user);
     if (!tenantId) {
       return NextResponse.json(
         { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
@@ -35,8 +35,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (
-      !(await hasTenantPermission(user.role, tenantId, 'ledger.view')) &&
-      !(await hasTenantPermission(user.role, tenantId, 'ledger.manage'))
+      !(await hasTenantPermission(user.role, tenantId, 'ledger.view'))
     ) {
       return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
     }

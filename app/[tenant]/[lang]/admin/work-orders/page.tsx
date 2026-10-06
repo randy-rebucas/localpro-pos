@@ -35,7 +35,10 @@ export default function WorkOrdersPage() {
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterAssignee, setFilterAssignee] = useState<string>('all');
   const { canAccess } = usePermissions();
-  const canManage = canAccess('work_orders.manage');
+  const canCreate = canAccess('work_orders.create');
+  const canEdit = canAccess('work_orders.edit');
+  // Cancelling an order is DELETE on the order.
+  const canDelete = canAccess('work_orders.delete');
   const canTrackTime = canAccess('work_order_time.manage');
   const { user } = useAuth();
 
@@ -123,7 +126,7 @@ export default function WorkOrdersPage() {
             </h1>
             <p className="text-sm text-gray-500">{dict?.admin?.workOrdersSubtitle || 'Manage jobs, technician assignments, and parts/labor'}</p>
           </div>
-          {canManage && (
+          {canCreate && (
             <button
               type="button"
               disabled={!workOrdersEnabled}
@@ -271,7 +274,7 @@ export default function WorkOrdersPage() {
                 <label className="block text-sm font-medium text-gray-700">{dict?.admin?.technician || 'Technician'}</label>
                 <select
                   value={selectedOrder.assignedToId || ''}
-                  disabled={!canManage}
+                  disabled={!canEdit}
                   onChange={(e) => handleUpdateOrder(selectedOrder.id, { assignedToId: e.target.value || undefined })}
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand bg-white disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -285,7 +288,7 @@ export default function WorkOrdersPage() {
                 <label className="block text-sm font-medium text-gray-700">{dict?.admin?.status || 'Status'}</label>
                 <select
                   value={selectedOrder.status}
-                  disabled={!canManage || !isWorkOrderStatusEditable(selectedOrder.status)}
+                  disabled={!canEdit || !isWorkOrderStatusEditable(selectedOrder.status)}
                   onChange={(e) => handleUpdateOrder(selectedOrder.id, { status: e.target.value as WorkOrderStatus })}
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand bg-white disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -361,7 +364,7 @@ export default function WorkOrdersPage() {
                   </div>
                 </div>
               )}
-              {canManage && (
+              {canDelete && (
                 <div className="flex gap-2 pt-4 border-t border-gray-200">
                   <button
                     onClick={() => handleCancelOrder(selectedOrder.id)}

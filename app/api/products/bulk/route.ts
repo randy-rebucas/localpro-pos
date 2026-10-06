@@ -36,7 +36,7 @@ export async function PUT(request: NextRequest) {
       throw authError;
     }
 
-    if (!(await hasTenantPermission(userRole, tenantId, 'products.manage'))) {
+    if (!(await hasTenantPermission(userRole, tenantId, 'products.edit'))) {
       return NextResponse.json(
         { success: false, error: 'Forbidden: Insufficient permissions' },
         { status: 403 }

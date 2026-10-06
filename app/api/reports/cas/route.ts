@@ -6,7 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
-import { getTenantIdFromRequest } from '@/lib/api-tenant';
+import { getTenantIdForUser } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { checkBirFeatureAccess } from '@/lib/subscription';
@@ -16,7 +16,7 @@ import { resolveTenantDateRange, DEFAULT_TENANT_TIMEZONE } from '@/lib/timezone'
 export async function GET(request: NextRequest) {
   try {
     const user = await requireAuth(request);
-    const tenantId = await getTenantIdFromRequest(request);
+    const tenantId = await getTenantIdForUser(request, user);
 
     if (!tenantId) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });

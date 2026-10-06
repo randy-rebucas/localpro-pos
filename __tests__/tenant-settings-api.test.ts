@@ -68,7 +68,8 @@ vi.mock('@/lib/currency', () => ({
   }),
 }));
 
-vi.mock('@/lib/business-types', () => ({
+vi.mock('@/lib/business-types', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/business-types')>()),
   applyBusinessTypeDefaults: vi.fn((settings: Record<string, unknown>) => settings),
 }));
 
@@ -150,6 +151,8 @@ describe('GET /api/tenants/:slug/settings', () => {
       exchangeRateApiKeyConfigured: false,
       suggestedCurrency: null,
       rolePermissionOverrides: {},
+      // Flat printer/drawer columns are always nested back under hardwareConfig.
+      hardwareConfig: {},
     });
     expect(mockTenantFindFirst).toHaveBeenCalledWith(
       expect.objectContaining({ where: { slug: SLUG, isActive: true } })
@@ -204,6 +207,7 @@ describe('PUT /api/tenants/:slug/settings', () => {
 
   it('rejects the save when the caller lacks settings.manage', async () => {
     authAs(TENANT_A_ID, 'cashier');
+    mockExistingTenant({ id: TENANT_A_ID, slug: SLUG, settings: { companyName: 'Old Name' } });
     mockHasTenantPermission.mockResolvedValue(false);
 
     const res = await PUT(createRequest(`/api/tenants/${SLUG}/settings`, 'PUT', { companyName: 'New Name' }), {
@@ -213,6 +217,69 @@ describe('PUT /api/tenants/:slug/settings', () => {
 
     expect(status).toBe(403);
     expect(mockTenantSettingsUpsert).not.toHaveBeenCalled();
+  });
+
+  describe('per-section permissions (lib/settings-section-permissions.ts)', () => {
+    const grant = (...keys: string[]) =>
+      mockHasTenantPermission.mockImplementation(async (_role: string, _tenantId: string, key: string) => keys.includes(key));
+    const put = (body: Record<string, unknown>) =>
+      PUT(createRequest(`/api/tenants/${SLUG}/settings`, 'PUT', { settings: body }), { params: Promise.resolve({ slug: SLUG }) });
+
+    beforeEach(() => {
+      authAs(TENANT_A_ID, 'cashier');
+      mockTenantSettingsUpsert.mockResolvedValue({});
+      mockExistingTenant({
+        id: TENANT_A_ID,
+        slug: SLUG,
+        settings: { companyName: 'Acme', currency: 'PHP', enableInventory: true, printerType: 'browser' },
+      });
+    });
+
+    it('lets a hardware.manage-only user change the hardware config', async () => {
+      grant('hardware.manage');
+      const res = await put({ hardwareConfig: { printer: { type: 'network', ipAddress: '10.0.0.5' } } });
+      expect(res.status).toBe(200);
+      expect(mockTenantSettingsUpsert).toHaveBeenCalled();
+    });
+
+    it('requires hardware.manage — settings.manage alone cannot change the hardware config', async () => {
+      grant('settings.manage');
+      const res = await put({ hardwareConfig: { printer: { type: 'network', ipAddress: '10.0.0.5' } } });
+      expect(res.status).toBe(403);
+      expect(mockTenantSettingsUpsert).not.toHaveBeenCalled();
+    });
+
+    it('blocks a section-only user from changing general settings in the same request', async () => {
+      grant('hardware.manage');
+      const res = await put({ hardwareConfig: { printer: { type: 'usb' } }, companyName: 'Hijacked' });
+      expect(res.status).toBe(403);
+      expect(mockTenantSettingsUpsert).not.toHaveBeenCalled();
+    });
+
+    it('lets the main Settings page post the whole object when the sections it carries are unchanged', async () => {
+      grant('settings.manage'); // feature_flags.manage revoked
+      const res = await put({ companyName: 'Acme Store', enableInventory: true, currency: 'PHP' });
+      expect(res.status).toBe(200);
+    });
+
+    it('rejects changing a feature flag without feature_flags.manage', async () => {
+      grant('settings.manage');
+      const res = await put({ enableInventory: false });
+      expect(res.status).toBe(403);
+    });
+
+    it('accepts either settings.manage or multi_currency.manage for the shared currency key', async () => {
+      grant('multi_currency.manage');
+      expect((await put({ currency: 'USD', currencySymbol: '$' })).status).toBe(200);
+      grant('settings.manage');
+      expect((await put({ currency: 'USD', currencySymbol: '$' })).status).toBe(200);
+    });
+
+    it('still requires a relevant permission for a request that changes nothing', async () => {
+      grant();
+      const res = await put({ companyName: 'Acme' });
+      expect(res.status).toBe(403);
+    });
   });
 
   it('rejects a request from a user belonging to a different tenant', async () => {

@@ -9,7 +9,7 @@ export type BranchStatus = 'active' | 'inactive';
  * Get CSS classes for status badge
  */
 export function getStatusColor(isActive: boolean): string {
-  return isActive ? 'bg-green-100 text-green-800 border-green-300' : 'bg-red-100 text-red-800 border-red-300';
+  return isActive ? 'bg-win8-success text-white' : 'bg-win8-danger text-white';
 }
 
 /**
@@ -29,11 +29,11 @@ export function formatAddress(address?: {
   zipCode?: string;
   country?: string;
 }): string {
-  if (!address) return '-';
+  if (!address) return '—';
   const parts = [address.street, address.city, address.state, address.zipCode, address.country].filter(
     (part) => part && part.trim()
   );
-  return parts.length > 0 ? parts.join(', ') : '-';
+  return parts.length > 0 ? parts.join(', ') : '—';
 }
 
 /**
@@ -48,11 +48,11 @@ export function getManagerName(
       }
     | string
 ): string {
-  if (!managerId) return '-';
+  if (!managerId) return '—';
   if (typeof managerId === 'object' && managerId !== null) {
     return managerId.name;
   }
-  return '-';
+  return '—';
 }
 
 /**

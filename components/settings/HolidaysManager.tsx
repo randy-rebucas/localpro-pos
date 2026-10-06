@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Win8Drawer from '@/components/admin/Win8Drawer';
+import { showToast } from '@/lib/toast';
 
 interface Holiday {
   id: string;
@@ -20,41 +22,88 @@ interface Holiday {
 interface HolidaysManagerProps {
   tenant: string;
   dict?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+  /** Add + import suggestions. The list and Retry are always usable. */
+  canCreate?: boolean;
+  canEdit?: boolean;
+  canDelete?: boolean;
 }
 
-export default function HolidaysManager({ tenant, dict }: HolidaysManagerProps) {
+const TYPE_BADGE: Record<string, string> = {
+  single: 'bg-brand-navy text-white',
+  recurring: 'bg-win8-info text-white',
+};
+
+const INPUT = 'w-full border border-gray-300 px-3 py-2 text-sm bg-white';
+const LABEL = 'block text-xs font-medium text-gray-600 mb-1';
+const WEEKDAY_KEYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+const WEEKDAY_FALLBACK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+function Spinner({ small }: { small?: boolean }) {
+  return (
+    <span className={`win8-spinner${small ? ' win8-spinner-sm' : ''}`}>
+      <span /><span /><span /><span /><span />
+    </span>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+    </svg>
+  );
+}
+
+export default function HolidaysManager({ tenant, dict, canCreate = true, canEdit = true, canDelete = true }: HolidaysManagerProps) {
+  const showRowActions = canEdit || canDelete;
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  // `editing` is only reset when the drawer opens, so its title doesn't flip
+  // from "Edit" to "Add" while it slides out.
   const [editing, setEditing] = useState<Holiday | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [formKey, setFormKey] = useState(0);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
     fetchHolidays();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const fetchHolidays = async () => {
+  // `quiet` refetches after a write without swapping the table for a spinner.
+  const fetchHolidays = async (quiet = false) => {
     try {
-      setLoading(true);
+      if (!quiet) setLoading(true);
+      setLoadError(null);
       const res = await fetch(`/api/tenants/${tenant}/holidays`, { credentials: 'include' });
       const data = await res.json();
       if (data.success) {
         setHolidays(data.data || []);
       } else {
-        setMessage({ type: 'error', text: data.error || dict?.holidays?.failedToLoad || 'Failed to load holidays' });
+        setLoadError(data.error || dict?.holidays?.failedToLoad || 'Failed to load holidays');
       }
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      setMessage({ type: 'error', text: error.message || dict?.holidays?.failedToLoad || 'Failed to load holidays' });
+      setLoadError(error.message || dict?.holidays?.failedToLoad || 'Failed to load holidays');
     } finally {
       setLoading(false);
     }
   };
 
+  const openForm = (holiday: Holiday | null) => {
+    setEditing(holiday);
+    setFormError(null);
+    setFormKey((k) => k + 1);
+    setShowForm(true);
+  };
+
   const handleSave = async (holiday: Partial<Holiday>) => {
     try {
-      setMessage(null);
+      setSaving(true);
+      setFormError(null);
       const url = `/api/tenants/${tenant}/holidays`;
       const method = editing ? 'PUT' : 'POST';
       const body = editing ? { id: editing.id, ...holiday } : holiday;
@@ -69,167 +118,244 @@ export default function HolidaysManager({ tenant, dict }: HolidaysManagerProps) 
       const data = await res.json();
 
       if (data.success) {
-        setMessage({ type: 'success', text: editing ? (dict?.holidays?.holidayUpdated || 'Holiday updated successfully') : (dict?.holidays?.holidayCreated || 'Holiday created successfully') });
+        showToast.success(editing ? (dict?.holidays?.holidayUpdated || 'Holiday updated successfully') : (dict?.holidays?.holidayCreated || 'Holiday created successfully'));
         setShowForm(false);
-        setEditing(null);
-        fetchHolidays();
+        fetchHolidays(true);
       } else {
-        setMessage({ type: 'error', text: data.error || dict?.holidays?.failedToSave || 'Failed to save holiday' });
+        setFormError(data.error || dict?.holidays?.failedToSave || 'Failed to save holiday');
       }
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       console.error('Error saving holiday:', error);
-      setMessage({ type: 'error', text: error.message || dict?.holidays?.failedToSave || 'Failed to save holiday' });
+      setFormError(error.message || dict?.holidays?.failedToSave || 'Failed to save holiday');
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm(dict?.holidays?.deleteConfirm || 'Are you sure you want to delete this holiday?')) return;
+  const handleDelete = async (holiday: Holiday) => {
+    const prompt = (dict?.holidays?.deleteConfirmNamed || 'Delete holiday "{name}"? This cannot be undone.').replace('{name}', holiday.name);
+    if (!confirm(prompt)) return;
 
     try {
-      const res = await fetch(`/api/tenants/${tenant}/holidays?id=${id}`, {
+      setDeletingId(holiday.id);
+      const res = await fetch(`/api/tenants/${tenant}/holidays?id=${holiday.id}`, {
         method: 'DELETE',
         credentials: 'include',
       });
 
       const data = await res.json();
       if (data.success) {
-        setMessage({ type: 'success', text: dict?.holidays?.holidayDeleted || 'Holiday deleted successfully' });
-        fetchHolidays();
+        showToast.success(dict?.holidays?.holidayDeleted || 'Holiday deleted successfully');
+        fetchHolidays(true);
       } else {
-        setMessage({ type: 'error', text: data.error || dict?.holidays?.failedToDelete || 'Failed to delete holiday' });
+        showToast.error(data.error || dict?.holidays?.failedToDelete || 'Failed to delete holiday');
       }
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      setMessage({ type: 'error', text: error.message || dict?.holidays?.failedToDelete || 'Failed to delete holiday' });
+      showToast.error(error.message || dict?.holidays?.failedToDelete || 'Failed to delete holiday');
+    } finally {
+      setDeletingId(null);
     }
   };
 
-  if (loading) {
-    return <div className="text-center py-8">{dict?.holidays?.loading || 'Loading holidays...'}</div>;
-  }
+  const describeSchedule = (holiday: Holiday) => {
+    if (holiday.type === 'single') return holiday.date || '—';
+    const r = holiday.recurring;
+    if (!r) return '—';
+    const parts: string[] = [dict?.holidays?.[r.pattern] || r.pattern];
+    if (r.pattern === 'weekly' && r.dayOfWeek !== undefined && r.dayOfWeek !== null) {
+      parts.push(dict?.businessHours?.[WEEKDAY_KEYS[r.dayOfWeek]] || WEEKDAY_FALLBACK[r.dayOfWeek] || '');
+    } else {
+      if (r.month) parts.push((dict?.holidays?.monthTemplate || '(Month {month})').replace('{month}', String(r.month)));
+      if (r.dayOfMonth) parts.push((dict?.holidays?.dayTemplate || '(Day {day})').replace('{day}', String(r.dayOfMonth)));
+    }
+    return parts.filter(Boolean).join(' ');
+  };
+
+  const headers = [
+    dict?.holidays?.holiday || 'Holiday',
+    dict?.common?.type || 'Type',
+    dict?.holidays?.schedule || 'Schedule',
+    dict?.holidays?.businessClosed || 'Business Closed',
+  ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-gray-900">{dict?.holidays?.holidayCalendar || 'Holiday Calendar'}</h3>
-        <div className="flex items-center space-x-2">
-          <button
-            onClick={() => setShowSuggestions(true)}
-            className="px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium hover:bg-gray-200 border border-gray-300"
-          >
-            {dict?.holidays?.suggestHolidays || 'Suggest Holidays'}
-          </button>
-          <button
-            onClick={() => {
-              setEditing(null);
-              setShowForm(true);
-            }}
-            className="px-4 py-2 bg-brand text-white text-sm font-medium hover:bg-brand-hover"
-          >
-            {dict?.holidays?.addHoliday || 'Add Holiday'}
-          </button>
-        </div>
+    <>
+      <div className="space-y-4">
+        <fieldset disabled={!canCreate} className="flex items-center justify-between gap-3 flex-wrap bg-white border border-gray-300 p-3">
+          <p className="text-sm text-gray-500 tabular-nums">
+            {loading || loadError ? '' : (dict?.holidays?.count || '{count} holiday(s)').replace('{count}', holidays.length.toLocaleString())}
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setShowSuggestions(true)}
+              className="px-4 py-2 border border-gray-300 text-gray-700 bg-white text-sm hover:bg-gray-100 disabled:opacity-50 transition-colors"
+            >
+              {dict?.holidays?.suggestHolidays || 'Suggest Holidays'}
+            </button>
+            <button
+              type="button"
+              onClick={() => openForm(null)}
+              className="px-4 py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover disabled:opacity-50 transition-colors"
+            >
+              <span aria-hidden="true">+ </span>
+              {dict?.holidays?.addHoliday || 'Add Holiday'}
+            </button>
+          </div>
+        </fieldset>
+
+        {loading ? (
+          <div className="text-center py-12 bg-white border border-gray-300">
+            <div className="win8-spinner text-brand mx-auto"><span /><span /><span /><span /><span /></div>
+            <p className="mt-3 text-gray-400 text-sm">{dict?.holidays?.loading || 'Loading holidays…'}</p>
+          </div>
+        ) : loadError ? (
+          <div className="text-center py-12 bg-white border border-gray-300">
+            <p className="text-win8-danger text-sm font-medium">{loadError}</p>
+            <button
+              type="button"
+              onClick={() => fetchHolidays()}
+              className="mt-4 px-4 py-2 bg-brand text-white text-sm hover:bg-brand-hover transition-colors"
+            >
+              {dict?.common?.retry || 'Retry'}
+            </button>
+          </div>
+        ) : holidays.length === 0 ? (
+          <div className="text-center py-12 px-4 text-gray-400 bg-white border border-gray-300">
+            {dict?.holidays?.noHolidays || 'No holidays configured. Add holidays to mark days when your business is closed.'}
+          </div>
+        ) : (
+          <div className="overflow-x-auto border border-gray-300 bg-white max-h-[70vh] overflow-y-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-brand-navy text-white text-xs uppercase tracking-wide sticky top-0 z-10">
+                <tr>
+                  {headers.map((h) => (
+                    <th key={h} className="px-4 py-3 text-left font-medium">{h}</th>
+                  ))}
+                  {showRowActions && (
+                    <th className="px-4 py-3 text-right font-medium">{dict?.common?.actions || 'Actions'}</th>
+                  )}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {holidays.map((holiday) => (
+                  <tr key={holiday.id} className="hover:bg-gray-100 transition-colors">
+                    <td className="px-4 py-3 font-medium text-gray-900">{holiday.name}</td>
+                    <td className="px-4 py-3">
+                      <span className={`px-2 py-0.5 text-xs font-semibold ${TYPE_BADGE[holiday.type] || 'bg-gray-500 text-white'}`}>
+                        {holiday.type === 'single'
+                          ? (dict?.holidays?.singleDate || 'Single Date')
+                          : (dict?.holidays?.recurring || 'Recurring')}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-gray-700 tabular-nums">{describeSchedule(holiday)}</td>
+                    <td className="px-4 py-3">
+                      {holiday.isBusinessClosed ? (
+                        <span className="px-2 py-0.5 text-xs font-semibold bg-win8-danger text-white">
+                          {dict?.holidays?.businessClosed || 'Business Closed'}
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 text-xs font-semibold bg-win8-success text-white">
+                          {dict?.holidays?.businessOpen || 'Open'}
+                        </span>
+                      )}
+                    </td>
+                    {showRowActions && (
+                      <td className="px-4 py-3">
+                        <div className="flex justify-end gap-1.5">
+                          {canEdit && (<button
+                            type="button"
+                            onClick={() => openForm(holiday)}
+                            title={dict?.common?.edit || 'Edit'}
+                            aria-label={dict?.common?.edit || 'Edit'}
+                            className="inline-flex items-center justify-center p-2.5 text-white bg-brand hover:brightness-110 transition-[filter]"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M11 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z" />
+                            </svg>
+                          </button>)}
+                          {canDelete && (<button
+                            type="button"
+                            onClick={() => handleDelete(holiday)}
+                            disabled={deletingId === holiday.id}
+                            title={dict?.common?.delete || 'Delete'}
+                            aria-label={dict?.common?.delete || 'Delete'}
+                            className="inline-flex items-center justify-center p-2.5 text-white bg-win8-danger hover:brightness-110 disabled:opacity-50 transition-[filter]"
+                          >
+                            {deletingId === holiday.id ? (
+                              <Spinner small />
+                            ) : (
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 7h12M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m2 0-.7 12.1a2 2 0 0 1-2 1.9H9.7a2 2 0 0 1-2-1.9L7 7h10Z" />
+                              </svg>
+                            )}
+                          </button>)}
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
-      {message && (
-        <div
-          className={`p-3 border ${
-            message.type === 'success' ? 'bg-green-50 text-green-800 border-green-300' : 'bg-red-50 text-red-800 border-red-300'
-          }`}
-        >
-          {message.text}
+      <Win8Drawer open={showForm} onClose={() => setShowForm(false)}>
+        <div className="flex items-center justify-between px-6 py-4 bg-brand-navy text-white shrink-0">
+          <h2 className="text-base font-semibold">
+            {editing ? (dict?.holidays?.editHoliday || 'Edit Holiday') : (dict?.holidays?.addHoliday || 'Add Holiday')}
+          </h2>
+          <button
+            type="button"
+            onClick={() => setShowForm(false)}
+            title={dict?.common?.close || 'Close'}
+            aria-label={dict?.common?.close || 'Close'}
+            className="text-white/70 hover:text-white"
+          >
+            <CloseIcon />
+          </button>
         </div>
-      )}
+        <HolidayForm
+          key={formKey}
+          holiday={editing}
+          saving={saving}
+          error={formError}
+          onSave={handleSave}
+          onCancel={() => setShowForm(false)}
+          dict={dict}
+        />
+      </Win8Drawer>
 
-      {showSuggestions && (
+      <Win8Drawer open={showSuggestions} onClose={() => setShowSuggestions(false)}>
         <SuggestedHolidays
           tenant={tenant}
           dict={dict}
           onClose={() => setShowSuggestions(false)}
           onImported={(count) => {
             setShowSuggestions(false);
-            setMessage({
-              type: 'success',
-              text: (dict?.holidays?.holidaysImported || '{count} holiday(s) imported').replace('{count}', String(count)),
-            });
-            fetchHolidays();
+            showToast.success(
+              (dict?.holidays?.holidaysImported || '{count} holiday(s) imported').replace('{count}', String(count))
+            );
+            fetchHolidays(true);
           }}
         />
-      )}
-
-      {showForm && (
-        <HolidayForm
-          holiday={editing}
-          onSave={handleSave}
-          onCancel={() => {
-            setShowForm(false);
-            setEditing(null);
-          }}
-          dict={dict}
-        />
-      )}
-
-      <div className="space-y-3">
-        {holidays.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
-            {dict?.holidays?.noHolidays || 'No holidays configured. Add holidays to mark days when your business is closed.'}
-          </div>
-        ) : (
-          holidays.map((holiday) => (
-            <div
-              key={holiday.id}
-              className="p-4 border-2 border-gray-300 hover:bg-gray-50"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="font-medium text-gray-900">{holiday.name}</h4>
-                  <div className="text-sm text-gray-600 mt-1">
-                    {holiday.type === 'single' ? (
-                      <span>{dict?.holidays?.date || 'Date'}: {holiday.date}</span>
-                    ) : (
-                      <span>
-                        {dict?.holidays?.recurring || 'Recurring'}: {holiday.recurring?.pattern}
-                        {holiday.recurring?.month && ` ${(dict?.holidays?.monthTemplate || '(Month {month})').replace('{month}', String(holiday.recurring.month))}`}
-                        {holiday.recurring?.dayOfMonth && ` ${(dict?.holidays?.dayTemplate || '(Day {day})').replace('{day}', String(holiday.recurring.dayOfMonth))}`}
-                      </span>
-                    )}
-                    {holiday.isBusinessClosed && (
-                      <span className="ml-2 text-red-600 font-medium">• {dict?.holidays?.businessClosed || 'Business Closed'}</span>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <button
-                    onClick={() => {
-                      setEditing(holiday);
-                      setShowForm(true);
-                    }}
-                    className="px-3 py-1 text-xs text-gray-600 hover:text-gray-800 font-medium"
-                  >
-                    {dict?.common?.edit || 'Edit'}
-                  </button>
-                  <button
-                    onClick={() => handleDelete(holiday.id)}
-                    className="px-3 py-1 text-xs text-red-600 hover:text-red-700 font-medium"
-                  >
-                    {dict?.common?.delete || 'Delete'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-    </div>
+      </Win8Drawer>
+    </>
   );
 }
 
 function HolidayForm({
   holiday,
+  saving,
+  error,
   onSave,
   onCancel,
   dict,
 }: {
   holiday: Holiday | null;
+  saving: boolean;
+  error: string | null;
   onSave: (holiday: Partial<Holiday>) => void;
   onCancel: () => void;
   dict?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -245,31 +371,51 @@ function HolidayForm({
   const [dayOfMonth, setDayOfMonth] = useState(holiday?.recurring?.dayOfMonth?.toString() || '');
   const [dayOfWeek, setDayOfWeek] = useState(holiday?.recurring?.dayOfWeek?.toString() || '0');
 
-  return (
-    <div className="border-2 border-gray-300 p-6 bg-white">
-      <h4 className="text-lg font-semibold mb-4">{holiday ? (dict?.holidays?.editHoliday || 'Edit Holiday') : (dict?.holidays?.addHoliday || 'Add Holiday')}</h4>
+  const required = <span className="text-win8-danger">*</span>;
 
-      <div className="space-y-4">
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSave({
+          name,
+          type,
+          date: type === 'single' ? date : '',
+          isBusinessClosed,
+          recurring:
+            type === 'recurring'
+              ? {
+                  pattern: recurringPattern,
+                  month: month ? parseInt(month) : undefined,
+                  dayOfMonth: dayOfMonth ? parseInt(dayOfMonth) : undefined,
+                  dayOfWeek: dayOfWeek ? parseInt(dayOfWeek) : undefined,
+                }
+              : undefined,
+        });
+      }}
+      className="flex flex-col flex-1 min-h-0"
+    >
+      <div className="p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
         <div>
-          <label htmlFor="holidayName" className="block text-sm font-medium text-gray-700 mb-2">{dict?.holidays?.holidayName || 'Holiday Name'} *</label>
+          <label htmlFor="holidayName" className={LABEL}>{dict?.holidays?.holidayName || 'Holiday Name'} {required}</label>
           <input
             id="holidayName"
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand"
+            className={INPUT}
             placeholder={dict?.holidays?.holidayNamePlaceholder || "e.g., New Year's Day"}
             required
           />
         </div>
 
         <div>
-          <label htmlFor="holidayType" className="block text-sm font-medium text-gray-700 mb-2">{dict?.holidays?.type || 'Type'} *</label>
+          <label htmlFor="holidayType" className={LABEL}>{dict?.holidays?.type || 'Type'} {required}</label>
           <select
             id="holidayType"
             value={type}
             onChange={(e) => setType(e.target.value as 'single' | 'recurring')}
-            className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand"
+            className={INPUT}
           >
             <option value="single">{dict?.holidays?.singleDate || 'Single Date'}</option>
             <option value="recurring">{dict?.holidays?.recurring || 'Recurring'}</option>
@@ -278,25 +424,25 @@ function HolidayForm({
 
         {type === 'single' ? (
           <div>
-            <label htmlFor="holidayDate" className="block text-sm font-medium text-gray-700 mb-2">{dict?.holidays?.date || 'Date'} *</label>
+            <label htmlFor="holidayDate" className={LABEL}>{dict?.holidays?.date || 'Date'} {required}</label>
             <input
               id="holidayDate"
               type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand"
+              className={INPUT}
               required
             />
           </div>
         ) : (
-          <div className="space-y-3">
+          <>
             <div>
-              <label htmlFor="recurringPattern" className="block text-sm font-medium text-gray-700 mb-2">{dict?.holidays?.recurringPattern || 'Recurring Pattern'} *</label>
+              <label htmlFor="recurringPattern" className={LABEL}>{dict?.holidays?.recurringPattern || 'Recurring Pattern'} {required}</label>
               <select
                 id="recurringPattern"
                 value={recurringPattern}
                 onChange={(e) => setRecurringPattern(e.target.value as any)} // eslint-disable-line @typescript-eslint/no-explicit-any
-                className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand"
+                className={INPUT}
               >
                 <option value="yearly">{dict?.holidays?.yearly || 'Yearly'}</option>
                 <option value="monthly">{dict?.holidays?.monthly || 'Monthly'}</option>
@@ -306,7 +452,7 @@ function HolidayForm({
             {recurringPattern === 'yearly' && (
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label htmlFor="recurringMonth" className="block text-sm font-medium text-gray-700 mb-2">{dict?.holidays?.monthRange || 'Month (1-12)'}</label>
+                  <label htmlFor="recurringMonth" className={LABEL}>{dict?.holidays?.monthRange || 'Month (1-12)'}</label>
                   <input
                     id="recurringMonth"
                     type="number"
@@ -314,11 +460,11 @@ function HolidayForm({
                     max="12"
                     value={month}
                     onChange={(e) => setMonth(e.target.value)}
-                    className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand"
+                    className={`${INPUT} tabular-nums`}
                   />
                 </div>
                 <div>
-                  <label htmlFor="recurringDayOfMonth" className="block text-sm font-medium text-gray-700 mb-2">{dict?.holidays?.dayOfMonth || 'Day of Month (1-31)'}</label>
+                  <label htmlFor="recurringDayOfMonth" className={LABEL}>{dict?.holidays?.dayOfMonth || 'Day of Month (1-31)'}</label>
                   <input
                     id="recurringDayOfMonth"
                     type="number"
@@ -326,33 +472,29 @@ function HolidayForm({
                     max="31"
                     value={dayOfMonth}
                     onChange={(e) => setDayOfMonth(e.target.value)}
-                    className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand"
+                    className={`${INPUT} tabular-nums`}
                   />
                 </div>
               </div>
             )}
             {recurringPattern === 'weekly' && (
               <div>
-                <label htmlFor="recurringDayOfWeek" className="block text-sm font-medium text-gray-700 mb-2">{dict?.holidays?.dayOfWeek || 'Day of Week'}</label>
+                <label htmlFor="recurringDayOfWeek" className={LABEL}>{dict?.holidays?.dayOfWeek || 'Day of Week'}</label>
                 <select
                   id="recurringDayOfWeek"
                   value={dayOfWeek}
                   onChange={(e) => setDayOfWeek(e.target.value)}
-                  className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand"
+                  className={INPUT}
                 >
-                  <option value="0">{dict?.businessHours?.sunday || 'Sunday'}</option>
-                  <option value="1">{dict?.businessHours?.monday || 'Monday'}</option>
-                  <option value="2">{dict?.businessHours?.tuesday || 'Tuesday'}</option>
-                  <option value="3">{dict?.businessHours?.wednesday || 'Wednesday'}</option>
-                  <option value="4">{dict?.businessHours?.thursday || 'Thursday'}</option>
-                  <option value="5">{dict?.businessHours?.friday || 'Friday'}</option>
-                  <option value="6">{dict?.businessHours?.saturday || 'Saturday'}</option>
+                  {WEEKDAY_KEYS.map((key, i) => (
+                    <option key={key} value={String(i)}>{dict?.businessHours?.[key] || WEEKDAY_FALLBACK[i]}</option>
+                  ))}
                 </select>
               </div>
             )}
             {recurringPattern === 'monthly' && (
               <div>
-                <label htmlFor="recurringDayOfMonth" className="block text-sm font-medium text-gray-700 mb-2">{dict?.holidays?.dayOfMonth || 'Day of Month (1-31)'}</label>
+                <label htmlFor="recurringDayOfMonth" className={LABEL}>{dict?.holidays?.dayOfMonth || 'Day of Month (1-31)'}</label>
                 <input
                   id="recurringDayOfMonth"
                   type="number"
@@ -360,14 +502,16 @@ function HolidayForm({
                   max="31"
                   value={dayOfMonth}
                   onChange={(e) => setDayOfMonth(e.target.value)}
-                  className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand"
+                  className={`${INPUT} tabular-nums`}
                 />
               </div>
             )}
-          </div>
+          </>
         )}
 
-        <div className="flex items-center space-x-2">
+        <hr className="border-gray-300" />
+
+        <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
           <input
             type="checkbox"
             id="isBusinessClosed"
@@ -375,43 +519,29 @@ function HolidayForm({
             onChange={(e) => setIsBusinessClosed(e.target.checked)}
             className="checkbox-win8"
           />
-          <label htmlFor="isBusinessClosed" className="text-sm text-gray-700">
-            {dict?.holidays?.businessClosedLabel || 'Business is closed on this holiday'}
-          </label>
-        </div>
+          {dict?.holidays?.businessClosedLabel || 'Business is closed on this holiday'}
+        </label>
 
-        <div className="flex items-center space-x-3">
-          <button
-            onClick={() =>
-              onSave({
-                name,
-                type,
-                date: type === 'single' ? date : '',
-                isBusinessClosed,
-                recurring:
-                  type === 'recurring'
-                    ? {
-                        pattern: recurringPattern,
-                        month: month ? parseInt(month) : undefined,
-                        dayOfMonth: dayOfMonth ? parseInt(dayOfMonth) : undefined,
-                        dayOfWeek: dayOfWeek ? parseInt(dayOfWeek) : undefined,
-                      }
-                    : undefined,
-              })
-            }
-            className="px-4 py-2 bg-brand text-white font-medium hover:bg-brand-hover"
-          >
-            {dict?.holidays?.saveHoliday || 'Save Holiday'}
-          </button>
-          <button
-            onClick={onCancel}
-            className="px-4 py-2 bg-gray-200 text-gray-700 font-medium hover:bg-gray-300"
-          >
-            {dict?.common?.cancel || 'Cancel'}
-          </button>
-        </div>
+        {error && <div role="alert" className="bg-win8-danger text-white text-sm p-3">{error}</div>}
       </div>
-    </div>
+
+      <div className="flex gap-3 px-6 py-4 border-t border-gray-300 justify-end shrink-0">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="px-4 py-2 border border-gray-300 text-gray-700 bg-white text-sm hover:bg-gray-100 transition-colors"
+        >
+          {dict?.common?.cancel || 'Cancel'}
+        </button>
+        <button
+          type="submit"
+          disabled={saving}
+          className="px-4 py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover disabled:opacity-50 transition-colors"
+        >
+          {saving ? (dict?.common?.saving || 'Saving…') : (dict?.holidays?.saveHoliday || 'Save Holiday')}
+        </button>
+      </div>
+    </form>
   );
 }
 
@@ -477,6 +607,7 @@ function SuggestedHolidays({
     }
   };
 
+  // The drawer unmounts its children when closed, so this runs on every open.
   useEffect(() => {
     fetchSuggestions();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -513,96 +644,118 @@ function SuggestedHolidays({
   };
 
   return (
-    <div className="border-2 border-gray-300 p-6 bg-white">
-      <div className="flex items-center justify-between mb-4">
-        <h4 className="text-lg font-semibold">{dict?.holidays?.suggestHolidays || 'Suggest Holidays'}</h4>
-        <button onClick={onClose} className="text-sm text-gray-500 hover:text-gray-700">
-          {dict?.common?.cancel || 'Cancel'}
+    <>
+      <div className="flex items-center justify-between px-6 py-4 bg-brand-navy text-white shrink-0">
+        <div>
+          <h2 className="text-base font-semibold">{dict?.holidays?.suggestHolidays || 'Suggest Holidays'}</h2>
+          <p className="text-xs text-white/80">
+            {(dict?.holidays?.suggestHolidaysDescription || "Public holidays for {year} from your country's calendar").replace('{year}', String(year))}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          title={dict?.common?.close || 'Close'}
+          aria-label={dict?.common?.close || 'Close'}
+          className="text-white/70 hover:text-white"
+        >
+          <CloseIcon />
         </button>
       </div>
 
-      <div className="mb-4">
-        <label htmlFor="suggestionsCountry" className="block text-sm font-medium text-gray-700 mb-2">
-          {dict?.holidays?.country || 'Country'}
-        </label>
-        <select
-          id="suggestionsCountry"
-          value={countryCode || ''}
-          onChange={(e) => fetchSuggestions(e.target.value)}
-          className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand"
-        >
-          <option value="" disabled>
-            {dict?.holidays?.selectCountry || 'Select a country'}
-          </option>
-          {availableCountries.map((c) => (
-            <option key={c.code} value={c.code}>
-              {c.name}
+      <div className="p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
+        <div>
+          <label htmlFor="suggestionsCountry" className={LABEL}>
+            {dict?.holidays?.country || 'Country'}
+          </label>
+          <select
+            id="suggestionsCountry"
+            value={countryCode || ''}
+            onChange={(e) => fetchSuggestions(e.target.value)}
+            className={INPUT}
+          >
+            <option value="" disabled>
+              {dict?.holidays?.selectCountry || 'Select a country'}
             </option>
-          ))}
-        </select>
-        {!countryCode && !loading && (
-          <p className="text-xs text-gray-500 mt-1">
-            {dict?.holidays?.countryNotDetected ||
-              "We couldn't match your tenant's configured country automatically — pick one above."}
-          </p>
+            {availableCountries.map((c) => (
+              <option key={c.code} value={c.code}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+          {!countryCode && !loading && (
+            <p className="text-xs text-gray-400 mt-1">
+              {dict?.holidays?.countryNotDetected ||
+                "We couldn't match your tenant's configured country automatically — pick one above."}
+            </p>
+          )}
+        </div>
+
+        {error && (
+          <div role="alert" className="p-3 bg-white border border-win8-danger text-win8-danger text-sm">{error}</div>
         )}
+
+        {loading ? (
+          <div className="text-center py-8">
+            <div className="win8-spinner text-brand mx-auto"><span /><span /><span /><span /><span /></div>
+            <p className="mt-3 text-gray-400 text-sm">{dict?.holidays?.loading || 'Loading holidays…'}</p>
+          </div>
+        ) : countryCode && suggestions.length === 0 ? (
+          <p className="text-sm text-gray-400 italic">
+            {dict?.holidays?.noSuggestions || 'No public holidays found for this country/year.'}
+          </p>
+        ) : countryCode ? (
+          <div className="border border-gray-300 divide-y divide-gray-200">
+            {suggestions.map((h) => (
+              <label
+                key={h.date}
+                htmlFor={`suggestion-${h.date}`}
+                className={`flex items-center gap-3 px-4 py-3 ${h.alreadyAdded ? 'bg-gray-100 cursor-not-allowed' : 'cursor-pointer hover:bg-gray-100 transition-colors'}`}
+              >
+                <input
+                  type="checkbox"
+                  id={`suggestion-${h.date}`}
+                  checked={!!selected[h.date]}
+                  disabled={h.alreadyAdded}
+                  onChange={(e) => setSelected((prev) => ({ ...prev, [h.date]: e.target.checked }))}
+                  className="checkbox-win8 disabled:opacity-50"
+                />
+                <span className="flex-1 min-w-0">
+                  <span className="block text-sm font-medium text-gray-900">{h.name}</span>
+                  <span className="block text-xs text-gray-500 tabular-nums">{h.date}</span>
+                </span>
+                {h.alreadyAdded && (
+                  <span className="px-2 py-0.5 text-xs font-semibold bg-gray-500 text-white shrink-0">
+                    {dict?.holidays?.alreadyAdded || 'Already added'}
+                  </span>
+                )}
+              </label>
+            ))}
+          </div>
+        ) : null}
       </div>
 
-      {error && (
-        <div className="p-3 mb-4 bg-red-50 text-red-800 border border-red-300">{error}</div>
-      )}
-
-      {loading ? (
-        <div className="text-center py-6 text-gray-500">{dict?.holidays?.loading || 'Loading holidays...'}</div>
-      ) : countryCode && suggestions.length === 0 ? (
-        <div className="text-center py-6 text-gray-500">
-          {dict?.holidays?.noSuggestions || 'No public holidays found for this country/year.'}
-        </div>
-      ) : countryCode ? (
-        <div className="space-y-2 max-h-80 overflow-y-auto">
-          {suggestions.map((h) => (
-            <div
-              key={h.date}
-              className={`flex items-center p-3 border ${h.alreadyAdded ? 'border-gray-200 bg-gray-50' : 'border-gray-300 hover:bg-gray-50'}`}
-            >
-              <input
-                type="checkbox"
-                id={`suggestion-${h.date}`}
-                checked={!!selected[h.date]}
-                disabled={h.alreadyAdded}
-                onChange={(e) => setSelected((prev) => ({ ...prev, [h.date]: e.target.checked }))}
-                className="checkbox-win8 h-5 w-5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-              />
-              <label htmlFor={`suggestion-${h.date}`} className="ml-3 flex-1">
-                <div className="text-sm font-medium text-gray-900">{h.name}</div>
-                <div className="text-xs text-gray-500">
-                  {h.date}
-                  {h.alreadyAdded && (
-                    <span className="ml-2 text-brand">{dict?.holidays?.alreadyAdded || 'Already added'}</span>
-                  )}
-                </div>
-              </label>
-            </div>
-          ))}
-        </div>
-      ) : null}
-
-      {countryCode && suggestions.length > 0 && (
-        <div className="flex items-center space-x-3 pt-4 mt-4 border-t border-gray-200">
+      <div className="flex gap-3 px-6 py-4 border-t border-gray-300 justify-end shrink-0">
+        <button
+          type="button"
+          onClick={onClose}
+          className="px-4 py-2 border border-gray-300 text-gray-700 bg-white text-sm hover:bg-gray-100 transition-colors"
+        >
+          {dict?.common?.cancel || 'Cancel'}
+        </button>
+        {countryCode && suggestions.length > 0 && (
           <button
+            type="button"
             onClick={handleImport}
             disabled={importing || selectedCount === 0}
-            className="px-4 py-2 bg-brand text-white font-medium hover:bg-brand-hover disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-4 py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover disabled:opacity-50 transition-colors"
           >
             {importing
-              ? dict?.holidays?.importing || 'Importing...'
+              ? dict?.holidays?.importing || 'Importing…'
               : (dict?.holidays?.importSelected || 'Import {count} selected').replace('{count}', String(selectedCount))}
           </button>
-          <button onClick={onClose} className="px-4 py-2 bg-gray-200 text-gray-700 font-medium hover:bg-gray-300">
-            {dict?.common?.cancel || 'Cancel'}
-          </button>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+    </>
   );
 }

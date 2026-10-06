@@ -47,7 +47,10 @@ async function getNextPurchaseOrderNumber(tenantId: string): Promise<string> {
 
 export async function GET(request: NextRequest) {
   try {
-    const { tenantId } = await requireTenantAccess(request);
+    const { tenantId, user } = await requireTenantAccess(request);
+    if (!(await hasTenantPermission(user.role, tenantId, 'purchase_orders.view'))) {
+      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
+    }
 
     const ip = request.headers.get('x-forwarded-for') ?? 'unknown';
     const { allowed } = checkRateLimit(`read:purchase-orders:${tenantId}:${ip}`, 60, 60_000);
@@ -86,7 +89,7 @@ export async function POST(request: NextRequest) {
     const { tenantId, user } = await requireTenantAccess(request);
     const t = await getValidationTranslatorFromRequest(request);
 
-    if (!(await hasTenantPermission(user.role, tenantId, 'purchase_orders.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenantId, 'purchase_orders.create'))) {
       return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
     }
 

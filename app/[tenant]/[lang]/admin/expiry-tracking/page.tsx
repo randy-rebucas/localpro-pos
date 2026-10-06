@@ -1,11 +1,10 @@
-﻿'use client';
+'use client';
 
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import toast from 'react-hot-toast';
-import { AlertTriangle, CalendarClock, Package } from 'lucide-react';
 import { getDictionaryClient } from '../../dictionaries-client';
 import { usePermissions } from '@/hooks/usePermissions';
+import AdminPageHeader from '@/components/admin/AdminPageHeader';
 
 interface ExpiryProduct {
   _id: string;
@@ -28,10 +27,16 @@ interface ExpiryReport {
   expiring: ExpiryProduct[];
 }
 
-const STATUS_CHIP: Record<string, string> = {
-  expired: 'bg-red-100 text-red-800 border border-red-200',
-  critical: 'bg-orange-100 text-orange-800 border border-orange-200',
-  warning: 'bg-yellow-100 text-yellow-800 border border-yellow-200',
+const STATUS_BADGE: Record<string, string> = {
+  expired: 'bg-win8-danger text-white',
+  critical: 'bg-win8-suspended text-white',
+  warning: 'bg-win8-warning text-white',
+};
+
+const SCHEDULE_BADGE: Record<string, string> = {
+  otc: 'bg-gray-500 text-white',
+  rx: 'bg-win8-info text-white',
+  dangerous: 'bg-win8-danger text-white',
 };
 
 const SCHEDULE_LABEL: Record<string, string> = {
@@ -39,6 +44,8 @@ const SCHEDULE_LABEL: Record<string, string> = {
   rx: 'Rx',
   dangerous: 'DD',
 };
+
+const ALERT_WINDOWS = [30, 60, 90, 180];
 
 export default function ExpiryTrackingPage() {
   const params = useParams();
@@ -49,6 +56,7 @@ export default function ExpiryTrackingPage() {
 
   const [report, setReport] = useState<ExpiryReport | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [alertDays, setAlertDays] = useState(90);
   const [scheduleFilter, setScheduleFilter] = useState('');
 
@@ -56,17 +64,20 @@ export default function ExpiryTrackingPage() {
     getDictionaryClient(lang).then(setDict);
   }, [lang]);
 
+  const t = (key: string, fallback: string): string => dict?.admin?.[key] || fallback;
+
   const fetchReport = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const qs = new URLSearchParams({ days: String(alertDays) });
       if (scheduleFilter) qs.set('schedule', scheduleFilter);
       const res = await fetch(`/api/reports/expiry?${qs}`);
       const json = await res.json();
       if (json.success) setReport(json.data);
-      else toast.error(json.error || dict?.admin?.failedToLoadReport || 'Failed to load report');
+      else setError(json.error || dict?.admin?.failedToLoadReport || 'Failed to load report');
     } catch {
-      toast.error(dict?.admin?.failedToLoadExpiryReport || 'Failed to load expiry report');
+      setError(dict?.admin?.failedToLoadExpiryReport || 'Failed to load expiry report');
     } finally {
       setLoading(false);
     }
@@ -77,196 +88,205 @@ export default function ExpiryTrackingPage() {
     else setLoading(false);
   }, [fetchReport, canView]);
 
-  const ProductRow = ({ p }: { p: ExpiryProduct }) => (
-    <tr className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
-      <td className="px-4 py-3">
-        <p className="text-sm font-medium text-gray-900">{p.name}</p>
-        {p.genericName && <p className="text-xs text-gray-500">{p.genericName}</p>}
-      </td>
-      <td className="px-4 py-3 text-sm text-gray-600">{p.batchNumber ?? '—'}</td>
-      <td className="px-4 py-3 text-sm text-gray-600">{new Date(p.expiryDate).toLocaleDateString()}</td>
-      <td className="px-4 py-3">
-        <span className={`text-xs px-2 py-0.5 font-medium ${STATUS_CHIP[p.status]}`}>
-          {p.daysUntilExpiry < 0
-            ? (dict?.admin?.daysAgo || '{days}d ago').replace('{days}', String(Math.abs(p.daysUntilExpiry)))
-            : (dict?.admin?.daysLeft || '{days}d left').replace('{days}', String(p.daysUntilExpiry))}
-        </span>
-      </td>
-      <td className="px-4 py-3 text-sm text-gray-600">{p.stock}</td>
-      <td className="px-4 py-3">
-        {p.drugSchedule && (
-          <span className="text-xs px-2 py-0.5 border border-gray-200 bg-gray-100 text-gray-700">
-            {SCHEDULE_LABEL[p.drugSchedule] ?? p.drugSchedule}
-          </span>
-        )}
-      </td>
-    </tr>
-  );
+  const title = t('expiryTrackingTitle', 'Expiry Tracking');
+  const description = t('expiryTrackingSubtitle', 'Monitor near-expiry and expired pharmacy products');
 
   if (!canView) {
     return (
       <div className="px-4 sm:px-6 py-6">
-        <div className="bg-red-50 border-2 border-red-300 p-6">
-          <h2 className="text-lg font-bold text-red-800 mb-1">{dict?.admin?.accessRestricted || 'Access Restricted'}</h2>
-          <p className="text-sm text-red-700">
-            {dict?.admin?.accessRestrictedExpiryTracking || "You don't have permission to view expiry tracking. Contact an admin or owner."}
+        <AdminPageHeader title={title} description={description} />
+        <div className="p-4 bg-white border border-win8-danger">
+          <h2 className="text-base font-bold text-win8-danger mb-1">{t('accessRestricted', 'Access Restricted')}</h2>
+          <p className="text-sm text-gray-700">
+            {t('accessRestrictedExpiryTracking', "You don't have permission to view expiry tracking. Contact an admin or owner.")}
           </p>
         </div>
       </div>
     );
   }
 
+  const headers = [
+    t('product', 'Product'),
+    t('batch', 'Batch'),
+    t('expiryDate', 'Expiry Date'),
+    t('status', 'Status'),
+    t('stock', 'Stock'),
+    t('schedule', 'Schedule'),
+  ];
+
+  const daysLabel = (p: ExpiryProduct) =>
+    p.daysUntilExpiry < 0
+      ? t('daysAgo', '{days}d ago').replace('{days}', Math.abs(p.daysUntilExpiry).toLocaleString())
+      : t('daysLeft', '{days}d left').replace('{days}', p.daysUntilExpiry.toLocaleString());
+
+  const renderTable = (rows: ExpiryProduct[]) => (
+    <div className="overflow-x-auto max-h-[70vh] overflow-y-auto">
+      <table className="w-full text-sm">
+        <thead className="bg-brand-navy text-white text-xs uppercase tracking-wide sticky top-0 z-10">
+          <tr>
+            {headers.map((h, i) => (
+              <th key={h} className={`px-4 py-3 font-medium ${i === 4 ? 'text-right' : 'text-left'}`}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-200">
+          {rows.map(p => (
+            <tr key={p._id} className="hover:bg-gray-100 transition-colors">
+              <td className="px-4 py-3">
+                <p className="font-medium text-gray-900">{p.name}</p>
+                {p.genericName && <p className="text-xs text-gray-500">{p.genericName}</p>}
+              </td>
+              <td className="px-4 py-3 font-mono text-xs text-gray-700">{p.batchNumber || '—'}</td>
+              <td className="px-4 py-3 text-xs text-gray-700 whitespace-nowrap">{new Date(p.expiryDate).toLocaleDateString()}</td>
+              <td className="px-4 py-3">
+                <span className={`px-2 py-0.5 text-xs font-semibold whitespace-nowrap ${STATUS_BADGE[p.status] || 'bg-gray-500 text-white'}`}>
+                  {daysLabel(p)}
+                </span>
+              </td>
+              <td className={`px-4 py-3 text-right tabular-nums ${p.stock > 0 ? 'text-gray-900' : 'text-gray-400'}`}>
+                {p.stock.toLocaleString()}
+              </td>
+              <td className="px-4 py-3">
+                {p.drugSchedule ? (
+                  <span className={`px-2 py-0.5 text-xs font-semibold ${SCHEDULE_BADGE[p.drugSchedule] || 'bg-gray-500 text-white'}`}>
+                    {SCHEDULE_LABEL[p.drugSchedule] ?? p.drugSchedule}
+                  </span>
+                ) : (
+                  <span className="text-gray-400">—</span>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+
+  const criticalCount = report ? report.expiring.filter(p => p.daysUntilExpiry <= 30).length : 0;
+  const isEmpty = !!report && report.totalExpired === 0 && report.totalExpiring === 0;
+
+  const kpis = report
+    ? [
+        { label: t('expiredStat', 'Expired'), value: report.totalExpired, note: t('pullFromShelfImmediately', 'Pull from shelf immediately'), color: 'bg-win8-danger' },
+        { label: t('criticalWithinDays', 'Critical (≤30d)'), value: criticalCount, note: null, color: 'bg-win8-suspended' },
+        { label: t('withinDays', 'Within {days}d').replace('{days}', String(alertDays)), value: report.totalExpiring, note: null, color: 'bg-brand' },
+      ]
+    : [];
+
   return (
     <div className="px-4 sm:px-6 py-6">
+      <AdminPageHeader title={title} description={description} />
 
-      {/* Page header */}
-      <div className="flex items-start justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <CalendarClock className="w-7 h-7 text-brand flex-shrink-0" />
+      <div className="space-y-4">
+        {/* Filter bar */}
+        <div className="bg-white border border-gray-300 p-4 flex flex-wrap gap-3 items-end">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">{dict?.admin?.expiryTrackingTitle || 'Expiry Tracking'}</h1>
-            <p className="text-sm text-gray-500 mt-0.5">{dict?.admin?.expiryTrackingSubtitle || 'Monitor near-expiry and expired pharmacy products'}</p>
+            <label htmlFor="expiry-window" className="block text-xs font-medium text-gray-600 mb-1">{t('alertWindow', 'Alert Window')}</label>
+            <select
+              id="expiry-window"
+              value={alertDays}
+              onChange={e => setAlertDays(Number(e.target.value))}
+              className="px-3 py-2 border border-gray-300 text-sm bg-white text-gray-900 w-36"
+            >
+              {ALERT_WINDOWS.map(d => (
+                <option key={d} value={d}>{d} {t('daysUnit', 'days')}</option>
+              ))}
+            </select>
           </div>
-        </div>
-      </div>
-
-      <div className="flex gap-6 items-start">
-
-        {/* Left — filters sidebar */}
-        <aside className="w-52 shrink-0 sticky top-6">
-          <div className="bg-white border border-gray-300 p-4">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">{dict?.admin?.filters || 'Filters'}</p>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">{dict?.admin?.alertWindow || 'Alert Window'}</label>
-                <select
-                  value={alertDays}
-                  onChange={e => setAlertDays(Number(e.target.value))}
-                  className="w-full border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand focus:border-brand"
-                >
-                  {[30, 60, 90, 180].map(d => (
-                    <option key={d} value={d}>{d} {dict?.admin?.daysUnit || 'days'}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">{dict?.admin?.drugSchedule || 'Drug Schedule'}</label>
-                <select
-                  value={scheduleFilter}
-                  onChange={e => setScheduleFilter(e.target.value)}
-                  className="w-full border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand focus:border-brand"
-                >
-                  <option value="">{dict?.admin?.all || 'All'}</option>
-                  <option value="otc">OTC</option>
-                  <option value="rx">Rx</option>
-                  <option value="dangerous">{dict?.admin?.dangerousDrugs || 'Dangerous Drugs'}</option>
-                </select>
-              </div>
-            </div>
+          <div>
+            <label htmlFor="expiry-schedule" className="block text-xs font-medium text-gray-600 mb-1">{t('drugSchedule', 'Drug Schedule')}</label>
+            <select
+              id="expiry-schedule"
+              value={scheduleFilter}
+              onChange={e => setScheduleFilter(e.target.value)}
+              className="px-3 py-2 border border-gray-300 text-sm bg-white text-gray-900 w-44"
+            >
+              <option value="">{t('all', 'All')}</option>
+              <option value="otc">OTC</option>
+              <option value="rx">Rx</option>
+              <option value="dangerous">{t('dangerousDrugs', 'Dangerous Drugs')}</option>
+            </select>
           </div>
-        </aside>
-
-        {/* Right — content */}
-        <div className="flex-1 min-w-0 space-y-4">
-
-          {/* Summary Cards */}
-          {report && (
-            <div className="grid grid-cols-3 gap-4">
-              <div className="px-5 py-4 text-white" style={{ backgroundColor: '#c0392b' }}>
-                <div className="flex items-center gap-2 mb-1">
-                  <AlertTriangle className="w-4 h-4 text-white/80" />
-                  <span className="text-xs font-medium text-white/80 uppercase tracking-wide">{dict?.admin?.expiredStat || 'Expired'}</span>
-                </div>
-                <p className="text-2xl font-bold">{report.totalExpired}</p>
-                <p className="text-xs text-white/80 mt-0.5">{dict?.admin?.pullFromShelfImmediately || 'Pull from shelf immediately'}</p>
-              </div>
-              <div className="px-5 py-4 text-white" style={{ backgroundColor: '#e3a008' }}>
-                <div className="flex items-center gap-2 mb-1">
-                  <AlertTriangle className="w-4 h-4 text-white/80" />
-                  <span className="text-xs font-medium text-white/80 uppercase tracking-wide">{dict?.admin?.criticalWithinDays || 'Critical (≤30d)'}</span>
-                </div>
-                <p className="text-2xl font-bold">
-                  {report.expiring.filter(p => p.daysUntilExpiry <= 30).length}
-                </p>
-              </div>
-              <div className="px-5 py-4 text-white" style={{ backgroundColor: '#35979c' }}>
-                <div className="flex items-center gap-2 mb-1">
-                  <Package className="w-4 h-4 text-white/80" />
-                  <span className="text-xs font-medium text-white/80 uppercase tracking-wide">{(dict?.admin?.withinDays || 'Within {days}d').replace('{days}', String(alertDays))}</span>
-                </div>
-                <p className="text-2xl font-bold">{report.totalExpiring}</p>
-              </div>
-            </div>
-          )}
-
-          {loading ? (
-            <div className="flex items-center justify-center py-24">
-              <div className="text-center">
-                <div className="inline-block animate-spin h-7 w-7 border-b-2 border-brand mb-3" />
-                <p className="text-sm text-gray-400">{dict?.admin?.loadingReport || 'Loading report...'}</p>
-              </div>
-            </div>
-          ) : !report || (report.totalExpired === 0 && report.totalExpiring === 0) ? (
-            <div className="bg-white border border-gray-300 py-16 text-center">
-              <CalendarClock className="w-10 h-10 mx-auto mb-2 text-gray-300" />
-              <p className="text-sm text-gray-400">{dict?.admin?.noExpiringProductsFound || 'No expiring products found in the selected window'}</p>
-            </div>
-          ) : (
-            <>
-              {report.expired.length > 0 && (
-                <div className="bg-white border border-gray-300 overflow-hidden">
-                  <div className="bg-red-50 border-b border-red-200 px-5 py-3 flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4 text-red-500" />
-                    <h2 className="text-xs font-semibold text-red-800 uppercase tracking-wide">{(dict?.admin?.expiredRemoveFromShelf || 'Expired — Remove from Shelf ({count})').replace('{count}', String(report.expired.length))}</h2>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead className="bg-gray-50 border-b border-gray-200">
-                        <tr>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">{dict?.admin?.product || 'Product'}</th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">{dict?.admin?.batch || 'Batch'}</th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">{dict?.admin?.expiryDate || 'Expiry Date'}</th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">{dict?.admin?.status || 'Status'}</th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">{dict?.admin?.stock || 'Stock'}</th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">{dict?.admin?.schedule || 'Schedule'}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {report.expired.map(p => <ProductRow key={p._id} p={p} />)}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-              {report.expiring.length > 0 && (
-                <div className="bg-white border border-gray-300 overflow-hidden">
-                  <div className="bg-yellow-50 border-b border-yellow-200 px-5 py-3 flex items-center gap-2">
-                    <CalendarClock className="w-4 h-4 text-yellow-600" />
-                    <h2 className="text-xs font-semibold text-yellow-800 uppercase tracking-wide">{(dict?.admin?.expiringWithinDays || 'Expiring Within {days} Days ({count})').replace('{days}', String(alertDays)).replace('{count}', String(report.expiring.length))}</h2>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead className="bg-gray-50 border-b border-gray-200">
-                        <tr>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">{dict?.admin?.product || 'Product'}</th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">{dict?.admin?.batch || 'Batch'}</th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">{dict?.admin?.expiryDate || 'Expiry Date'}</th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">{dict?.admin?.status || 'Status'}</th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">{dict?.admin?.stock || 'Stock'}</th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">{dict?.admin?.schedule || 'Schedule'}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {report.expiring.map(p => <ProductRow key={p._id} p={p} />)}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
+          <button
+            type="button"
+            onClick={fetchReport}
+            disabled={loading}
+            className="ml-auto inline-flex items-center justify-center px-4 py-2 border border-gray-300 text-gray-700 bg-white text-sm hover:bg-gray-100 disabled:opacity-50 transition-colors whitespace-nowrap"
+          >
+            {loading ? t('refreshingReport', 'Refreshing…') : t('refresh', 'Refresh')}
+          </button>
         </div>
+
+        {/* KPI tiles */}
+        {loading && !report ? (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="bg-white border border-gray-300 p-5 animate-pulse">
+                <div className="h-3 bg-gray-200 w-24 mb-3" /><div className="h-8 bg-gray-200 w-16 mb-2" /><div className="h-3 bg-gray-200 w-20" />
+              </div>
+            ))}
+          </div>
+        ) : report && !error ? (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {kpis.map(k => (
+              <div key={k.label} className={`${k.color} text-white p-5`}>
+                <p className="text-xs font-semibold uppercase tracking-wide text-white/80">{k.label}</p>
+                <p className="text-3xl font-bold tabular-nums mt-2">{k.value.toLocaleString()}</p>
+                {k.note && <p className="text-xs text-white/80 mt-1">{k.note}</p>}
+              </div>
+            ))}
+          </div>
+        ) : null}
+
+        {/* Report */}
+        {loading ? (
+          <div className="text-center py-12 bg-white border border-gray-300">
+            <div className="win8-spinner text-brand mx-auto"><span /><span /><span /><span /><span /></div>
+            <p className="mt-3 text-gray-400 text-sm">{t('loadingReport', 'Loading report…')}</p>
+          </div>
+        ) : error ? (
+          <div className="text-center py-12 bg-white border border-gray-300">
+            <p className="text-win8-danger text-sm font-medium">{error}</p>
+            <button
+              onClick={fetchReport}
+              className="mt-4 inline-flex items-center justify-center px-4 py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover transition-colors"
+            >
+              {dict?.common?.retry || 'Retry'}
+            </button>
+          </div>
+        ) : !report || isEmpty ? (
+          <div className="text-center py-12 text-sm text-gray-400 bg-white border border-gray-300">
+            {t('noExpiringProductsFound', 'No expiring products found in the selected window')}
+          </div>
+        ) : (
+          <>
+            {report.expired.length > 0 && (
+              <section className="bg-white border border-gray-300">
+                <div className="px-6 py-4 border-b border-gray-300 flex items-center gap-2">
+                  <span className="inline-block w-2.5 h-2.5 bg-win8-danger shrink-0" aria-hidden="true" />
+                  <h2 className="text-base font-bold text-gray-900">
+                    {t('expiredRemoveFromShelf', 'Expired — Remove from Shelf ({count})').replace('{count}', report.expired.length.toLocaleString())}
+                  </h2>
+                </div>
+                {renderTable(report.expired)}
+              </section>
+            )}
+
+            {report.expiring.length > 0 && (
+              <section className="bg-white border border-gray-300">
+                <div className="px-6 py-4 border-b border-gray-300 flex items-center gap-2">
+                  <span className="inline-block w-2.5 h-2.5 bg-win8-warning shrink-0" aria-hidden="true" />
+                  <h2 className="text-base font-bold text-gray-900">
+                    {t('expiringWithinDays', 'Expiring Within {days} Days ({count})')
+                      .replace('{days}', String(alertDays))
+                      .replace('{count}', report.expiring.length.toLocaleString())}
+                  </h2>
+                </div>
+                {renderTable(report.expiring)}
+              </section>
+            )}
+          </>
+        )}
       </div>
     </div>
   );

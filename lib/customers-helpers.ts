@@ -1,9 +1,7 @@
 type Dict = Record<string, Record<string, string | undefined> | undefined>;
 
 export function getStatusBadgeClass(isActive: boolean): string {
-  return isActive
-    ? 'bg-green-100 text-green-800 border-green-300'
-    : 'bg-red-100 text-red-800 border-red-300';
+  return isActive ? 'bg-win8-success text-white' : 'bg-gray-500 text-white';
 }
 
 export function getStatusLabel(isActive: boolean, dict: Dict): string {
@@ -12,6 +10,12 @@ export function getStatusLabel(isActive: boolean, dict: Dict): string {
 
 export function getDeleteConfirmMessage(dict: Dict): string {
   return dict?.admin?.deleteCustomerConfirm || 'Are you sure you want to deactivate this customer?';
+}
+
+export function getDeactivateConfirmMessage(name: string, dict: Dict): string {
+  const template = dict?.admin?.deactivateCustomerNamed;
+  if (template) return template.replace('{name}', name);
+  return `Deactivate customer "${name}"? You can reactivate them later.`;
 }
 
 export function getDeleteSuccessMessage(dict: Dict): string {

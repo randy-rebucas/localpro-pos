@@ -139,6 +139,20 @@ describe('BackupResetPage', () => {
     ));
   });
 
+  it('shows a danger warning only while "clear existing data" is checked', async () => {
+    render(<BackupResetPage />);
+    await screen.findByText('Collection Backup & Reset');
+
+    const warning = /will be permanently deleted before the restore runs/i;
+    expect(screen.queryByText(warning)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText(/Clear existing data before restoring/i));
+    expect(screen.getByText(warning)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText(/Clear existing data before restoring/i));
+    expect(screen.queryByText(warning)).not.toBeInTheDocument();
+  });
+
   it('does not restore if the clear-existing confirm dialog is declined', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(false);
     render(<BackupResetPage />);
@@ -190,7 +204,7 @@ describe('BackupResetPage', () => {
     render(<BackupResetPage />);
     await screen.findByText('Collection Backup & Reset');
 
-    fireEvent.click(screen.getByLabelText('Products'));
+    fireEvent.click(screen.getByLabelText('Categories'));
     fireEvent.click(screen.getByRole('button', { name: /Reset Selected Collections/i }));
 
     await waitFor(() => expect(window.confirm).toHaveBeenCalled());
@@ -202,15 +216,46 @@ describe('BackupResetPage', () => {
     render(<BackupResetPage />);
     await screen.findByText('Collection Backup & Reset');
 
-    fireEvent.click(screen.getByLabelText('Products'));
     fireEvent.click(screen.getByLabelText('Categories'));
+    fireEvent.click(screen.getByLabelText('Discounts'));
     fireEvent.click(screen.getByRole('button', { name: /Reset Selected Collections/i }));
 
     await waitFor(() => expect(mockReset).toHaveBeenCalledWith(
-      ['products', 'categories'],
+      ['categories', 'discounts'],
       expect.any(Function),
       expect.any(Function)
     ));
+  });
+
+  it('blocks reset until collections that reference the selection are added', async () => {
+    mockReset.mockResolvedValue(true);
+    render(<BackupResetPage />);
+    await screen.findByText('Collection Backup & Reset');
+
+    fireEvent.click(screen.getByLabelText('Transactions'));
+    expect(screen.getByText(/must be reset together/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Reset Selected Collections/i })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: /Add Required Collections/i }));
+    expect((screen.getByLabelText('Payments') as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText('Kitchen Tickets') as HTMLInputElement).checked).toBe(true);
+    expect(screen.queryByText(/must be reset together/i)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Reset Selected Collections/i }));
+    await waitFor(() => expect(mockReset).toHaveBeenCalledWith(
+      expect.arrayContaining(['transactions', 'payments', 'kitchenTickets']),
+      expect.any(Function),
+      expect.any(Function)
+    ));
+  });
+
+  it('does not block backup on reset dependencies', async () => {
+    mockCreateBackup.mockResolvedValue(true);
+    render(<BackupResetPage />);
+    await screen.findByText('Collection Backup & Reset');
+
+    fireEvent.click(screen.getByLabelText('Transactions'));
+    expect(screen.getByRole('button', { name: /Download Backup/i })).not.toBeDisabled();
   });
 
   it('clears the selection after a successful reset', async () => {
@@ -221,11 +266,11 @@ describe('BackupResetPage', () => {
     render(<BackupResetPage />);
     await screen.findByText('Collection Backup & Reset');
 
-    fireEvent.click(screen.getByLabelText('Products'));
+    fireEvent.click(screen.getByLabelText('Categories'));
     fireEvent.click(screen.getByRole('button', { name: /Reset Selected Collections/i }));
 
     await waitFor(() => {
-      const checkbox = screen.getByLabelText('Products') as HTMLInputElement;
+      const checkbox = screen.getByLabelText('Categories') as HTMLInputElement;
       expect(checkbox.checked).toBe(false);
     });
   });

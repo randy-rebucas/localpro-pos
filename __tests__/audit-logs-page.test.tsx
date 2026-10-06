@@ -159,7 +159,15 @@ describe('AuditLogsPage', () => {
   // -------------------------------------------------------------------------
   it('shows an empty state when there are no logs', async () => {
     render(<AuditLogsPage />);
-    expect(await screen.findByText('No audit logs found')).toBeInTheDocument();
+    expect(await screen.findByText('No audit logs yet.')).toBeInTheDocument();
+  });
+
+  it('distinguishes the filtered empty state from the no-data empty state', async () => {
+    render(<AuditLogsPage />);
+    await screen.findByText('No audit logs yet.');
+
+    fireEvent.change(screen.getByPlaceholderText('e.g. product, user'), { target: { value: 'product' } });
+    expect(await screen.findByText('No audit logs match your filters.')).toBeInTheDocument();
   });
 
   // -------------------------------------------------------------------------

@@ -1,4 +1,9 @@
 import { useCallback, useState } from 'react';
+import { getFetchErrorMessage } from '@/lib/fetch-error';
+
+// The ledger routes run several sequential queries (auth, permissions), so
+// allow more than the usual 20s.
+const LEDGER_FETCH_TIMEOUT_MS = 30000;
 
 export interface JournalLine {
   id: string;
@@ -48,7 +53,7 @@ export function useJournalEntries(tenant: string, filters: EntryFilters = {}) {
     setError(null);
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 20000);
+    const timeout = setTimeout(() => controller.abort(), LEDGER_FETCH_TIMEOUT_MS);
 
     try {
       const params = new URLSearchParams({ tenant });
@@ -71,7 +76,7 @@ export function useJournalEntries(tenant: string, filters: EntryFilters = {}) {
         onError?.(errorMsg);
       }
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to fetch journal entries';
+      const errorMsg = getFetchErrorMessage(err, 'Failed to fetch journal entries');
       setError(errorMsg);
       onError?.(errorMsg);
     } finally {
@@ -87,7 +92,7 @@ export function useJournalEntries(tenant: string, filters: EntryFilters = {}) {
       onError?: (error: string) => void
     ) => {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 20000);
+      const timeout = setTimeout(() => controller.abort(), LEDGER_FETCH_TIMEOUT_MS);
       try {
         const res = await globalThis.fetch(`/api/ledger/entries?tenant=${tenant}`, {
           method: 'POST',
@@ -104,7 +109,7 @@ export function useJournalEntries(tenant: string, filters: EntryFilters = {}) {
           onError?.(data.error || 'Failed to create journal entry');
         }
       } catch (err) {
-        onError?.(err instanceof Error ? err.message : 'Failed to create journal entry');
+        onError?.(getFetchErrorMessage(err, 'Failed to create journal entry'));
       } finally {
         clearTimeout(timeout);
       }
@@ -115,7 +120,7 @@ export function useJournalEntries(tenant: string, filters: EntryFilters = {}) {
   const deleteEntry = useCallback(
     async (id: string, onSuccess?: (message: string) => void, onError?: (error: string) => void) => {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 20000);
+      const timeout = setTimeout(() => controller.abort(), LEDGER_FETCH_TIMEOUT_MS);
       try {
         const res = await globalThis.fetch(`/api/ledger/entries/${id}?tenant=${tenant}`, {
           method: 'DELETE',
@@ -130,7 +135,7 @@ export function useJournalEntries(tenant: string, filters: EntryFilters = {}) {
           onError?.(data.error || 'Failed to delete journal entry');
         }
       } catch (err) {
-        onError?.(err instanceof Error ? err.message : 'Failed to delete journal entry');
+        onError?.(getFetchErrorMessage(err, 'Failed to delete journal entry'));
       } finally {
         clearTimeout(timeout);
       }

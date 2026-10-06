@@ -12,7 +12,6 @@ import { hardwareStatusChecker } from '@/lib/hardware/status-checker';
 
 interface PrinterDetectionPanelProps {
   dictValue: (key: string, fallback: string) => string;
-  primaryColor: string;
   onApplyPrinter: (printer: PrinterSetupRecommendation['printer']) => void;
 }
 
@@ -24,17 +23,14 @@ function formatVidPid(vendorId?: number, productId?: number): string | null {
   return `${vid}:${pid}`;
 }
 
+const PROBE_BADGE: Record<string, string> = {
+  ready: 'bg-win8-success text-white',
+  os_driver_claimed: 'bg-win8-warning text-white',
+  unsupported: 'bg-gray-500 text-white',
+};
+
 function statusBadgeClass(status: DetectedPrinter['probeStatus']): string {
-  switch (status) {
-    case 'ready':
-      return 'bg-green-100 text-green-800 border-green-200';
-    case 'os_driver_claimed':
-      return 'bg-amber-100 text-amber-900 border-amber-200';
-    case 'unsupported':
-      return 'bg-gray-100 text-gray-700 border-gray-200';
-    default:
-      return 'bg-red-100 text-red-800 border-red-200';
-  }
+  return PROBE_BADGE[status] || 'bg-win8-danger text-white';
 }
 
 function statusLabel(status: DetectedPrinter['probeStatus'], dictValue: PrinterDetectionPanelProps['dictValue']): string {
@@ -52,7 +48,6 @@ function statusLabel(status: DetectedPrinter['probeStatus'], dictValue: PrinterD
 
 export default function PrinterDetectionPanel({
   dictValue,
-  primaryColor,
   onApplyPrinter,
 }: PrinterDetectionPanelProps) {
   const [scanning, setScanning] = useState(false);
@@ -96,7 +91,7 @@ export default function PrinterDetectionPanel({
   };
 
   return (
-    <div className="rounded border border-gray-200 bg-gray-50 p-4 mb-4">
+    <div className="border border-gray-300 bg-gray-50 p-4">
       <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
         <div>
           <h4 className="text-sm font-semibold text-gray-900">
@@ -114,11 +109,10 @@ export default function PrinterDetectionPanel({
             type="button"
             onClick={() => runScan(false)}
             disabled={scanning || pairing}
-            className="px-3 py-1.5 text-xs font-semibold text-white border disabled:opacity-50"
-            style={{ backgroundColor: primaryColor, borderColor: primaryColor }}
+            className="inline-flex items-center justify-center px-4 py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover disabled:opacity-50 transition-colors"
           >
             {scanning
-              ? dictValue('scanning', 'Scanning...')
+              ? dictValue('scanning', 'Scanning…')
               : dictValue('scanForPrinters', 'Scan for printers')}
           </button>
           {'usb' in navigator && (
@@ -126,10 +120,10 @@ export default function PrinterDetectionPanel({
               type="button"
               onClick={() => runScan(true)}
               disabled={scanning || pairing}
-              className="px-3 py-1.5 text-xs font-semibold border border-gray-300 bg-white text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+              className="inline-flex items-center justify-center px-4 py-2 border border-gray-300 text-gray-700 bg-white text-sm hover:bg-gray-100 disabled:opacity-50 transition-colors"
             >
               {pairing
-                ? dictValue('pairing', 'Pairing...')
+                ? dictValue('pairing', 'Pairing…')
                 : dictValue('pairUsbPrinter', 'Pair USB printer')}
             </button>
           )}
@@ -137,7 +131,7 @@ export default function PrinterDetectionPanel({
       </div>
 
       {scanned && detected.length === 0 && (
-        <p className="text-sm text-gray-600 mb-3">
+        <p className="text-sm text-gray-400 italic mb-3">
           {dictValue(
             'noPrintersFound',
             'No printers found. Try Pair USB printer, or use Browser Print / Network printer.'
@@ -147,7 +141,7 @@ export default function PrinterDetectionPanel({
 
       {detected.length > 0 && (
         <div className="space-y-2 mb-3">
-          <p className="text-xs font-medium text-gray-600 uppercase tracking-wide">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
             {dictValue('detectedDevices', 'Detected devices')}
           </p>
           {detected.map((device) => {
@@ -155,13 +149,13 @@ export default function PrinterDetectionPanel({
             return (
               <div
                 key={device.id}
-                className="flex flex-wrap items-center justify-between gap-2 border border-gray-200 bg-white p-3"
+                className="flex flex-wrap items-center justify-between gap-2 border border-gray-300 bg-white p-3"
               >
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-gray-900 truncate">{device.label}</p>
                   <p className="text-xs text-gray-500">
                     {device.connection.toUpperCase()}
-                    {ids ? ` · ${ids}` : ''}
+                    {ids ? <span className="font-mono">{` · ${ids}`}</span> : ''}
                     {device.matchedProfileName ? ` · ${device.matchedProfileName}` : ''}
                   </p>
                   {device.probeMessage && (
@@ -170,7 +164,7 @@ export default function PrinterDetectionPanel({
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <span
-                    className={`text-[10px] font-bold px-2 py-0.5 border ${statusBadgeClass(device.probeStatus)}`}
+                    className={`px-2 py-0.5 text-xs font-semibold ${statusBadgeClass(device.probeStatus)}`}
                   >
                     {statusLabel(device.probeStatus, dictValue)}
                   </span>
@@ -178,7 +172,7 @@ export default function PrinterDetectionPanel({
                     <button
                       type="button"
                       onClick={() => applyDevice(device)}
-                      className="text-xs font-semibold text-gray-700 hover:text-gray-900 underline"
+                      className="inline-flex items-center justify-center px-3 py-2 text-xs font-semibold text-brand hover:underline"
                     >
                       {dictValue('useThisPrinter', 'Use this printer')}
                     </button>
@@ -191,13 +185,12 @@ export default function PrinterDetectionPanel({
       )}
 
       {recommendation && (
-        <div className="border border-teal-200 bg-teal-50/60 p-3">
-          <p className="text-sm text-gray-800 mb-2">{recommendation.summary}</p>
+        <div className="bg-brand-soft border border-brand p-4 flex items-center justify-between gap-3 flex-wrap">
+          <p className="text-sm text-brand-navy">{recommendation.summary}</p>
           <button
             type="button"
             onClick={applyRecommendation}
-            className="px-3 py-1.5 text-xs font-bold text-white border"
-            style={{ backgroundColor: primaryColor, borderColor: primaryColor }}
+            className="inline-flex items-center justify-center px-4 py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover transition-colors"
           >
             {dictValue('useRecommendedSetup', 'Use recommended setup')}
           </button>

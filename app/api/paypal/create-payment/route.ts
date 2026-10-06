@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
-import { getTenantIdFromRequest } from '@/lib/api-tenant';
+import { getTenantIdForUser } from '@/lib/api-tenant';
 import { getTenantSlugFromRequest } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createSubscriptionPayment } from '@/lib/paypal';
@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
   try {
     // Require authentication
     const user = await requireAuth(request);
-    const tenantId = await getTenantIdFromRequest(request);
+    const tenantId = await getTenantIdForUser(request, user);
     const tenantSlug = await getTenantSlugFromRequest(request);
 
     if (!tenantId) {
@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!(await hasTenantPermission(user.role, tenantId, 'subscriptions.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenantId, 'subscriptions.change_plan'))) {
       return NextResponse.json(
         { success: false, error: 'Forbidden: Insufficient permissions' },
         { status: 403 }

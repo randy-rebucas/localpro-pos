@@ -31,7 +31,10 @@ export default function LaundryOrdersPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const { canAccess } = usePermissions();
-  const canManage = canAccess('laundry_orders.manage');
+  const canCreate = canAccess('laundry_orders.create');
+  const canEdit = canAccess('laundry_orders.edit');
+  // Cancelling an order is DELETE on the order.
+  const canDelete = canAccess('laundry_orders.delete');
 
   const { settings } = useTenantSettings();
   const laundryOrdersEnabled = supportsFeature(settings ?? undefined, 'laundryOrders');
@@ -103,7 +106,7 @@ export default function LaundryOrdersPage() {
             </h1>
             <p className="text-sm text-gray-500">{dict?.admin?.laundryOrdersSubtitle || 'Track garments from pickup through wash, dry, fold, and delivery'}</p>
           </div>
-          {canManage && (
+          {canCreate && (
             <button
               type="button"
               disabled={!laundryOrdersEnabled}
@@ -247,7 +250,7 @@ export default function LaundryOrdersPage() {
                 <label className="block text-sm font-medium text-gray-700">{dict?.admin?.status || 'Status'}</label>
                 <select
                   value={selectedOrder.status}
-                  disabled={!canManage || !isLaundryStatusEditable(selectedOrder.status)}
+                  disabled={!canEdit || !isLaundryStatusEditable(selectedOrder.status)}
                   onChange={(e) => handleUpdateOrder(selectedOrder.id, { status: e.target.value as LaundryOrderStatus })}
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand bg-white disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -282,7 +285,7 @@ export default function LaundryOrdersPage() {
                   <p className="mt-1 text-sm text-gray-900">{selectedOrder.notes}</p>
                 </div>
               )}
-              {canManage && (
+              {canDelete && (
                 <div className="flex gap-2 pt-4 border-t border-gray-200">
                   <button
                     onClick={() => handleCancelOrder(selectedOrder.id)}

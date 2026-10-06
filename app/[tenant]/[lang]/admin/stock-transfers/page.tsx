@@ -84,7 +84,13 @@ export default function StockTransfersPage() {
   const [showReceive, setShowReceive] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const { canAccess } = usePermissions();
-  const canManage = canAccess('stock_transfers.manage');
+  const allowCreate = canAccess('stock_transfers.create');
+  // Cancelling is a status update (PUT /api/stock-transfers/[id]).
+  const allowEdit = canAccess('stock_transfers.edit');
+  const allowDelete = canAccess('stock_transfers.delete');
+  const allowSend = canAccess('stock_transfers.send');
+  const allowReceive = canAccess('stock_transfers.receive');
+  const showRowActions = allowEdit || allowDelete || allowSend || allowReceive;
 
   const {
     stockTransfers,
@@ -198,16 +204,16 @@ export default function StockTransfersPage() {
               <th className={thRight}>{t('items', 'Items')}</th>
               <th className={thCls}>{t('created', 'Created')}</th>
               <th className={thCls}>{t('status', 'Status')}</th>
-              {canManage && <th className={thRight}>{dict.common?.actions || 'Actions'}</th>}
+              {showRowActions && <th className={thRight}>{dict.common?.actions || 'Actions'}</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
             {stockTransfers.map((transfer) => {
               const busy = busyId === transfer._id;
-              const canSend = transfer.status === 'pending';
-              const canReceive = transfer.status === 'in_transit' || transfer.status === 'partially_received';
-              const canCancel = isStockTransferStatusEditable(transfer.status) && getAllowedNextStatuses(transfer.status).includes('cancelled');
-              const canDelete = transfer.status === 'pending';
+              const canSend = allowSend && transfer.status === 'pending';
+              const canReceive = allowReceive && (transfer.status === 'in_transit' || transfer.status === 'partially_received');
+              const canCancel = allowEdit && isStockTransferStatusEditable(transfer.status) && getAllowedNextStatuses(transfer.status).includes('cancelled');
+              const canDelete = allowDelete && transfer.status === 'pending';
               return (
                 <tr key={transfer._id} className="hover:bg-gray-100 transition-colors">
                   <td className="px-4 py-3 whitespace-nowrap font-mono text-xs font-semibold text-gray-900">{transfer.transferNumber}</td>
@@ -220,7 +226,7 @@ export default function StockTransfersPage() {
                       {getStatusLabel(transfer.status, dict)}
                     </span>
                   </td>
-                  {canManage && (
+                  {showRowActions && (
                     <td className="px-4 py-3">
                       <div className="flex justify-end gap-1.5">
                         {busy ? (
@@ -267,7 +273,7 @@ export default function StockTransfersPage() {
         <AdminPageHeader
           title={t('title', 'Stock Transfers')}
           description={t('subtitle', 'Move inventory between branches with a full audit trail')}
-          actions={canManage ? (
+          actions={allowCreate ? (
             <button
               type="button"
               onClick={() => {
@@ -285,7 +291,7 @@ export default function StockTransfersPage() {
         />
 
         <div className="space-y-4">
-          {canManage && tooFewBranches && !loading && (
+          {allowCreate && tooFewBranches && !loading && (
             <div className="bg-brand-soft border border-brand p-4 text-sm text-brand-navy">
               {t('needTwoBranches', 'You need at least 2 branches to transfer stock.')}
             </div>

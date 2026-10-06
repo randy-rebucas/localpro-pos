@@ -11,6 +11,7 @@
 import prisma from '@/lib/db';
 import { ITenantSettings } from '@/types/tenant';
 import { logger } from '@/lib/logger';
+import { reshapeHardwareConfig } from '@/lib/tenant-settings-flatten';
 
 export interface TenantInfo {
   _id: string;
@@ -34,7 +35,11 @@ export async function getTenantSettingsById(tenantId: string): Promise<ITenantSe
       where: { id: tenantId },
       select: { settings: true },
     });
-    return (tenant?.settings as unknown as ITenantSettings) || null;
+    if (!tenant?.settings) return null;
+    // Nest the flat printer/drawer columns under `hardwareConfig` (the shape
+    // callers like /api/hardware/cash-drawer-kick read). Shape-only — the
+    // lookup above stays scoped to the exact tenantId.
+    return reshapeHardwareConfig(tenant.settings as unknown as Record<string, unknown>) as unknown as ITenantSettings;
   } catch (error) {
     logger.error('Error fetching tenant settings:', error);
     return null;

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import prisma, { dbTransaction } from '@/lib/db';
-import { getTenantIdFromRequest } from '@/lib/api-tenant';
+import { getTenantIdForUser } from '@/lib/api-tenant';
 import { requireAuth, getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { checkRateLimit } from '@/lib/rate-limit';
@@ -29,7 +29,7 @@ export async function GET(
       );
     }
 
-    const tenantId = await getTenantIdFromRequest(request);
+    const tenantId = await getTenantIdForUser(request, user);
     if (!tenantId) {
       return NextResponse.json(
         { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
@@ -39,8 +39,7 @@ export async function GET(
 
     if (
       !(await hasTenantPermission(user.role, tenantId, 'work_order_time.manage')) &&
-      !(await hasTenantPermission(user.role, tenantId, 'work_orders.view')) &&
-      !(await hasTenantPermission(user.role, tenantId, 'work_orders.manage'))
+      !(await hasTenantPermission(user.role, tenantId, 'work_orders.view'))
     ) {
       return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
     }
@@ -90,7 +89,7 @@ export async function POST(
       );
     }
 
-    const tenantId = await getTenantIdFromRequest(request);
+    const tenantId = await getTenantIdForUser(request, user);
     if (!tenantId) {
       return NextResponse.json(
         { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },

@@ -46,7 +46,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const { id } = await params;
     const t = await getValidationTranslatorFromRequest(request);
 
-    if (!(await hasTenantPermission(user.role, tenantId, 'discounts.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenantId, 'discounts.edit'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
@@ -145,7 +145,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     const { id } = await params;
     const t = await getValidationTranslatorFromRequest(request);
 
-    if (!(await hasTenantPermission(user.role, tenantId, 'discounts.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenantId, 'discounts.delete'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 

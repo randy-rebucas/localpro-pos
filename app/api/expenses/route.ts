@@ -15,7 +15,10 @@ export async function GET(request: NextRequest) {
   try {
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
-    const { tenantId } = authResult;
+    const { tenantId, user } = authResult;
+    if (!(await hasTenantPermission(user.role, tenantId, 'expenses.view'))) {
+      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
+    }
 
     const searchParams = request.nextUrl.searchParams;
     const startDate = searchParams.get('startDate');
@@ -54,7 +57,7 @@ export async function POST(request: NextRequest) {
     const userId = user.userId;
     const t = await getValidationTranslatorFromRequest(request);
 
-    if (!(await hasTenantPermission(user.role, tenantId, 'expenses.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenantId, 'expenses.create'))) {
       return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
     }
 

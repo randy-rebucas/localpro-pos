@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma, { dbTransaction } from '@/lib/db';
 import { Prisma } from '@prisma/client';
-import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant';
+import { getTenantIdForUser, requireTenantAccess } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -72,14 +72,14 @@ export async function PATCH(
   try {
     const { id } = await params;
     const user = await requireAuth(request);
-    const tenantId = await getTenantIdFromRequest(request);
+    const tenantId = await getTenantIdForUser(request, user);
     const t = await getValidationTranslatorFromRequest(request);
 
     if (!tenantId) {
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
-    if (!(await hasTenantPermission(user.role, tenantId, 'tax_rules.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenantId, 'tax_rules.edit'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
@@ -166,14 +166,14 @@ export async function DELETE(
   try {
     const { id } = await params;
     const user = await requireAuth(request);
-    const tenantId = await getTenantIdFromRequest(request);
+    const tenantId = await getTenantIdForUser(request, user);
     const t = await getValidationTranslatorFromRequest(request);
 
     if (!tenantId) {
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
-    if (!(await hasTenantPermission(user.role, tenantId, 'tax_rules.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenantId, 'tax_rules.delete'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 

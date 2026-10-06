@@ -69,7 +69,7 @@ export async function POST(
       return NextResponse.json({ success: false, error: t('validation.unauthorized', 'Unauthorized') }, { status: 401 });
     }
 
-    if (!(await hasTenantPermission(user.role, user.tenantId, 'receipt_templates.manage'))) {
+    if (!(await hasTenantPermission(user.role, user.tenantId, 'receipt_templates.create'))) {
       return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden') }, { status: 403 });
     }
 
@@ -166,7 +166,7 @@ export async function PUT(
       return NextResponse.json({ success: false, error: t('validation.unauthorized', 'Unauthorized') }, { status: 401 });
     }
 
-    if (!(await hasTenantPermission(user.role, user.tenantId, 'receipt_templates.manage'))) {
+    if (!(await hasTenantPermission(user.role, user.tenantId, 'receipt_templates.edit'))) {
       return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden') }, { status: 403 });
     }
 
@@ -269,7 +269,7 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: t('validation.unauthorized', 'Unauthorized') }, { status: 401 });
     }
 
-    if (!(await hasTenantPermission(user.role, user.tenantId, 'receipt_templates.manage'))) {
+    if (!(await hasTenantPermission(user.role, user.tenantId, 'receipt_templates.delete'))) {
       return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden') }, { status: 403 });
     }
 

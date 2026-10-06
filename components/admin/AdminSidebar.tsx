@@ -19,6 +19,7 @@ import { getDefaultTenantSettings } from '@/lib/currency';
 import { useAdminLayout } from '@/contexts/AdminLayoutContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import { supportsFeature } from '@/lib/business-type-helpers';
+import { getDictionaryClient } from '@/app/[tenant]/[lang]/dictionaries-client';
 
 interface NavItem {
   label: string;
@@ -45,6 +46,14 @@ export default function AdminSidebar() {
   const lang = (params?.lang as string) || 'en';
   const { user, logout } = useAuth();
   const { canAccess } = usePermissions();
+  const [navDict, setNavDict] = useState<Record<string, string> | null>(null);
+
+  useEffect(() => {
+    getDictionaryClient(lang === 'es' ? 'es' : 'en').then((d) => setNavDict(d?.adminNav ?? null));
+  }, [lang]);
+
+  // English fallback keeps the sidebar readable before the dictionary loads.
+  const t = (key: string, fallback: string) => navDict?.[key] || fallback;
 
   const { settings } = useTenantSettings();
 
@@ -64,109 +73,109 @@ export default function AdminSidebar() {
   const navGroups: NavGroup[] = [
     {
       id: 'overview',
-      title: 'Overview',
+      title: t('groupOverview', 'Overview'),
       defaultOpen: true,
       items: [
-        { label: 'Dashboard', href: `${base}/admin`, icon: LayoutDashboard, exact: true, permission: 'dashboard.view' },
-        { label: 'Reports', href: `${base}/admin/reports`, icon: BarChart2, permission: 'reports.view' },
+        { label: t('dashboard', 'Dashboard'), href: `${base}/admin`, icon: LayoutDashboard, exact: true, permission: 'dashboard.view' },
+        { label: t('reports', 'Reports'), href: `${base}/admin/reports`, icon: BarChart2, permission: 'reports.view' },
       ],
     },
     {
       id: 'catalog',
-      title: 'Catalog',
+      title: t('groupCatalog', 'Catalog'),
       defaultOpen: true,
       items: [
-        { label: 'Products', href: `${base}/admin/products`, icon: Package, permission: 'products.manage' },
-        { label: 'Categories', href: `${base}/admin/categories`, icon: Tag, permission: 'categories.manage', feature: 'categories' },
-        { label: 'Bundles', href: `${base}/admin/bundles`, icon: Layers, permission: 'bundles.manage' },
-        { label: 'Inventory', href: `${base}/admin/inventory`, icon: Boxes, permission: 'inventory.manage', feature: 'inventory' },
-        { label: 'Stock Movements', href: `${base}/admin/stock-movements`, icon: ArrowUpDown, permission: 'stock_movements.manage', feature: 'inventory' },
-        { label: 'Suppliers', href: `${base}/admin/suppliers`, icon: Contact, permission: 'suppliers.manage', feature: 'suppliers' },
-        { label: 'Purchase Orders', href: `${base}/admin/purchase-orders`, icon: FileBox, permission: 'purchase_orders.manage', feature: 'suppliers' },
-        { label: 'Stock Transfers', href: `${base}/admin/stock-transfers`, icon: ArrowRightLeft, permission: 'stock_transfers.manage', feature: 'inventory' },
+        { label: t('products', 'Products'), href: `${base}/admin/products`, icon: Package, permission: 'products.manage' },
+        { label: t('categories', 'Categories'), href: `${base}/admin/categories`, icon: Tag, permission: 'categories.manage', feature: 'categories' },
+        { label: t('bundles', 'Bundles'), href: `${base}/admin/bundles`, icon: Layers, permission: 'bundles.manage' },
+        { label: t('inventory', 'Inventory'), href: `${base}/admin/inventory`, icon: Boxes, permission: 'inventory.view', feature: 'inventory' },
+        { label: t('stockMovements', 'Stock Movements'), href: `${base}/admin/stock-movements`, icon: ArrowUpDown, permission: 'stock_movements.view', feature: 'inventory' },
+        { label: t('suppliers', 'Suppliers'), href: `${base}/admin/suppliers`, icon: Contact, permission: 'suppliers.view', feature: 'suppliers' },
+        { label: t('purchaseOrders', 'Purchase Orders'), href: `${base}/admin/purchase-orders`, icon: FileBox, permission: 'purchase_orders.view', feature: 'suppliers' },
+        { label: t('stockTransfers', 'Stock Transfers'), href: `${base}/admin/stock-transfers`, icon: ArrowRightLeft, permission: 'stock_transfers.view', feature: 'inventory' },
       ],
     },
     {
       id: 'sales',
-      title: 'Sales',
+      title: t('groupSales', 'Sales'),
       defaultOpen: true,
       items: [
-        { label: 'Transactions', href: `${base}/admin/transactions`, icon: Receipt, permission: 'transactions.view' },
-        { label: 'Discounts', href: `${base}/admin/discounts`, icon: Percent, permission: 'discounts.manage' },
-        { label: 'Cash Drawer', href: `${base}/admin/cash-drawer`, icon: DollarSign, permission: 'cash_drawer.manage' },
-        { label: 'Expenses', href: `${base}/admin/expenses`, icon: TrendingDown, permission: 'expenses.manage', feature: 'expenses' },
-        { label: 'Invoices', href: `${base}/admin/invoices`, icon: ReceiptText, permission: 'invoices.manage' },
-        { label: 'Ledger', href: `${base}/admin/ledger`, icon: BookOpen, permission: 'ledger.manage', feature: 'accounting' },
+        { label: t('transactions', 'Transactions'), href: `${base}/admin/transactions`, icon: Receipt, permission: 'transactions.view' },
+        { label: t('discounts', 'Discounts'), href: `${base}/admin/discounts`, icon: Percent, permission: 'discounts.manage' },
+        { label: t('cashDrawer', 'Cash Drawer'), href: `${base}/admin/cash-drawer`, icon: DollarSign, permission: 'cash_drawer.view' },
+        { label: t('expenses', 'Expenses'), href: `${base}/admin/expenses`, icon: TrendingDown, permission: 'expenses.manage', feature: 'expenses' },
+        { label: t('invoices', 'Invoices'), href: `${base}/admin/invoices`, icon: ReceiptText, permission: 'invoices.view' },
+        { label: t('ledger', 'Ledger'), href: `${base}/admin/ledger`, icon: BookOpen, permission: 'ledger.view', feature: 'accounting' },
       ],
     },
     {
       id: 'customers',
-      title: 'Customers',
+      title: t('groupCustomers', 'Customers'),
       defaultOpen: false,
       items: [
-        { label: 'Customers', href: `${base}/admin/customers`, icon: Users, permission: 'customers.manage' },
-        { label: 'Customer Groups', href: `${base}/admin/customer-groups`, icon: Users2, permission: 'customer_groups.manage' },
-        { label: 'Loyalty', href: `${base}/admin/loyalty`, icon: Heart, permission: 'loyalty.manage' },
-        { label: 'CRM', href: `${base}/admin/crm`, icon: Megaphone, permission: 'crm.manage' },
+        { label: t('customers', 'Customers'), href: `${base}/admin/customers`, icon: Users, permission: 'customers.manage' },
+        { label: t('customerGroups', 'Customer Groups'), href: `${base}/admin/customer-groups`, icon: Users2, permission: 'customer_groups.view' },
+        { label: t('loyalty', 'Loyalty'), href: `${base}/admin/loyalty`, icon: Heart, permission: 'loyalty.view' },
+        { label: t('crm', 'CRM'), href: `${base}/admin/crm`, icon: Megaphone, permission: 'crm.view' },
       ],
     },
     {
       id: 'operations',
-      title: 'Operations',
+      title: t('groupOperations', 'Operations'),
       defaultOpen: false,
       items: [
-        { label: 'Bookings', href: `${base}/admin/bookings`, icon: CalendarDays, permission: 'bookings.manage', feature: 'booking' },
-        { label: 'Delivery', href: `${base}/admin/delivery`, icon: Truck, permission: 'delivery.manage', feature: 'delivery' },
-        { label: 'Work Orders', href: `${base}/admin/work-orders`, icon: ClipboardList, permission: 'work_orders.manage', feature: 'workOrders' },
-        { label: 'Deposits', href: `${base}/admin/deposits`, icon: DollarSign, permission: 'deposits.manage' },
-        { label: 'Laundry Orders', href: `${base}/admin/laundry`, icon: WashingMachine, permission: 'laundry_orders.manage', feature: 'laundryOrders' },
-        { label: 'Kitchen Display', href: `${base}/admin/kitchen-display`, icon: ChefHat, permission: 'kitchen_display.manage', feature: 'kitchenDisplay' },
-        { label: 'Tables', href: `${base}/admin/tables`, icon: LayoutGrid, permission: 'tables.manage', feature: 'tableManagement' },
-        { label: 'Attendance', href: `${base}/admin/attendance`, icon: UserCheck, permission: 'attendance.manage', feature: 'employees' },
-        { label: 'Channel Orders', href: `${base}/admin/channel-orders`, icon: ShoppingCart, permission: 'channel_orders.manage' },
+        { label: t('bookings', 'Bookings'), href: `${base}/admin/bookings`, icon: CalendarDays, permission: 'bookings.view', feature: 'booking' },
+        { label: t('delivery', 'Delivery'), href: `${base}/admin/delivery`, icon: Truck, permission: 'delivery.view', feature: 'delivery' },
+        { label: t('workOrders', 'Work Orders'), href: `${base}/admin/work-orders`, icon: ClipboardList, permission: 'work_orders.view', feature: 'workOrders' },
+        { label: t('deposits', 'Deposits'), href: `${base}/admin/deposits`, icon: DollarSign, permission: 'deposits.view' },
+        { label: t('laundryOrders', 'Laundry Orders'), href: `${base}/admin/laundry`, icon: WashingMachine, permission: 'laundry_orders.view', feature: 'laundryOrders' },
+        { label: t('kitchenDisplay', 'Kitchen Display'), href: `${base}/admin/kitchen-display`, icon: ChefHat, permission: 'kitchen_display.view', feature: 'kitchenDisplay' },
+        { label: t('tables', 'Tables'), href: `${base}/admin/tables`, icon: LayoutGrid, permission: 'tables.view', feature: 'tableManagement' },
+        { label: t('attendance', 'Attendance'), href: `${base}/admin/attendance`, icon: UserCheck, permission: 'attendance.view', feature: 'employees' },
+        { label: t('channelOrders', 'Channel Orders'), href: `${base}/admin/channel-orders`, icon: ShoppingCart, permission: 'integrations.view' },
       ],
     },
     {
       id: 'compliance',
-      title: 'Compliance',
+      title: t('groupCompliance', 'Compliance'),
       defaultOpen: false,
       items: [
-        { label: 'Compliance Status', href: `${base}/admin/compliance`, icon: ShieldCheck, permission: 'compliance.view' },
-        { label: 'Business Permits', href: `${base}/admin/business-permits`, icon: Building2, permission: 'business_permits.manage' },
-        { label: 'BIR Compliance', href: `${base}/admin/bir-compliance`, icon: FileText, permission: 'bir_compliance.manage' },
-        { label: 'Restaurant', href: `${base}/admin/restaurant-compliance`, icon: UtensilsCrossed, permission: 'restaurant_compliance.manage' },
-        { label: 'Retail', href: `${base}/admin/retail-compliance`, icon: ShoppingBag, permission: 'retail_compliance.manage' },
-        { label: 'Laundry', href: `${base}/admin/laundry-compliance`, icon: WashingMachine, permission: 'laundry_compliance.manage' },
-        { label: 'Service', href: `${base}/admin/service-compliance`, icon: Briefcase, permission: 'service_compliance.manage' },
-        { label: 'Pharmacy', href: `${base}/admin/pharmacy-compliance`, icon: Pill, permission: 'pharmacy_compliance.manage' },
-        { label: 'Prescriptions', href: `${base}/admin/prescriptions`, icon: FileText, permission: 'prescriptions.manage' },
-        { label: 'Expiry Tracking', href: `${base}/admin/expiry-tracking`, icon: CalendarClock, permission: 'expiry_tracking.manage' },
+        { label: t('complianceStatus', 'Compliance Status'), href: `${base}/admin/compliance`, icon: ShieldCheck, permission: 'compliance.view' },
+        { label: t('businessPermits', 'Business Permits'), href: `${base}/admin/business-permits`, icon: Building2, permission: 'business_permits.manage' },
+        { label: t('birCompliance', 'BIR Compliance'), href: `${base}/admin/bir-compliance`, icon: FileText, permission: 'bir_compliance.manage' },
+        { label: t('restaurantCompliance', 'Restaurant'), href: `${base}/admin/restaurant-compliance`, icon: UtensilsCrossed, permission: 'restaurant_compliance.manage' },
+        { label: t('retailCompliance', 'Retail'), href: `${base}/admin/retail-compliance`, icon: ShoppingBag, permission: 'retail_compliance.manage' },
+        { label: t('laundryCompliance', 'Laundry'), href: `${base}/admin/laundry-compliance`, icon: WashingMachine, permission: 'laundry_compliance.manage' },
+        { label: t('serviceCompliance', 'Service'), href: `${base}/admin/service-compliance`, icon: Briefcase, permission: 'service_compliance.manage' },
+        { label: t('pharmacyCompliance', 'Pharmacy'), href: `${base}/admin/pharmacy-compliance`, icon: Pill, permission: 'pharmacy_compliance.manage' },
+        { label: t('prescriptions', 'Prescriptions'), href: `${base}/admin/prescriptions`, icon: FileText, permission: 'prescriptions.view' },
+        { label: t('expiryTracking', 'Expiry Tracking'), href: `${base}/admin/expiry-tracking`, icon: CalendarClock, permission: 'expiry_tracking.manage' },
       ],
     },
     {
       id: 'configuration',
-      title: 'Configuration',
+      title: t('groupConfiguration', 'Configuration'),
       defaultOpen: false,
       items: [
-        { label: 'Users', href: `${base}/admin/users`, icon: Users2, permission: 'users.manage', feature: 'employees' },
-        { label: 'Branches', href: `${base}/admin/branches`, icon: GitBranch, permission: 'branches.manage' },
-        { label: 'Business Type', href: `${base}/admin/business-types`, icon: Store, permission: 'business_types.manage' },
-        { label: 'Business Hours', href: `${base}/admin/business-hours`, icon: Clock, permission: 'business_hours.manage' },
-        { label: 'Tax Rules', href: `${base}/admin/tax-rules`, icon: Calculator, permission: 'tax_rules.manage' },
-        { label: 'Subscriptions', href: `${base}/admin/subscriptions`, icon: CreditCard, permission: 'subscriptions.manage' },
-        { label: 'Hardware', href: `${base}/admin/hardware`, icon: Monitor, permission: 'hardware.manage' },
-        { label: 'Devices (Terminals)', href: `${base}/admin/devices`, icon: Smartphone, permission: 'devices.manage' },
-        { label: 'Notifications', href: `${base}/admin/notification-templates`, icon: Bell, permission: 'notifications.manage' },
-        { label: 'Branding', href: `${base}/admin/advanced-branding`, icon: Palette, permission: 'branding.manage' },
-        { label: 'Multi-Currency', href: `${base}/admin/multi-currency`, icon: DollarSign, permission: 'multi_currency.manage' },
-        { label: 'Holidays', href: `${base}/admin/holidays`, icon: CalendarDays, permission: 'holidays.manage' },
-        { label: 'Feature Flags', href: `${base}/admin/feature-flags`, icon: ToggleLeft, permission: 'feature_flags.manage' },
-        { label: 'Roles & Permissions', href: `${base}/admin/roles-permissions`, icon: Lock, permission: 'roles_permissions.manage' },
-        { label: 'Audit Logs', href: `${base}/admin/audit-logs`, icon: ClipboardList, permission: 'audit_logs.view' },
-        { label: 'Backup & Reset', href: `${base}/admin/backup-reset`, icon: Database, permission: 'reset_collections.manage' },
-        { label: 'Sample Data', href: `${base}/admin/sample-data`, icon: Sparkles, permission: 'sample_data.manage' },
-        { label: 'API Docs', href: `${base}/admin/api-docs`, icon: Code2, permission: 'api_docs.view' },
-        { label: 'Settings', href: `${base}/admin/settings`, icon: Settings, permission: 'settings.manage' },
+        { label: t('users', 'Users'), href: `${base}/admin/users`, icon: Users2, permission: 'users.view', feature: 'employees' },
+        { label: t('branches', 'Branches'), href: `${base}/admin/branches`, icon: GitBranch, permission: 'branches.manage' },
+        { label: t('businessType', 'Business Type'), href: `${base}/admin/business-types`, icon: Store, permission: 'settings.manage' },
+        { label: t('businessHours', 'Business Hours'), href: `${base}/admin/business-hours`, icon: Clock, permission: 'business_hours.manage' },
+        { label: t('taxRules', 'Tax Rules'), href: `${base}/admin/tax-rules`, icon: Calculator, permission: 'tax_rules.manage' },
+        { label: t('subscriptions', 'Subscriptions'), href: `${base}/admin/subscriptions`, icon: CreditCard, permission: 'subscriptions.view' },
+        { label: t('hardware', 'Hardware'), href: `${base}/admin/hardware`, icon: Monitor, permission: 'hardware.manage' },
+        { label: t('devices', 'Devices (Terminals)'), href: `${base}/admin/devices`, icon: Smartphone, permission: 'devices.view' },
+        { label: t('notifications', 'Notifications'), href: `${base}/admin/notification-templates`, icon: Bell, permission: 'notifications.manage' },
+        { label: t('branding', 'Branding'), href: `${base}/admin/advanced-branding`, icon: Palette, permission: 'branding.manage' },
+        { label: t('multiCurrency', 'Multi-Currency'), href: `${base}/admin/multi-currency`, icon: DollarSign, permission: 'multi_currency.manage' },
+        { label: t('holidays', 'Holidays'), href: `${base}/admin/holidays`, icon: CalendarDays, permission: 'holidays.manage' },
+        { label: t('featureFlags', 'Feature Flags'), href: `${base}/admin/feature-flags`, icon: ToggleLeft, permission: 'feature_flags.manage' },
+        { label: t('rolesPermissions', 'Roles & Permissions'), href: `${base}/admin/roles-permissions`, icon: Lock, permission: 'roles_permissions.manage' },
+        { label: t('auditLogs', 'Audit Logs'), href: `${base}/admin/audit-logs`, icon: ClipboardList, permission: 'audit_logs.view' },
+        { label: t('backupReset', 'Backup & Reset'), href: `${base}/admin/backup-reset`, icon: Database, permission: 'reset_collections.manage' },
+        { label: t('sampleData', 'Sample Data'), href: `${base}/admin/sample-data`, icon: Sparkles, permission: 'sample_data.manage' },
+        { label: t('apiDocs', 'API Docs'), href: `${base}/admin/api-docs`, icon: Code2, permission: 'api_docs.view' },
+        { label: t('settings', 'Settings'), href: `${base}/admin/settings`, icon: Settings, permission: 'settings.manage' },
       ],
     },
   ];
@@ -226,13 +235,15 @@ export default function AdminSidebar() {
   };
 
   const roleLabel: Record<string, string> = {
-    owner: 'Owner',
-    admin: 'Admin',
-    manager: 'Manager',
-    cashier: 'Cashier',
-    viewer: 'Viewer',
-    super_admin: 'Super Admin',
+    owner: t('roleOwner', 'Owner'),
+    admin: t('roleAdmin', 'Admin'),
+    manager: t('roleManager', 'Manager'),
+    cashier: t('roleCashier', 'Cashier'),
+    viewer: t('roleViewer', 'Viewer'),
+    super_admin: t('roleSuperAdmin', 'Super Admin'),
   };
+  const goToPosLabel = t('goToPos', 'Go to POS');
+  const logoutLabel = t('logout', 'Logout');
 
   const SidebarContent = ({ collapsed }: { collapsed: boolean }) => (
     <div className="flex flex-col h-full">
@@ -247,7 +258,7 @@ export default function AdminSidebar() {
           </div>
           {!collapsed && (
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-gray-900 truncate">{user?.name || 'User'}</p>
+              <p className="text-sm font-semibold text-gray-900 truncate">{user?.name || t('userFallback', 'User')}</p>
               <p className="text-xs text-gray-500 truncate">{roleLabel[user?.role ?? ''] || user?.role}</p>
             </div>
           )}
@@ -265,7 +276,9 @@ export default function AdminSidebar() {
               {/* Group header */}
               {!collapsed && (
                 <button
+                  type="button"
                   onClick={() => toggleGroup(group.id)}
+                  aria-expanded={!!isOpen}
                   className={`w-full flex items-center justify-between px-2 py-1.5 text-xs font-semibold uppercase tracking-wider transition-colors ${
                     groupActive ? 'text-gray-800' : 'text-gray-400 hover:text-gray-600'
                   }`}
@@ -287,6 +300,8 @@ export default function AdminSidebar() {
                           href={item.href}
                           onClick={closeMobileSidebar}
                           title={collapsed ? item.label : undefined}
+                          aria-label={collapsed ? item.label : undefined}
+                          aria-current={active ? 'page' : undefined}
                           className={`flex items-center gap-2.5 px-2.5 py-2 text-sm transition-colors ${
                             active
                               ? 'font-semibold text-white'
@@ -315,19 +330,20 @@ export default function AdminSidebar() {
         <Link
           href={base}
           onClick={closeMobileSidebar}
-          title={collapsed ? 'Go to POS' : undefined}
+          title={collapsed ? goToPosLabel : undefined}
           className={`flex items-center gap-2.5 px-2.5 py-2 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors ${collapsed ? 'justify-center' : ''}`}
         >
           <Store className="w-4 h-4 flex-shrink-0" />
-          {!collapsed && <span>Go to POS</span>}
+          {!collapsed && <span>{goToPosLabel}</span>}
         </Link>
         <button
           onClick={logout}
-          title={collapsed ? 'Logout' : undefined}
-          className={`w-full flex items-center gap-2.5 px-2.5 py-2 text-sm text-gray-600 hover:bg-red-50 hover:text-red-600 transition-colors ${collapsed ? 'justify-center' : ''}`}
+          title={collapsed ? logoutLabel : undefined}
+          aria-label={collapsed ? logoutLabel : undefined}
+          className={`w-full flex items-center gap-2.5 px-2.5 py-2 text-sm text-gray-600 hover:bg-win8-danger hover:text-white transition-colors ${collapsed ? 'justify-center' : ''}`}
         >
-          <LogOut className="w-4 h-4 flex-shrink-0" />
-          {!collapsed && <span>Logout</span>}
+          <LogOut className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
+          {!collapsed && <span>{logoutLabel}</span>}
         </button>
       </div>
     </div>
@@ -345,7 +361,7 @@ export default function AdminSidebar() {
 
       {/* Mobile drawer — slides in below the fixed top bar */}
       <aside
-        className={`fixed top-14 left-0 bottom-0 w-64 bg-white border-r border-gray-200 shadow-xl z-50 transform transition-transform duration-200 lg:hidden overflow-hidden ${
+        className={`fixed top-14 left-0 bottom-0 w-64 bg-white border-r border-gray-300 z-50 transform transition-transform duration-200 lg:hidden overflow-hidden ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >

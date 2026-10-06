@@ -15,7 +15,7 @@ export async function PUT(
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId, user } = authResult;
-    if (!(await hasTenantPermission(user.role, tenantId, 'devices.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenantId, 'devices.edit'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
     const { id } = await params;
@@ -97,7 +97,7 @@ export async function DELETE(
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId, user } = authResult;
-    if (!(await hasTenantPermission(user.role, tenantId, 'devices.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenantId, 'devices.delete'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
     const { id } = await params;

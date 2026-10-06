@@ -72,7 +72,7 @@ export async function PATCH(
     try {
       const tenantAccess = await requireTenantAccess(request);
       tenantId = tenantAccess.tenantId;
-      if (!(await hasTenantPermission(tenantAccess.user.role, tenantId, 'customers.edit'))) {
+      if (!(await hasTenantPermission(tenantAccess.user.role, tenantId, 'customers.update'))) {
         return NextResponse.json(
           { success: false, error: 'Forbidden: Insufficient permissions' },
           { status: 403 }
@@ -200,7 +200,7 @@ export async function DELETE(
     try {
       const tenantAccess = await requireTenantAccess(request);
       tenantId = tenantAccess.tenantId;
-      if (!(await hasTenantPermission(tenantAccess.user.role, tenantId, 'customers.edit'))) {
+      if (!(await hasTenantPermission(tenantAccess.user.role, tenantId, 'customers.delete'))) {
         return NextResponse.json(
           { success: false, error: 'Forbidden: Insufficient permissions' },
           { status: 403 }

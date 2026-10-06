@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
     try {
       const tenantAccess = await requireTenantAccess(request);
       tenantId = tenantAccess.tenantId;
-      if (!(await hasTenantPermission(tenantAccess.user.role, tenantId, 'categories.manage'))) {
+      if (!(await hasTenantPermission(tenantAccess.user.role, tenantId, 'categories.create'))) {
         const t = await getValidationTranslatorFromRequest(request);
         return NextResponse.json(
           { success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') },

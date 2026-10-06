@@ -3,14 +3,21 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { Customer } from '@/types/customer';
 import { CustomerFormData } from './useCustomersForm';
+import { getFetchErrorMessage, isAbortError } from '@/lib/fetch-error';
 
 export type { Customer } from '@/types/customer';
 
 interface UseCustomersListReturn {
   customers: Customer[];
   loading: boolean;
+  /** Set when the last list fetch failed; cleared on the next successful fetch. */
+  error: string | null;
   page: number;
   totalPages: number;
+  /** Total matching customers across all pages. */
+  total: number;
+  /** Page size used for the list request. */
+  limit: number;
   setPage: (page: number) => void;
   search: string;
   setSearch: (search: string) => void;
@@ -45,12 +52,16 @@ function normalizeTagsFromForm(form: CustomerFormData): string[] {
   return raw.filter(Boolean);
 }
 
+const PAGE_SIZE = 20;
+
 export function useCustomersList(): UseCustomersListReturn {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [initialLoadComplete, setInitialLoadComplete] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [filterActive, setFilterActive] = useState('all');
@@ -63,7 +74,7 @@ export function useCustomersList(): UseCustomersListReturn {
   const fetchCustomers = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ page: String(page), limit: '20' });
+      const params = new URLSearchParams({ page: String(page), limit: String(PAGE_SIZE) });
       if (debouncedSearch) params.set('search', debouncedSearch);
       if (filterActive !== 'all') params.set('isActive', filterActive);
 
@@ -79,14 +90,21 @@ export function useCustomersList(): UseCustomersListReturn {
 
       const data = await res.json();
       if (data.success) {
-        setCustomers(data.data || []);
+        const rows: Customer[] = data.data || [];
+        setCustomers(rows);
         const pages = data.pagination?.pages;
         setTotalPages(typeof pages === 'number' && pages >= 1 ? pages : 1);
+        const count = data.pagination?.total;
+        setTotal(typeof count === 'number' ? count : rows.length);
+        setError(null);
+      } else {
+        setError(data.error || 'Failed to load customers');
       }
-    } catch (error) {
-      if (error instanceof Error && error.name !== 'AbortError') {
-        console.error('Failed to fetch customers:', error);
+    } catch (err) {
+      if (!isAbortError(err)) {
+        console.error('Failed to fetch customers:', err);
       }
+      setError(getFetchErrorMessage(err, 'Failed to load customers'));
     } finally {
       setLoading(false);
       setInitialLoadComplete(true);
@@ -189,8 +207,11 @@ export function useCustomersList(): UseCustomersListReturn {
   return {
     customers,
     loading,
+    error,
     page,
     totalPages,
+    total,
+    limit: PAGE_SIZE,
     setPage,
     search,
     setSearch,

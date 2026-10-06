@@ -8,6 +8,7 @@ import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { getDefaultTenantSettings } from '@/lib/currency';
 import { logger } from '@/lib/logger';
 import toast from 'react-hot-toast';
+import { usePermissions } from '@/hooks/usePermissions';
 
 interface UploadedFile {
   id?: string;
@@ -30,6 +31,9 @@ export default function FileUploadPage() {
   const [showModal, setShowModal] = useState(false);
   const [viewingFile, setViewingFile] = useState<UploadedFile | null>(null);
   const [deletingFileId, setDeletingFileId] = useState<string | null>(null);
+  const { canAccess } = usePermissions();
+  // Deleting needs files.manage; uploading also works with products/settings access (see /api/upload).
+  const canDeleteFiles = canAccess('files.manage');
   const { settings } = useTenantSettings();
   const tenantSettings = settings || getDefaultTenantSettings();
   const primaryColor = tenantSettings.primaryColor || '#35979c';
@@ -425,13 +429,15 @@ export default function FileUploadPage() {
                         >
                           {(dict as any)?.fileUpload?.view || 'View'} {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
                         </button>
-                        <button
-                          onClick={() => setDeletingFileId(file.id || '')}
-                          className="ml-2 px-3 py-1 bg-red-100 text-red-700 hover:bg-red-200 text-sm font-medium transition-colors"
-                          title={(dict as any)?.fileUpload?.delete || 'Delete file'} // eslint-disable-line @typescript-eslint/no-explicit-any
-                        >
-                          {(dict as any)?.fileUpload?.delete || 'Delete'} {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
-                        </button>
+                        {canDeleteFiles && (
+                          <button
+                            onClick={() => setDeletingFileId(file.id || '')}
+                            className="ml-2 px-3 py-1 bg-red-100 text-red-700 hover:bg-red-200 text-sm font-medium transition-colors"
+                            title={(dict as any)?.fileUpload?.delete || 'Delete file'} // eslint-disable-line @typescript-eslint/no-explicit-any
+                          >
+                            {(dict as any)?.fileUpload?.delete || 'Delete'} {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>

@@ -43,7 +43,11 @@ export default function DiscountsPage() {
   const [search, setSearch] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
   const { canAccess } = usePermissions();
-  const canManage = canAccess('discounts.manage');
+  const canCreate = canAccess('discounts.create');
+  // Edit and activate/deactivate both go through PUT /api/discounts/[id].
+  const canEdit = canAccess('discounts.edit');
+  const canDelete = canAccess('discounts.delete');
+  const showRowActions = canEdit || canDelete;
 
   const {
     discounts,
@@ -163,7 +167,7 @@ export default function DiscountsPage() {
               <th className="px-4 py-3 text-left font-medium">{dict.admin?.validPeriod || 'Valid Period'}</th>
               <th className="px-4 py-3 text-right font-medium">{dict.admin?.usage || 'Usage'}</th>
               <th className="px-4 py-3 text-left font-medium">{dict.admin?.status || 'Status'}</th>
-              {canManage && (
+              {showRowActions && (
                 <th className="px-4 py-3 text-right font-medium">{dict.common?.actions || 'Actions'}</th>
               )}
             </tr>
@@ -211,10 +215,10 @@ export default function DiscountsPage() {
                       {getStatusLabel(discount, dict)}
                     </span>
                   </td>
-                  {canManage && (
+                  {showRowActions && (
                     <td className="px-4 py-3">
                       <div className="flex justify-end gap-1.5">
-                        <button
+                        {canEdit && (<button
                           onClick={() => openForm(discount)}
                           disabled={!discountsEnabled}
                           title={editLabel}
@@ -224,8 +228,8 @@ export default function DiscountsPage() {
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M11 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z" />
                           </svg>
-                        </button>
-                        <button
+                        </button>)}
+                        {canEdit && (<button
                           onClick={() => handleToggleDiscountStatus(discount)}
                           disabled={busy}
                           title={toggleLabel}
@@ -241,8 +245,8 @@ export default function DiscountsPage() {
                               />
                             </svg>
                           )}
-                        </button>
-                        <button
+                        </button>)}
+                        {canDelete && (<button
                           onClick={() => handleDeleteDiscount(discount)}
                           disabled={busy}
                           title={deleteLabel}
@@ -252,7 +256,7 @@ export default function DiscountsPage() {
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M6 7h12M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m2 0-.7 12.1a2 2 0 0 1-2 1.9H9.7a2 2 0 0 1-2-1.9L7 7h10Z" />
                           </svg>
-                        </button>
+                        </button>)}
                       </div>
                     </td>
                   )}
@@ -309,7 +313,7 @@ export default function DiscountsPage() {
                 className="pl-8 pr-3 py-2 border border-gray-300 text-sm w-56"
               />
             </div>
-            {discountsEnabled && canManage && (
+            {discountsEnabled && canCreate && (
               <button
                 onClick={() => openForm(null)}
                 className="px-4 py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover transition-colors"

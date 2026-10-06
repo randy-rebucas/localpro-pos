@@ -2,7 +2,7 @@
 
 **Component under test:** `app/[tenant]/[lang]/admin/holidays/page.tsx` + `components/settings/HolidaysManager.tsx`
 **Backing API:** `app/api/tenants/[slug]/holidays/route.ts` (`GET`, `POST`, `PUT`, `DELETE`)
-**Permission gate:** server-side only — `roleAtLeast(user.role, 'manager')` on write verbs (`POST`/`PUT`/`DELETE`); `GET` only requires any authenticated same-tenant user. Not registered as a permission key in `lib/permissions.ts`, so (unlike `settings.manage`/`business_hours.manage`) it cannot be adjusted per-tenant via the Roles & Permissions override UI, and there is no client-side gate at all — see §3 Medium.
+**Permission gate:** `holidays.manage` (registered in `lib/permissions.ts`, default floor `manager`, tenant-overridable via Roles & Permissions). Enforced server-side with `hasTenantPermission` on write verbs (`POST`/`PUT`/`DELETE`); `GET` only requires any authenticated same-tenant user. The page gates client-side with `usePermissions().canAccess('holidays.manage')` — see §3 Medium #4 (resolved 2026-10-06).
 **Existing test coverage:** none before this pass — added `__tests__/holidays-page.test.tsx` (9 tests)
 **Status:** Audited 2026-09-21. Fixed three same-day bugs, all plain code fixes (not product decisions): (1) non-unique holiday IDs (`Date.now()`-based on a global `@id` column) that could collide across concurrent requests from *any* tenant; (2) the admin page permanently hanging on its loading spinner if an unrelated, unused settings fetch failed; (3) the holiday list silently rendering "no holidays" instead of an error when the GET itself failed. One Medium item (no client-side permission gating, unlike sibling admin pages) is left open — fixing it requires registering a new permission key, which is a product/scope decision, not a bug fix.
 
@@ -14,7 +14,7 @@
 |---|---|---|
 | Page | `app/[tenant]/[lang]/admin/holidays/page.tsx` | Thin shell: loads the dictionary, renders `HolidaysManager` |
 | Fetch/CRUD | `components/settings/HolidaysManager.tsx` | Owns its own `fetchHolidays`/`handleSave`/`handleDelete` against `/api/tenants/{tenant}/holidays` — entirely self-contained, does **not** go through the page's props for data |
-| API | `app/api/tenants/[slug]/holidays/route.ts` | `GET`/`POST`/`PUT`/`DELETE`, tenant-scoped, `roleAtLeast(role, 'manager')` on writes |
+| API | `app/api/tenants/[slug]/holidays/route.ts` | `GET`/`POST`/`PUT`/`DELETE`, tenant-scoped, `hasTenantPermission(role, tenantId, 'holidays.manage')` on writes |
 | Consumers of saved data | `lib/holidays.ts` (not modified this pass — used by booking/availability logic per the page's own subtitle: "affect booking availability") | Out of scope for this slice; not audited here |
 
 ## 2. Functional walkthrough
@@ -42,18 +42,18 @@ None found after fixes. (The ID-collision bug below was assessed as High, not Cr
 ### Medium
 
 3. **GET failure silently rendered as "no holidays."** See §2. **Fixed** — `fetchHolidays` now surfaces `data.error` via `setMessage` on a `{success: false}` response, matching the existing error-handling pattern used by save/delete.
-4. **No client-side permission gating on Add/Edit/Delete.** Every other audited admin page in this pattern (`feature-flags`, `roles-permissions`) disables/hides write controls for a role below the permission floor, via `usePermissions().canAccess(...)`. This page shows the full Add/Edit/Delete UI to every authenticated tenant user regardless of role; a `viewer`/`cashier` can fill out and submit the form, only to get a 403 back from the server (`roleAtLeast(user.role, 'manager')`). Not a security hole — the server independently enforces the floor — but it's a worse UX than the sibling pages and inconsistent with house style. **Open**: fixing it properly means registering a permission key (e.g. `holidays.manage`) in `lib/permissions.ts` and switching the route from a raw `roleAtLeast` check to `hasTenantPermission`, which also makes it tenant-overridable like `settings.manage`/`business_hours.manage` — that's a scope/product decision (does this need to be overridable per-tenant, or is a hardcoded `manager` floor intentional?), not a plain bug fix, so left open.
+4. **No client-side permission gating on Add/Edit/Delete.** Every other audited admin page in this pattern (`feature-flags`, `roles-permissions`) disables/hides write controls for a role below the permission floor, via `usePermissions().canAccess(...)`. This page shows the full Add/Edit/Delete UI to every authenticated tenant user regardless of role; a `viewer`/`cashier` can fill out and submit the form, only to get a 403 back from the server (`roleAtLeast(user.role, 'manager')`). Not a security hole — the server independently enforces the floor — but it's a worse UX than the sibling pages and inconsistent with house style. **Resolved (2026-10-06):** registered `holidays.manage` (default `manager`, so behavior is unchanged unless a tenant overrides it), switched all three write verbs in the route to `hasTenantPermission`, and the page now shows a read-only notice and wraps `HolidaysManager` in `<fieldset disabled>` (every control in it is a write action) when `canAccess('holidays.manage')` is false. The AdminSidebar link already gated on this key, but because it was unregistered, `hasPermission` returned false and hid the page from managers; that is fixed too. Covered by `__tests__/holidays-page.test.tsx` (read-only case) and `__tests__/permission-registry-coverage.test.ts`.
 5. **No numeric bounds validation server-side for recurring day/month fields.** The client `<input type="number" min="1" max="31">` is only a soft UI hint; `POST`/`PUT` never validate that `recurring.dayOfMonth` is 1–31 or `recurring.month` is 1–12 before persisting (only presence is checked — `route.ts:108-116`). A crafted request (bypassing the client) can persist `dayOfMonth: 99` or `month: -5`, which then feeds `resolvedDate` (`route.ts:129-133`) as a malformed date string. **Open** — a validation-parity gap worth closing, but not fixed this pass (out of the two "plain, obviously-safe" fixes budget already spent; recommend as next step).
 
 ### Low
 
 6. **`GET /api/tenants/[slug]/holidays` has no rate limit**, unlike `POST`/`PUT`/`DELETE` on the same route (`route.ts` — compare `checkRateLimit('holidays:...')` present on writes, absent on read). Low risk (read-only, tenant/auth-scoped), but inconsistent within the same file.
-7. **Save button has no in-flight/disabled state** during `handleSave`/`handleDelete` (`HolidaysManager.tsx`), so a fast double-click can fire two identical requests. The ID-collision fix (finding #1) removes the worst consequence (a 500), but a duplicate holiday can still be created. Not fixed — minor UX polish, not a correctness bug now that IDs are unique.
+7. **Save button has no in-flight/disabled state** during `handleSave`/`handleDelete` (`HolidaysManager.tsx`), so a fast double-click can fire two identical requests. The ID-collision fix (finding #1) removes the worst consequence (a 500), but a duplicate holiday can still be created. **Fixed (2026-10-06, Win8 restyle):** the drawer's Save button is disabled and reads "Saving…" while `handleSave` is in flight, and each row's Delete button is disabled with a spinner while its `handleDelete` runs.
 
 ## 4. Suggested test matrix
 
 **Permissions**
-- [ ] Role below `manager` floor: server independently rejects `POST`/`PUT`/`DELETE` with 403 (`roleAtLeast` check in `route.ts`) — not exercised by the new mocked-fetch component suite; would need an integration test against a real DB/auth token, since there's no client-side gate to assert against yet (see Medium #4).
+- [ ] Role below `manager` floor: server independently rejects `POST`/`PUT`/`DELETE` with 403 (`hasTenantPermission` check in `route.ts`) — not exercised by the mocked-fetch component suite; the client-side read-only gate is covered by `holidays-page.test.tsx` (see Medium #4).
 - [ ] Role at/above `manager`: writes succeed — implicitly covered by the create/edit/delete tests (mocked fetch always returns success), but doesn't prove the server accepts a real `manager` token.
 - [ ] Cross-tenant: a user authenticated for tenant A cannot read/write tenant B's holidays. Server-side scoping (`tenantId: tenant.id` on every query, plus the explicit `user.tenantId !== tenant.id` check) inspected and looks correct on all four verbs, but needs a real integration test to prove — not provable from a mocked-fetch component test.
 
@@ -82,7 +82,7 @@ None found after fixes. (The ID-collision bug below was assessed as High, not Cr
 **Regression triggers**
 - [x] No `.then` attached to a mock object anywhere in `holidays-page.test.tsx`.
 - [x] Tenant isolation re-checked for all four verbs on this route — `tenantId` scoping present throughout, no cross-tenant leak found.
-- [x] Permission check on writes uses floor semantics (`roleAtLeast`), not exact-match.
+- [x] Permission check on writes uses the registry floor plus tenant overrides (`hasTenantPermission`), not exact-match.
 - [N/A] Win8/Metro styling — this page lives under `app/[tenant]/[lang]/admin/**`, not `app/super-admin/**`.
 
 ## 5. Recommended next steps

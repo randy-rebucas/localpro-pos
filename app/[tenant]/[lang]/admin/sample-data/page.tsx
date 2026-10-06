@@ -1,18 +1,30 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { getDefaultTenantSettings, getCurrencySymbol } from '@/lib/currency';
 import { useSampleDataManager } from '@/hooks/useSampleDataManager';
 import { usePermissions } from '@/hooks/usePermissions';
-import {
-  getBusinessTypeLabel,
-  getBusinessTypeColor,
-  getColorStyles,
-} from '@/lib/sample-data-helpers';
+import { getBusinessTypeLabel, getBusinessTypeBadge } from '@/lib/sample-data-helpers';
+import AdminPageHeader from '@/components/admin/AdminPageHeader';
+
+type ItemKey = 'categories' | 'products' | 'customers' | 'discounts';
+
+const PRODUCT_TYPE_BADGE: Record<string, string> = {
+  service: 'bg-win8-accent text-white',
+  bundle: 'bg-win8-warning text-white',
+  regular: 'bg-brand text-white',
+};
+
+// Decorative icon per item type (stroke paths, 24x24).
+const ITEM_ICON: Record<ItemKey, string> = {
+  categories: 'M7 7h.01M3 5v5.59a1 1 0 0 0 .29.7l9.42 9.42a1 1 0 0 0 1.41 0l5.59-5.59a1 1 0 0 0 0-1.41L10.29 4.29A1 1 0 0 0 9.59 4H4a1 1 0 0 0-1 1Z',
+  products: 'M21 8 12 3 3 8m18 0-9 5m9-5v8l-9 5m0-8L3 8m9 5v8M3 8v8l9 5',
+  customers: 'M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM4 21a8 8 0 0 1 16 0',
+  discounts: 'M9 14 15 8M9.5 8.5h.01M14.5 13.5h.01M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3a3 3 0 0 0 0 6v3a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-3a3 3 0 0 0 0-6V6Z',
+};
 
 export default function SampleDataPage() {
   const params = useParams();
@@ -29,7 +41,6 @@ export default function SampleDataPage() {
 
   const { settings } = useTenantSettings();
   const tenantSettings = settings || getDefaultTenantSettings();
-  const primaryColor = tenantSettings.primaryColor || '#35979c';
   const currencySymbol = tenantSettings.currencySymbol || getCurrencySymbol(tenantSettings.currency);
 
   useEffect(() => {
@@ -47,21 +58,27 @@ export default function SampleDataPage() {
     await installSampleData(Array.from(selectedItems));
   };
 
+  const toggleItem = (key: string, checked: boolean) => {
+    const next = new Set(selectedItems);
+    if (checked) {
+      next.add(key);
+    } else {
+      next.delete(key);
+    }
+    setSelectedItems(next);
+  };
+
   if (pageLoading || !dict) {
     return (
-      <div className="flex items-center justify-center py-24">
-        <div className="text-center">
-          <div className="inline-block animate-spin h-8 w-8 border-b-2" style={{ borderColor: primaryColor }} />
-          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
-        </div>
+      <div className="flex flex-col items-center justify-center py-24">
+        <div className="win8-spinner text-brand"><span /><span /><span /><span /><span /></div>
+        <p className="mt-3 text-sm text-gray-400">{dict?.common?.loading || 'Loading…'}</p>
       </div>
     );
   }
 
   const bizType = preview?.businessType ?? 'general';
   const bizLabel = getBusinessTypeLabel(bizType);
-  const colorKey = getBusinessTypeColor(bizType);
-  const colors = getColorStyles(colorKey);
 
   const hasData = preview && (
     preview.existing.categories > 0 ||
@@ -70,292 +87,267 @@ export default function SampleDataPage() {
     preview.existing.discounts > 0
   );
 
+  const itemLabels: Record<ItemKey, string> = {
+    categories: dict?.admin?.categories || 'Categories',
+    products: dict?.admin?.products || 'Products',
+    customers: dict?.admin?.customers || 'Customers',
+    discounts: dict?.admin?.discounts || 'Discounts',
+  };
+
+  const filteredProducts = preview
+    ? preview.sample.products.filter(p => p.name.toLowerCase().includes(productSearch.toLowerCase()))
+    : [];
+
+  const installDisabled = installing || previewLoading || selectedItems.size === 0;
+
   return (
-    <div>
-      <div className="px-4 sm:px-6 py-6">
+    <div className="px-4 sm:px-6 py-6">
+      <AdminPageHeader
+        title={dict?.sampleData?.title || 'Install Sample Data'}
+        description={dict?.sampleData?.subtitle || 'Quickly populate your store with realistic sample products, categories, customers, and discount codes tailored to your business type.'}
+      />
 
-        {/* Header */}
-        <div className="mb-6 sm:mb-8">
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">{dict?.sampleData?.title || 'Install Sample Data'}</h1>
-          <p className="text-gray-600">
-            {dict?.sampleData?.subtitle || 'Quickly populate your store with realistic sample products, categories, customers, and discount codes tailored to your business type.'}
-          </p>
-        </div>
-
+      <div className="space-y-6">
         {/* Status message */}
         {message && (
-          <div className={`mb-6 p-4 border flex items-start gap-3 ${
-            message.type === 'success'
-              ? 'bg-green-50 text-green-800 border-green-300'
-              : 'bg-red-50 text-red-800 border-red-300'
-          }`}>
-            {message.type === 'success' ? (
-              <svg className="w-5 h-5 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-            ) : (
-              <svg className="w-5 h-5 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-            )}
-            <span>{message.text}</span>
+          <div
+            role={message.type === 'error' ? 'alert' : 'status'}
+            className={`p-3 bg-white border text-sm font-medium ${
+              message.type === 'success' ? 'border-win8-success text-win8-success' : 'border-win8-danger text-win8-danger'
+            }`}
+          >
+            {message.text}
           </div>
         )}
 
         {/* Install results */}
         {installResults && (
-          <div className="mb-6 bg-white border border-gray-200 p-5">
-            <h3 className="font-semibold text-gray-900 mb-4">{dict?.sampleData?.installationResults || 'Installation Results'}</h3>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              {([
-                { label: dict?.admin?.categories || 'Categories', value: installResults.categories, icon: '🏷️' },
-                { label: dict?.admin?.products || 'Products',   value: installResults.products,   icon: '📦' },
-                { label: dict?.admin?.customers || 'Customers',  value: installResults.customers,  icon: '👤' },
-                { label: dict?.admin?.discounts || 'Discounts',  value: installResults.discounts,  icon: '🎫' },
-              ] as { label: string; value: number; icon: string }[]).map(stat => (
-                <div key={stat.label} className="text-center p-4 bg-gray-50 border border-gray-200">
-                  <div className="text-2xl mb-1">{stat.icon}</div>
-                  <div className="text-2xl font-bold text-gray-900">{stat.value}</div>
-                  <div className="text-sm text-gray-500">{stat.label} {dict?.sampleData?.added || 'added'}</div>
+          <section className="bg-white border border-gray-300">
+            <div className="px-6 py-4 border-b border-gray-300">
+              <h2 className="text-base font-bold text-gray-900">{dict?.sampleData?.installationResults || 'Installation Results'}</h2>
+            </div>
+            <div className="p-6 grid grid-cols-2 sm:grid-cols-4 gap-4">
+              {(Object.keys(itemLabels) as ItemKey[]).map((key) => (
+                <div key={key} className="bg-white border border-gray-300 p-5">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide leading-tight">{itemLabels[key]}</p>
+                  <p className="text-3xl font-bold tabular-nums text-win8-success mt-1.5">{installResults[key].toLocaleString()}</p>
+                  <p className="text-xs text-gray-400 mt-1">{dict?.sampleData?.added || 'added'}</p>
                 </div>
               ))}
             </div>
+          </section>
+        )}
+
+        {/* Business type note */}
+        {previewLoading ? (
+          <div className="bg-white border border-gray-300 p-5 animate-pulse">
+            <div className="h-4 bg-gray-200 w-1/3 mb-3" />
+            <div className="h-3 bg-gray-200 w-2/3" />
+          </div>
+        ) : preview && (
+          <div className="bg-brand-soft border border-brand p-4 text-sm text-brand-navy">
+            <div className="flex items-center gap-2 flex-wrap mb-1">
+              <span className={`px-2 py-0.5 text-xs font-semibold uppercase tracking-wide ${getBusinessTypeBadge(bizType)}`}>
+                {bizType}
+              </span>
+              <span className="font-semibold">{bizLabel}</span>
+            </div>
+            <p>
+              {dict?.sampleData?.businessTypeBannerDesc || 'Sample data has been curated specifically for this business type. All records will be added to your store and ready to use immediately.'}
+            </p>
           </div>
         )}
 
-        <div className="space-y-6">
-          {/* Business type banner */}
-          {previewLoading ? (
-            <div className="bg-white border border-gray-200 p-6 animate-pulse">
-              <div className="h-5 bg-gray-200 w-1/3 mb-3" />
-              <div className="h-4 bg-gray-200 w-2/3" />
-            </div>
-          ) : preview && (
-            <div className={`border p-5 ${colors.bg} ${colors.border}`}>
-              <div className="flex items-center gap-3 mb-1">
-                <span className={`text-xs font-semibold px-2 py-0.5 uppercase tracking-wide ${colors.badge}`}>
-                  {bizType}
-                </span>
-                <h2 className={`font-semibold ${colors.text}`}>{bizLabel}</h2>
-              </div>
-              <p className="text-sm text-gray-600">
-                {dict?.sampleData?.businessTypeBannerDesc || 'Sample data has been curated specifically for this business type. All records will be added to your store and ready to use immediately.'}
-              </p>
-            </div>
-          )}
-
-          {/* Preview table */}
-          <div className="bg-white border border-gray-300">
-            <div className="px-5 py-4 border-b border-gray-200">
-              <h2 className="font-semibold text-gray-900">{dict?.sampleData?.whatWillBeInstalled || 'What will be installed'}</h2>
-              <p className="text-sm text-gray-500 mt-0.5">{dict?.sampleData?.onlyNewRecords || 'Only new records will be added — existing data is never overwritten.'}</p>
-            </div>
-
-            {previewLoading ? (
-              <div className="p-6 space-y-3 animate-pulse">
-                {[1,2,3,4].map(i => <div key={i} className="h-12 bg-gray-100" />)}
-              </div>
-            ) : preview ? (
-              <div className="divide-y divide-gray-100">
-                {([
-                  { key: 'categories', label: dict?.admin?.categories || 'Categories', icon: '🏷️', items: preview.sample.categories.join(', ') },
-                  { key: 'products',   label: dict?.admin?.products || 'Products',   icon: '📦', items: `${preview.preview.products} products across ${preview.preview.categories} categories` },
-                  { key: 'customers',  label: dict?.admin?.customers || 'Customers',  icon: '👤', items: `${preview.preview.customers} sample customers with contact details and tags` },
-                  { key: 'discounts',  label: dict?.admin?.discounts || 'Discounts',  icon: '🎫', items: preview.sample.discounts.map(d => `${d.code} (${d.type === 'percentage' ? d.value + '%' : currencySymbol + d.value} off)`).join(', ') },
-                ] as { key: keyof typeof preview.preview; label: string; icon: string; items: string }[]).map(row => {
-                  const toAdd    = preview.preview[row.key];
-                  const existing = preview.existing[row.key];
-                  const willAdd  = Math.max(0, toAdd - existing);
-                  const isSelected = selectedItems.has(row.key);
-                  return (
-                    <div key={row.key} className="px-5 py-4 flex items-start gap-4">
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={(e) => {
-                          const newSelected = new Set(selectedItems);
-                          if (e.target.checked) {
-                            newSelected.add(row.key);
-                          } else {
-                            newSelected.delete(row.key);
-                          }
-                          setSelectedItems(newSelected);
-                        }}
-                        className="checkbox-win8 w-4 h-4 mt-1 cursor-pointer"
-                      />
-                      <span className="text-xl">{row.icon}</span>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-medium text-gray-900">{row.label}</span>
-                          <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5">
-                            {toAdd} {dict?.sampleData?.totalInSet || 'total in set'}
-                          </span>
-                          <span className={`text-xs px-2 py-0.5 font-medium ${
-                            willAdd > 0
-                              ? 'bg-green-100 text-green-700'
-                              : 'bg-gray-100 text-gray-500'
-                          }`}>
-                            {willAdd > 0 ? (dict?.sampleData?.newBadge || '+{count} new').replace('{count}', String(willAdd)) : (dict?.sampleData?.alreadyInstalled || 'already installed')}
-                          </span>
-                        </div>
-                        <p className="text-sm text-gray-500 mt-1 truncate">{row.items}</p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="p-6 text-center text-gray-500">{dict?.sampleData?.couldNotLoadPreview || 'Could not load preview.'}</div>
-            )}
+        {/* What will be installed */}
+        <section className="bg-white border border-gray-300">
+          <div className="px-6 py-4 border-b border-gray-300">
+            <h2 className="text-base font-bold text-gray-900">{dict?.sampleData?.whatWillBeInstalled || 'What will be installed'}</h2>
+            <p className="text-sm text-gray-500">{dict?.sampleData?.onlyNewRecords || 'Only new records will be added — existing data is never overwritten.'}</p>
           </div>
 
-          {/* Products preview */}
-          {preview && preview.sample.products.length > 0 && (
-            <div className="bg-white border border-gray-300">
-              <div className="px-5 py-4 border-b border-gray-200">
-                <h2 className="font-semibold text-gray-900 mb-3">{dict?.sampleData?.sampleProductsPreview || 'Sample Products Preview'}</h2>
+          {previewLoading ? (
+            <div className="p-6 space-y-3 animate-pulse">
+              {[1, 2, 3, 4].map(i => <div key={i} className="h-12 bg-gray-200" />)}
+            </div>
+          ) : preview ? (
+            <div className="divide-y divide-gray-200">
+              {([
+                { key: 'categories', items: preview.sample.categories.join(', ') },
+                {
+                  key: 'products',
+                  items: (dict?.sampleData?.productsAcross || '{products} products across {categories} categories')
+                    .replace('{products}', String(preview.preview.products))
+                    .replace('{categories}', String(preview.preview.categories)),
+                },
+                {
+                  key: 'customers',
+                  items: (dict?.sampleData?.customersWithDetails || '{count} sample customers with contact details and tags')
+                    .replace('{count}', String(preview.preview.customers)),
+                },
+                { key: 'discounts', items: preview.sample.discounts.map(d => `${d.code} (${d.type === 'percentage' ? d.value + '%' : currencySymbol + d.value})`).join(', ') },
+              ] as { key: ItemKey; items: string }[]).map(row => {
+                const toAdd = preview.preview[row.key];
+                const existing = preview.existing[row.key];
+                const willAdd = Math.max(0, toAdd - existing);
+                const isSelected = selectedItems.has(row.key);
+                return (
+                  <label
+                    key={row.key}
+                    className={`px-6 py-4 flex items-start gap-4 transition-colors ${isSelected ? 'bg-brand-soft' : 'hover:bg-gray-100'} ${canManage ? 'cursor-pointer' : 'cursor-not-allowed'}`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      disabled={!canManage}
+                      onChange={(e) => toggleItem(row.key, e.target.checked)}
+                      className="checkbox-win8 mt-2.5"
+                    />
+                    <span className="w-9 h-9 shrink-0 bg-brand text-white flex items-center justify-center">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" d={ITEM_ICON[row.key]} />
+                      </svg>
+                    </span>
+                    <span className="flex-1 min-w-0">
+                      <span className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-semibold text-gray-900">{itemLabels[row.key]}</span>
+                        <span className="text-xs text-gray-500 tabular-nums">
+                          {toAdd} {dict?.sampleData?.totalInSet || 'total in set'}
+                        </span>
+                        <span className={`px-2 py-0.5 text-xs font-semibold tabular-nums ${willAdd > 0 ? 'bg-win8-success text-white' : 'bg-gray-500 text-white'}`}>
+                          {willAdd > 0
+                            ? (dict?.sampleData?.newBadge || '+{count} new').replace('{count}', String(willAdd))
+                            : (dict?.sampleData?.alreadyInstalled || 'already installed')}
+                        </span>
+                      </span>
+                      <span className="block text-xs text-gray-500 mt-1 truncate" title={row.items}>{row.items || '—'}</span>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="text-center py-12">
+              <p className="text-win8-danger text-sm font-medium">{dict?.sampleData?.couldNotLoadPreview || 'Could not load preview.'}</p>
+              <button
+                onClick={() => loadPreview()}
+                className="mt-4 px-4 py-2 bg-brand text-white text-sm hover:bg-brand-hover transition-colors"
+              >
+                {dict?.common?.retry || 'Retry'}
+              </button>
+            </div>
+          )}
+        </section>
+
+        {/* Products preview */}
+        {preview && preview.sample.products.length > 0 && (
+          <section className="bg-white border border-gray-300">
+            <div className="px-6 py-4 border-b border-gray-300 flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <h2 className="text-base font-bold text-gray-900">{dict?.sampleData?.sampleProductsPreview || 'Sample Products Preview'}</h2>
+                <p className="text-sm text-gray-500 tabular-nums">
+                  {(dict?.sampleData?.productsShown || '{shown} of {total} shown')
+                    .replace('{shown}', String(filteredProducts.length))
+                    .replace('{total}', String(preview.sample.products.length))}
+                </p>
+              </div>
+              <div className="relative">
+                <svg className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.34-4.34M19 11a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z" />
+                </svg>
                 <input
                   type="text"
                   placeholder={dict?.common?.search || 'Search products...'}
+                  aria-label={dict?.common?.search || 'Search products'}
                   value={productSearch}
                   onChange={(e) => setProductSearch(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all"
+                  className="pl-8 pr-3 py-2 border border-gray-300 text-sm w-56"
                 />
               </div>
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-100">
-                  <thead className="bg-gray-50">
+            </div>
+            {filteredProducts.length === 0 ? (
+              <div className="text-center py-12 text-gray-400 text-sm">
+                {dict?.sampleData?.noProductsMatch || 'No products match your search'}
+              </div>
+            ) : (
+              <div className="overflow-x-auto max-h-[70vh] overflow-y-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-brand-navy text-white text-xs uppercase tracking-wide sticky top-0 z-10">
                     <tr>
-                      <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">{dict?.admin?.name || 'Name'}</th>
-                      <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">{dict?.common?.type || 'Type'}</th>
-                      <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">{dict?.admin?.price || 'Price'}</th>
+                      <th className="px-4 py-3 text-left font-medium">{dict?.admin?.name || 'Name'}</th>
+                      <th className="px-4 py-3 text-left font-medium">{dict?.common?.type || 'Type'}</th>
+                      <th className="px-4 py-3 text-right font-medium">{dict?.admin?.price || 'Price'}</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {preview.sample.products
-                      .filter(p => p.name.toLowerCase().includes(productSearch.toLowerCase()))
-                      .map((p, i) => (
-                      <tr key={i} className="hover:bg-gray-50">
-                        <td className="px-5 py-3 text-sm text-gray-900">{p.name}</td>
-                        <td className="px-5 py-3">
-                          <span className={`text-xs px-2 py-0.5 font-medium ${
-                            p.type === 'service' ? 'bg-purple-100 text-purple-700' :
-                            p.type === 'bundle'  ? 'bg-amber-100  text-amber-700'  :
-                                                    'bg-brand-soft   text-brand-hover'
-                          }`}>
+                  <tbody className="divide-y divide-gray-200">
+                    {filteredProducts.map((p, i) => (
+                      <tr key={i} className="hover:bg-gray-100 transition-colors">
+                        <td className="px-4 py-3 font-medium text-gray-900">{p.name}</td>
+                        <td className="px-4 py-3">
+                          <span className={`px-2 py-0.5 text-xs font-semibold capitalize ${PRODUCT_TYPE_BADGE[p.type] || 'bg-gray-500 text-white'}`}>
                             {p.type}
                           </span>
                         </td>
-                        <td className="px-5 py-3 text-sm text-right font-medium text-gray-900">
+                        <td className="px-4 py-3 text-right font-medium text-gray-900 tabular-nums">
                           {currencySymbol}{p.price.toLocaleString()}
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-                {preview.sample.products.filter(p => p.name.toLowerCase().includes(productSearch.toLowerCase())).length === 0 && (
-                  <div className="px-5 py-6 text-center text-gray-500">
-                    {dict?.sampleData?.noProductsMatch || 'No products match your search'}
-                  </div>
-                )}
               </div>
-            </div>
-          )}
+            )}
+          </section>
+        )}
 
-          {/* Warning if data exists */}
+        {/* Install */}
+        <section className="bg-white border border-gray-300">
+          <div className="px-6 py-4 flex items-center justify-between gap-4 flex-wrap">
+            <div>
+              <h2 className="text-base font-bold text-gray-900">{dict?.sampleData?.readyToInstall || 'Ready to install'}</h2>
+              <p className="text-sm text-gray-500">
+                {preview && selectedItems.size > 0
+                  ? (dict?.sampleData?.willAdd || 'Will add: {items}').replace(
+                      '{items}',
+                      (Object.keys(itemLabels) as ItemKey[])
+                        .filter((k) => selectedItems.has(k))
+                        .map((k) => `${preview.preview[k]} ${itemLabels[k]}`)
+                        .join(', ')
+                    )
+                  : (dict?.sampleData?.selectAtLeastOne || 'Select at least one item type to install')}
+              </p>
+            </div>
+            {canManage && (
+              <button
+                onClick={handleInstall}
+                disabled={installDisabled}
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {installing ? (
+                  <span className="win8-spinner win8-spinner-sm" aria-hidden="true"><span /><span /><span /><span /><span /></span>
+                ) : (
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                )}
+                {installing ? (dict?.sampleData?.installing || 'Installing…') : (dict?.sampleData?.installSampleData || 'Install Sample Data')}
+              </button>
+            )}
+          </div>
           {hasData && (
-            <div className="bg-yellow-50 border border-yellow-200 p-4 flex items-start gap-3">
-              <svg className="w-5 h-5 text-yellow-600 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
-              </svg>
-              <div>
-                <p className="text-sm font-medium text-yellow-800">{dict?.sampleData?.storeHasData || 'This store already has data'}</p>
-                <p className="text-sm text-yellow-700 mt-0.5">
+            <div className="px-6 pb-4">
+              <div className="p-3 bg-white border border-win8-warning text-sm">
+                <p className="font-semibold text-win8-warning">{dict?.sampleData?.storeHasData || 'This store already has data'}</p>
+                <p className="text-gray-700 mt-0.5">
                   {dict?.sampleData?.storeHasDataDesc || 'Existing records will not be modified. Only new sample records (those not already present) will be added.'}
                 </p>
               </div>
             </div>
           )}
+        </section>
 
-          {/* Selected Items Summary */}
-          {selectedItems.size > 0 && (
-            <div className="bg-brand-soft border border-teal-200 p-4">
-              <p className="text-sm font-medium text-brand-navy-deep mb-2">{dict?.sampleData?.selectedForInstallation || 'Selected for installation:'}</p>
-              <div className="flex flex-wrap gap-2">
-                {Array.from(selectedItems).map(item => (
-                  <span
-                    key={item}
-                    className="inline-flex items-center gap-1 px-3 py-1 bg-brand-soft text-brand-hover text-sm font-medium"
-                  >
-                    {item.charAt(0).toUpperCase() + item.slice(1)}
-                    <button
-                      onClick={() => {
-                        const newSelected = new Set(selectedItems);
-                        newSelected.delete(item);
-                        setSelectedItems(newSelected);
-                      }}
-                      className="ml-1 text-brand hover:text-brand-navy"
-                    >
-                      ✕
-                    </button>
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Action button */}
-          <div className="bg-white border border-gray-300 p-5 sm:p-6">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div>
-                <h3 className="font-semibold text-gray-900">{dict?.sampleData?.readyToInstall || 'Ready to install'}</h3>
-                <p className="text-sm text-gray-500 mt-0.5">
-                  {preview && selectedItems.size > 0
-                    ? (() => {
-                        const items: string[] = [];
-                        if (selectedItems.has('categories')) items.push(`${preview.preview.categories} ${dict?.admin?.categories || 'categories'}`);
-                        if (selectedItems.has('products')) items.push(`${preview.preview.products} ${dict?.admin?.products || 'products'}`);
-                        if (selectedItems.has('customers')) items.push(`${preview.preview.customers} ${dict?.admin?.customers || 'customers'}`);
-                        if (selectedItems.has('discounts')) items.push(`${preview.preview.discounts} ${dict?.admin?.discounts || 'discounts'}`);
-                        return (dict?.sampleData?.willAdd || 'Will add: {items}').replace('{items}', items.join(', '));
-                      })()
-                    : (dict?.sampleData?.selectAtLeastOne || 'Select at least one item type to install')
-                  }
-                </p>
-              </div>
-              {canManage && (
-                <button
-                  onClick={handleInstall}
-                  disabled={installing || previewLoading || selectedItems.size === 0}
-                  style={{ backgroundColor: (installing || previewLoading || selectedItems.size === 0) ? undefined : primaryColor }}
-                  className={`inline-flex items-center justify-center gap-2 px-6 py-3 text-white font-semibold transition-all min-w-[180px] ${
-                    installing || previewLoading || selectedItems.size === 0
-                      ? 'bg-gray-400 cursor-not-allowed'
-                      : 'hover:brightness-110 cursor-pointer'
-                  }`}
-                >
-                  {installing ? (
-                    <>
-                      <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                      </svg>
-                      {dict?.sampleData?.installing || 'Installing\u2026'}
-                    </>
-                  ) : (
-                    <>
-                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                      </svg>
-                      {dict?.sampleData?.installSampleData || 'Install Sample Data'}
-                    </>
-                  )}
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Info note */}
-          <p className="text-xs text-gray-400 text-center">
-            {dict?.sampleData?.infoNote || 'Sample data is intended for testing and demo purposes. You can delete individual records from their respective management screens at any time.'}
-          </p>
-        </div>
+        <p className="text-xs text-gray-400">
+          {dict?.sampleData?.infoNote || 'Sample data is intended for testing and demo purposes. You can delete individual records from their respective management screens at any time.'}
+        </p>
       </div>
     </div>
   );

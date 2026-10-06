@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import toast from 'react-hot-toast';
-import { Building2, AlertTriangle } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
+import AdminPageHeader from '@/components/admin/AdminPageHeader';
+import { showToast } from '@/lib/toast';
 import { getDictionaryClient } from '../../dictionaries-client';
 import { usePermissions } from '@/hooks/usePermissions';
 
@@ -20,6 +21,9 @@ interface BusinessPermits {
   sanitaryPermitNumber?: string;
   sanitaryPermitExpiry?: string;
 }
+
+const INPUT = 'w-full border border-gray-300 px-3 py-2 text-sm bg-white text-gray-900 disabled:bg-gray-100';
+const LABEL = 'block text-xs font-medium text-gray-600 mb-1';
 
 /**
  * Whole calendar days between today and the given date, comparing local
@@ -39,44 +43,58 @@ function ExpiryWarning({ dateStr, dict }: { dateStr?: string; dict: any }) { // 
   if (!dateStr) return null;
   const days = daysUntil(dateStr);
   if (days > 30) return null;
-  const text = days < 0
+  const expired = days < 0;
+  const text = expired
     ? (dict?.admin?.expiredDaysAgo || 'Expired {days} day(s) ago').replace('{days}', String(Math.abs(days)))
     : (dict?.admin?.expiresInDays || 'Expires in {days} day(s)').replace('{days}', String(days));
   return (
-    <p className="flex items-center gap-1 text-xs mt-1 font-medium text-amber-600">
-      <AlertTriangle className="w-3 h-3" />
+    <p className={`flex items-center gap-1 text-xs mt-1 font-semibold ${expired ? 'text-win8-danger' : 'text-win8-warning'}`}>
+      <AlertTriangle className="w-3 h-3" aria-hidden="true" />
       {text}
     </p>
   );
 }
 
-function Field({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string }) {
+function Field({ id, label, value, onChange, placeholder }: { id: string; label: string; value: string; onChange: (v: string) => void; placeholder?: string }) {
   return (
     <div>
-      <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
+      <label htmlFor={id} className={LABEL}>{label}</label>
       <input
+        id={id}
         type="text"
         value={value}
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand focus:border-brand"
+        className={`${INPUT} font-mono`}
       />
     </div>
   );
 }
 
-function DateField({ label, value, onChange, dateStr, dict }: { label: string; value: string; onChange: (v: string) => void; dateStr?: string; dict: any }) { // eslint-disable-line @typescript-eslint/no-explicit-any
+function DateField({ id, label, value, onChange, dateStr, dict }: { id: string; label: string; value: string; onChange: (v: string) => void; dateStr?: string; dict: any }) { // eslint-disable-line @typescript-eslint/no-explicit-any
   return (
     <div>
-      <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
+      <label htmlFor={id} className={LABEL}>{label}</label>
       <input
+        id={id}
         type="date"
         value={value}
         onChange={e => onChange(e.target.value)}
-        className="w-full border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand focus:border-brand"
+        className={INPUT}
       />
       <ExpiryWarning dateStr={dateStr} dict={dict} />
     </div>
+  );
+}
+
+function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="bg-white border border-gray-300">
+      <div className="px-6 py-4 border-b border-gray-300">
+        <h2 className="text-base font-bold text-gray-900">{title}</h2>
+      </div>
+      <div className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-4">{children}</div>
+    </section>
   );
 }
 
@@ -90,6 +108,7 @@ export default function BusinessPermitsPage() {
 
   const [data, setData] = useState<BusinessPermits>({});
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -97,15 +116,27 @@ export default function BusinessPermitsPage() {
   }, [lang]);
 
   const fetchData = useCallback(async () => {
+    const failMsg = dict?.admin?.failedToLoadBusinessPermits || 'Failed to load business permits';
     try {
       const res = await fetch(`/api/tenants/${tenant}/business-permits`);
       const json = await res.json();
-      if (json.success) setData(json.data);
-    } catch { toast.error(dict?.admin?.failedToLoadBusinessPermits || 'Failed to load business permits'); }
+      if (json.success) {
+        setData(json.data ?? {});
+        setLoadError(null);
+      } else {
+        setLoadError(json.error || failMsg);
+      }
+    } catch { setLoadError(failMsg); }
     finally { setLoading(false); }
   }, [tenant, dict]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  const retryLoad = () => {
+    setLoading(true);
+    setLoadError(null);
+    fetchData();
+  };
 
   const set = (key: keyof BusinessPermits) => (v: string) => setData(d => ({ ...d, [key]: v }));
 
@@ -118,112 +149,116 @@ export default function BusinessPermitsPage() {
         body: JSON.stringify(data),
       });
       const json = await res.json();
-      if (json.success) toast.success(dict?.admin?.businessPermitsSaved || 'Business permits saved');
-      else toast.error(json.error || dict?.admin?.failedToSave || 'Failed to save');
-    } catch { toast.error(dict?.admin?.failedToSave || 'Failed to save'); }
+      if (json.success) showToast.success(dict?.admin?.businessPermitsSaved || 'Business permits saved');
+      else showToast.error(json.error || dict?.admin?.failedToSave || 'Failed to save');
+    } catch { showToast.error(dict?.admin?.failedToSave || 'Failed to save'); }
     finally { setSaving(false); }
   };
 
   return (
     <div className="px-4 sm:px-6 py-6">
-
-      {/* Page header */}
-      <div className="flex items-start justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <Building2 className="w-7 h-7 text-brand flex-shrink-0" />
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">{dict?.admin?.businessPermitsTitle || 'Business Permits'}</h1>
-            <p className="text-sm text-gray-500 mt-0.5">{dict?.admin?.businessPermitsSubtitle || 'LGU permits and government registrations — required for all business types'}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <Link
-            href={`/${tenant}/${lang}/admin/compliance`}
-            className="px-4 py-2 text-sm text-gray-600 border border-gray-300 bg-white hover:bg-gray-50 transition-colors"
-          >
-            {dict?.admin?.complianceStatus || 'Compliance Status'}
-          </Link>
-          {canManage && (
-            <button
-              onClick={handleSave}
-              disabled={saving || loading}
-              className="px-4 py-2 text-sm font-medium bg-brand text-white border border-brand-hover hover:bg-brand-hover disabled:opacity-50 transition-colors"
+      <AdminPageHeader
+        title={dict?.admin?.businessPermitsTitle || 'Business Permits'}
+        description={dict?.admin?.businessPermitsSubtitle || 'LGU permits and government registrations — required for all business types'}
+        actions={
+          <>
+            <Link
+              href={`/${tenant}/${lang}/admin/compliance`}
+              className="inline-flex items-center justify-center px-4 py-2 border border-gray-300 text-gray-700 bg-white text-sm hover:bg-gray-100 transition-colors"
             >
-              {saving ? (dict?.admin?.saving || 'Saving...') : (dict?.admin?.savePermits || 'Save Permits')}
-            </button>
-          )}
-        </div>
-      </div>
+              {dict?.admin?.complianceStatus || 'Compliance Status'}
+            </Link>
+            {canManage && (
+              <button
+                onClick={handleSave}
+                disabled={saving || loading || !!loadError}
+                className="px-4 py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover disabled:opacity-50 transition-colors"
+              >
+                {saving ? (dict?.common?.saving || 'Saving…') : (dict?.admin?.savePermits || 'Save Permits')}
+              </button>
+            )}
+          </>
+        }
+      />
 
-      {loading ? (
-        <div className="flex items-center justify-center py-24">
-          <div className="text-center">
-            <div className="inline-block animate-spin h-7 w-7 border-b-2 border-brand mb-3" />
-            <p className="text-sm text-gray-400">{dict?.common?.loading || 'Loading...'}</p>
+      <div className="space-y-4">
+        {!loading && !loadError && !canManage && (
+          <div className="bg-brand-soft border border-brand p-4 text-sm text-brand-navy">
+            {dict?.settings?.readOnlyNotice || "You don't have permission to change settings. Contact an admin or manager."}
           </div>
-        </div>
-      ) : (
-        <div className="flex gap-6 items-start">
+        )}
 
-          {/* Left — info sidebar */}
-          <aside className="w-52 shrink-0 sticky top-6">
-            <div className="bg-white border border-gray-300 p-4">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">{dict?.admin?.requirements || 'Requirements'}</p>
-              <ul className="space-y-2 text-xs text-gray-600">
-                <li className="flex gap-2"><span className="text-brand font-bold mt-0.5">·</span>{dict?.admin?.bpMayorsPermit || "Mayor's Business Permit (RA 7160)"}</li>
-                <li className="flex gap-2"><span className="text-brand font-bold mt-0.5">·</span>{dict?.admin?.bpBarangayClearance || 'Barangay Business Clearance'}</li>
-                <li className="flex gap-2"><span className="text-brand font-bold mt-0.5">·</span>{dict?.admin?.bpDtiSec || 'DTI or SEC Registration'}</li>
-                <li className="flex gap-2"><span className="text-brand font-bold mt-0.5">·</span>{dict?.admin?.bpBirCor || 'BIR Certificate of Registration'}</li>
-                <li className="flex gap-2"><span className="text-brand font-bold mt-0.5">·</span>{dict?.admin?.bpFireSafety || 'Fire Safety Inspection Cert (BFP)'}</li>
-                <li className="flex gap-2"><span className="text-brand font-bold mt-0.5">·</span>{dict?.admin?.bpSanitary || 'Sanitary Permit (LGU Health)'}</li>
-              </ul>
-              <p className="text-xs text-gray-400 mt-4">{dict?.admin?.bpExpiryNote || 'Permits typically expire annually. Set expiry dates to receive advance warnings.'}</p>
-            </div>
-          </aside>
+        {loading ? (
+          <div className="text-center py-12 bg-white border border-gray-300">
+            <div className="win8-spinner text-brand mx-auto"><span /><span /><span /><span /><span /></div>
+            <p className="mt-3 text-gray-400 text-sm">{dict?.admin?.loadingBusinessPermits || 'Loading business permits…'}</p>
+          </div>
+        ) : loadError ? (
+          <div className="text-center py-12 bg-white border border-gray-300">
+            <p className="text-win8-danger text-sm font-medium">{loadError}</p>
+            <button
+              onClick={retryLoad}
+              className="mt-4 px-4 py-2 bg-brand text-white text-sm hover:bg-brand-hover transition-colors"
+            >
+              {dict?.common?.retry || 'Retry'}
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col lg:flex-row gap-6 items-start">
 
-          {/* Right — form sections */}
-          <fieldset disabled={!canManage} className="flex-1 min-w-0 space-y-4">
+            {/* Left — info sidebar */}
+            <aside className="w-full lg:w-56 shrink-0 lg:sticky lg:top-6">
+              <div className="bg-white border border-gray-300 p-4">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">{dict?.admin?.requirements || 'Requirements'}</p>
+                <ul className="space-y-2 text-xs text-gray-700">
+                  {[
+                    dict?.admin?.bpMayorsPermit || "Mayor's Business Permit (RA 7160)",
+                    dict?.admin?.bpBarangayClearance || 'Barangay Business Clearance',
+                    dict?.admin?.bpDtiSec || 'DTI or SEC Registration',
+                    dict?.admin?.bpBirCor || 'BIR Certificate of Registration',
+                    dict?.admin?.bpFireSafety || 'Fire Safety Inspection Cert (BFP)',
+                    dict?.admin?.bpSanitary || 'Sanitary Permit (LGU Health)',
+                  ].map(item => (
+                    <li key={item} className="flex gap-2">
+                      <span className="inline-block w-1.5 h-1.5 bg-brand shrink-0 mt-1" aria-hidden="true" />
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+                <hr className="border-gray-200 my-3" />
+                <p className="text-xs text-gray-500">{dict?.admin?.bpExpiryNote || 'Permits typically expire annually. Set expiry dates to receive advance warnings.'}</p>
+              </div>
+            </aside>
 
-            {/* LGU Permits */}
-            <div className="bg-white border border-gray-300">
-              <div className="px-5 py-3 border-b border-gray-200 bg-gray-50">
-                <h2 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{dict?.admin?.lguPermits || 'LGU Permits'}</h2>
-              </div>
-              <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Field label={dict?.admin?.mayorsPermitNumber || "Mayor's Permit Number"} value={data.mayorsPermitNumber ?? ''} onChange={set('mayorsPermitNumber')} placeholder={dict?.admin?.mayorsPermitNumberPlaceholder || 'e.g. MP-2024-00001'} />
-                <DateField label={dict?.admin?.mayorsPermitExpiry || "Mayor's Permit Expiry"} value={data.mayorsPermitExpiry?.split('T')[0] ?? ''} onChange={set('mayorsPermitExpiry')} dateStr={data.mayorsPermitExpiry} dict={dict} />
-                <Field label={dict?.admin?.barangayClearanceNumber || 'Barangay Clearance Number'} value={data.barangayClearanceNumber ?? ''} onChange={set('barangayClearanceNumber')} placeholder={dict?.admin?.barangayClearanceNumberPlaceholder || 'Barangay clearance no.'} />
-                <DateField label={dict?.admin?.barangayClearanceExpiry || 'Barangay Clearance Expiry'} value={data.barangayClearanceExpiry?.split('T')[0] ?? ''} onChange={set('barangayClearanceExpiry')} dateStr={data.barangayClearanceExpiry} dict={dict} />
-              </div>
-            </div>
+            {/* Right — form sections */}
+            <fieldset disabled={!canManage} className="w-full flex-1 min-w-0 space-y-6">
 
-            {/* Government Registrations */}
-            <div className="bg-white border border-gray-300">
-              <div className="px-5 py-3 border-b border-gray-200 bg-gray-50">
-                <h2 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{dict?.admin?.governmentRegistrations || 'Government Registrations'}</h2>
-              </div>
-              <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Field label={dict?.admin?.dtiSecRegistration || 'DTI / SEC Registration'} value={data.dtiSecRegistration ?? ''} onChange={set('dtiSecRegistration')} placeholder={dict?.admin?.dtiSecRegistrationPlaceholder || 'DTI (sole prop) or SEC (corp)'} />
-                <Field label={dict?.admin?.birCertificateOfRegistration || 'BIR Certificate of Registration'} value={data.birCertificateOfRegistration ?? ''} onChange={set('birCertificateOfRegistration')} placeholder={dict?.admin?.birCorPlaceholder || 'BIR COR number'} />
-              </div>
-            </div>
+              {/* LGU Permits */}
+              <SectionCard title={dict?.admin?.lguPermits || 'LGU Permits'}>
+                <Field id="bp-mayor" label={dict?.admin?.mayorsPermitNumber || "Mayor's Permit Number"} value={data.mayorsPermitNumber ?? ''} onChange={set('mayorsPermitNumber')} placeholder={dict?.admin?.mayorsPermitNumberPlaceholder || 'e.g. MP-2024-00001'} />
+                <DateField id="bp-mayor-expiry" label={dict?.admin?.mayorsPermitExpiry || "Mayor's Permit Expiry"} value={data.mayorsPermitExpiry?.split('T')[0] ?? ''} onChange={set('mayorsPermitExpiry')} dateStr={data.mayorsPermitExpiry} dict={dict} />
+                <Field id="bp-barangay" label={dict?.admin?.barangayClearanceNumber || 'Barangay Clearance Number'} value={data.barangayClearanceNumber ?? ''} onChange={set('barangayClearanceNumber')} placeholder={dict?.admin?.barangayClearanceNumberPlaceholder || 'Barangay clearance no.'} />
+                <DateField id="bp-barangay-expiry" label={dict?.admin?.barangayClearanceExpiry || 'Barangay Clearance Expiry'} value={data.barangayClearanceExpiry?.split('T')[0] ?? ''} onChange={set('barangayClearanceExpiry')} dateStr={data.barangayClearanceExpiry} dict={dict} />
+              </SectionCard>
 
-            {/* Fire Safety & Sanitation */}
-            <div className="bg-white border border-gray-300">
-              <div className="px-5 py-3 border-b border-gray-200 bg-gray-50">
-                <h2 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{dict?.admin?.fireSafetySanitation || 'Fire Safety & Sanitation'}</h2>
-              </div>
-              <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Field label={dict?.admin?.fsic || 'Fire Safety Inspection Certificate (FSIC)'} value={data.fireSafetyInspectionCertificate ?? ''} onChange={set('fireSafetyInspectionCertificate')} placeholder={dict?.admin?.fsicPlaceholder || 'FSIC number'} />
-                <DateField label={dict?.admin?.fsicExpiry || 'FSIC Expiry'} value={data.fsicExpiry?.split('T')[0] ?? ''} onChange={set('fsicExpiry')} dateStr={data.fsicExpiry} dict={dict} />
-                <Field label={dict?.admin?.sanitaryPermitNumber || 'Sanitary Permit Number'} value={data.sanitaryPermitNumber ?? ''} onChange={set('sanitaryPermitNumber')} placeholder={dict?.admin?.sanitaryPermitNumberPlaceholder || 'Issued by LGU Health Office'} />
-                <DateField label={dict?.admin?.sanitaryPermitExpiry || 'Sanitary Permit Expiry'} value={data.sanitaryPermitExpiry?.split('T')[0] ?? ''} onChange={set('sanitaryPermitExpiry')} dateStr={data.sanitaryPermitExpiry} dict={dict} />
-              </div>
-            </div>
+              {/* Government Registrations */}
+              <SectionCard title={dict?.admin?.governmentRegistrations || 'Government Registrations'}>
+                <Field id="bp-dti-sec" label={dict?.admin?.dtiSecRegistration || 'DTI / SEC Registration'} value={data.dtiSecRegistration ?? ''} onChange={set('dtiSecRegistration')} placeholder={dict?.admin?.dtiSecRegistrationPlaceholder || 'DTI (sole prop) or SEC (corp)'} />
+                <Field id="bp-bir-cor" label={dict?.admin?.birCertificateOfRegistration || 'BIR Certificate of Registration'} value={data.birCertificateOfRegistration ?? ''} onChange={set('birCertificateOfRegistration')} placeholder={dict?.admin?.birCorPlaceholder || 'BIR COR number'} />
+              </SectionCard>
 
-          </fieldset>
-        </div>
-      )}
+              {/* Fire Safety & Sanitation */}
+              <SectionCard title={dict?.admin?.fireSafetySanitation || 'Fire Safety & Sanitation'}>
+                <Field id="bp-fsic" label={dict?.admin?.fsic || 'Fire Safety Inspection Certificate (FSIC)'} value={data.fireSafetyInspectionCertificate ?? ''} onChange={set('fireSafetyInspectionCertificate')} placeholder={dict?.admin?.fsicPlaceholder || 'FSIC number'} />
+                <DateField id="bp-fsic-expiry" label={dict?.admin?.fsicExpiry || 'FSIC Expiry'} value={data.fsicExpiry?.split('T')[0] ?? ''} onChange={set('fsicExpiry')} dateStr={data.fsicExpiry} dict={dict} />
+                <Field id="bp-sanitary" label={dict?.admin?.sanitaryPermitNumber || 'Sanitary Permit Number'} value={data.sanitaryPermitNumber ?? ''} onChange={set('sanitaryPermitNumber')} placeholder={dict?.admin?.sanitaryPermitNumberPlaceholder || 'Issued by LGU Health Office'} />
+                <DateField id="bp-sanitary-expiry" label={dict?.admin?.sanitaryPermitExpiry || 'Sanitary Permit Expiry'} value={data.sanitaryPermitExpiry?.split('T')[0] ?? ''} onChange={set('sanitaryPermitExpiry')} dateStr={data.sanitaryPermitExpiry} dict={dict} />
+              </SectionCard>
+
+            </fieldset>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

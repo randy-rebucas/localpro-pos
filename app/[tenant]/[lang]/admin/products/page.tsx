@@ -106,7 +106,10 @@ export default function ProductsPage() {
   const { settings } = useTenantSettings();
   const { confirm, Dialog } = useConfirm();
   const { canAccess } = usePermissions();
-  const canManage = canAccess('products.manage');
+  const canCreate = canAccess('products.create');
+  const canEdit = canAccess('products.edit');
+  const canDelete = canAccess('products.delete');
+  const canRestock = canAccess('products.restock');
   const [businessTypeConfig, setBusinessTypeConfig] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const {
     products,
@@ -527,7 +530,7 @@ export default function ProductsPage() {
                         >
                           <Barcode className="w-4 h-4" aria-hidden />
                         </button>
-                        {canManage && (
+                        {canEdit && (
                           <button
                             type="button"
                             onClick={() => openProductForm(product)}
@@ -538,7 +541,7 @@ export default function ProductsPage() {
                             <Pencil className="w-4 h-4" aria-hidden />
                           </button>
                         )}
-                        {canManage && (product.isActive === false ? (
+                        {(product.isActive === false ? canEdit : canDelete) && (product.isActive === false ? (
                           <button
                             type="button"
                             onClick={() => handleReactivateProduct(product._id)}
@@ -696,7 +699,7 @@ export default function ProductsPage() {
                     </button>
                   </div>
                 </div>
-                {canManage && (
+                {canCreate && (
                   <button type="button" onClick={() => setShowImportModal(true)} className={btnSecondaryIcon}>
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
@@ -704,7 +707,7 @@ export default function ProductsPage() {
                     {dict.products?.import || 'Import'}
                   </button>
                 )}
-                {canManage && (
+                {(canCreate || canEdit) && (
                   <Link href={`/${tenant}/${lang}/admin/file-upload`} className={btnSecondaryIcon}>
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
@@ -712,7 +715,7 @@ export default function ProductsPage() {
                     {dict.products?.uploadImages || 'Upload Images'}
                   </Link>
                 )}
-                {canManage && (
+                {canCreate && (
                   <button type="button" onClick={() => openProductForm(null)} className={btnPrimary}>
                     + {dict.admin?.addProduct || 'Add Product'}
                   </button>
@@ -727,12 +730,12 @@ export default function ProductsPage() {
                 {selectedProducts.size} {dict.admin?.selected || 'selected'}
               </span>
               <div className="flex gap-2 flex-wrap">
-                {canManage && (
+                {canEdit && (
                   <button type="button" onClick={openBulkEdit} className={btnPrimary}>
                     {dict.products?.bulkEdit || 'Edit Selected'}
                   </button>
                 )}
-                {canManage && (
+                {canRestock && (
                   <button type="button" onClick={openBulkRestock} className={btnPrimary}>
                     {dict.products?.restockSelected || 'Restock Selected'}
                   </button>

@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import toast from 'react-hot-toast';
-import { ShieldCheck, AlertTriangle, XCircle, CheckCircle, ChevronRight, Clock, Minus } from 'lucide-react';
+import { AlertTriangle, XCircle, CheckCircle, ChevronRight, Clock, Minus, type LucideIcon } from 'lucide-react';
+import AdminPageHeader from '@/components/admin/AdminPageHeader';
 import { getDictionaryClient } from '../../dictionaries-client';
 import { usePermissions } from '@/hooks/usePermissions';
 
@@ -25,35 +25,19 @@ interface ComplianceSection {
   items: ComplianceItem[];
 }
 
-function statusIcon(s: ComplianceStatus) {
-  switch (s) {
-    case 'compliant': return <CheckCircle className="w-5 h-5 text-green-500 shrink-0" />;
-    case 'warning': return <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />;
-    case 'expired': return <XCircle className="w-5 h-5 text-red-500 shrink-0" />;
-    case 'missing': return <XCircle className="w-5 h-5 text-red-400 shrink-0" />;
-    case 'not_applicable': return <Minus className="w-5 h-5 text-gray-300 shrink-0" />;
-  }
-}
+const STATUS_STYLE: Record<ComplianceStatus, { bg: string; icon: LucideIcon; dictKey: string; fallback: string }> = {
+  compliant: { bg: 'bg-win8-success', icon: CheckCircle, dictKey: 'complianceStatusCompliant', fallback: 'Compliant' },
+  warning: { bg: 'bg-win8-warning', icon: AlertTriangle, dictKey: 'complianceStatusWarning', fallback: 'Expiring Soon' },
+  expired: { bg: 'bg-win8-danger', icon: XCircle, dictKey: 'complianceStatusExpired', fallback: 'Expired' },
+  missing: { bg: 'bg-win8-danger', icon: XCircle, dictKey: 'complianceStatusMissing', fallback: 'Missing' },
+  not_applicable: { bg: 'bg-gray-500', icon: Minus, dictKey: 'complianceStatusNotApplicable', fallback: 'N/A' },
+};
 
-function statusBorder(s: ComplianceStatus) {
-  switch (s) {
-    case 'compliant': return 'border-green-200';
-    case 'warning': return 'border-amber-300';
-    case 'expired': return 'border-red-400';
-    case 'missing': return 'border-red-300';
-    case 'not_applicable': return 'border-gray-100';
-  }
-}
-
-function statusBg(s: ComplianceStatus) {
-  switch (s) {
-    case 'compliant': return '';
-    case 'warning': return 'bg-amber-50';
-    case 'expired': return 'bg-red-50';
-    case 'missing': return 'bg-red-50';
-    case 'not_applicable': return '';
-  }
-}
+const OVERALL_BADGE: Record<'compliant' | 'action_required' | 'critical', string> = {
+  compliant: 'bg-win8-success text-white',
+  action_required: 'bg-win8-warning text-white',
+  critical: 'bg-win8-danger text-white',
+};
 
 /**
  * Whole calendar days between today and the given date, comparing local
@@ -98,6 +82,7 @@ export default function CompliancePage() {
   const [overallStatus, setOverallStatus] = useState<'compliant' | 'action_required' | 'critical'>('compliant');
   const [businessType, setBusinessType] = useState('');
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const { canAccess } = usePermissions();
   const canView = canAccess('compliance.view');
 
@@ -423,19 +408,26 @@ export default function CompliancePage() {
       const hasWarning = allItems.some(i => i.status === 'warning');
       setOverallStatus(hasCritical ? 'critical' : hasWarning ? 'action_required' : 'compliant');
       setSections(allSections);
+      setLoadFailed(false);
     } catch {
-      toast.error(dict?.admin?.failedToLoadComplianceData || 'Failed to load compliance data');
+      setLoadFailed(true);
     } finally {
       setLoading(false);
     }
-  }, [tenant, lang, dict]);
+  }, [tenant, lang]);
 
   useEffect(() => { buildDashboard(); }, [buildDashboard]);
 
-  const overallBadge = {
-    compliant: { label: dict?.admin?.complianceAllCompliant || 'All Compliant', cls: 'bg-green-50 text-green-800 border border-green-300' },
-    action_required: { label: dict?.admin?.complianceActionRequired || 'Action Required', cls: 'bg-amber-50 text-amber-800 border border-amber-300' },
-    critical: { label: dict?.admin?.complianceAttentionNeeded || 'Attention Needed', cls: 'bg-red-50 text-red-800 border border-red-300' },
+  const retryLoad = () => {
+    setLoading(true);
+    setLoadFailed(false);
+    buildDashboard();
+  };
+
+  const overallLabel = {
+    compliant: dict?.admin?.complianceAllCompliant || 'All Compliant',
+    action_required: dict?.admin?.complianceActionRequired || 'Action Required',
+    critical: dict?.admin?.complianceAttentionNeeded || 'Attention Needed',
   }[overallStatus];
 
   const quickLinks = [
@@ -455,12 +447,23 @@ export default function CompliancePage() {
   const compliantCount = sections.flatMap(s => s.items).filter(i => i.status === 'compliant').length;
   const totalCount = sections.flatMap(s => s.items).length;
 
+  const header = (
+    <AdminPageHeader
+      title={dict?.admin?.complianceDashboard || 'Compliance Dashboard'}
+      description={dict?.admin?.complianceDashboardSubtitle || 'Your Philippine regulatory compliance status at a glance'}
+      actions={!loading && !loadFailed && canView ? (
+        <span className={`px-3 py-1.5 text-xs font-semibold ${OVERALL_BADGE[overallStatus]}`}>{overallLabel}</span>
+      ) : undefined}
+    />
+  );
+
   if (!canView) {
     return (
       <div className="px-4 sm:px-6 py-6">
-        <div className="bg-red-50 border-2 border-red-300 p-6">
-          <h2 className="text-lg font-bold text-red-800 mb-1">{dict?.admin?.accessRestricted || 'Access Restricted'}</h2>
-          <p className="text-sm text-red-700">
+        {header}
+        <div className="bg-white border border-win8-danger p-6">
+          <h2 className="text-base font-bold text-win8-danger mb-1">{dict?.admin?.accessRestricted || 'Access Restricted'}</h2>
+          <p className="text-sm text-gray-700">
             {dict?.admin?.accessRestrictedCompliance || "You don't have permission to view the compliance dashboard. Contact an admin or owner."}
           </p>
         </div>
@@ -470,104 +473,112 @@ export default function CompliancePage() {
 
   return (
     <div className="px-4 sm:px-6 py-6">
-
-      {/* Page header */}
-      <div className="flex items-start justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <ShieldCheck className="w-7 h-7 text-brand flex-shrink-0" />
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">{dict?.admin?.complianceDashboard || 'Compliance Dashboard'}</h1>
-            <p className="text-sm text-gray-500 mt-0.5">{dict?.admin?.complianceDashboardSubtitle || 'Your Philippine regulatory compliance status at a glance'}</p>
-          </div>
-        </div>
-        {!loading && (
-          <span className={`text-xs px-3 py-1.5 font-semibold ${overallBadge.cls}`}>
-            {overallBadge.label}
-          </span>
-        )}
-      </div>
+      {header}
 
       {loading ? (
-        <div className="flex items-center justify-center py-24 text-gray-400">
-          <div className="text-center">
-            <div className="inline-block animate-spin h-7 w-7 border-b-2 border-brand mb-3" />
-            <p className="text-sm">{dict?.admin?.loadingComplianceData || 'Loading compliance data...'}</p>
-          </div>
+        <div className="text-center py-12 bg-white border border-gray-300">
+          <div className="win8-spinner text-brand mx-auto"><span /><span /><span /><span /><span /></div>
+          <p className="mt-3 text-gray-400 text-sm">{dict?.admin?.loadingComplianceData || 'Loading compliance data…'}</p>
+        </div>
+      ) : loadFailed ? (
+        <div className="text-center py-12 bg-white border border-gray-300">
+          <p className="text-win8-danger text-sm font-medium">{dict?.admin?.failedToLoadComplianceData || 'Failed to load compliance data'}</p>
+          <button
+            onClick={retryLoad}
+            className="mt-4 px-4 py-2 bg-brand text-white text-sm hover:bg-brand-hover transition-colors"
+          >
+            {dict?.common?.retry || 'Retry'}
+          </button>
         </div>
       ) : (
-        <div className="flex gap-6 items-start">
+        <div className="flex flex-col lg:flex-row gap-6 items-start">
 
-          {/* Left — Quick links + summary */}
-          <aside className="w-52 shrink-0 sticky top-6 space-y-4">
+          {/* Left — summary + quick links */}
+          <aside className="w-full lg:w-56 shrink-0 lg:sticky lg:top-6 space-y-4">
             {/* Progress */}
-            <div className="bg-white border border-gray-300 p-4">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">{dict?.admin?.progress || 'Progress'}</p>
-              <div className="text-2xl font-bold text-gray-900 mb-1">{compliantCount}<span className="text-sm text-gray-400 font-normal"> / {totalCount}</span></div>
-              <p className="text-xs text-gray-500 mb-3">{dict?.admin?.itemsCompliant || 'items compliant'}</p>
-              <div className="w-full bg-gray-100 h-1.5">
+            <div className="bg-white border border-gray-300 p-5">
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide leading-tight">{dict?.admin?.progress || 'Progress'}</p>
+              <p className="text-3xl font-bold tabular-nums text-gray-900 mt-1.5">
+                {compliantCount}<span className="text-sm text-gray-400 font-normal"> / {totalCount}</span>
+              </p>
+              <p className="text-xs text-gray-400 mt-1 mb-3">{dict?.admin?.itemsCompliant || 'items compliant'}</p>
+              <div className="w-full bg-gray-100 h-2 overflow-hidden">
                 <div
-                  className="h-1.5 bg-green-500 transition-all"
+                  className="h-2 bg-win8-success transition-all"
                   style={{ width: totalCount ? `${(compliantCount / totalCount) * 100}%` : '0%' }}
                 />
               </div>
             </div>
 
             {/* Quick links */}
-            <div className="bg-white border border-gray-300 p-4">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">{dict?.admin?.quickLinks || 'Quick Links'}</p>
-              <div className="space-y-1">
+            <div className="bg-white border border-gray-300">
+              <p className="px-4 pt-4 pb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">{dict?.admin?.quickLinks || 'Quick Links'}</p>
+              <div className="divide-y divide-gray-200 border-t border-gray-200">
                 {quickLinks.map(l => (
                   <Link
                     key={l.href}
                     href={l.href}
-                    className="flex items-center justify-between px-2 py-1.5 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors"
+                    className="flex items-center justify-between gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-brand transition-colors"
                   >
                     <span className="truncate">{l.label}</span>
-                    <ChevronRight className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                    <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" aria-hidden="true" />
                   </Link>
                 ))}
               </div>
             </div>
           </aside>
 
-          {/* Right — Compliance sections */}
-          <div className="flex-1 min-w-0 space-y-4">
+          {/* Right — compliance sections */}
+          <div className="w-full flex-1 min-w-0 space-y-6">
             {sections.map(section => (
-              <div key={section.title} className="bg-white border border-gray-300 overflow-hidden">
-                <div className="px-5 py-3 border-b border-gray-200 bg-gray-50">
-                  <h2 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{section.title}</h2>
+              <section key={section.title} className="bg-white border border-gray-300">
+                <div className="px-6 py-4 border-b border-gray-300">
+                  <h2 className="text-base font-bold text-gray-900">{section.title}</h2>
                 </div>
-                <div className="divide-y divide-gray-100">
-                  {section.items.map(item => (
-                    <div
-                      key={item.id}
-                      className={`flex items-start gap-4 px-5 py-4 border-l-4 ${statusBorder(item.status)} ${statusBg(item.status)}`}
-                    >
-                      {statusIcon(item.status)}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-800">{item.label}</p>
-                        <p className="text-xs text-gray-500 mt-0.5">{item.description}</p>
-                        {item.daysUntilExpiry !== undefined && (
-                          <p className={`text-xs mt-1 font-medium flex items-center gap-1 ${item.daysUntilExpiry < 0 ? 'text-red-600' : 'text-amber-600'}`}>
-                            <Clock className="w-3 h-3" />
-                            {item.daysUntilExpiry < 0
-                              ? (dict?.admin?.expiredDaysAgo || 'Expired {days} day(s) ago').replace('{days}', String(Math.abs(item.daysUntilExpiry)))
-                              : (dict?.admin?.expiresInDays || 'Expires in {days} day(s)').replace('{days}', String(item.daysUntilExpiry))}
-                          </p>
-                        )}
+                <div className="divide-y divide-gray-200">
+                  {section.items.map(item => {
+                    const style = STATUS_STYLE[item.status];
+                    const Icon = style.icon;
+                    const expired = item.daysUntilExpiry !== undefined && item.daysUntilExpiry < 0;
+                    const expiryColor = expired ? 'text-win8-danger' : item.status === 'warning' ? 'text-win8-warning' : 'text-gray-500';
+                    return (
+                      <div key={item.id} className="flex items-start gap-4 px-6 py-4">
+                        <span className={`w-8 h-8 shrink-0 flex items-center justify-center text-white ${style.bg}`} aria-hidden="true">
+                          <Icon className="w-4 h-4" />
+                        </span>
+                        <div className="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-start gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="text-sm font-semibold text-gray-900">{item.label}</p>
+                              <span className={`px-2 py-0.5 text-xs font-semibold text-white ${style.bg}`}>
+                                {dict?.admin?.[style.dictKey] || style.fallback}
+                              </span>
+                            </div>
+                            <p className="text-xs text-gray-500 mt-0.5">{item.description}</p>
+                            {item.daysUntilExpiry !== undefined && (
+                              <p className={`text-xs mt-1 font-semibold flex items-center gap-1 ${expiryColor}`}>
+                                <Clock className="w-3 h-3" aria-hidden="true" />
+                                {expired
+                                  ? (dict?.admin?.expiredDaysAgo || 'Expired {days} day(s) ago').replace('{days}', String(Math.abs(item.daysUntilExpiry!)))
+                                  : (dict?.admin?.expiresInDays || 'Expires in {days} day(s)').replace('{days}', String(item.daysUntilExpiry))}
+                              </p>
+                            )}
+                          </div>
+                          {item.actionHref && item.status !== 'compliant' && item.status !== 'not_applicable' && (
+                            <Link
+                              href={item.actionHref}
+                              className="inline-flex items-center justify-center gap-1 self-start shrink-0 whitespace-nowrap px-4 py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover transition-colors"
+                            >
+                              {item.actionLabel ?? (dict?.admin?.fix || 'Fix')}
+                              <ChevronRight className="w-4 h-4" aria-hidden="true" />
+                            </Link>
+                          )}
+                        </div>
                       </div>
-                      {item.actionHref && item.status !== 'compliant' && item.status !== 'not_applicable' && (
-                        <Link
-                          href={item.actionHref}
-                          className="flex items-center gap-1 text-xs text-brand hover:text-brand-hover whitespace-nowrap shrink-0 font-medium"
-                        >
-                          {item.actionLabel ?? (dict?.admin?.fix || 'Fix')} <ChevronRight className="w-3 h-3" />
-                        </Link>
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
-              </div>
+              </section>
             ))}
           </div>
         </div>

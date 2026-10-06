@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import prisma from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
-import { roleAtLeast } from '@/lib/permissions';
+import { hasTenantPermission } from '@/lib/permissions-server';
 import { logger } from '@/lib/logger';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -78,7 +78,7 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (!roleAtLeast(user.role, 'manager')) {
+    if (!(await hasTenantPermission(user.role, user.tenantId, 'holidays.create'))) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
@@ -189,7 +189,7 @@ export async function PUT(
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (!roleAtLeast(user.role, 'manager')) {
+    if (!(await hasTenantPermission(user.role, user.tenantId, 'holidays.edit'))) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
@@ -283,7 +283,7 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (!roleAtLeast(user.role, 'manager')) {
+    if (!(await hasTenantPermission(user.role, user.tenantId, 'holidays.delete'))) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 

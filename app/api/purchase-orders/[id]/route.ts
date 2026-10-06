@@ -30,7 +30,10 @@ function toPurchaseOrderJSON(po: {
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { tenantId } = await requireTenantAccess(request);
+    const { tenantId, user } = await requireTenantAccess(request);
+    if (!(await hasTenantPermission(user.role, tenantId, 'purchase_orders.view'))) {
+      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
+    }
     const { id } = await params;
 
     const purchaseOrder = await prisma.purchaseOrder.findFirst({
@@ -62,7 +65,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const { id } = await params;
     const t = await getValidationTranslatorFromRequest(request);
 
-    if (!(await hasTenantPermission(user.role, tenantId, 'purchase_orders.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenantId, 'purchase_orders.edit'))) {
       return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
     }
 
@@ -131,7 +134,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     const { id } = await params;
     const t = await getValidationTranslatorFromRequest(request);
 
-    if (!(await hasTenantPermission(user.role, tenantId, 'purchase_orders.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenantId, 'purchase_orders.delete'))) {
       return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
     }
 

@@ -16,6 +16,12 @@ vi.mock('@/app/[tenant]/[lang]/dictionaries-client', () => ({
   getDictionaryClient: vi.fn().mockResolvedValue({}),
 }));
 
+// The global next/link mock (setup.ts) renders bare children; render a real
+// anchor here so link targets can be asserted.
+vi.mock('next/link', () => ({
+  default: ({ children, href, ...rest }: { children: React.ReactNode; href: string }) => <a href={href} {...rest}>{children}</a>,
+}));
+
 import MultiCurrencyPage from '@/app/[tenant]/[lang]/admin/multi-currency/page';
 
 const mockFetch = vi.fn();
@@ -93,10 +99,11 @@ describe('MultiCurrencyPage', () => {
   // -------------------------------------------------------------------------
   it('reads settings back from the flat GET response instead of showing hardcoded defaults', async () => {
     render(<MultiCurrencyPage />);
-    await screen.findByRole('heading', { name: 'Multi-Currency Management' });
+    await screen.findByRole('combobox');
 
     // exchangeRateSource: 'api' came back flat (not nested under multiCurrency);
     // if the page fell back to its hardcoded default, this would render 'Manual Entry' instead.
+    expect(screen.getByRole('heading', { level: 1, name: 'Multi-Currency Management' })).toBeInTheDocument();
     expect(screen.getByRole('combobox')).toHaveValue('api');
     // displayCurrencies: ['USD','EUR'] came back flat too — if defaulted to [],
     // the "no display currencies" banner would show and no rate rows would render.
@@ -108,7 +115,7 @@ describe('MultiCurrencyPage', () => {
   it('shows the empty-state banner when displayCurrencies is genuinely empty', async () => {
     routeFetch({ settingsGet: flatSettingsResponse({ displayCurrencies: [] }) });
     render(<MultiCurrencyPage />);
-    await screen.findByRole('heading', { name: 'Multi-Currency Management' });
+    await screen.findByRole('combobox');
 
     expect(await screen.findByText(/No display currencies configured/i)).toBeInTheDocument();
   });
@@ -118,7 +125,7 @@ describe('MultiCurrencyPage', () => {
   // -------------------------------------------------------------------------
   it('shows the tenant\'s configured base currency', async () => {
     render(<MultiCurrencyPage />);
-    await screen.findByRole('heading', { name: 'Multi-Currency Management' });
+    await screen.findByRole('combobox');
 
     expect(screen.getByText('PHP (₱)')).toBeInTheDocument();
   });
@@ -132,7 +139,7 @@ describe('MultiCurrencyPage', () => {
       }),
     });
     render(<MultiCurrencyPage />);
-    await screen.findByRole('heading', { name: 'Multi-Currency Management' });
+    await screen.findByRole('combobox');
 
     expect(await screen.findByText(/Philippines.*commonly uses PHP/)).toBeInTheDocument();
     const useButton = screen.getByRole('button', { name: 'Use PHP' });
@@ -153,7 +160,7 @@ describe('MultiCurrencyPage', () => {
       }),
     });
     render(<MultiCurrencyPage />);
-    await screen.findByRole('heading', { name: 'Multi-Currency Management' });
+    await screen.findByRole('combobox');
 
     expect(screen.queryByText(/commonly uses/)).not.toBeInTheDocument();
   });
@@ -167,7 +174,7 @@ describe('MultiCurrencyPage', () => {
       }),
     });
     render(<MultiCurrencyPage />);
-    await screen.findByRole('heading', { name: 'Multi-Currency Management' });
+    await screen.findByRole('combobox');
 
     expect(await screen.findByText(/commonly uses PHP/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Use PHP' })).not.toBeInTheDocument();
@@ -178,7 +185,7 @@ describe('MultiCurrencyPage', () => {
   // -------------------------------------------------------------------------
   it('loads previously-saved exchange rates on mount instead of rendering blank inputs', async () => {
     render(<MultiCurrencyPage />);
-    await screen.findByRole('heading', { name: 'Multi-Currency Management' });
+    await screen.findByRole('combobox');
 
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledWith(
@@ -197,7 +204,7 @@ describe('MultiCurrencyPage', () => {
   it('never prefills the API key field, and shows a distinct placeholder when one is already configured', async () => {
     routeFetch({ settingsGet: flatSettingsResponse({ exchangeRateApiKeyConfigured: true }) });
     render(<MultiCurrencyPage />);
-    await screen.findByRole('heading', { name: 'Multi-Currency Management' });
+    await screen.findByRole('combobox');
 
     const apiKeyInput = screen.getByPlaceholderText('Key is configured — leave blank to keep it') as HTMLInputElement;
     expect(apiKeyInput.value).toBe('');
@@ -206,7 +213,7 @@ describe('MultiCurrencyPage', () => {
 
   it('shows the generic placeholder when no key is configured yet', async () => {
     render(<MultiCurrencyPage />);
-    await screen.findByRole('heading', { name: 'Multi-Currency Management' });
+    await screen.findByRole('combobox');
     expect(screen.getByPlaceholderText('API key for exchange rate service')).toBeInTheDocument();
   });
 
@@ -216,7 +223,7 @@ describe('MultiCurrencyPage', () => {
   it('disables the fieldset and hides Save when the user lacks settings.manage', async () => {
     mockCanAccess.mockReturnValue(false);
     render(<MultiCurrencyPage />);
-    await screen.findByRole('heading', { name: 'Multi-Currency Management' });
+    await screen.findByRole('combobox');
 
     const fieldset = document.querySelector('fieldset') as HTMLFieldSetElement;
     expect(fieldset).toBeDisabled();
@@ -229,7 +236,7 @@ describe('MultiCurrencyPage', () => {
   it('persists manually-entered rates via the exchange-rates endpoint on save (settings PUT alone cannot)', async () => {
     routeFetch({ settingsGet: flatSettingsResponse({ exchangeRateSource: 'manual' }) });
     render(<MultiCurrencyPage />);
-    await screen.findByRole('heading', { name: 'Multi-Currency Management' });
+    await screen.findByRole('combobox');
     await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/tenants/test-tenant/exchange-rates', expect.objectContaining({ credentials: 'include' })));
 
     const usdInput = screen.getByText('USD').closest('div')!.querySelector('input') as HTMLInputElement;
@@ -251,7 +258,7 @@ describe('MultiCurrencyPage', () => {
 
   it('does not call the exchange-rates endpoint on save when the source is API-driven', async () => {
     render(<MultiCurrencyPage />); // exchangeRateSource: 'api' by default in flatSettingsResponse
-    await screen.findByRole('heading', { name: 'Multi-Currency Management' });
+    await screen.findByRole('combobox');
     await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/tenants/test-tenant/exchange-rates', expect.objectContaining({ credentials: 'include' })));
 
     mockFetch.mockClear();
@@ -273,7 +280,7 @@ describe('MultiCurrencyPage', () => {
   // -------------------------------------------------------------------------
   it('fetches and applies the latest rates from the provider', async () => {
     render(<MultiCurrencyPage />);
-    await screen.findByRole('heading', { name: 'Multi-Currency Management' });
+    await screen.findByRole('combobox');
     await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/tenants/test-tenant/exchange-rates', expect.objectContaining({ credentials: 'include' })));
 
     mockFetch.mockImplementationOnce((url: string, init?: RequestInit) => {
@@ -291,5 +298,57 @@ describe('MultiCurrencyPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /Fetch Latest Rates/i }));
 
     expect(await screen.findByText('Exchange rates updated successfully')).toBeInTheDocument();
+  });
+
+  // -------------------------------------------------------------------------
+  // Regressions fixed alongside the Win8 pass
+  // -------------------------------------------------------------------------
+  it('keeps the rate inputs filled after a successful save (settings PUT never returns rates)', async () => {
+    routeFetch({ settingsGet: flatSettingsResponse({ exchangeRateSource: 'manual' }) });
+    render(<MultiCurrencyPage />);
+    await screen.findByRole('combobox');
+    const usdInput = () => screen.getByLabelText('Exchange rate for USD') as HTMLInputElement;
+    await waitFor(() => expect(usdInput().value).toBe('1'));
+
+    fireEvent.change(usdInput(), { target: { value: '58.5' } });
+    fireEvent.click(screen.getByRole('button', { name: /Save Settings/i }));
+
+    expect(await screen.findByText('Multi-currency settings saved successfully!')).toBeInTheDocument();
+    expect(usdInput().value).toBe('58.5');
+    expect((screen.getByLabelText('Exchange rate for EUR') as HTMLInputElement).value).toBe('0.92');
+  });
+
+  it('drops a cleared rate instead of saving it as 0', async () => {
+    routeFetch({ settingsGet: flatSettingsResponse({ exchangeRateSource: 'manual' }) });
+    render(<MultiCurrencyPage />);
+    await screen.findByRole('combobox');
+    const usdInput = screen.getByLabelText('Exchange rate for USD') as HTMLInputElement;
+    await waitFor(() => expect(usdInput.value).toBe('1'));
+
+    fireEvent.change(usdInput, { target: { value: '' } });
+    expect(usdInput.value).toBe('');
+    fireEvent.click(screen.getByRole('button', { name: /Save Settings/i }));
+
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith('/api/tenants/test-tenant/exchange-rates', expect.objectContaining({ method: 'POST' }));
+    });
+    const post = mockFetch.mock.calls.find(([url, init]) => String(url).includes('/exchange-rates') && init?.method === 'POST')!;
+    const body = JSON.parse(post[1].body as string);
+    expect(body.exchangeRates).toEqual({ EUR: 0.92 });
+  });
+
+  it('hides Fetch Latest Rates in manual mode', async () => {
+    routeFetch({ settingsGet: flatSettingsResponse({ exchangeRateSource: 'manual' }) });
+    render(<MultiCurrencyPage />);
+    await screen.findByRole('combobox');
+    expect(screen.queryByRole('button', { name: /Fetch Latest Rates/i })).not.toBeInTheDocument();
+  });
+
+  it("links the empty state to the settings page's Multi-Currency tab", async () => {
+    routeFetch({ settingsGet: flatSettingsResponse({ displayCurrencies: [] }) });
+    render(<MultiCurrencyPage />);
+    await screen.findByRole('combobox');
+    const link = await screen.findByRole('link', { name: /Configure Display Currencies/i });
+    expect(link).toHaveAttribute('href', '/test-tenant/en/settings?tab=multiCurrency');
   });
 });

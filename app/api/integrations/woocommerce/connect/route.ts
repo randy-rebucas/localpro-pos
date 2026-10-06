@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
   try {
     const t = await getValidationTranslatorFromRequest(request);
     const { tenantId, user } = await requireTenantAccess(request);
-    if (!(await hasTenantPermission(user.role, tenantId, 'integrations.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenantId, 'integrations.connect'))) {
       return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
     }
     await requireEcommerceIntegrationFeature(tenantId);

@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { getFetchErrorMessage } from '@/lib/fetch-error';
 
 export interface AuditLog {
   _id: string;
@@ -87,7 +88,7 @@ export function useAuditLogs() {
         onError?.(errorMsg);
       }
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to fetch audit logs. Please check your connection.';
+      const errorMsg = getFetchErrorMessage(err, 'Failed to fetch audit logs. Please check your connection.');
       setError(errorMsg);
       onError?.(errorMsg);
     } finally {

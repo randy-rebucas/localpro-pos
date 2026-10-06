@@ -322,7 +322,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     try {
       const tenantAccess = await requireTenantAccess(request);
       tenantId = tenantAccess.tenantId;
-      if (!(await hasTenantPermission(tenantAccess.user.role, tenantId, 'products.manage'))) {
+      if (!(await hasTenantPermission(tenantAccess.user.role, tenantId, 'products.edit'))) {
         return NextResponse.json(
           { success: false, error: 'Forbidden: Insufficient permissions' },
           { status: 403 }
@@ -420,7 +420,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     try {
       const tenantAccess = await requireTenantAccess(request);
       tenantId = tenantAccess.tenantId;
-      if (!(await hasTenantPermission(tenantAccess.user.role, tenantId, 'products.manage'))) {
+      if (!(await hasTenantPermission(tenantAccess.user.role, tenantId, 'products.edit'))) {
         return NextResponse.json(
           { success: false, error: 'Forbidden: Insufficient permissions' },
           { status: 403 }
@@ -491,7 +491,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     try {
       const tenantAccess = await requireTenantAccess(request);
       tenantId = tenantAccess.tenantId;
-      if (!(await hasTenantPermission(tenantAccess.user.role, tenantId, 'products.manage'))) {
+      if (!(await hasTenantPermission(tenantAccess.user.role, tenantId, 'products.delete'))) {
         return NextResponse.json(
           { success: false, error: 'Forbidden: Insufficient permissions' },
           { status: 403 }

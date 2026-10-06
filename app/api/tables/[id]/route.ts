@@ -15,7 +15,10 @@ export async function GET(
   try {
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
-    const { tenantId } = authResult;
+    const { tenantId, user } = authResult;
+    if (!(await hasTenantPermission(user.role, tenantId, 'tables.view'))) {
+      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
+    }
     const { id } = await params;
 
     const table = await prisma.posTable.findFirst({ where: { id, tenantId } });
@@ -44,10 +47,10 @@ export async function PATCH(
     const { status, isActive, currentOrderId } = body;
 
     // Renaming, resizing, or (de)activating a table is floor-plan configuration
-    // (tables.configure, manager+); changing status/currentOrderId is ordinary
-    // POS table service any staff with tables.manage (cashier+) already does.
+    // (tables.edit, manager+ by default); changing status/currentOrderId is
+    // ordinary POS table service (tables.update_status, cashier+ by default).
     const isConfigChange = name !== undefined || capacity !== undefined || isActive !== undefined;
-    const requiredPermission = isConfigChange ? 'tables.configure' : 'tables.manage';
+    const requiredPermission = isConfigChange ? 'tables.edit' : 'tables.update_status';
     if (!(await hasTenantPermission(user.role, tenantId, requiredPermission))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
@@ -134,7 +137,7 @@ export async function DELETE(
     const { tenantId, user } = authResult;
     const { id } = await params;
 
-    if (!(await hasTenantPermission(user.role, tenantId, 'tables.configure'))) {
+    if (!(await hasTenantPermission(user.role, tenantId, 'tables.delete'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 

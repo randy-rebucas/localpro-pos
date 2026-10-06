@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth, getCurrentUser } from '@/lib/auth';
-import { getTenantIdFromRequest } from '@/lib/api-tenant';
+import { requireAuth } from '@/lib/auth';
+import { getTenantIdForUser, handleTenantAccessViolation, TenantAccessViolationError } from '@/lib/api-tenant';
 import prisma from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { uploadToCloudinary, deleteFromCloudinary } from '@/lib/cloudinary';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { createAuditLog } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { hasAnyTenantPermission, hasTenantPermission } from '@/lib/permissions-server';
 import { randomUUID } from 'crypto';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -21,19 +22,56 @@ const ALLOWED_TYPES = [
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 ];
 
+type Translate = (key: string, fallback: string) => string;
+
+/**
+ * Uploading and browsing the media library is part of creating/editing
+ * products (product images) and settings (logos), so any of these keys allows
+ * it. Deleting a file needs files.manage itself.
+ */
+const UPLOAD_PERMISSIONS = ['files.manage', 'products.create', 'products.edit', 'settings.manage'];
+
+function forbidden(t: Translate): NextResponse {
+  return NextResponse.json(
+    { success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') },
+    { status: 403 }
+  );
+}
+
+/**
+ * Map a caught error to the right response. Auth and tenant failures are the
+ * caller's problem (401/403), not a server fault; anything else stays a 500
+ * with a safe translated message rather than the raw internal error text.
+ */
+function errorResponse(
+  error: unknown,
+  request: NextRequest,
+  t: Translate,
+  logLabel: string,
+  failure: { key: string; fallback: string }
+): NextResponse {
+  if (error instanceof TenantAccessViolationError) {
+    return handleTenantAccessViolation(error, request);
+  }
+  if (error instanceof Error && error.message === 'Unauthorized') {
+    return NextResponse.json({ success: false, error: t('validation.unauthorized', 'Unauthorized') }, { status: 401 });
+  }
+  logger.error(logLabel, error instanceof Error ? error.message : error);
+  return NextResponse.json({ success: false, error: t(failure.key, failure.fallback) }, { status: 500 });
+}
+
 export async function POST(request: NextRequest) {
   const t = await getValidationTranslatorFromRequest(request);
   try {
-    await requireAuth(request);
-    const user = await getCurrentUser(request);
-    const tenantId = await getTenantIdFromRequest(request);
+    const user = await requireAuth(request);
+    const tenantId = await getTenantIdForUser(request, user);
 
     if (!tenantId) {
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 403 });
     }
 
-    if (!user || !user.userId) {
-      return NextResponse.json({ success: false, error: t('validation.userNotFound', 'User not found') }, { status: 401 });
+    if (!(await hasAnyTenantPermission(user.role, tenantId, UPLOAD_PERMISSIONS))) {
+      return forbidden(t);
     }
 
     // Rate limit: 50 uploads per hour per user
@@ -114,28 +152,22 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error: unknown) {
-    if (error instanceof Error) {
-      logger.error('Error uploading file:', error.message);
-    } else {
-      logger.error('Error uploading file:', error);
-    }
-    return NextResponse.json({ success: false, error: t('validation.uploadFailed', 'Failed to upload file') }, { status: 500 });
+    return errorResponse(error, request, t, 'Error uploading file:', { key: 'validation.uploadFailed', fallback: 'Failed to upload file' });
   }
 }
 
 export async function GET(request: NextRequest) {
   const t = await getValidationTranslatorFromRequest(request);
   try {
-    await requireAuth(request);
-    const user = await getCurrentUser(request);
-    const tenantId = await getTenantIdFromRequest(request);
+    const user = await requireAuth(request);
+    const tenantId = await getTenantIdForUser(request, user);
 
     if (!tenantId) {
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 403 });
     }
 
-    if (!user || !user.userId) {
-      return NextResponse.json({ success: false, error: t('validation.userNotFound', 'User not found') }, { status: 401 });
+    if (!(await hasAnyTenantPermission(user.role, tenantId, UPLOAD_PERMISSIONS))) {
+      return forbidden(t);
     }
 
     // Rate limit: 200 listings per hour per user
@@ -176,24 +208,22 @@ export async function GET(request: NextRequest) {
       })),
     });
   } catch (error: unknown) {
-    logger.error('Error fetching files:', error);
-    return NextResponse.json({ success: false, error: t('validation.fetchFilesFailed', 'Failed to fetch files') }, { status: 500 });
+    return errorResponse(error, request, t, 'Error fetching files:', { key: 'validation.fetchFilesFailed', fallback: 'Failed to fetch files' });
   }
 }
 
 export async function DELETE(request: NextRequest) {
   const t = await getValidationTranslatorFromRequest(request);
   try {
-    await requireAuth(request);
-    const user = await getCurrentUser(request);
-    const tenantId = await getTenantIdFromRequest(request);
+    const user = await requireAuth(request);
+    const tenantId = await getTenantIdForUser(request, user);
 
     if (!tenantId) {
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 403 });
     }
 
-    if (!user || !user.userId) {
-      return NextResponse.json({ success: false, error: t('validation.userNotFound', 'User not found') }, { status: 401 });
+    if (!(await hasTenantPermission(user.role, tenantId, 'files.manage'))) {
+      return forbidden(t);
     }
 
     // Rate limit: 50 deletions per hour per user
@@ -214,19 +244,13 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ success: false, error: t('validation.fileIdRequired', 'File ID is required') }, { status: 400 });
     }
 
-    // Fetch the file to get cloudinary public_id
-    const file = await prisma.file.findUnique({ where: { id: fileId } });
+    // Fetch the file (to get the cloudinary public_id), scoped to the caller's
+    // tenant: another tenant's file is indistinguishable from a missing one, so
+    // the response never confirms that a foreign file ID exists.
+    const file = await prisma.file.findFirst({ where: { id: fileId, tenantId } });
 
     if (!file) {
       return NextResponse.json({ success: false, error: t('validation.fileNotFound', 'File not found') }, { status: 404 });
-    }
-
-    // Ensure file belongs to authenticated tenant (security check)
-    if (file.tenantId !== tenantId) {
-      return NextResponse.json(
-        { success: false, error: t('validation.fileNotYourTenant', 'Unauthorized: File does not belong to your tenant') },
-        { status: 403 }
-      );
     }
 
     // Delete from Cloudinary
@@ -260,11 +284,6 @@ export async function DELETE(request: NextRequest) {
       message: t('validation.fileDeleted', 'File deleted successfully'),
     });
   } catch (error: unknown) {
-    if (error instanceof Error) {
-      logger.error('Error deleting file:', error.message);
-    } else {
-      logger.error('Error deleting file:', error);
-    }
-    return NextResponse.json({ success: false, error: t('validation.deleteFailed', 'Failed to delete file') }, { status: 500 });
+    return errorResponse(error, request, t, 'Error deleting file:', { key: 'validation.deleteFailed', fallback: 'Failed to delete file' });
   }
 }

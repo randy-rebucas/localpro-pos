@@ -38,9 +38,11 @@ None found beyond the above (the three above were assessed as Critical, not High
 
 ### Medium
 4. **`exchangeRates` value can be a Mongoose `Map` per an inline comment in the page** (`// exchangeRates may be a Mongoose Map or a plain object`). This is dead-code defensiveness from a pre-Postgres-migration codepath — the current Prisma-backed `/exchange-rates` GET always returns a plain object (`Record<string, number>`, built via a `for...of` loop over rows in `route.ts:41-44`). Not removed this pass (harmless, and removing dead defensive code wasn't the goal), but worth cleaning up in a follow-up so the code doesn't imply a data shape that can no longer occur.
-5. **No numeric validation on manually-typed rate values beyond the HTML `min="0.0001"` hint.** The client parses with `parseFloat` and substitutes `0` for `NaN` (`isNaN(parsed) ? 0 : parsed`), so a rate of literally `0` can be silently saved for a bad input (e.g. typing "abc") rather than rejecting it. The server-side `/exchange-rates` POST *does* validate (`rate <= 0` is rejected, `route.ts:158-165`), so a `0` value would actually get rejected by the server with a 400 — but the client-side substitution means the admin sees their bad input silently become `0` in the field before that rejection surfaces, which is confusing UX. Not fixed this pass (validation-parity gap, not a security/data-integrity issue since the server backstops it).
+5. **No numeric validation on manually-typed rate values beyond the HTML `min="0.0001"` hint.** The client parses with `parseFloat` and substitutes `0` for `NaN` (`isNaN(parsed) ? 0 : parsed`), so a rate of literally `0` can be silently saved for a bad input (e.g. typing "abc") rather than rejecting it. The server-side `/exchange-rates` POST *does* validate (`rate <= 0` is rejected, `route.ts:158-165`), so a `0` value would actually get rejected by the server with a 400 — but the client-side substitution means the admin sees their bad input silently become `0` in the field before that rejection surfaces, which is confusing UX. Not fixed this pass (validation-parity gap, not a security/data-integrity issue since the server backstops it). **Partly fixed (2026-10-06):** a cleared/non-numeric field now drops that currency's rate instead of substituting `0`; an explicitly typed `0` still relies on the server rejection.
 
 ### Low
+7. ~~**Successful save blanked every rate input.**~~ **Fixed (2026-10-06):** the settings PUT response never carries rates (they live in their own table), and `useMultiCurrencySettings.saveSettings` replaced state with the reshaped response (`exchangeRates: {}`). It now keeps the on-screen rates.
+8. ~~**Empty state pointed to "Settings → Multi-Currency" with no way to get there.**~~ **Fixed (2026-10-06):** that tab lives on `app/[tenant]/[lang]/settings/page.tsx` (not admin/settings); the empty state now links to `/settings?tab=multiCurrency`, which that page honors.
 6. **Save button has no per-request guard against a double-click** triggering two sequential `saveSettings` + `saveManualRates` calls. Low risk — both endpoints are idempotent upserts, not additive.
 
 ## 4. Suggested test matrix
@@ -63,6 +65,10 @@ None found beyond the above (the three above were assessed as Critical, not High
 
 **Save / error handling**
 - [x] "Fetch Latest Rates" success applies the returned rates and shows a success message.
+- [x] Rate inputs stay filled after a successful save (Finding 7).
+- [x] A cleared rate is dropped from the saved rates rather than sent as `0` (Finding 5).
+- [x] "Fetch Latest Rates" is hidden in manual mode (it was shown disabled with no explanation).
+- [x] Empty state links to the settings page's Multi-Currency tab (Finding 8).
 - [ ] "Fetch Latest Rates" failure path (provider unavailable, 502 from the server) — not covered this pass; the server-side error path was inspected (`route.ts:127-133`) and returns a clear message, but no component test exercises it.
 - [ ] Exchange-rate save failure (e.g. a `0`/negative rate rejected server-side per Medium #5) surfacing correctly in the UI — not covered this pass.
 

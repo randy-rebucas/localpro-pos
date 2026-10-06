@@ -16,6 +16,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { getDefaultTenantSettings } from '@/lib/currency';
 import { formatDate, formatDateTime } from '@/lib/formatting';
 import { hardwareService } from '@/lib/hardware';
+import { resolveHardwareConfig, readLocalHardwareConfig } from '@/lib/hardware-helpers';
 import {
   useTransactionsCatalog,
   type CatalogTransaction,
@@ -79,7 +80,8 @@ export default function TransactionsPage() {
   // Mirror the backend's refunds.process / expenses.manage permission checks so the UI doesn't
   // offer an action the API will reject — respects tenant-configured role overrides.
   const canRefund = canAccess('refunds.process');
-  const canManageExpenses = canAccess('expenses.manage');
+  const canManageExpenses = canAccess('expenses.create');
+  const canViewExpenses = canAccess('expenses.view');
 
   const {
     transactions,
@@ -89,23 +91,16 @@ export default function TransactionsPage() {
     error,
     refetch,
     updateTransactionStatus,
-  } = useTransactionsCatalog(tenant, page);
+  } = useTransactionsCatalog(tenant, page, canViewExpenses);
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
   }, [lang]);
 
-  // Initialize hardware config from localStorage or tenant settings
+  // Initialize hardware config: tenant settings win, browser cache fills per-device gaps
   useEffect(() => {
     if (!tenant) return;
-    const stored = localStorage.getItem(`hardware_config_${tenant}`);
-    if (stored) {
-      try {
-        hardwareService.setConfig(JSON.parse(stored));
-      } catch { /* ignore */ }
-    } else if (tenantSettings?.hardwareConfig) {
-      hardwareService.setConfig(tenantSettings.hardwareConfig);
-    }
+    hardwareService.setConfig(resolveHardwareConfig(tenantSettings?.hardwareConfig, readLocalHardwareConfig(tenant)));
   }, [tenant, tenantSettings]);
 
   // Load display mode from localStorage

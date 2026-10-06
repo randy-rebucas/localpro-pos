@@ -36,29 +36,8 @@ export function formatAuditTimestamp(dateString: string, lang: 'en' | 'es' = 'en
   }
 }
 
-export function getActionBadgeClass(action: string): string {
-  const baseClass = 'px-2 py-1 text-xs font-semibold border';
-  
-  switch (action.toLowerCase()) {
-    case 'create':
-      return `${baseClass} border-green-300 bg-green-100 text-green-800`;
-    case 'update':
-      return `${baseClass} border-teal-300 bg-brand-soft text-brand-navy`;
-    case 'delete':
-      return `${baseClass} border-red-300 bg-red-100 text-red-800`;
-    case 'view':
-      return `${baseClass} border-gray-300 bg-gray-100 text-gray-800`;
-    case 'login':
-      return `${baseClass} border-yellow-300 bg-yellow-100 text-yellow-800`;
-    case 'logout':
-      return `${baseClass} border-purple-300 bg-purple-100 text-purple-800`;
-    default:
-      return `${baseClass} border-teal-300 bg-brand-soft text-brand-navy`;
-  }
-}
-
 export function formatEntityId(entityId: string | undefined): string {
-  if (!entityId) return '-';
+  if (!entityId) return '—';
   // Show last 12 characters if ID is very long
   if (entityId.length > 20) {
     return entityId.substring(entityId.length - 12);
@@ -67,19 +46,7 @@ export function formatEntityId(entityId: string | undefined): string {
 }
 
 export function formatIpAddress(ipAddress: string | undefined): string {
-  return ipAddress || '-';
-}
-
-export function getPaginationInfo(
-  page: number,
-  limit: number,
-  total: number,
-  dict: any // eslint-disable-line @typescript-eslint/no-explicit-any
-): string {
-  const start = (page - 1) * limit + 1;
-  const end = Math.min(page * limit, total);
-  
-  return `${dict?.admin?.showing || 'Showing'} ${start} ${dict?.admin?.to || 'to'} ${end} ${dict?.admin?.of || 'of'} ${total} ${dict?.admin?.results || 'results'}`;
+  return ipAddress || '—';
 }
 
 export function canGoToPreviousPage(page: number): boolean {

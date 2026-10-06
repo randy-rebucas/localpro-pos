@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { getFetchErrorMessage } from '@/lib/fetch-error';
 
 export interface User {
   _id: string;
@@ -39,7 +40,7 @@ export function useUsersList() {
         onError?.(errorMsg);
       }
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to fetch users';
+      const errorMsg = getFetchErrorMessage(err, 'Failed to fetch users');
       setError(errorMsg);
       onError?.(errorMsg);
     } finally {
@@ -70,7 +71,7 @@ export function useUsersList() {
           onError?.(errorMsg);
         }
       } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'Failed to delete user';
+        const errorMsg = getFetchErrorMessage(err, 'Failed to delete user');
         onError?.(errorMsg);
       } finally {
         clearTimeout(timeout);
@@ -104,7 +105,7 @@ export function useUsersList() {
           onError?.(errorMsg);
         }
       } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'Failed to update user';
+        const errorMsg = getFetchErrorMessage(err, 'Failed to update user');
         onError?.(errorMsg);
       } finally {
         clearTimeout(timeout);

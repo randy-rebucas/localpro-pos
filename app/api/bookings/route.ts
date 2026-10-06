@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import prisma, { dbTransaction } from '@/lib/db';
-import { getTenantIdFromRequest } from '@/lib/api-tenant';
+import { getTenantIdForUser } from '@/lib/api-tenant';
 import { requireAuth, getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { checkRateLimit } from '@/lib/rate-limit';
@@ -12,7 +12,7 @@ import { getValidationTranslatorFromRequest } from '@/lib/validation-translation
 import { requireBookingSchedulingAccess } from '@/lib/booking-scheduling-access';
 import { getClosedHolidayForDate } from '@/lib/holidays';
 import { logger } from '@/lib/logger';
-import { serializeBooking } from '@/lib/booking-serializer';
+import { serializeBooking, toDbBookingStatus } from '@/lib/booking-serializer';
 
 class BookingConflictError extends Error {
   conflicts: unknown;
@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const tenantId = await getTenantIdFromRequest(request);
+    const tenantId = await getTenantIdForUser(request, user);
     if (!tenantId) {
       return NextResponse.json(
         { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    if (!(await hasTenantPermission(user.role, tenantId, 'bookings.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenantId, 'bookings.view'))) {
       return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
     }
 
@@ -63,7 +63,10 @@ export async function GET(request: NextRequest) {
     const staffId = searchParams.get('staffId');
 
     // Build query
-    const where: Record<string, unknown> = { tenantId, isActive: { not: false } };
+    // Cancelling soft-deletes (isActive: false), so an explicit "cancelled"
+    // filter must look past the isActive guard or it can never match anything.
+    const where: Record<string, unknown> =
+      status === 'cancelled' ? { tenantId } : { tenantId, isActive: { not: false } };
 
     if (startDate || endDate) {
       where.startTime = {
@@ -73,7 +76,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (status) {
-      where.status = status;
+      where.status = toDbBookingStatus(status);
     }
 
     if (staffId) {
@@ -124,13 +127,13 @@ export async function POST(request: NextRequest) {
           { status: 401 }
         );
       }
-      if (!(await hasTenantPermission(user.role, user.tenantId, 'bookings.manage'))) {
+      if (!(await hasTenantPermission(user.role, user.tenantId, 'bookings.create'))) {
         return NextResponse.json(
           { success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') },
           { status: 403 }
         );
       }
-      tenantId = await getTenantIdFromRequest(request);
+      tenantId = await getTenantIdForUser(request, user);
     }
 
     if (!tenantId) {
@@ -265,7 +268,7 @@ export async function POST(request: NextRequest) {
             duration,
             staffId: staffId || undefined,
             notes,
-            status,
+            status: toDbBookingStatus(status),
           },
         });
       });

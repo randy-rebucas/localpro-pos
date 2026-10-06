@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!(await hasTenantPermission(userRole, tenantId, 'products.manage'))) {
+    if (!(await hasTenantPermission(userRole, tenantId, 'products.create'))) {
       return NextResponse.json(
         { success: false, error: 'Forbidden: Insufficient permissions' },
         { status: 403 }

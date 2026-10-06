@@ -82,7 +82,9 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
-    if (!(await hasTenantPermission(user.role, tenant.id, 'settings.manage'))) {
+    // Same key the settings PUT requires to change `multiCurrency` (see
+    // lib/settings-section-permissions.ts); default floor matches settings.manage.
+    if (!(await hasTenantPermission(user.role, tenant.id, 'multi_currency.manage'))) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 

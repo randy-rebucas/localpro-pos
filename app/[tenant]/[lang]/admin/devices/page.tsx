@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
-import toast from 'react-hot-toast';
+import { showToast } from '@/lib/toast';
 import { getDictionaryClient } from '../../dictionaries-client';
 import { getAssignedDeviceId, setAssignedDeviceId } from '@/lib/device-identity';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -47,7 +47,10 @@ export default function DevicesPage() {
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
   const { canAccess } = usePermissions();
-  const canManage = canAccess('devices.manage');
+  const canCreate = canAccess('devices.create');
+  const canEdit = canAccess('devices.edit');
+  // Deactivating a device is DELETE /api/devices/[id].
+  const canDelete = canAccess('devices.delete');
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [devices, setDevices] = useState<Device[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -59,6 +62,7 @@ export default function DevicesPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [assignedDeviceId, setAssignedDeviceIdState] = useState<string | null>(null);
+  const [deactivatingId, setDeactivatingId] = useState<string | null>(null);
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -139,7 +143,7 @@ export default function DevicesPage() {
       });
       const data = await res.json();
       if (data.success) {
-        toast.success(editingDevice ? (dict?.admin?.deviceUpdated || 'Device updated') : (dict?.admin?.deviceRegistered || 'Device registered'));
+        showToast.success(editingDevice ? (dict?.admin?.deviceUpdated || 'Device updated') : (dict?.admin?.deviceRegistered || 'Device registered'));
         setShowModal(false);
         fetchDevices();
       } else {
@@ -156,6 +160,7 @@ export default function DevicesPage() {
     const confirmMsg = (dict?.admin?.deactivateDeviceConfirm || 'Deactivate device "{label}"? Past receipts will still show its serial number.')
       .replace('{label}', device.label);
     if (!confirm(confirmMsg)) return;
+    setDeactivatingId(device._id);
     try {
       const res = await fetch(`/api/devices/${device._id}`, {
         method: 'DELETE',
@@ -163,13 +168,15 @@ export default function DevicesPage() {
       });
       const data = await res.json();
       if (data.success) {
-        toast.success(dict?.admin?.deviceDeactivated || 'Device deactivated');
+        showToast.success(dict?.admin?.deviceDeactivated || 'Device deactivated');
         fetchDevices();
       } else {
-        toast.error(data.error || dict?.admin?.failedToDeactivateDevice || 'Failed to deactivate device');
+        showToast.error(data.error || dict?.admin?.failedToDeactivateDevice || 'Failed to deactivate device');
       }
     } catch {
-      toast.error(dict?.admin?.failedToDeactivateDevice || 'Failed to deactivate device');
+      showToast.error(dict?.admin?.failedToDeactivateDevice || 'Failed to deactivate device');
+    } finally {
+      setDeactivatingId(null);
     }
   };
 
@@ -179,13 +186,13 @@ export default function DevicesPage() {
     const msg = (dict?.admin?.deviceAssignedToBrowser || 'This browser is now assigned to "{label}" ({terminalId})')
       .replace('{label}', device.label)
       .replace('{terminalId}', device.terminalId);
-    toast.success(msg);
+    showToast.success(msg);
   };
 
   const handleUnassign = () => {
     setAssignedDeviceId(tenant, null);
     setAssignedDeviceIdState(null);
-    toast.success(dict?.admin?.deviceUnassignedFromBrowser || 'This browser is no longer assigned to a device');
+    showToast.success(dict?.admin?.deviceUnassignedFromBrowser || 'This browser is no longer assigned to a device');
   };
 
   if (!dict) {
@@ -223,7 +230,7 @@ export default function DevicesPage() {
           <button
             type="button"
             onClick={fetchDevices}
-            className="mt-4 px-4 py-2 bg-brand text-white text-sm hover:bg-brand-hover transition-colors"
+            className="mt-4 inline-flex items-center justify-center px-4 py-2 bg-brand text-white text-sm hover:bg-brand-hover transition-colors"
           >
             {dict.common?.retry || 'Retry'}
           </button>
@@ -279,7 +286,7 @@ export default function DevicesPage() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex justify-end gap-1.5">
-                      {canManage && (
+                      {canEdit && (
                         <button
                           type="button"
                           onClick={() => openEditModal(device)}
@@ -305,17 +312,22 @@ export default function DevicesPage() {
                           </svg>
                         </button>
                       )}
-                      {canManage && device.isActive && (
+                      {canDelete && device.isActive && (
                         <button
                           type="button"
                           onClick={() => handleDeactivate(device)}
+                          disabled={deactivatingId === device._id}
                           title={deactivateLabel}
                           aria-label={`${deactivateLabel}: ${device.label}`}
-                          className={`${ICON_BUTTON} bg-win8-danger`}
+                          className={`${ICON_BUTTON} bg-win8-danger disabled:opacity-50`}
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M18.36 6.64a9 9 0 1 1-12.73 0M12 2v10" />
-                          </svg>
+                          {deactivatingId === device._id ? (
+                            <span className="win8-spinner win8-spinner-sm"><span /><span /><span /><span /><span /></span>
+                          ) : (
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M18.36 6.64a9 9 0 1 1-12.73 0M12 2v10" />
+                            </svg>
+                          )}
                         </button>
                       )}
                     </div>
@@ -348,7 +360,11 @@ export default function DevicesPage() {
                 {dict.admin?.thisBrowserAssignedTo || 'This browser is assigned to:'}{' '}
                 <strong>{devices.find((d) => d._id === assignedDeviceId)?.label || assignedDeviceId}</strong>
               </span>
-              <button type="button" onClick={handleUnassign} className="text-xs font-semibold text-win8-danger hover:underline">
+              <button
+                type="button"
+                onClick={handleUnassign}
+                className="inline-flex items-center justify-center px-4 py-2 border border-win8-danger bg-white text-win8-danger text-sm font-medium hover:bg-gray-100 transition-colors"
+              >
                 {dict.admin?.unassign || 'Unassign'}
               </button>
             </div>
@@ -361,11 +377,11 @@ export default function DevicesPage() {
                 <span className="ml-2 text-xs font-normal text-gray-500 tabular-nums">{devices.length.toLocaleString()}</span>
               )}
             </h2>
-            {canManage && (
+            {canCreate && (
               <button
                 type="button"
                 onClick={openAddModal}
-                className="px-4 py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover transition-colors"
+                className="inline-flex items-center justify-center px-4 py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover transition-colors"
               >
                 + {dict.admin?.registerDevice || 'Register Device'}
               </button>

@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId, user } = authResult;
-    if (!(await hasTenantPermission(user.role, tenantId, 'tables.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenantId, 'tables.view'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId, user } = authResult;
-    if (!(await hasTenantPermission(user.role, tenantId, 'tables.configure'))) {
+    if (!(await hasTenantPermission(user.role, tenantId, 'tables.create'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 

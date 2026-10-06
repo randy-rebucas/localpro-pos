@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import prisma, { dbTransaction } from '@/lib/db';
-import { getTenantIdFromRequest } from '@/lib/api-tenant';
+import { getTenantIdForUser } from '@/lib/api-tenant';
 import { requireAuth, getRoleRank } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -19,7 +19,7 @@ function toUserJSON<T extends { id: string }>(u: T) {
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const authUser = await requireAuth(request);
-    const tenantId = await getTenantIdFromRequest(request);
+    const tenantId = await getTenantIdForUser(request, authUser);
     const { id } = await params;
     const t = await getValidationTranslatorFromRequest(request);
 
@@ -27,7 +27,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
-    if (!(await hasTenantPermission(authUser.role, tenantId, 'users.manage'))) {
+    if (!(await hasTenantPermission(authUser.role, tenantId, 'users.view'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
@@ -59,7 +59,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   let t: (key: string, fallback: string) => string;
   try {
     const actingUser = await requireAuth(request);
-    const tenantId = await getTenantIdFromRequest(request);
+    const tenantId = await getTenantIdForUser(request, actingUser);
     const { id } = await params;
     t = await getValidationTranslatorFromRequest(request);
 
@@ -67,7 +67,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
-    if (!(await hasTenantPermission(actingUser.role, tenantId, 'users.manage'))) {
+    if (!(await hasTenantPermission(actingUser.role, tenantId, 'users.edit'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
@@ -262,7 +262,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   let t: (key: string, fallback: string) => string;
   try {
     const actingUser = await requireAuth(request);
-    const tenantId = await getTenantIdFromRequest(request);
+    const tenantId = await getTenantIdForUser(request, actingUser);
     const { id } = await params;
     t = await getValidationTranslatorFromRequest(request);
 

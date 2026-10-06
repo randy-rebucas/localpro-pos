@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
-import { getTenantIdFromRequest } from '@/lib/api-tenant';
+import { getTenantIdForUser } from '@/lib/api-tenant';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { sendBookingReminder } from '@/lib/notifications';
@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
 
     // Only allow admins/managers to trigger reminders manually
     // In production, this would be called by a cron job
-    const tenantId = await getTenantIdFromRequest(request);
+    const tenantId = await getTenantIdForUser(request, user);
 
     if (!tenantId) {
       return NextResponse.json(

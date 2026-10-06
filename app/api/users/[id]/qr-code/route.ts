@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import prisma from '@/lib/db';
-import { requireAuth, getCurrentUser } from '@/lib/auth';
+import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
-import { getTenantIdFromRequest } from '@/lib/api-tenant';
+import { getTenantIdForUser } from '@/lib/api-tenant';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
@@ -18,7 +18,7 @@ export async function GET(
   let t: (key: string, fallback: string) => string;
   try {
     const authUser = await requireAuth(request);
-    const tenantId = await getTenantIdFromRequest(request);
+    const tenantId = await getTenantIdForUser(request, authUser);
     const { id } = await params;
     t = await getValidationTranslatorFromRequest(request);
 
@@ -29,7 +29,7 @@ export async function GET(
       );
     }
 
-    if (!(await hasTenantPermission(authUser.role, tenantId, 'users.manage'))) {
+    if (!(await hasTenantPermission(authUser.role, tenantId, 'users.view'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
@@ -87,9 +87,8 @@ export async function POST(
   let t: (key: string, fallback: string) => string;
   try {
     const authUser = await requireAuth(request);
-    const tenantId = await getTenantIdFromRequest(request);
+    const tenantId = await getTenantIdForUser(request, authUser);
     const { id } = await params;
-    const currentUser = await getCurrentUser(request);
     t = await getValidationTranslatorFromRequest(request);
 
     if (!tenantId) {
@@ -99,7 +98,7 @@ export async function POST(
       );
     }
 
-    if (!(await hasTenantPermission(authUser.role, tenantId, 'users.manage'))) {
+    if (!(await hasTenantPermission(authUser.role, tenantId, 'users.edit'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
@@ -119,12 +118,12 @@ export async function POST(
 
     await createAuditLog(request, {
       tenantId,
-      userId: currentUser?.userId,
+      userId: authUser.userId,
       action: AuditActions.UPDATE,
       entityType: 'user',
       entityId: id,
       changes: { qrToken: { regenerated: true } },
-      metadata: { updatedBy: currentUser?.userId },
+      metadata: { updatedBy: authUser.userId },
     });
 
     return NextResponse.json({

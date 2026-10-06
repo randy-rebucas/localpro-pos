@@ -70,6 +70,8 @@ vi.mock('@/lib/auth', () => ({
 const mockGetTenantIdFromRequest = vi.fn();
 vi.mock('@/lib/api-tenant', () => ({
   getTenantIdFromRequest: (...args: unknown[]) => mockGetTenantIdFromRequest(...args),
+  // Routes resolve the tenant for the already-authenticated user; same mock drives both.
+  getTenantIdForUser: (...args: unknown[]) => mockGetTenantIdFromRequest(...args),
 }));
 
 const mockHasTenantPermission = vi.fn();

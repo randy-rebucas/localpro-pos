@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId, user } = authResult;
-    if (!(await hasTenantPermission(user.role, tenantId, 'branches.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenantId, 'branches.create'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
     const t = await getValidationTranslatorFromRequest(request);

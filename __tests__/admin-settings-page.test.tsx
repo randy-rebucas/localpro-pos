@@ -212,7 +212,7 @@ describe('logo URL validation', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /save settings/i }));
 
-    expect(mockToastError).toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toHaveTextContent(/https/i);
     expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls.some(([, init]) => init?.method === 'PUT')).toBe(false);
   });
 
@@ -226,7 +226,7 @@ describe('logo URL validation', () => {
     expect(screen.queryByAltText('Logo preview')).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: /save settings/i }));
-    expect(mockToastError).toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toBeInTheDocument();
   });
 
   it('accepts a valid https logo URL and renders a preview', async () => {
@@ -239,7 +239,8 @@ describe('logo URL validation', () => {
     expect(screen.getByAltText('Logo preview')).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: /save settings/i }));
-    expect(mockToastError).not.toHaveBeenCalled();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    await waitFor(() => expect(mockToastSuccess).toHaveBeenCalled());
   });
 });
 
@@ -256,7 +257,7 @@ describe('receipt tab text length validation', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /save settings/i }));
 
-    expect(mockToastError).toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toBeInTheDocument();
     expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls.some(([, init]) => init?.method === 'PUT')).toBe(false);
   });
 });
@@ -272,7 +273,7 @@ describe('low stock threshold range validation', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /save settings/i }));
 
-    expect(mockToastError).toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toBeInTheDocument();
     expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls.some(([, init]) => init?.method === 'PUT')).toBe(false);
   });
 });
@@ -289,6 +290,39 @@ describe('currency symbol auto-fill', () => {
     await userEvent.selectOptions(currencySelect, 'USD');
 
     expect(symbolInput).toHaveValue('$');
+  });
+});
+
+describe('load failure', () => {
+  it('shows an error with Retry instead of an editable form of defaults', async () => {
+    mockCanAccess.mockReturnValue(true);
+    (global.fetch as ReturnType<typeof vi.fn>).mockImplementation(async () => ({
+      json: async () => ({ success: false, error: 'Boom' }),
+    }));
+    render(<AdminSettingsPage />);
+
+    expect(await screen.findByText('Boom')).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('Your business name')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /save settings/i })).not.toBeInTheDocument();
+
+    mockFetchImpl(baseSettings);
+    await userEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(await screen.findByPlaceholderText('Your business name')).toHaveValue(baseSettings.companyName);
+  });
+});
+
+describe('contact tab dirty tracking', () => {
+  it('prompts before leaving the Contact tab with an address-only edit', async () => {
+    await renderLoaded(true);
+    await userEvent.click(screen.getByRole('button', { name: 'Contact' }));
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+
+    fireEvent.change(labelledInput('Street'), { target: { value: '9 New Rd.' } });
+    await userEvent.click(screen.getByRole('button', { name: 'General' }));
+
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(labelledInput('Street')).toHaveValue('9 New Rd.');
+    confirmSpy.mockRestore();
   });
 });
 

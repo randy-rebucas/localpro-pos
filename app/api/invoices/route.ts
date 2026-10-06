@@ -2,24 +2,35 @@ import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import prisma from '@/lib/db';
 import { requireTenantAccess } from '@/lib/api-tenant';
-import { hasTenantPermission } from '@/lib/permissions-server';
+import { hasAnyTenantPermission, hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { generateInvoiceNumber } from '@/lib/receipt';
 import { calculateTax } from '@/lib/tax-calculation';
 import { getTenantSettingsById } from '@/lib/tenant';
 
+// Invoices carry customer contact details. Deposit staff also read the list to
+// pick the invoice a deposit is applied to while creating/editing one, so any
+// of these permissions allows it.
+const INVOICE_LIST_PERMISSIONS = ['invoices.view', 'deposits.create', 'deposits.edit'];
+
 export async function GET(request: NextRequest) {
   try {
     let tenantId: string;
+    let role: string;
     try {
       const tenantAccess = await requireTenantAccess(request);
       tenantId = tenantAccess.tenantId;
+      role = tenantAccess.user.role;
     } catch (authError: unknown) {
       const msg = (authError as Error).message ?? '';
       return NextResponse.json(
         { success: false, error: msg },
         { status: msg.includes('Unauthorized') ? 401 : 403 }
       );
+    }
+
+    if (!(await hasAnyTenantPermission(role, tenantId, INVOICE_LIST_PERMISSIONS))) {
+      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
     const searchParams = request.nextUrl.searchParams;
@@ -80,7 +91,7 @@ export async function POST(request: NextRequest) {
   try {
     const tenantAccess = await requireTenantAccess(request);
     const { tenantId, user } = tenantAccess;
-    if (!(await hasTenantPermission(user.role, tenantId, 'invoices.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenantId, 'invoices.create'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 

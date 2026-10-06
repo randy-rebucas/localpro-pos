@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
     // Build query
     const where: Record<string, unknown> = { tenantId: user.tenantId, isActive: { not: false } };
 
-    const isManagerPlus = await hasTenantPermission(user.role, user.tenantId, 'attendance.manage');
+    const isManagerPlus = await hasTenantPermission(user.role, user.tenantId, 'attendance.view');
 
     if (userId && isManagerPlus) {
       // Manager+ viewing a specific employee

@@ -18,8 +18,8 @@ vi.mock('@/app/[tenant]/[lang]/dictionaries-client', () => ({
 
 const mockToastSuccess = vi.fn();
 const mockToastError = vi.fn();
-vi.mock('react-hot-toast', () => ({
-  default: { success: (...args: unknown[]) => mockToastSuccess(...args), error: (...args: unknown[]) => mockToastError(...args) },
+vi.mock('@/lib/toast', () => ({
+  showToast: { success: (...args: unknown[]) => mockToastSuccess(...args), error: (...args: unknown[]) => mockToastError(...args) },
 }));
 
 import AdvancedBrandingPage from '@/app/[tenant]/[lang]/admin/advanced-branding/page';
@@ -61,8 +61,9 @@ describe('AdvancedBrandingPage', () => {
   // -------------------------------------------------------------------------
   it('reads branding fields back from the flat GET response instead of showing hardcoded defaults', async () => {
     render(<AdvancedBrandingPage />);
-    await screen.findByRole('heading', { level: 1, name: 'Advanced Branding' });
+    await screen.findByDisplayValue('Inter');
 
+    expect(screen.getByRole('heading', { level: 1, name: 'Advanced Branding' })).toBeInTheDocument();
     expect(screen.getByDisplayValue('Inter')).toBeInTheDocument();
     expect(screen.getByDisplayValue('https://fonts.googleapis.com/css2?family=Inter')).toBeInTheDocument();
     expect(screen.getByDisplayValue(':root { --x: 1; }')).toBeInTheDocument();
@@ -73,7 +74,7 @@ describe('AdvancedBrandingPage', () => {
 
   it('sends the whole advancedBranding object as a single nested field on save', async () => {
     render(<AdvancedBrandingPage />);
-    await screen.findByRole('heading', { level: 1, name: 'Advanced Branding' });
+    await screen.findByDisplayValue('Inter');
 
     fireEvent.change(screen.getByDisplayValue('Inter'), { target: { value: 'Roboto' } });
 
@@ -102,9 +103,12 @@ describe('AdvancedBrandingPage', () => {
   it('hides the Save button when the user lacks settings.manage', async () => {
     mockCanAccess.mockReturnValue(false);
     render(<AdvancedBrandingPage />);
-    await screen.findByRole('heading', { level: 1, name: 'Advanced Branding' });
+    await screen.findByDisplayValue('Inter');
 
     expect(screen.queryByRole('button', { name: /Save Settings/i })).not.toBeInTheDocument();
+    // Fields render read-only (disabled fieldset) instead of silently editable.
+    expect(screen.getByDisplayValue('Inter')).toBeDisabled();
+    expect(screen.getByText(/You don't have permission to change settings/)).toBeInTheDocument();
   });
 
   // -------------------------------------------------------------------------
@@ -112,7 +116,7 @@ describe('AdvancedBrandingPage', () => {
   // -------------------------------------------------------------------------
   it('rejects a non-https Google Font URL client-side and does not save', async () => {
     render(<AdvancedBrandingPage />);
-    await screen.findByRole('heading', { level: 1, name: 'Advanced Branding' });
+    await screen.findByDisplayValue('Inter');
 
     fireEvent.change(screen.getByDisplayValue('https://fonts.googleapis.com/css2?family=Inter'), {
       target: { value: 'javascript:alert(1)' },
@@ -127,7 +131,7 @@ describe('AdvancedBrandingPage', () => {
 
   it('rejects unbalanced custom CSS braces client-side and does not save', async () => {
     render(<AdvancedBrandingPage />);
-    await screen.findByRole('heading', { level: 1, name: 'Advanced Branding' });
+    await screen.findByDisplayValue('Inter');
 
     fireEvent.change(screen.getByDisplayValue(':root { --x: 1; }'), {
       target: { value: ':root { --x: 1;' },
@@ -142,7 +146,7 @@ describe('AdvancedBrandingPage', () => {
 
   it('server rejects a non-https font URL that bypasses the client check', async () => {
     render(<AdvancedBrandingPage />);
-    await screen.findByRole('heading', { level: 1, name: 'Advanced Branding' });
+    await screen.findByDisplayValue('Inter');
 
     mockFetch.mockResolvedValueOnce({
       ok: false,
@@ -168,7 +172,7 @@ describe('AdvancedBrandingPage', () => {
     mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(flatSettingsResponse()) });
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
 
-    expect(await screen.findByRole('heading', { level: 1, name: 'Advanced Branding' })).toBeInTheDocument();
+    expect(await screen.findByDisplayValue('Inter')).toBeInTheDocument();
   });
 
   // -------------------------------------------------------------------------
@@ -176,7 +180,7 @@ describe('AdvancedBrandingPage', () => {
   // -------------------------------------------------------------------------
   it('shows the Custom Font URL field instead when fontSource is "custom"', async () => {
     render(<AdvancedBrandingPage />);
-    await screen.findByRole('heading', { level: 1, name: 'Advanced Branding' });
+    await screen.findByDisplayValue('Inter');
 
     fireEvent.change(screen.getByDisplayValue('Google Font'), { target: { value: 'custom' } });
 

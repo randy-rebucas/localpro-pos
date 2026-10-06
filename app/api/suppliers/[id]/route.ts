@@ -15,7 +15,10 @@ function toSupplierJSON(s: { id: string; [key: string]: unknown }) {
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { tenantId } = await requireTenantAccess(request);
+    const { tenantId, user } = await requireTenantAccess(request);
+    if (!(await hasTenantPermission(user.role, tenantId, 'suppliers.view'))) {
+      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
+    }
     const { id } = await params;
 
     const supplier = await prisma.supplier.findFirst({ where: { id, tenantId } });
@@ -35,7 +38,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const { id } = await params;
     const t = await getValidationTranslatorFromRequest(request);
 
-    if (!(await hasTenantPermission(user.role, tenantId, 'suppliers.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenantId, 'suppliers.edit'))) {
       return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
     }
 
@@ -99,7 +102,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     const { id } = await params;
     const t = await getValidationTranslatorFromRequest(request);
 
-    if (!(await hasTenantPermission(user.role, tenantId, 'suppliers.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenantId, 'suppliers.delete'))) {
       return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
     }
 

@@ -29,7 +29,11 @@ export default function PurchaseOrdersPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [receivingOrder, setReceivingOrder] = useState<PurchaseOrder | null>(null);
   const { canAccess } = usePermissions();
-  const canManage = canAccess('purchase_orders.manage');
+  const canCreate = canAccess('purchase_orders.create');
+  // Mark ordered / cancel are status updates (PUT /api/purchase-orders/[id]).
+  const canEdit = canAccess('purchase_orders.edit');
+  const canDelete = canAccess('purchase_orders.delete');
+  const canReceive = canAccess('purchase_orders.receive');
 
   const {
     purchaseOrders,
@@ -94,7 +98,7 @@ export default function PurchaseOrdersPage() {
         <div className="bg-white border border-gray-300 p-6">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-bold text-gray-900">Purchase Orders</h2>
-            {canManage && (
+            {canCreate && (
               <button
                 onClick={() => {
                   clearMessage();
@@ -139,24 +143,24 @@ export default function PurchaseOrdersPage() {
                       </span>
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
-                      {canManage ? (
+                      {canEdit || canDelete || canReceive ? (
                         <div className="flex gap-2 flex-wrap">
-                          {(po.status === 'ordered' || po.status === 'partially_received') && (
+                          {canReceive && (po.status === 'ordered' || po.status === 'partially_received') && (
                             <button onClick={() => setReceivingOrder(po)} className="text-brand hover:text-brand-navy-deep">
                               Receive
                             </button>
                           )}
-                          {po.status === 'draft' && (
+                          {canEdit && po.status === 'draft' && (
                             <button onClick={() => handleStatusChange(po, 'ordered')} className="text-brand hover:text-brand-navy-deep">
                               Mark Ordered
                             </button>
                           )}
-                          {isPurchaseOrderStatusEditable(po.status) && getAllowedNextStatuses(po.status).includes('cancelled') && (
+                          {canEdit && isPurchaseOrderStatusEditable(po.status) && getAllowedNextStatuses(po.status).includes('cancelled') && (
                             <button onClick={() => handleStatusChange(po, 'cancelled')} className="text-red-600 hover:text-red-900">
                               Cancel
                             </button>
                           )}
-                          {po.status === 'draft' && (
+                          {canDelete && po.status === 'draft' && (
                             <button onClick={() => handleDelete(po)} className="text-red-600 hover:text-red-900">
                               Delete
                             </button>

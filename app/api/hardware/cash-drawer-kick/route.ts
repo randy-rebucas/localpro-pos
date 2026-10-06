@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
-import { getTenantIdFromRequest } from '@/lib/api-tenant';
+import { getTenantIdForUser } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { logger } from '@/lib/logger';
@@ -14,7 +14,7 @@ import net from 'net';
 export async function POST(request: NextRequest) {
   try {
     const user = await requireAuth(request);
-    const tenantId = await getTenantIdFromRequest(request);
+    const tenantId = await getTenantIdForUser(request, user);
 
     if (!tenantId) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
     // cash checkout print (receipt-printer.ts openDrawerViaPrintProxy) and on
     // shift start/end (AttendanceClock.tsx), both routine cashier actions;
     // settings.manage (manager-floor) would block ordinary cashiers from it.
-    if (!(await hasTenantPermission(user.role, tenantId, 'cash_drawer.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenantId, 'cash_drawer.open_drawer'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 

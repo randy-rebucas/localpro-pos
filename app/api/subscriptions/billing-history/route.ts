@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
   try {
     const { tenantId, user } = await requireTenantAccess(request);
 
-    if (!(await hasTenantPermission(user.role, tenantId, 'subscriptions.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenantId, 'subscriptions.view'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
@@ -39,7 +39,8 @@ export async function GET(request: NextRequest) {
     // Transform the billing history to include proper date formatting
     const formattedHistory = subscription.billingHistory.map((billing) => ({
       _id: billing.id,
-      amount: billing.amount,
+      // Prisma Decimal serializes as a string; clients format this as a number.
+      amount: Number(billing.amount),
       currency: billing.currency || 'PHP',
       status: billing.status || 'paid',
       date: billing.date ?? null,

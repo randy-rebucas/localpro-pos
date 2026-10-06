@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
   try {
     const { tenantId, user } = await requireTenantAccess(request);
     syncTenantId = tenantId;
-    if (!(await hasTenantPermission(user.role, tenantId, 'integrations.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenantId, 'integrations.sync'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
     await requireEcommerceIntegrationFeature(tenantId);

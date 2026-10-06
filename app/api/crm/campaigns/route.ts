@@ -11,7 +11,10 @@ export async function GET(request: NextRequest) {
   try {
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
-    const { tenantId } = authResult;
+    const { tenantId, user } = authResult;
+    if (!(await hasTenantPermission(user.role, tenantId, 'crm.view'))) {
+      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
+    }
 
     const campaigns = await prisma.campaign.findMany({
       where: { tenantId },
@@ -30,7 +33,7 @@ export async function POST(request: NextRequest) {
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId, user } = authResult;
-    if (!(await hasTenantPermission(user.role, tenantId, 'crm.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenantId, 'crm.create'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
     const userId = user.userId;

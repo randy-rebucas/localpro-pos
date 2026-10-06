@@ -25,7 +25,9 @@ export function useBrandingSave(tenant: string) {
         },
         credentials: 'include',
         signal: controller.signal,
-        body: JSON.stringify({ settings }),
+        // Only the section this page edits (the PUT checks branding.manage for
+        // it); echoing the whole settings object would clobber other pages.
+        body: JSON.stringify({ settings: { advancedBranding: settings.advancedBranding } }),
       });
 
       // Read the body before branching on res.ok — a 400 (e.g. the font URL

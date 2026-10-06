@@ -39,7 +39,9 @@ export default function TablesPage() {
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [tables, setTables] = useState<TableRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  // Stored untranslated (server message, or which fallback to show) so fetchTables
+  // doesn't depend on dict and refetch when the dictionary arrives.
+  const [loadError, setLoadError] = useState<{ server?: string; fallback: 'failedToLoadTables' | 'errorLoadingTables' } | null>(null);
   const [showInactive, setShowInactive] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [selectedTable, setSelectedTable] = useState<TableRow | null>(null);
@@ -47,7 +49,11 @@ export default function TablesPage() {
 
   const { settings } = useTenantSettings();
   const { canAccess } = usePermissions();
-  const canManage = canAccess('tables.configure');
+  const canCreate = canAccess('tables.create');
+  // Edit + reactivate are config PATCHes; deactivate is DELETE; "reset to open" is a status-only PATCH.
+  const canEdit = canAccess('tables.edit');
+  const canDelete = canAccess('tables.delete');
+  const canUpdateStatus = canAccess('tables.update_status');
   const tableManagementEnabled = supportsFeature(settings ?? undefined, 'tableManagement');
 
   useEffect(() => {
@@ -64,9 +70,9 @@ export default function TablesPage() {
       );
       const data = await res.json();
       if (data.success) setTables(data.data || []);
-      else setLoadError(data.error || dict?.tables?.failedToLoadTables || 'Failed to load tables');
+      else setLoadError({ server: data.error, fallback: 'failedToLoadTables' });
     } catch {
-      setLoadError(dict?.tables?.errorLoadingTables || 'Error loading tables');
+      setLoadError({ fallback: 'errorLoadingTables' });
     } finally {
       setLoading(false);
     }
@@ -195,7 +201,11 @@ export default function TablesPage() {
     if (loadError) {
       return (
         <div className="text-center py-12 bg-white border border-gray-300">
-          <p className="text-win8-danger text-sm font-medium">{loadError}</p>
+          <p className="text-win8-danger text-sm font-medium">
+            {loadError.server ||
+              dict?.tables?.[loadError.fallback] ||
+              (loadError.fallback === 'failedToLoadTables' ? 'Failed to load tables' : 'Error loading tables')}
+          </p>
           <button
             type="button"
             onClick={fetchTables}
@@ -211,7 +221,7 @@ export default function TablesPage() {
       return (
         <div className="text-center py-12 text-gray-400 bg-white border border-gray-300">
           <p>{dict?.tables?.noTablesYet || 'No tables configured yet'}</p>
-          {canManage && tableManagementEnabled && (
+          {canCreate && tableManagementEnabled && (
             <button
               type="button"
               onClick={openAdd}
@@ -249,11 +259,11 @@ export default function TablesPage() {
                 {table.capacity ? `${table.capacity} ${dict?.tables?.seats || 'seats'}` : '—'}
               </p>
 
-              {canManage && (
+              {(canEdit || canDelete || canUpdateStatus) && (
                 <div className="flex flex-wrap gap-1.5 mt-3">
                   {table.isActive ? (
                     <>
-                      {table.status !== 'open' && (
+                      {canUpdateStatus && table.status !== 'open' && (
                         <button
                           type="button"
                           onClick={() => handleResetStatus(table)}
@@ -262,23 +272,23 @@ export default function TablesPage() {
                           {dict?.tables?.resetToOpen || 'Reset to Open'}
                         </button>
                       )}
-                      <button
+                      {canEdit && (<button
                         type="button"
                         onClick={() => openEdit(table)}
                         className={`${SMALL_ACTION} bg-brand`}
                       >
                         {dict?.common?.edit || 'Edit'}
-                      </button>
-                      <button
+                      </button>)}
+                      {canDelete && (<button
                         type="button"
                         onClick={() => handleDeactivate(table)}
                         className={`${SMALL_ACTION} bg-win8-danger`}
                       >
                         {dict?.admin?.deactivate || 'Deactivate'}
-                      </button>
+                      </button>)}
                     </>
                   ) : (
-                    <button
+                    canEdit && <button
                       type="button"
                       onClick={() => handleReactivate(table)}
                       className={`${SMALL_ACTION} bg-win8-success`}
@@ -346,7 +356,7 @@ export default function TablesPage() {
               />
               {dict?.tables?.showInactive || 'Show inactive'}
             </label>
-            {canManage && (
+            {canCreate && (
               <button
                 type="button"
                 onClick={openAdd}

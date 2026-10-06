@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
@@ -8,6 +8,7 @@ import { useMultiCurrencySettings } from '@/hooks/useMultiCurrencySettings';
 import { useExchangeRateFetch } from '@/hooks/useExchangeRateFetch';
 import { usePermissions } from '@/hooks/usePermissions';
 import { getCurrencySymbol } from '@/lib/currency';
+import AdminPageHeader from '@/components/admin/AdminPageHeader';
 import {
   getSaveSuccessMessage,
   getSaveErrorMessage,
@@ -15,12 +16,15 @@ import {
   getExchangeRateFetchErrorMessage,
 } from '@/lib/multi-currency-helpers';
 
+const INPUT = 'w-full border border-gray-300 px-3 py-2 text-sm bg-white disabled:bg-gray-100';
+const LABEL = 'block text-xs font-medium text-gray-600 mb-1';
+
 export default function MultiCurrencyPage() {
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
   const { canAccess } = usePermissions();
-  const canManage = canAccess('settings.manage');
+  const canManage = canAccess('multi_currency.manage');
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
 
   const { settings, loading, saving, message, setMessage, fetchSettings, updateSetting, saveSettings } =
@@ -91,13 +95,10 @@ export default function MultiCurrencyPage() {
     setTimeout(() => setMessage(null), 3000);
   };
 
-  if (!dict || loading) {
+  if (!dict) {
     return (
       <div className="flex items-center justify-center py-24">
-        <div className="text-center">
-          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-brand"></div>
-          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
-        </div>
+        <div className="win8-spinner text-brand"><span /><span /><span /><span /><span /></div>
       </div>
     );
   }
@@ -109,213 +110,252 @@ export default function MultiCurrencyPage() {
     exchangeRateSource: 'manual',
     exchangeRateApiKey: '',
   };
+  const displayCurrencies: string[] = multiCurrency.displayCurrencies ?? [];
+  const hasDisplayCurrencies = displayCurrencies.length > 0;
+  const baseCurrency = settings?.currency || 'PHP';
 
   return (
-    <div>
-      <div className="px-4 sm:px-6 py-6">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">
-            {dict?.admin?.multiCurrency || 'Multi-Currency Management'}
-          </h1>
-          <p className="text-gray-600">
-            {dict?.admin?.multiCurrencyDescription || 'Configure exchange rates and API settings for multi-currency support'}
-          </p>
-        </div>
+    <div className="px-4 sm:px-6 py-6">
+      <AdminPageHeader
+        title={dict?.admin?.multiCurrency || 'Multi-Currency Management'}
+        description={dict?.admin?.multiCurrencyDescription || 'Configure exchange rates and API settings for multi-currency support'}
+      />
 
-        <div className="mb-6 p-4 bg-gray-50 border border-gray-200 flex items-center justify-between flex-wrap gap-2">
-          <div>
-            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-              {dict?.admin?.baseCurrency || 'Base Currency'}
-            </span>
-            <p className="text-lg font-bold text-gray-900">
-              {settings?.currency || 'PHP'} ({settings?.currencySymbol || getCurrencySymbol(settings?.currency || 'PHP')})
+      <div className="space-y-6">
+        {loading ? (
+          <div className="text-center py-12 bg-white border border-gray-300">
+            <div className="win8-spinner text-brand mx-auto"><span /><span /><span /><span /><span /></div>
+            <p className="mt-3 text-gray-400 text-sm">{dict?.admin?.loadingMultiCurrency || 'Loading multi-currency settings…'}</p>
+          </div>
+        ) : !settings ? (
+          <div className="text-center py-12 bg-white border border-gray-300 px-4">
+            <p className="text-sm font-bold text-gray-900">{dict?.settings?.failedToLoad || 'Failed to Load Settings'}</p>
+            <p className="mt-1 text-win8-danger text-sm font-medium">
+              {message?.text || dict?.settings?.loadErrorDescription || 'Unable to load tenant settings. Please check your connection and try again.'}
             </p>
+            <button
+              onClick={() => fetchSettings()}
+              className="mt-4 px-4 py-2 bg-brand text-white text-sm hover:bg-brand-hover transition-colors"
+            >
+              {dict?.settings?.retry || 'Retry'}
+            </button>
           </div>
-          <Link
-            href={`/${tenant}/${lang}/admin/settings`}
-            className="text-sm text-brand hover:text-brand-hover font-medium"
-          >
-            {dict?.admin?.changeBaseCurrency || 'Change in Settings →'}
-          </Link>
-        </div>
-
-        {settings?.suggestedCurrency && settings.suggestedCurrency.currency !== settings?.currency && (
-          <div className="mb-6 p-4 bg-blue-50 border border-blue-300 flex items-center justify-between flex-wrap gap-3">
-            <p className="text-sm text-blue-800">
-              {(
-                dict?.admin?.suggestedCurrencyHint ||
-                'Your tenant\'s country ({country}) commonly uses {currency} — want to use it as your base currency?'
-              )
-                .replace('{country}', settings.suggestedCurrency.countryName)
-                .replace('{currency}', settings.suggestedCurrency.currency)}
-            </p>
-            {canManage && (
-              <button
-                type="button"
-                onClick={() => {
-                  const code = settings.suggestedCurrency!.currency;
-                  updateSetting('currency', code);
-                  updateSetting('currencySymbol', getCurrencySymbol(code));
-                }}
-                className="px-4 py-2 bg-brand text-white text-sm font-medium hover:bg-brand-hover whitespace-nowrap"
-              >
-                {(dict?.admin?.useSuggestedCurrency || 'Use {currency}').replace('{currency}', settings.suggestedCurrency.currency)}
-              </button>
-            )}
-          </div>
-        )}
-
-        {message && (
-          <div
-            className={`mb-6 p-4 border ${
-              message.type === 'success'
-                ? 'bg-green-50 text-green-800 border-green-300'
-                : 'bg-red-50 text-red-800 border-red-300'
-            }`}
-          >
-            {message.text}
-          </div>
-        )}
-
-        <fieldset disabled={!canManage} className="bg-white border border-gray-300 p-6 space-y-6">
-          <div>
-            <h2 className="text-xl font-bold text-gray-900 mb-4">
-              {dict?.admin?.exchangeRateSource || 'Exchange Rate Source'}
-            </h2>
-            <div className="space-y-4">
+        ) : (
+          <>
+            <div className="bg-white border border-gray-300 p-4 flex items-center justify-between flex-wrap gap-2">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  {dict?.admin?.exchangeRateSource || 'Exchange Rate Source'}
-                </label>
-                <select
-                  value={multiCurrency.exchangeRateSource || 'manual'}
-                  onChange={(e) => {
-                    updateSetting('multiCurrency.exchangeRateSource', e.target.value);
-                  }}
-                  className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
-                >
-                  <option value="manual">{dict?.admin?.manualEntry || 'Manual Entry'}</option>
-                  <option value="api">{dict?.admin?.automaticAPI || 'Automatic (API)'}</option>
-                </select>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  {dict?.admin?.baseCurrency || 'Base Currency'}
+                </p>
+                <p className="text-lg font-bold text-gray-900 mt-0.5">
+                  {settings.currency || 'PHP'} ({settings.currencySymbol || getCurrencySymbol(settings.currency || 'PHP')})
+                </p>
               </div>
+              <Link
+                href={`/${tenant}/${lang}/admin/settings`}
+                className="inline-flex items-center px-4 py-2 border border-gray-300 text-gray-700 bg-white text-sm hover:bg-gray-100 transition-colors"
+              >
+                {dict?.admin?.changeBaseCurrency || 'Change in Settings →'}
+              </Link>
+            </div>
 
-              {multiCurrency.exchangeRateSource === 'api' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    {dict?.admin?.exchangeRateApiKey || 'Exchange Rate API Key (Optional)'}
-                  </label>
-                  <input
-                    type="password"
-                    autoComplete="new-password"
-                    value={multiCurrency.exchangeRateApiKey || ''}
-                    onChange={(e) => {
-                      updateSetting('multiCurrency.exchangeRateApiKey', e.target.value);
+            {settings.suggestedCurrency && settings.suggestedCurrency.currency !== settings.currency && (
+              <div className="bg-brand-soft border border-brand p-4 flex items-center justify-between flex-wrap gap-3">
+                <p className="text-sm text-brand-navy">
+                  {(
+                    dict?.admin?.suggestedCurrencyHint ||
+                    'Your tenant\'s country ({country}) commonly uses {currency} — want to use it as your base currency?'
+                  )
+                    .replace('{country}', settings.suggestedCurrency.countryName)
+                    .replace('{currency}', settings.suggestedCurrency.currency)}
+                </p>
+                {canManage && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const code = settings.suggestedCurrency!.currency;
+                      updateSetting('currency', code);
+                      updateSetting('currencySymbol', getCurrencySymbol(code));
                     }}
-                    className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
-                    placeholder={
-                      multiCurrency.exchangeRateApiKeyConfigured
-                        ? dict?.admin?.apiKeyConfiguredPlaceholder || 'Key is configured — leave blank to keep it'
-                        : dict?.admin?.apiKeyPlaceholder || 'API key for exchange rate service'
-                    }
-                  />
-                  <p className="mt-2 text-xs text-gray-500">
-                    {dict?.admin?.apiKeyHint || 'Leave empty to use free tier (exchangerate-api.com)'}
+                    className="px-4 py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover transition-colors whitespace-nowrap"
+                  >
+                    {(dict?.admin?.useSuggestedCurrency || 'Use {currency}').replace('{currency}', settings.suggestedCurrency.currency)}
+                  </button>
+                )}
+              </div>
+            )}
+
+            {!canManage && (
+              <div className="bg-brand-soft border border-brand p-4 text-sm text-brand-navy">
+                {dict?.settings?.readOnlyNotice || "You don't have permission to change settings. Contact an admin or manager."}
+              </div>
+            )}
+
+            <fieldset disabled={!canManage} className="space-y-6">
+              <section className="bg-white border border-gray-300">
+                <div className="px-6 py-4 border-b border-gray-300">
+                  <h2 className="text-base font-bold text-gray-900">
+                    {dict?.admin?.exchangeRateSource || 'Exchange Rate Source'}
+                  </h2>
+                  <p className="text-sm text-gray-500">
+                    {dict?.admin?.exchangeRateSourceDescription || 'Enter rates by hand or pull them from an exchange rate provider'}
                   </p>
                 </div>
-              )}
-            </div>
-          </div>
+                <div className="p-6 space-y-4">
+                  <div>
+                    <label htmlFor="mc-rate-source" className={LABEL}>
+                      {dict?.admin?.exchangeRateSource || 'Exchange Rate Source'}
+                    </label>
+                    <select
+                      id="mc-rate-source"
+                      value={multiCurrency.exchangeRateSource || 'manual'}
+                      onChange={(e) => {
+                        updateSetting('multiCurrency.exchangeRateSource', e.target.value);
+                      }}
+                      className={`${INPUT} md:w-80`}
+                    >
+                      <option value="manual">{dict?.admin?.manualEntry || 'Manual Entry'}</option>
+                      <option value="api">{dict?.admin?.automaticAPI || 'Automatic (API)'}</option>
+                    </select>
+                  </div>
 
-          {multiCurrency.displayCurrencies && multiCurrency.displayCurrencies.length > 0 && (
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold text-gray-900">
-                  {dict?.admin?.exchangeRates || 'Exchange Rates'}
-                </h2>
-                <button
-                  type="button"
-                  onClick={handleFetchRates}
-                  disabled={fetchingRates || multiCurrency.exchangeRateSource !== 'api'}
-                  className="px-4 py-2 bg-brand text-white text-sm font-medium hover:bg-brand-hover disabled:bg-gray-400 disabled:cursor-not-allowed"
-                >
-                  {fetchingRates 
-                    ? (dict?.admin?.fetching || 'Fetching...') 
-                    : (dict?.admin?.fetchLatestRates || 'Fetch Latest Rates')}
-                </button>
-              </div>
-              {multiCurrency.lastUpdated && (
-                <p className="text-xs text-gray-500 mb-4">
-                  {dict?.admin?.lastUpdated || 'Last updated'}: {new Date(multiCurrency.lastUpdated).toLocaleString(undefined, { hour12: true })}
-                </p>
-              )}
-              <div className="space-y-2">
-                {multiCurrency.displayCurrencies.map((currency: string) => {
-                  // exchangeRates may be a Mongoose Map or a plain object — handle both
-                  const ratesRaw = multiCurrency.exchangeRates as unknown;
-                  const rate: number | undefined =
-                    ratesRaw instanceof Map
-                      ? (ratesRaw as Map<string, number>).get(currency)
-                      : (ratesRaw as Record<string, number> | undefined)?.[currency];
-                  return (
-                    <div key={currency} className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200">
-                      <span className="text-sm font-medium text-gray-900">{currency}</span>
+                  {multiCurrency.exchangeRateSource === 'api' && (
+                    <div>
+                      <label htmlFor="mc-api-key" className={LABEL}>
+                        {dict?.admin?.exchangeRateApiKey || 'Exchange Rate API Key (Optional)'}
+                      </label>
                       <input
-                        type="number"
-                        step="0.0001"
-                        min="0.0001"
-                        value={rate ?? ''}
+                        id="mc-api-key"
+                        type="password"
+                        autoComplete="new-password"
+                        value={multiCurrency.exchangeRateApiKey || ''}
                         onChange={(e) => {
-                          // Build a plain-object copy so the spread below always works
-                          const existing: Record<string, number> =
-                            ratesRaw instanceof Map
-                              ? Object.fromEntries(ratesRaw as Map<string, number>)
-                              : { ...((ratesRaw as Record<string, number>) || {}) };
-                          const parsed = parseFloat(e.target.value);
-                          const newRates = { ...existing, [currency]: isNaN(parsed) ? 0 : parsed };
-                          updateSetting('multiCurrency.exchangeRates', newRates);
+                          updateSetting('multiCurrency.exchangeRateApiKey', e.target.value);
                         }}
-                        className="w-32 px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-brand focus:border-brand"
-                        placeholder={dict?.admin?.ratePlaceholder || 'Rate'}
+                        className={`${INPUT} font-mono`}
+                        placeholder={
+                          multiCurrency.exchangeRateApiKeyConfigured
+                            ? dict?.admin?.apiKeyConfiguredPlaceholder || 'Key is configured — leave blank to keep it'
+                            : dict?.admin?.apiKeyPlaceholder || 'API key for exchange rate service'
+                        }
                       />
+                      <p className="text-xs text-gray-400 mt-1">
+                        {dict?.admin?.apiKeyHint || 'Leave empty to use free tier (exchangerate-api.com)'}
+                      </p>
                     </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+                  )}
+                </div>
+              </section>
 
-          {(!multiCurrency.displayCurrencies || multiCurrency.displayCurrencies.length === 0) && (
-            <div className="p-4 bg-yellow-50 border border-yellow-300">
-              <p className="text-sm text-yellow-800">
-                {dict?.admin?.noDisplayCurrencies || 'No display currencies configured. Please configure display currencies in Settings → Multi-Currency.'}
-              </p>
-            </div>
-          )}
+              <section className="bg-white border border-gray-300">
+                <div className="px-6 py-4 border-b border-gray-300 flex items-center justify-between gap-3 flex-wrap">
+                  <div>
+                    <h2 className="text-base font-bold text-gray-900">
+                      {dict?.admin?.exchangeRates || 'Exchange Rates'}
+                    </h2>
+                    <p className="text-sm text-gray-500">
+                      {dict?.admin?.lastUpdated || 'Last updated'}:{' '}
+                      {multiCurrency.lastUpdated
+                        ? new Date(multiCurrency.lastUpdated).toLocaleString(undefined, { hour12: true })
+                        : '—'}
+                    </p>
+                  </div>
+                  {hasDisplayCurrencies && multiCurrency.exchangeRateSource === 'api' && (
+                    <button
+                      type="button"
+                      onClick={handleFetchRates}
+                      disabled={fetchingRates}
+                      className="px-4 py-2 bg-brand text-white text-sm font-medium hover:bg-brand-hover disabled:opacity-50 transition-colors"
+                    >
+                      {fetchingRates
+                        ? (dict?.admin?.fetching || 'Fetching…')
+                        : (dict?.admin?.fetchLatestRates || 'Fetch Latest Rates')}
+                    </button>
+                  )}
+                </div>
 
-          {canManage && (
-            <div className="flex justify-end pt-6 mt-8 border-t border-gray-200">
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="px-6 py-3 bg-brand text-white hover:bg-brand-hover font-semibold transition-all duration-200 border border-brand-hover disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-              >
-                {saving ? (
-                  <>
-                    <div className="animate-spin h-5 w-5 border-b-2 border-white"></div>
-                    <span>{dict?.common?.saving || 'Saving...'}</span>
-                  </>
+                {hasDisplayCurrencies ? (
+                  <div className="divide-y divide-gray-200">
+                    {displayCurrencies.map((currency) => {
+                      // exchangeRates may be a Mongoose Map or a plain object — handle both
+                      const ratesRaw = multiCurrency.exchangeRates as unknown;
+                      const rate: number | undefined =
+                        ratesRaw instanceof Map
+                          ? (ratesRaw as Map<string, number>).get(currency)
+                          : (ratesRaw as Record<string, number> | undefined)?.[currency];
+                      return (
+                        <div key={currency} className="flex items-center justify-between gap-4 px-6 py-3 hover:bg-gray-100 transition-colors">
+                          <span className="text-sm font-semibold font-mono text-gray-900">{currency}</span>
+                          <div className="flex items-center gap-2">
+                            {/* Rate = units of this currency per 1 base unit (lib/multi-currency.ts) */}
+                            <span className="text-xs font-mono text-gray-500 whitespace-nowrap" aria-hidden="true">1 {baseCurrency} =</span>
+                            <input
+                              type="number"
+                              step="0.0001"
+                              min="0.0001"
+                              value={rate ?? ''}
+                              onChange={(e) => {
+                                // Build a plain-object copy so the spread below always works
+                                const existing: Record<string, number> =
+                                  ratesRaw instanceof Map
+                                    ? Object.fromEntries(ratesRaw as Map<string, number>)
+                                    : { ...((ratesRaw as Record<string, number>) || {}) };
+                                // A cleared field drops the rate rather than storing 0 —
+                                // conversion treats ≤0 as invalid, and the input must be clearable.
+                                const parsed = parseFloat(e.target.value);
+                                const newRates = { ...existing };
+                                if (isNaN(parsed)) delete newRates[currency];
+                                else newRates[currency] = parsed;
+                                updateSetting('multiCurrency.exchangeRates', newRates);
+                              }}
+                              aria-label={(dict?.admin?.rateFor || 'Exchange rate for {currency}').replace('{currency}', currency)}
+                              className="w-36 border border-gray-300 px-3 py-2 text-sm text-right tabular-nums bg-white disabled:bg-gray-100"
+                              placeholder={dict?.admin?.ratePlaceholder || 'Rate'}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 ) : (
-                  <>
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    <span>{dict?.common?.save || 'Save Settings'}</span>
-                  </>
+                  <div className="px-6 py-6">
+                    <p className="text-sm text-gray-400 italic">
+                      {dict?.admin?.noDisplayCurrencies || 'No display currencies configured. Please configure display currencies in Settings → Multi-Currency.'}
+                    </p>
+                    <Link
+                      href={`/${tenant}/${lang}/settings?tab=multiCurrency`}
+                      className="mt-4 inline-flex items-center px-4 py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover transition-colors"
+                    >
+                      {dict?.admin?.configureDisplayCurrencies || 'Configure Display Currencies →'}
+                    </Link>
+                  </div>
                 )}
-              </button>
-            </div>
-          )}
-        </fieldset>
+              </section>
+            </fieldset>
+
+            {(canManage || message) && (
+              <div className="flex items-center justify-end gap-4 flex-wrap">
+                {message && (
+                  <p
+                    role={message.type === 'error' ? 'alert' : 'status'}
+                    className={`mr-auto text-sm font-medium ${message.type === 'success' ? 'text-win8-success' : 'text-win8-danger'}`}
+                  >
+                    {message.text}
+                  </p>
+                )}
+                {canManage && (
+                  <button
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="px-4 py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover disabled:opacity-50 transition-colors"
+                  >
+                    {saving ? (dict?.settings?.saving || 'Saving…') : (dict?.settings?.save || 'Save Settings')}
+                  </button>
+                )}
+              </div>
+            )}
+          </>
+        )}
       </div>
     </div>
   );

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import prisma, { dbTransaction } from '@/lib/db';
-import { getTenantIdFromRequest } from '@/lib/api-tenant';
-import { requireAuth, getCurrentUser } from '@/lib/auth';
+import { getTenantIdForUser } from '@/lib/api-tenant';
+import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { updateStock } from '@/lib/stock';
@@ -17,7 +17,7 @@ import {
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const authUser = await requireAuth(request);
-    const tenantId = await getTenantIdFromRequest(request);
+    const tenantId = await getTenantIdForUser(request, authUser);
     const { id } = await params;
     const body = await request.json();
     const t = await getValidationTranslatorFromRequest(request);
@@ -57,7 +57,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       );
     }
 
-    const currentUser = await getCurrentUser(request);
     const { items, reason, notes } = body;
 
     // If no items specified, refund all items (full refund)
@@ -203,7 +202,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
               detailsChange: originalPayment.detailsChange,
               detailsCheckNumber: originalPayment.detailsCheckNumber,
               detailsNotes: originalPayment.detailsNotes,
-              processedById: currentUser?.userId,
+              processedById: authUser.userId,
               processedAt: new Date(),
               refundedAt: new Date(),
               refundReason: body.reason || body.notes || 'Transaction refund',

@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { getFetchErrorMessage } from '@/lib/fetch-error';
 
 export interface Booking {
   _id: string;
@@ -59,7 +60,7 @@ export function useBookingDetail(tenant: string, bookingId: string) {
           onError?.(errorMsg);
         }
       } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'Failed to update booking';
+        const errorMsg = getFetchErrorMessage(err, 'Failed to update booking');
         setError(errorMsg);
         onError?.(errorMsg);
       } finally {

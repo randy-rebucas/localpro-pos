@@ -33,7 +33,10 @@ export default function DeliveryPage() {
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterRider, setFilterRider] = useState<string>('all');
   const { canAccess } = usePermissions();
-  const canManage = canAccess('delivery.manage');
+  const canCreate = canAccess('delivery.create');
+  const canEdit = canAccess('delivery.edit');
+  // Cancelling an order is DELETE on the order.
+  const canDelete = canAccess('delivery.delete');
 
   const { settings } = useTenantSettings();
   const deliveryEnabled = supportsFeature(settings ?? undefined, 'delivery');
@@ -111,7 +114,7 @@ export default function DeliveryPage() {
             </h1>
             <p className="text-sm text-gray-500">{dict?.admin?.deliverySubtitle || 'Manage delivery orders and rider assignments'}</p>
           </div>
-          {canManage && (
+          {canCreate && (
             <button
               type="button"
               disabled={!deliveryEnabled}
@@ -262,7 +265,7 @@ export default function DeliveryPage() {
                 <label className="block text-sm font-medium text-gray-700">{dict?.admin?.rider || 'Rider'}</label>
                 <select
                   value={selectedOrder.riderId || ''}
-                  disabled={!canManage}
+                  disabled={!canEdit}
                   onChange={(e) => handleUpdateOrder(selectedOrder.id, { riderId: e.target.value || undefined })}
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand bg-white disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -276,7 +279,7 @@ export default function DeliveryPage() {
                 <label className="block text-sm font-medium text-gray-700">{dict?.admin?.status || 'Status'}</label>
                 <select
                   value={selectedOrder.status}
-                  disabled={!canManage || !isDeliveryStatusEditable(selectedOrder.status)}
+                  disabled={!canEdit || !isDeliveryStatusEditable(selectedOrder.status)}
                   onChange={(e) => handleUpdateOrder(selectedOrder.id, { status: e.target.value as DeliveryStatus })}
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand bg-white disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -291,7 +294,7 @@ export default function DeliveryPage() {
                   <p className="mt-1 text-sm text-gray-900">{selectedOrder.notes}</p>
                 </div>
               )}
-              {canManage && (
+              {canDelete && (
                 <div className="flex gap-2 pt-4 border-t border-gray-200">
                   <button
                     onClick={() => handleCancelOrder(selectedOrder.id)}

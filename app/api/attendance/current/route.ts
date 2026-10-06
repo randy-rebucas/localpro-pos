@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     // attendance page polling every employee's current clock-in status);
     // everyone else can only ever see their own.
     const requestedUserId = new URL(request.url).searchParams.get('userId');
-    const isManagerPlus = await hasTenantPermission(user.role, user.tenantId, 'attendance.manage');
+    const isManagerPlus = await hasTenantPermission(user.role, user.tenantId, 'attendance.view');
     const targetUserId = requestedUserId && isManagerPlus ? requestedUserId : user.userId;
 
     const activeSession = await prisma.attendance.findFirst({

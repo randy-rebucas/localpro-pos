@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
   try {
     const { tenantId, user } = await requireTenantAccess(request);
 
-    if (!(await hasTenantPermission(user.role, tenantId, 'subscriptions.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenantId, 'subscriptions.view'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 

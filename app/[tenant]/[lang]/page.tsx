@@ -80,6 +80,7 @@ const FloorMap = dynamic(() => import('@/components/FloorMap'), {
   ),
 });
 import { hardwareService } from '@/lib/hardware';
+import { resolveHardwareConfig, readLocalHardwareConfig } from '@/lib/hardware-helpers';
 import { getAssignedDeviceId } from '@/lib/device-identity';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -383,24 +384,10 @@ export default function Dashboard() {
   // Initialize hardware services
   useEffect(() => {
     if (settings) {
-      // Prefer localStorage (set by hardware admin page or standalone hardware settings modal),
-      // fall back to DB-saved settings.hardwareConfig so the POS works even without a prior
-      // localStorage write.
-      const hardwareConfigKey = `hardware_config_${tenant}`;
-      const savedConfig = localStorage.getItem(hardwareConfigKey);
-      if (savedConfig) {
-        try {
-          const config = JSON.parse(savedConfig);
-          hardwareService.setConfig(config);
-        } catch (error) {
-          console.error('Failed to load hardware config:', error);
-          if (settings.hardwareConfig) {
-            hardwareService.setConfig(settings.hardwareConfig);
-          }
-        }
-      } else if (settings.hardwareConfig) {
-        hardwareService.setConfig(settings.hardwareConfig);
-      }
+      // The tenant config saved on the admin Hardware page wins so a save there reaches
+      // every terminal; the browser cache only fills in per-device drawer pairing, or the
+      // whole config when nothing has been saved server-side yet.
+      hardwareService.setConfig(resolveHardwareConfig(settings.hardwareConfig, readLocalHardwareConfig(tenant)));
       // Surface a banner if a configured device type is network/usb but likely unreachable at init
       if (settings.hardwareConfig?.printer?.type === 'network' && !settings.hardwareConfig.printer.ipAddress) {
         setHwStatusMsg('Printer configured but no IP address set — check Hardware Settings');

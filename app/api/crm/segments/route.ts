@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { hasTenantPermission } from '@/lib/permissions-server';
 import prisma from '@/lib/db';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { handleApiError } from '@/lib/error-handler';
@@ -14,7 +15,10 @@ export async function GET(request: NextRequest) {
   try {
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
-    const { tenantId } = authResult;
+    const { tenantId, user } = authResult;
+    if (!(await hasTenantPermission(user.role, tenantId, 'crm.view'))) {
+      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
+    }
 
     const searchParams = request.nextUrl.searchParams;
     const segment = searchParams.get('segment') ?? 'all';

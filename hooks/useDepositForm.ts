@@ -1,3 +1,4 @@
+import { getFetchErrorMessage } from '@/lib/fetch-error';
 import { useCallback, useState } from 'react';
 
 export interface DepositFormData {
@@ -60,7 +61,7 @@ export function useDepositForm(tenant: string) {
           onError?.(errorMsg);
         }
       } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'Failed to record deposit';
+        const errorMsg = getFetchErrorMessage(err, 'Failed to record deposit');
         setError(errorMsg);
         onError?.(errorMsg);
       } finally {

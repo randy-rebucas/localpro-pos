@@ -13,7 +13,9 @@ export default function SuppliersPage() {
   const [showModal, setShowModal] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
   const { canAccess } = usePermissions();
-  const canManage = canAccess('suppliers.manage');
+  const canCreate = canAccess('suppliers.create');
+  const canEdit = canAccess('suppliers.edit');
+  const canDelete = canAccess('suppliers.delete');
 
   const {
     suppliers,
@@ -67,7 +69,7 @@ export default function SuppliersPage() {
         <div className="bg-white border border-gray-300 p-6">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-bold text-gray-900">Suppliers</h2>
-            {canManage && (
+            {canCreate && (
               <button
                 onClick={() => {
                   clearMessage();
@@ -105,21 +107,25 @@ export default function SuppliersPage() {
                       </span>
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
-                      {canManage ? (
+                      {canEdit || canDelete ? (
                         <div className="flex gap-2">
-                          <button
-                            onClick={() => {
-                              clearMessage();
-                              setEditingSupplier(supplier);
-                              setShowModal(true);
-                            }}
-                            className="text-brand hover:text-brand-navy-deep"
-                          >
-                            Edit
-                          </button>
-                          <button onClick={() => handleDelete(supplier)} className="text-red-600 hover:text-red-900">
-                            Delete
-                          </button>
+                          {canEdit && (
+                            <button
+                              onClick={() => {
+                                clearMessage();
+                                setEditingSupplier(supplier);
+                                setShowModal(true);
+                              }}
+                              className="text-brand hover:text-brand-navy-deep"
+                            >
+                              Edit
+                            </button>
+                          )}
+                          {canDelete && (
+                            <button onClick={() => handleDelete(supplier)} className="text-red-600 hover:text-red-900">
+                              Delete
+                            </button>
+                          )}
                         </div>
                       ) : (
                         <span className="text-gray-400">-</span>

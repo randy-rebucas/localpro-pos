@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
-import { getTenantIdFromRequest } from '@/lib/api-tenant';
+import { getTenantIdForUser } from '@/lib/api-tenant';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { checkRateLimit } from '@/lib/rate-limit';
@@ -38,7 +38,7 @@ export async function GET(
       );
     }
 
-    const tenantId = await getTenantIdFromRequest(request);
+    const tenantId = await getTenantIdForUser(request, user);
     if (!tenantId) {
       return NextResponse.json(
         { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
@@ -47,8 +47,7 @@ export async function GET(
     }
 
     if (
-      !(await hasTenantPermission(user.role, tenantId, 'deposits.view')) &&
-      !(await hasTenantPermission(user.role, tenantId, 'deposits.manage'))
+      !(await hasTenantPermission(user.role, tenantId, 'deposits.view'))
     ) {
       return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
     }
@@ -95,7 +94,7 @@ export async function PATCH(
       );
     }
 
-    const tenantId = await getTenantIdFromRequest(request);
+    const tenantId = await getTenantIdForUser(request, user);
     if (!tenantId) {
       return NextResponse.json(
         { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
@@ -103,14 +102,22 @@ export async function PATCH(
       );
     }
 
-    if (!(await hasTenantPermission(user.role, tenantId, 'deposits.manage'))) {
-      return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
-    }
-
     const ip = request.headers.get('x-forwarded-for') ?? 'unknown';
     const { allowed } = checkRateLimit(`write:deposits:${tenantId}:${ip}`, 60, 60_000);
     if (!allowed) {
       return NextResponse.json({ success: false, error: t('validation.tooManyRequests', 'Too many requests') }, { status: 429 });
+    }
+
+    const body = await request.json();
+    const { status, invoiceId, refundedAmount, notes } = body;
+
+    // Refunding/forfeiting is its own grantable action (deposits.refund) — it
+    // doesn't also need deposits.edit. Any other change (applying, invoice,
+    // notes) is an edit.
+    const isRefundAction = status !== undefined && SENSITIVE_STATUSES.includes(status as DepositStatus);
+    const requiredPermission = isRefundAction ? 'deposits.refund' : 'deposits.edit';
+    if (!(await hasTenantPermission(user.role, tenantId, requiredPermission))) {
+      return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
     }
 
     const { id } = await params;
@@ -121,9 +128,6 @@ export async function PATCH(
         { status: 404 }
       );
     }
-
-    const body = await request.json();
-    const { status, invoiceId, refundedAmount, notes } = body;
 
     if (status !== undefined) {
       if (!isValidDepositStatusTransition(existing.status as DepositStatus, status)) {
@@ -141,18 +145,29 @@ export async function PATCH(
         );
       }
 
-      if (
-        SENSITIVE_STATUSES.includes(status as DepositStatus) &&
-        !(await hasTenantPermission(user.role, tenantId, 'deposits.refund'))
-      ) {
-        return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
-      }
-
       if (status === 'applied' && !invoiceId && !existing.invoiceId) {
         return NextResponse.json(
           { success: false, error: t('validation.depositInvoiceRequired', 'An invoice is required to apply this deposit') },
           { status: 400 }
         );
+      }
+
+      // A refund can never exceed what was collected (omitted = full refund).
+      if (status === 'refunded' && refundedAmount !== undefined && refundedAmount !== null) {
+        const refund = Number(refundedAmount);
+        const collected = Number(existing.amount);
+        if (!Number.isFinite(refund) || refund <= 0 || refund > collected) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: t(
+                'validation.invalidRefundAmount',
+                'Refund amount must be more than 0 and no more than the deposit amount ({amount})'
+              ).replace('{amount}', collected.toFixed(2)),
+            },
+            { status: 400 }
+          );
+        }
       }
     }
 
@@ -239,7 +254,7 @@ export async function DELETE(
       );
     }
 
-    const tenantId = await getTenantIdFromRequest(request);
+    const tenantId = await getTenantIdForUser(request, user);
     if (!tenantId) {
       return NextResponse.json(
         { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
@@ -247,7 +262,7 @@ export async function DELETE(
       );
     }
 
-    if (!(await hasTenantPermission(user.role, tenantId, 'deposits.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenantId, 'deposits.delete'))) {
       return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
     }
 

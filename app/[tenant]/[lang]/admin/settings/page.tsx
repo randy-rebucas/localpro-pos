@@ -1,9 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import toast from 'react-hot-toast';
-import { Settings } from 'lucide-react';
+import { showToast } from '@/lib/toast';
+import AdminPageHeader from '@/components/admin/AdminPageHeader';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import { getDictionaryClient } from '../../dictionaries-client';
@@ -72,6 +73,37 @@ interface FormData {
   smsNotifications: boolean;
 }
 
+const inputCls = 'w-full border border-gray-300 px-3 py-2 text-sm bg-white disabled:bg-gray-100';
+const labelCls = 'block text-xs font-medium text-gray-600 mb-1';
+const groupLabelCls = 'text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3';
+const colorSwatchCls = 'h-[38px] w-14 shrink-0 border border-gray-300 bg-white p-0.5 cursor-pointer';
+
+// Module-level so it keeps a stable identity across renders — defined inside
+// the page it remounted on every keystroke/toggle and dropped keyboard focus.
+function Toggle({ label, desc, checked, onChange }: { label: string; desc?: string; checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <label className="flex items-start gap-3 cursor-pointer py-3">
+      <input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} className="checkbox-win8 mt-0.5 shrink-0" />
+      <div>
+        <span className="text-sm font-medium text-gray-900">{label}</span>
+        {desc && <p className="text-xs text-gray-500 mt-0.5">{desc}</p>}
+      </div>
+    </label>
+  );
+}
+
+function SectionCard({ title, desc, children, bodyCls = 'p-6 space-y-4' }: { title: string; desc?: string; children: React.ReactNode; bodyCls?: string }) {
+  return (
+    <section className="bg-white border border-gray-300">
+      <div className="px-6 py-4 border-b border-gray-300">
+        <h2 className="text-base font-bold text-gray-900">{title}</h2>
+        {desc && <p className="text-sm text-gray-500">{desc}</p>}
+      </div>
+      <div className={bodyCls}>{children}</div>
+    </section>
+  );
+}
+
 export default function AdminSettingsPage() {
   const params = useParams();
   const tenant = params.tenant as string;
@@ -116,6 +148,8 @@ export default function AdminSettingsPage() {
   const [activeSection, setActiveSection] = useState('general');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
   const [form, setForm] = useState<FormData>({
     companyName: '', businessType: '', taxId: '', registrationNumber: '',
     language: 'en', timezone: 'Asia/Manila', currency: 'PHP', currencySymbol: '₱',
@@ -138,6 +172,8 @@ export default function AdminSettingsPage() {
   const [savedForm, setSavedForm] = useState<FormData>(form);
 
   const fetchSettings = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
     try {
       const res = await fetch(`/api/tenants/${tenant}/settings`);
       const json = await res.json();
@@ -202,9 +238,13 @@ export default function AdminSettingsPage() {
           setSavedForm(next);
           return next;
         });
+      } else {
+        // Never fall through to an editable form of defaults — saving a tab
+        // from that state would overwrite the real settings.
+        setLoadError(json.error || dict?.settings?.failedToLoad || 'Failed to load settings');
       }
     } catch {
-      toast.error(dict?.settings?.failedToLoad || 'Failed to load settings');
+      setLoadError(dict?.settings?.failedToLoad || 'Failed to load settings');
     } finally {
       setLoading(false);
     }
@@ -212,8 +252,10 @@ export default function AdminSettingsPage() {
 
   useEffect(() => { fetchSettings(); }, [fetchSettings]);
 
-  const set = <K extends keyof FormData>(key: K, value: FormData[K]) =>
+  const set = <K extends keyof FormData>(key: K, value: FormData[K]) => {
+    setFormError(null);
     setForm(f => ({ ...f, [key]: value }));
+  };
 
   // Only the fields owned by the active tab are sent on save — the API does a
   // per-key $set so a stale read of other tabs' fields (loaded once at mount)
@@ -226,9 +268,16 @@ export default function AdminSettingsPage() {
     features: ['enableInventory', 'enableCategories', 'enableDiscounts', 'enableLoyaltyProgram', 'enableCustomerManagement', 'enableBookingScheduling', 'enableTableManagement', 'enableOnAccountSales', 'enableSuppliers', 'enableExpenses', 'enableEmployees', 'autoOpenDrawerOnShiftStart', 'autoOpenDrawerOnShiftEnd'],
     notifications: ['lowStockAlert', 'lowStockThreshold', 'emailNotifications', 'smsNotifications'],
   };
+  // Fields a tab owns that are sent in a different shape (the address goes
+  // out as a nested `address` object), so they're not in SECTION_FIELDS but
+  // still count toward its dirty state.
+  const EXTRA_DIRTY_FIELDS: Record<string, (keyof FormData)[]> = {
+    contact: ['addressStreet', 'addressCity', 'addressState', 'addressZipCode', 'addressCountry'],
+  };
 
   const isSectionDirty = (sectionId: string): boolean =>
-    (SECTION_FIELDS[sectionId] || []).some(key => form[key] !== savedForm[key]);
+    [...(SECTION_FIELDS[sectionId] || []), ...(EXTRA_DIRTY_FIELDS[sectionId] || [])]
+      .some(key => form[key] !== savedForm[key]);
 
   const switchSection = (sectionId: string) => {
     if (sectionId === activeSection) return;
@@ -238,6 +287,7 @@ export default function AdminSettingsPage() {
       if (!window.confirm(confirmMsg)) return;
       setForm(savedForm);
     }
+    setFormError(null);
     setActiveSection(sectionId);
   };
 
@@ -284,10 +334,11 @@ export default function AdminSettingsPage() {
   const handleSave = async () => {
     const validationError = validateActiveSection();
     if (validationError) {
-      toast.error(validationError);
+      setFormError(validationError);
       return;
     }
 
+    setFormError(null);
     setSaving(true);
     try {
       const payload: Record<string, unknown> = {};
@@ -311,106 +362,100 @@ export default function AdminSettingsPage() {
       });
       const json = await res.json();
       if (json.success) {
-        toast.success(dict?.settings?.saved || 'Settings saved');
-        setSavedForm(f => ({ ...f, ...payload } as FormData));
+        showToast.success(dict?.settings?.saved || 'Settings saved');
+        // Snapshot every field this tab owns (incl. the address fields, which
+        // are sent nested rather than as flat keys) so the dirty check is exact.
+        const savedKeys = [...(SECTION_FIELDS[activeSection] || []), ...(EXTRA_DIRTY_FIELDS[activeSection] || [])];
+        setSavedForm(f => {
+          const next = { ...f };
+          for (const key of savedKeys) (next as Record<string, unknown>)[key] = form[key];
+          return next;
+        });
         await refreshSettings();
       } else {
-        toast.error(json.error || dict?.settings?.error || 'Failed to save settings');
+        showToast.error(json.error || dict?.settings?.error || 'Failed to save settings');
       }
     } catch {
-      toast.error(dict?.settings?.error || 'Failed to save settings');
+      showToast.error(dict?.settings?.error || 'Failed to save settings');
     } finally {
       setSaving(false);
     }
   };
 
-  const inputCls = 'w-full border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand focus:border-brand';
-  const labelCls = 'block text-xs font-medium text-gray-600 mb-1';
-  const checkboxCls = 'checkbox-win8 w-4 h-4';
-
-  const Toggle = ({ label, desc, checked, onChange }: { label: string; desc?: string; checked: boolean; onChange: (v: boolean) => void }) => (
-    <label className="flex items-start gap-3 cursor-pointer py-2">
-      <input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} className={`${checkboxCls} mt-0.5 shrink-0`} />
-      <div>
-        <span className="text-sm font-medium text-gray-700">{label}</span>
-        {desc && <p className="text-xs text-gray-400 mt-0.5">{desc}</p>}
-      </div>
-    </label>
+  const formErrorBox = formError && (
+    <div role="alert" className="p-3 bg-white border border-win8-danger text-win8-danger text-sm">{formError}</div>
   );
 
   return (
     <div className="px-4 sm:px-6 py-6">
-
-      {/* Page header */}
-      <div className="flex items-start justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <Settings className="w-7 h-7 text-brand flex-shrink-0" />
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">{dict?.settings?.title || 'Settings'}</h1>
-            <p className="text-sm text-gray-500 mt-0.5">{dict?.settings?.subtitle || 'Configure your store preferences and business information'}</p>
-          </div>
-        </div>
-        {canManage && (
+      <AdminPageHeader
+        title={dict?.settings?.title || 'Settings'}
+        description={dict?.settings?.subtitle || 'Configure your store preferences and business information'}
+        actions={canManage && !loadError ? (
           <button
             onClick={handleSave}
             disabled={saving || loading}
-            className="px-4 py-2 text-sm font-medium bg-brand text-white border border-brand-hover hover:bg-brand-hover disabled:opacity-50 transition-colors"
+            className="px-4 py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover disabled:opacity-50 transition-colors"
           >
-            {saving ? (dict?.settings?.saving || 'Saving...') : (dict?.settings?.save || 'Save Settings')}
+            {saving ? (dict?.settings?.saving || 'Saving…') : (dict?.settings?.save || 'Save Settings')}
           </button>
-        )}
-      </div>
+        ) : undefined}
+      />
 
-      {!loading && !canManage && (
-        <div className="mb-6 p-3 bg-yellow-50 border border-yellow-300 text-sm text-yellow-800">
-          {dict?.settings?.readOnlyNotice || "You don't have permission to change settings. Contact an admin or manager."}
-        </div>
-      )}
-
-      {loading ? (
-        <div className="flex items-center justify-center py-24">
-          <div className="text-center">
-            <div className="inline-block animate-spin h-7 w-7 border-b-2 border-brand mb-3" />
-            <p className="text-sm text-gray-400">{dict?.settings?.loading || 'Loading settings...'}</p>
+      <div className="space-y-4">
+        {!loading && !loadError && !canManage && (
+          <div className="bg-brand-soft border border-brand p-4 text-sm text-brand-navy">
+            {dict?.settings?.readOnlyNotice || "You don't have permission to change settings. Contact an admin or manager."}
           </div>
-        </div>
-      ) : (
-        <div className="flex gap-6 items-start">
+        )}
 
-          {/* Left — section nav */}
-          <aside className="w-44 shrink-0 sticky top-6">
-            <div className="bg-white border border-gray-300">
-              <p className="px-4 pt-4 pb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">{dict?.settings?.sectionsNavLabel || 'Sections'}</p>
-              <nav className="pb-2">
-                {SECTIONS.map(s => (
-                  <button
-                    key={s.id}
-                    onClick={() => switchSection(s.id)}
-                    className={`w-full text-left px-4 py-2 text-sm transition-colors ${
-                      activeSection === s.id
-                        ? 'bg-brand text-white font-medium'
-                        : 'text-gray-600 hover:bg-gray-50'
-                    }`}
-                  >
-                    {s.label}
-                  </button>
-                ))}
-              </nav>
-            </div>
-          </aside>
+        {loading ? (
+          <div className="text-center py-12 bg-white border border-gray-300">
+            <div className="win8-spinner text-brand mx-auto"><span /><span /><span /><span /><span /></div>
+            <p className="mt-3 text-gray-400 text-sm">{dict?.settings?.loading || 'Loading settings…'}</p>
+          </div>
+        ) : loadError ? (
+          <div className="text-center py-12 bg-white border border-gray-300">
+            <p className="text-win8-danger text-sm font-medium">{loadError}</p>
+            <button onClick={fetchSettings} className="mt-4 px-4 py-2 bg-brand text-white text-sm hover:bg-brand-hover transition-colors">
+              {dict?.settings?.retry || 'Retry'}
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col md:flex-row gap-4 md:gap-6 items-stretch md:items-start">
 
-          {/* Right — section content */}
-          <fieldset disabled={!canManage} className="flex-1 min-w-0">
-
-            {/* General */}
-            {activeSection === 'general' && (
+            {/* Section nav */}
+            <aside className="w-full md:w-48 shrink-0 md:sticky md:top-6">
               <div className="bg-white border border-gray-300">
-                <div className="px-5 py-3 border-b border-gray-200 bg-gray-50">
-                  <h2 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{dict?.settings?.tabs?.general || 'General'}</h2>
-                  <p className="text-xs text-gray-400 mt-0.5">{dict?.settings?.generalSectionDesc || 'Business identity, locale, and currency settings'}</p>
-                </div>
-                <div className="p-5 space-y-6">
+                <p className="hidden md:block px-4 pt-4 pb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">{dict?.settings?.sectionsNavLabel || 'Sections'}</p>
+                <nav aria-label={dict?.settings?.sectionsNavLabel || 'Sections'} className="flex md:flex-col overflow-x-auto md:pb-2">
+                  {SECTIONS.map(s => (
+                    <button
+                      key={s.id}
+                      onClick={() => switchSection(s.id)}
+                      aria-current={activeSection === s.id ? 'page' : undefined}
+                      className={`shrink-0 md:w-full text-left px-4 py-2 text-sm whitespace-nowrap transition-colors ${
+                        activeSection === s.id
+                          ? 'bg-brand text-white font-medium'
+                          : 'text-gray-700 hover:bg-gray-100'
+                      }`}
+                    >
+                      {s.label}
+                    </button>
+                  ))}
+                </nav>
+              </div>
+            </aside>
 
+            {/* Section content */}
+            <fieldset disabled={!canManage} className="flex-1 min-w-0 space-y-4">
+
+              {activeSection === 'general' && (
+                <SectionCard
+                  title={dict?.settings?.tabs?.general || 'General'}
+                  desc={dict?.settings?.generalSectionDesc || 'Business identity, locale, and currency settings'}
+                  bodyCls="p-6 space-y-6"
+                >
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="sm:col-span-2">
                       <label className={labelCls}>{dict?.settings?.companyStoreNameLabel || 'Company / Store Name'}</label>
@@ -425,16 +470,16 @@ export default function AdminSettingsPage() {
                     </div>
                     <div>
                       <label className={labelCls}>{dict?.settings?.taxIdEin || 'Tax ID / TIN'}</label>
-                      <input type="text" value={form.taxId} onChange={e => set('taxId', e.target.value)} placeholder={dict?.settings?.taxIdPlaceholderExample || 'e.g. 123-456-789-000'} className={inputCls} />
+                      <input type="text" value={form.taxId} onChange={e => set('taxId', e.target.value)} placeholder={dict?.settings?.taxIdPlaceholderExample || 'e.g. 123-456-789-000'} className={`${inputCls} font-mono`} />
                     </div>
                     <div>
                       <label className={labelCls}>{dict?.settings?.registrationNumberLabel || 'Registration Number'}</label>
-                      <input type="text" value={form.registrationNumber} onChange={e => set('registrationNumber', e.target.value)} placeholder={dict?.settings?.registrationNumberDtiPlaceholder || 'DTI / SEC / CDA'} className={inputCls} />
+                      <input type="text" value={form.registrationNumber} onChange={e => set('registrationNumber', e.target.value)} placeholder={dict?.settings?.registrationNumberDtiPlaceholder || 'DTI / SEC / CDA'} className={`${inputCls} font-mono`} />
                     </div>
                   </div>
 
-                  <div className="border-t border-gray-100 pt-5">
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">{dict?.settings?.localeSectionLabel || 'Locale'}</p>
+                  <div className="border-t border-gray-200 pt-5">
+                    <p className={groupLabelCls}>{dict?.settings?.localeSectionLabel || 'Locale'}</p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <label className={labelCls}>{dict?.settings?.language || 'Language'}</label>
@@ -467,8 +512,8 @@ export default function AdminSettingsPage() {
                     </div>
                   </div>
 
-                  <div className="border-t border-gray-100 pt-5">
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">{dict?.settings?.currencySectionLabel || 'Currency'}</p>
+                  <div className="border-t border-gray-200 pt-5">
+                    <p className={groupLabelCls}>{dict?.settings?.currencySectionLabel || 'Currency'}</p>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       <div className="sm:col-span-2">
                         <label className={labelCls}>{dict?.settings?.currencySectionLabel || 'Currency'}</label>
@@ -476,6 +521,7 @@ export default function AdminSettingsPage() {
                           value={form.currency}
                           onChange={e => {
                             const code = e.target.value;
+                            setFormError(null);
                             setForm(f => ({ ...f, currency: code, currencySymbol: getCurrencySymbol(code) }));
                           }}
                           className={inputCls}
@@ -497,24 +543,21 @@ export default function AdminSettingsPage() {
                     </div>
                   </div>
 
-                </div>
-              </div>
-            )}
+                  {formErrorBox}
+                </SectionCard>
+              )}
 
-            {/* Branding */}
-            {activeSection === 'branding' && (
-              <div className="bg-white border border-gray-300">
-                <div className="px-5 py-3 border-b border-gray-200 bg-gray-50">
-                  <h2 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{dict?.settings?.tabs?.branding || 'Branding'}</h2>
-                  <p className="text-xs text-gray-400 mt-0.5">{dict?.settings?.brandingSectionDesc || 'Colors and logo used across your store and receipts'}</p>
-                </div>
-                <div className="p-5 space-y-4">
+              {activeSection === 'branding' && (
+                <SectionCard
+                  title={dict?.settings?.tabs?.branding || 'Branding'}
+                  desc={dict?.settings?.brandingSectionDesc || 'Colors and logo used across your store and receipts'}
+                >
                   <div>
                     <label className={labelCls}>{dict?.settings?.logoUrl || 'Logo URL'}</label>
                     <input type="url" value={form.logo} onChange={e => set('logo', e.target.value)} placeholder="https://..." className={inputCls} />
                     <p className="text-xs text-gray-400 mt-1">{dict?.settings?.logoUrlHint || 'Must be a secure (https://) image URL'}</p>
                     {form.logo && SAFE_LOGO_URL_RE.test(form.logo) && (
-                      <div className="mt-3 border border-gray-200 p-3 inline-block">
+                      <div className="mt-3 border border-gray-300 bg-gray-50 p-3 inline-block">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={form.logo} alt={dict?.settings?.logoPreviewAlt || 'Logo preview'} className="h-16 object-contain" onError={e => { e.currentTarget.style.display = 'none'; }} />
                       </div>
@@ -524,37 +567,34 @@ export default function AdminSettingsPage() {
                     <div>
                       <label className={labelCls}>{dict?.settings?.primaryColor || 'Primary Color'}</label>
                       <div className="flex gap-2">
-                        <input type="color" value={form.primaryColor} onChange={e => set('primaryColor', e.target.value)} className="h-9 w-14 border border-gray-300 bg-white p-0.5 cursor-pointer" />
-                        <input type="text" value={form.primaryColor} onChange={e => set('primaryColor', e.target.value)} placeholder="#35979c" className={`${inputCls} flex-1`} />
+                        <input type="color" value={form.primaryColor} onChange={e => set('primaryColor', e.target.value)} aria-label={dict?.settings?.primaryColor || 'Primary Color'} className={colorSwatchCls} />
+                        <input type="text" value={form.primaryColor} onChange={e => set('primaryColor', e.target.value)} placeholder="#35979c" className={`${inputCls} flex-1 font-mono`} />
                       </div>
                     </div>
                     <div>
                       <label className={labelCls}>{dict?.settings?.secondaryColor || 'Secondary Color'}</label>
                       <div className="flex gap-2">
-                        <input type="color" value={form.secondaryColor || '#000000'} onChange={e => set('secondaryColor', e.target.value)} className="h-9 w-14 border border-gray-300 bg-white p-0.5 cursor-pointer" />
-                        <input type="text" value={form.secondaryColor} onChange={e => set('secondaryColor', e.target.value)} placeholder="#000000" className={`${inputCls} flex-1`} />
+                        <input type="color" value={form.secondaryColor || '#000000'} onChange={e => set('secondaryColor', e.target.value)} aria-label={dict?.settings?.secondaryColor || 'Secondary Color'} className={colorSwatchCls} />
+                        <input type="text" value={form.secondaryColor} onChange={e => set('secondaryColor', e.target.value)} placeholder="#000000" className={`${inputCls} flex-1 font-mono`} />
                       </div>
                     </div>
                   </div>
-                  <div className="mt-2">
-                    <p className="text-xs text-gray-400">
-                      {dict?.settings?.advancedBrandingHintPrefix || 'For advanced branding (fonts, themes, custom CSS), go to'}{' '}
-                      <span className="text-brand font-medium">{dict?.settings?.advancedBrandingHintLink || 'Advanced Branding'}</span>{' '}
-                      {dict?.settings?.advancedBrandingHintSuffix || 'in the sidebar.'}
-                    </p>
+                  <div className="bg-brand-soft border border-brand p-4 text-sm text-brand-navy">
+                    {dict?.settings?.advancedBrandingHintPrefix || 'For advanced branding (fonts, themes, custom CSS), go to'}{' '}
+                    <Link href={`/${tenant}/${lang}/admin/advanced-branding`} className="font-semibold text-brand hover:underline">
+                      {dict?.settings?.advancedBrandingHintLink || 'Advanced Branding'}
+                    </Link>{' '}
+                    {dict?.settings?.advancedBrandingHintSuffix || 'in the sidebar.'}
                   </div>
-                </div>
-              </div>
-            )}
+                  {formErrorBox}
+                </SectionCard>
+              )}
 
-            {/* Contact */}
-            {activeSection === 'contact' && (
-              <div className="bg-white border border-gray-300">
-                <div className="px-5 py-3 border-b border-gray-200 bg-gray-50">
-                  <h2 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{dict?.settings?.contactInformation || 'Contact Information'}</h2>
-                  <p className="text-xs text-gray-400 mt-0.5">{dict?.settings?.contactSectionDesc || 'Displayed on receipts and customer-facing documents'}</p>
-                </div>
-                <div className="p-5 space-y-4">
+              {activeSection === 'contact' && (
+                <SectionCard
+                  title={dict?.settings?.contactInformation || 'Contact Information'}
+                  desc={dict?.settings?.contactSectionDesc || 'Displayed on receipts and customer-facing documents'}
+                >
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className={labelCls}>{dict?.settings?.emailAddressLabel || 'Email Address'}</label>
@@ -570,8 +610,8 @@ export default function AdminSettingsPage() {
                     </div>
                   </div>
 
-                  <div className="border-t border-gray-100 pt-4">
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">{dict?.settings?.addressSectionLabel || 'Address'}</p>
+                  <div className="border-t border-gray-200 pt-4">
+                    <p className={groupLabelCls}>{dict?.settings?.addressSectionLabel || 'Address'}</p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="sm:col-span-2">
                         <label className={labelCls}>{dict?.settings?.streetLabel || 'Street'}</label>
@@ -595,53 +635,42 @@ export default function AdminSettingsPage() {
                       </div>
                     </div>
                   </div>
-                </div>
-              </div>
-            )}
+                  {formErrorBox}
+                </SectionCard>
+              )}
 
-            {/* Receipt */}
-            {activeSection === 'receipt' && (
-              <div className="space-y-4">
-                <div className="bg-white border border-gray-300">
-                  <div className="px-5 py-3 border-b border-gray-200 bg-gray-50">
-                    <h2 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{dict?.settings?.receiptContentTitle || 'Receipt Content'}</h2>
-                    <p className="text-xs text-gray-400 mt-0.5">{dict?.settings?.receiptContentSectionDesc || 'Text printed at the top and bottom of every receipt'}</p>
-                  </div>
-                  <div className="p-5 space-y-4">
+              {activeSection === 'receipt' && (
+                <>
+                  <SectionCard
+                    title={dict?.settings?.receiptContentTitle || 'Receipt Content'}
+                    desc={dict?.settings?.receiptContentSectionDesc || 'Text printed at the top and bottom of every receipt'}
+                  >
                     <div>
                       <label className={labelCls}>{dict?.settings?.receiptHeader || 'Receipt Header'}</label>
-                      <textarea value={form.receiptHeader} onChange={e => set('receiptHeader', e.target.value)} rows={3} maxLength={RECEIPT_TEXT_MAX_LEN} placeholder={dict?.settings?.receiptHeaderExamplePlaceholder || 'e.g. Thank you for shopping with us!'} className={inputCls} />
+                      <textarea value={form.receiptHeader} onChange={e => set('receiptHeader', e.target.value)} rows={3} maxLength={RECEIPT_TEXT_MAX_LEN} placeholder={dict?.settings?.receiptHeaderExamplePlaceholder || 'e.g. Thank you for shopping with us!'} className={`${inputCls} resize-none`} />
+                      <p className="text-xs text-gray-400 mt-1 text-right tabular-nums">{form.receiptHeader.length}/{RECEIPT_TEXT_MAX_LEN}</p>
                     </div>
                     <div>
                       <label className={labelCls}>{dict?.settings?.receiptFooter || 'Receipt Footer'}</label>
-                      <textarea value={form.receiptFooter} onChange={e => set('receiptFooter', e.target.value)} rows={3} maxLength={RECEIPT_TEXT_MAX_LEN} placeholder={dict?.settings?.receiptFooterExamplePlaceholder || 'e.g. All sales are final. Goods once sold cannot be returned.'} className={inputCls} />
+                      <textarea value={form.receiptFooter} onChange={e => set('receiptFooter', e.target.value)} rows={3} maxLength={RECEIPT_TEXT_MAX_LEN} placeholder={dict?.settings?.receiptFooterExamplePlaceholder || 'e.g. All sales are final. Goods once sold cannot be returned.'} className={`${inputCls} resize-none`} />
+                      <p className="text-xs text-gray-400 mt-1 text-right tabular-nums">{form.receiptFooter.length}/{RECEIPT_TEXT_MAX_LEN}</p>
                     </div>
-                  </div>
-                </div>
+                  </SectionCard>
 
-                <div className="bg-white border border-gray-300">
-                  <div className="px-5 py-3 border-b border-gray-200 bg-gray-50">
-                    <h2 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{dict?.settings?.showOnReceiptTitle || 'Show on Receipt'}</h2>
-                  </div>
-                  <div className="p-5 divide-y divide-gray-50">
+                  <SectionCard title={dict?.settings?.showOnReceiptTitle || 'Show on Receipt'} bodyCls="px-6 py-2 divide-y divide-gray-200">
                     <Toggle label={dict?.settings?.storeLogoLabel || 'Store Logo'} desc={dict?.settings?.storeLogoDesc || 'Print logo at the top of receipts'} checked={form.receiptShowLogo} onChange={v => set('receiptShowLogo', v)} />
                     <Toggle label={dict?.settings?.storeAddressLabel || 'Store Address'} desc={dict?.settings?.storeAddressDesc || 'Print full address on receipts'} checked={form.receiptShowAddress} onChange={v => set('receiptShowAddress', v)} />
                     <Toggle label={dict?.settings?.phoneNumberLabel || 'Phone Number'} desc={dict?.settings?.phoneNumberDesc || 'Print contact phone on receipts'} checked={form.receiptShowPhone} onChange={v => set('receiptShowPhone', v)} />
                     <Toggle label={dict?.settings?.emailAddressLabel || 'Email Address'} desc={dict?.settings?.emailAddressDesc || 'Print email on receipts'} checked={form.receiptShowEmail} onChange={v => set('receiptShowEmail', v)} />
-                  </div>
-                </div>
+                  </SectionCard>
 
-                <div className="bg-white border border-gray-300">
-                  <div className="px-5 py-3 border-b border-gray-200 bg-gray-50">
-                    <h2 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{dict?.settings?.taxSectionTitle || 'Tax'}</h2>
-                  </div>
-                  <div className="p-5 space-y-4">
+                  <SectionCard title={dict?.settings?.taxSectionTitle || 'Tax'} bodyCls="px-6 py-2">
                     <Toggle label={dict?.settings?.enableTax || 'Enable Tax'} desc={dict?.settings?.enableTaxDesc || 'Apply tax to all transactions'} checked={form.taxEnabled} onChange={v => set('taxEnabled', v)} />
                     {form.taxEnabled && (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-gray-200 pt-4 pb-4">
                         <div>
                           <label className={labelCls}>{dict?.settings?.taxRate || 'Tax Rate (%)'}</label>
-                          <input type="number" min={0} max={100} step={0.01} value={form.taxRate} onChange={e => set('taxRate', Number(e.target.value))} className={inputCls} />
+                          <input type="number" min={0} max={100} step={0.01} value={form.taxRate} onChange={e => set('taxRate', Number(e.target.value))} className={`${inputCls} tabular-nums`} />
                         </div>
                         <div>
                           <label className={labelCls}>{dict?.settings?.taxLabel || 'Tax Label'}</label>
@@ -649,88 +678,74 @@ export default function AdminSettingsPage() {
                         </div>
                       </div>
                     )}
-                  </div>
-                </div>
-              </div>
-            )}
+                    {formError && <div className="pb-4">{formErrorBox}</div>}
+                  </SectionCard>
+                </>
+              )}
 
-            {/* Features */}
-            {activeSection === 'features' && (
-              <div className="bg-white border border-gray-300">
-                <div className="px-5 py-3 border-b border-gray-200 bg-gray-50">
-                  <h2 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{dict?.settings?.featureFlagsTitle || 'Feature Flags'}</h2>
-                  <p className="text-xs text-gray-400 mt-0.5">{dict?.settings?.featureFlagsDesc || 'Enable or disable modules for your store'}</p>
-                </div>
-                <div className="p-5 divide-y divide-gray-50">
-                  <Toggle label={dict?.settings?.inventoryTrackingLabel || 'Inventory Tracking'} desc={dict?.settings?.inventoryTrackingDesc || 'Track stock levels for products'} checked={form.enableInventory} onChange={v => set('enableInventory', v)} />
-                  <Toggle label={dict?.settings?.categoriesLabel || 'Categories'} desc={dict?.settings?.categoriesDesc || 'Organise products into categories'} checked={form.enableCategories} onChange={v => set('enableCategories', v)} />
-                  <Toggle label={dict?.settings?.discountsLabel || 'Discounts'} desc={dict?.settings?.discountsDesc || 'Apply discount codes and percentage discounts'} checked={form.enableDiscounts} onChange={v => set('enableDiscounts', v)} />
-                  <Toggle label={dict?.settings?.loyaltyProgram || 'Loyalty Program'} desc={dict?.settings?.loyaltyProgramDescShort || 'Earn and redeem loyalty points at checkout'} checked={form.enableLoyaltyProgram} onChange={v => set('enableLoyaltyProgram', v)} />
-                  <Toggle label={dict?.settings?.customerManagementLabel || 'Customer Management'} desc={dict?.settings?.customerManagementDescShort || 'Maintain a customer database with profiles'} checked={form.enableCustomerManagement} onChange={v => set('enableCustomerManagement', v)} />
-                  <Toggle label={dict?.settings?.bookingScheduling || 'Booking & Scheduling'} desc={dict?.settings?.bookingSchedulingDescShort || 'Accept service appointments and reservations'} checked={form.enableBookingScheduling} onChange={v => set('enableBookingScheduling', v)} />
-                  <Toggle label={dict?.settings?.tableManagementLabel || 'Table Management'} desc={dict?.settings?.tableManagementDesc || 'Manage dining tables and floor layout'} checked={form.enableTableManagement} onChange={v => set('enableTableManagement', v)} />
-                  <Toggle label={dict?.settings?.onAccountSalesLabel || 'On-Account Sales'} desc={dict?.settings?.onAccountSalesDescShort || 'Allow customers to purchase on credit / pay later'} checked={form.enableOnAccountSales} onChange={v => set('enableOnAccountSales', v)} />
-                  <Toggle label={dict?.settings?.suppliersLabel || 'Suppliers'} desc={dict?.settings?.suppliersDescShort || 'Manage suppliers and purchase orders'} checked={form.enableSuppliers} onChange={v => set('enableSuppliers', v)} />
-                  <Toggle label={dict?.settings?.expensesLabel || 'Expenses'} desc={dict?.settings?.expensesDescShort || 'Track business expenses'} checked={form.enableExpenses} onChange={v => set('enableExpenses', v)} />
-                  <Toggle label={dict?.settings?.employeesLabel || 'Employees'} desc={dict?.settings?.employeesDescShort || 'Manage staff accounts and roles'} checked={form.enableEmployees} onChange={v => set('enableEmployees', v)} />
-                </div>
-              </div>
-            )}
+              {activeSection === 'features' && (
+                <>
+                  <SectionCard
+                    title={dict?.settings?.featureFlagsTitle || 'Feature Flags'}
+                    desc={dict?.settings?.featureFlagsDesc || 'Enable or disable modules for your store'}
+                    bodyCls="px-6 py-2 grid grid-cols-1 lg:grid-cols-2 gap-x-8"
+                  >
+                    <Toggle label={dict?.settings?.inventoryTrackingLabel || 'Inventory Tracking'} desc={dict?.settings?.inventoryTrackingDesc || 'Track stock levels for products'} checked={form.enableInventory} onChange={v => set('enableInventory', v)} />
+                    <Toggle label={dict?.settings?.categoriesLabel || 'Categories'} desc={dict?.settings?.categoriesDesc || 'Organise products into categories'} checked={form.enableCategories} onChange={v => set('enableCategories', v)} />
+                    <Toggle label={dict?.settings?.discountsLabel || 'Discounts'} desc={dict?.settings?.discountsDesc || 'Apply discount codes and percentage discounts'} checked={form.enableDiscounts} onChange={v => set('enableDiscounts', v)} />
+                    <Toggle label={dict?.settings?.loyaltyProgram || 'Loyalty Program'} desc={dict?.settings?.loyaltyProgramDescShort || 'Earn and redeem loyalty points at checkout'} checked={form.enableLoyaltyProgram} onChange={v => set('enableLoyaltyProgram', v)} />
+                    <Toggle label={dict?.settings?.customerManagementLabel || 'Customer Management'} desc={dict?.settings?.customerManagementDescShort || 'Maintain a customer database with profiles'} checked={form.enableCustomerManagement} onChange={v => set('enableCustomerManagement', v)} />
+                    <Toggle label={dict?.settings?.bookingScheduling || 'Booking & Scheduling'} desc={dict?.settings?.bookingSchedulingDescShort || 'Accept service appointments and reservations'} checked={form.enableBookingScheduling} onChange={v => set('enableBookingScheduling', v)} />
+                    <Toggle label={dict?.settings?.tableManagementLabel || 'Table Management'} desc={dict?.settings?.tableManagementDesc || 'Manage dining tables and floor layout'} checked={form.enableTableManagement} onChange={v => set('enableTableManagement', v)} />
+                    <Toggle label={dict?.settings?.onAccountSalesLabel || 'On-Account Sales'} desc={dict?.settings?.onAccountSalesDescShort || 'Allow customers to purchase on credit / pay later'} checked={form.enableOnAccountSales} onChange={v => set('enableOnAccountSales', v)} />
+                    <Toggle label={dict?.settings?.suppliersLabel || 'Suppliers'} desc={dict?.settings?.suppliersDescShort || 'Manage suppliers and purchase orders'} checked={form.enableSuppliers} onChange={v => set('enableSuppliers', v)} />
+                    <Toggle label={dict?.settings?.expensesLabel || 'Expenses'} desc={dict?.settings?.expensesDescShort || 'Track business expenses'} checked={form.enableExpenses} onChange={v => set('enableExpenses', v)} />
+                    <Toggle label={dict?.settings?.employeesLabel || 'Employees'} desc={dict?.settings?.employeesDescShort || 'Manage staff accounts and roles'} checked={form.enableEmployees} onChange={v => set('enableEmployees', v)} />
+                  </SectionCard>
 
-            {/* Cash Drawer */}
-            {activeSection === 'features' && (
-              <div className="bg-white border border-gray-300 mt-4">
-                <div className="px-5 py-3 border-b border-gray-200 bg-gray-50">
-                  <h2 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{dict?.admin?.cashDrawer || 'Cash Drawer'}</h2>
-                  <p className="text-xs text-gray-400 mt-0.5">{dict?.settings?.cashDrawerSectionDesc || 'Requires a cash drawer configured under Hardware settings'}</p>
-                </div>
-                <div className="p-5 divide-y divide-gray-50">
-                  <Toggle label={dict?.settings?.autoOpenShiftStartLabel || 'Auto-Open on Shift Start'} desc={dict?.settings?.autoOpenShiftStartDesc || 'Automatically pop open the cash drawer when a cashier starts their shift'} checked={form.autoOpenDrawerOnShiftStart} onChange={v => set('autoOpenDrawerOnShiftStart', v)} />
-                  <Toggle label={dict?.settings?.autoOpenShiftEndLabel || 'Auto-Open on Shift End'} desc={dict?.settings?.autoOpenShiftEndDesc || 'Automatically pop open the cash drawer when a cashier ends their shift'} checked={form.autoOpenDrawerOnShiftEnd} onChange={v => set('autoOpenDrawerOnShiftEnd', v)} />
-                </div>
-              </div>
-            )}
+                  <SectionCard
+                    title={dict?.admin?.cashDrawer || 'Cash Drawer'}
+                    desc={dict?.settings?.cashDrawerSectionDesc || 'Requires a cash drawer configured under Hardware settings'}
+                    bodyCls="px-6 py-2 divide-y divide-gray-200"
+                  >
+                    <Toggle label={dict?.settings?.autoOpenShiftStartLabel || 'Auto-Open on Shift Start'} desc={dict?.settings?.autoOpenShiftStartDesc || 'Automatically pop open the cash drawer when a cashier starts their shift'} checked={form.autoOpenDrawerOnShiftStart} onChange={v => set('autoOpenDrawerOnShiftStart', v)} />
+                    <Toggle label={dict?.settings?.autoOpenShiftEndLabel || 'Auto-Open on Shift End'} desc={dict?.settings?.autoOpenShiftEndDesc || 'Automatically pop open the cash drawer when a cashier ends their shift'} checked={form.autoOpenDrawerOnShiftEnd} onChange={v => set('autoOpenDrawerOnShiftEnd', v)} />
+                  </SectionCard>
+                </>
+              )}
 
-            {/* Notifications */}
-            {activeSection === 'notifications' && (
-              <div className="space-y-4">
-                <div className="bg-white border border-gray-300">
-                  <div className="px-5 py-3 border-b border-gray-200 bg-gray-50">
-                    <h2 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{dict?.settings?.inventoryAlertsTitle || 'Inventory Alerts'}</h2>
-                  </div>
-                  <div className="p-5 space-y-4">
+              {activeSection === 'notifications' && (
+                <>
+                  <SectionCard title={dict?.settings?.inventoryAlertsTitle || 'Inventory Alerts'} bodyCls="px-6 py-2">
                     <Toggle label={dict?.settings?.enableLowStockAlerts || 'Low Stock Alerts'} desc={dict?.settings?.lowStockAlertDesc || 'Get notified when products fall below the threshold'} checked={form.lowStockAlert} onChange={v => set('lowStockAlert', v)} />
                     {form.lowStockAlert && (
-                      <div>
+                      <div className="border-t border-gray-200 pt-4 pb-4">
                         <label className={labelCls}>{dict?.settings?.lowStockThresholdUnitsLabel || 'Low Stock Threshold (units)'}</label>
-                        <input type="number" min={1} max={LOW_STOCK_THRESHOLD_MAX} value={form.lowStockThreshold} onChange={e => set('lowStockThreshold', Number(e.target.value))} className={`${inputCls} w-32`} />
+                        <input type="number" min={1} max={LOW_STOCK_THRESHOLD_MAX} value={form.lowStockThreshold} onChange={e => set('lowStockThreshold', Number(e.target.value))} className="w-32 border border-gray-300 px-3 py-2 text-sm bg-white disabled:bg-gray-100 tabular-nums" />
                       </div>
                     )}
-                  </div>
-                </div>
+                    {formError && <div className="pb-4">{formErrorBox}</div>}
+                  </SectionCard>
 
-                <div className="bg-white border border-gray-300">
-                  <div className="px-5 py-3 border-b border-gray-200 bg-gray-50">
-                    <h2 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{dict?.settings?.notificationChannels || 'Notification Channels'}</h2>
-                  </div>
-                  <div className="p-5 divide-y divide-gray-50">
+                  <SectionCard title={dict?.settings?.notificationChannels || 'Notification Channels'} bodyCls="px-6 py-2 divide-y divide-gray-200">
                     <Toggle label={dict?.settings?.emailNotificationsLabel || 'Email Notifications'} desc={dict?.settings?.emailNotificationsDescShort || 'Receive alerts and summaries via email'} checked={form.emailNotifications} onChange={v => set('emailNotifications', v)} />
                     <Toggle label={dict?.settings?.smsNotificationsLabel || 'SMS Notifications'} desc={dict?.settings?.smsNotificationsDescShort || 'Receive alerts via SMS (requires SMS provider)'} checked={form.smsNotifications} onChange={v => set('smsNotifications', v)} />
-                  </div>
-                  <div className="px-5 py-3 border-t border-gray-100">
-                    <p className="text-xs text-gray-400">
-                      {dict?.settings?.notificationTemplatesHintPrefix || 'For notification templates (booking confirmations, attendance alerts), go to'}{' '}
-                      <span className="text-brand font-medium">{dict?.settings?.notificationTemplatesHintLink || 'Notifications'}</span>{' '}
-                      {dict?.settings?.notificationTemplatesHintSuffix || 'in the sidebar.'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
+                  </SectionCard>
 
-          </fieldset>
-        </div>
-      )}
+                  <div className="bg-brand-soft border border-brand p-4 text-sm text-brand-navy">
+                    {dict?.settings?.notificationTemplatesHintPrefix || 'For notification templates (booking confirmations, attendance alerts), go to'}{' '}
+                    <Link href={`/${tenant}/${lang}/admin/notification-templates`} className="font-semibold text-brand hover:underline">
+                      {dict?.settings?.notificationTemplatesHintLink || 'Notifications'}
+                    </Link>{' '}
+                    {dict?.settings?.notificationTemplatesHintSuffix || 'in the sidebar.'}
+                  </div>
+                </>
+              )}
+
+            </fieldset>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

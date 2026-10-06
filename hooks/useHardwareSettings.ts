@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { ITenantSettings } from '@/types/tenant';
+import { isEmptyHardwareConfig, readLocalHardwareConfig, resolveHardwareConfig } from '@/lib/hardware-helpers';
 
 export interface HardwareSettingsMessage {
   type: 'success' | 'error';
@@ -13,6 +14,8 @@ export const useHardwareSettings = (tenant: string) => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<HardwareSettingsMessage | null>(null);
+  /** True when the form was pre-filled from this browser's cache and isn't saved server-side yet. */
+  const [importedFromDevice, setImportedFromDevice] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const fetchSettings = useCallback(async () => {
@@ -32,11 +35,17 @@ export const useHardwareSettings = (tenant: string) => {
       const data = await res.json();
 
       if (data.success) {
-        const defaultSettings: ITenantSettings = {
-          hardwareConfig: {},
+        // Before hardware config was persisted server-side it lived only in each
+        // browser's cache. If the tenant has nothing saved yet but this browser
+        // does, pre-fill the form from it so one Save shares it with every terminal.
+        const serverConfig = data.data?.hardwareConfig;
+        const localConfig = readLocalHardwareConfig(tenant);
+        const importLocal = isEmptyHardwareConfig(serverConfig) && !isEmptyHardwareConfig(localConfig);
+        setSettings({
           ...data.data,
-        };
-        setSettings(defaultSettings);
+          hardwareConfig: importLocal ? localConfig! : resolveHardwareConfig(serverConfig, localConfig),
+        });
+        setImportedFromDevice(importLocal);
       } else {
         setMessage({ type: 'error', text: data.error || 'Failed to load settings' });
       }
@@ -70,11 +79,15 @@ export const useHardwareSettings = (tenant: string) => {
         setSaving(true);
         setMessage(null);
 
+        // Send only the key this page owns: the PUT persists every submitted
+        // key, so echoing the whole (possibly stale) settings object back
+        // would clobber concurrent edits made on other settings pages.
+        const hardwareConfig = settingsToSave.hardwareConfig ?? {};
         const res = await fetch(`/api/tenants/${tenant}/settings`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
-          body: JSON.stringify({ settings: settingsToSave }),
+          body: JSON.stringify({ settings: { hardwareConfig } }),
           signal: controller.signal,
         });
 
@@ -82,12 +95,13 @@ export const useHardwareSettings = (tenant: string) => {
         const data = await res.json();
 
         if (data.success) {
-          setSettings(data.data);
+          // The PUT responds with the raw flat settings row (no `hardwareConfig`),
+          // so keep the config we just saved rather than replacing state with it.
+          setSettings((prev) => (prev ? { ...prev, hardwareConfig } : prev));
+          setImportedFromDevice(false);
 
           // Sync to localStorage so the POS page picks up the new config immediately
-          if (data.data?.hardwareConfig !== undefined) {
-            localStorage.setItem(`hardware_config_${tenant}`, JSON.stringify(data.data.hardwareConfig));
-          }
+          localStorage.setItem(`hardware_config_${tenant}`, JSON.stringify(hardwareConfig));
 
           return { success: true, data: data.data };
         } else {
@@ -125,6 +139,7 @@ export const useHardwareSettings = (tenant: string) => {
     saving,
     message,
     setMessage,
+    importedFromDevice,
     fetchSettings,
     updateHardwareConfig,
     saveSettings,

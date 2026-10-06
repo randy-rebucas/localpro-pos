@@ -12,7 +12,7 @@ export async function GET(
     const { tenantId, user } = await requireTenantAccess(request);
     const { id } = await params;
 
-    if (!(await hasTenantPermission(user.role, tenantId, 'invoices.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenantId, 'invoices.view'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 

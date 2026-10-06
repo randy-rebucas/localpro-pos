@@ -57,8 +57,9 @@ export default function SettingsPage() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const tab = new URLSearchParams(window.location.search).get('tab');
-    if (tab === 'ecommerce') {
-      setActiveTab('ecommerce');
+    // Deep-linked from admin pages (e.g. Admin → Multi-Currency's empty state).
+    if (tab === 'ecommerce' || tab === 'multiCurrency') {
+      setActiveTab(tab);
     }
   }, []);
 

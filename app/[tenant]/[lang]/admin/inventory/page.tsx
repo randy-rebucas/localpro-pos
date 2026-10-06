@@ -67,7 +67,7 @@ export default function AdminInventoryPage() {
   const inventoryEnabled = supportsFeature(settings ?? undefined, 'inventory');
   const businessTypeConfig = settings ? getBusinessTypeConfig(getBusinessType(settings)) : null;
   const { canAccess } = usePermissions();
-  const canManage = canAccess('inventory.manage');
+  const canManage = canAccess('inventory.view');
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);

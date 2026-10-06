@@ -1,25 +1,26 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useState } from 'react';
 import HardwareStatusChecker from '@/components/HardwareStatus';
 import HardwareSettings from '@/components/HardwareSettings';
 import { useParams } from 'next/navigation';
-import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
 import { hardwareService } from '@/lib/hardware';
 import { useHardwareSettings } from '@/hooks/useHardwareSettings';
 import { getSaveSuccessMessage, getSaveErrorMessage } from '@/lib/hardware-helpers';
 import { usePermissions } from '@/hooks/usePermissions';
+import { showToast } from '@/lib/toast';
+import AdminPageHeader from '@/components/admin/AdminPageHeader';
 
 export default function HardwareAdminPage() {
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
   const { canAccess } = usePermissions();
-  const canManage = canAccess('settings.manage');
+  const canManage = canAccess('hardware.manage');
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
 
-  const { settings, loading, saving, message, setMessage, fetchSettings, updateHardwareConfig, saveSettings } =
+  const { settings, loading, saving, message, setMessage, importedFromDevice, fetchSettings, updateHardwareConfig, saveSettings } =
     useHardwareSettings(tenant);
 
   useEffect(() => {
@@ -40,19 +41,36 @@ export default function HardwareAdminPage() {
 
     const result = await saveSettings(settings);
     if (result.success) {
-      setMessage({ type: 'success', text: getSaveSuccessMessage(dict) });
-      setTimeout(() => setMessage(null), 3000);
+      setMessage(null);
+      showToast.success(getSaveSuccessMessage(dict));
     } else {
+      // The hook already set an inline error; make sure it has text.
       setMessage({ type: 'error', text: result.error || getSaveErrorMessage(dict) });
     }
   };
 
-  if (!dict || loading) {
+  if (!dict) {
     return (
       <div className="flex items-center justify-center py-24">
-        <div className="text-center">
-          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-brand"></div>
-          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
+        <div className="win8-spinner text-brand"><span /><span /><span /><span /><span /></div>
+      </div>
+    );
+  }
+
+  const header = (
+    <AdminPageHeader
+      title={dict.admin?.hardwareSettings || 'Hardware Settings'}
+      description={dict.admin?.hardwareSettingsSubtitle || 'Configure printers, barcode scanners, QR readers, cash drawers, and other hardware devices.'}
+    />
+  );
+
+  if (loading) {
+    return (
+      <div className="px-4 sm:px-6 py-6">
+        {header}
+        <div className="text-center py-12 bg-white border border-gray-300">
+          <div className="win8-spinner text-brand mx-auto"><span /><span /><span /><span /><span /></div>
+          <p className="mt-3 text-gray-400 text-sm">{dict.common?.loading || 'Loading…'}</p>
         </div>
       </div>
     );
@@ -60,87 +78,73 @@ export default function HardwareAdminPage() {
 
   if (!settings) {
     return (
-      <div>
-        <div className="px-4 sm:px-6 py-6">
-          <div className="bg-red-50 border-2 border-red-300 p-5 sm:p-6">
-            <h2 className="text-xl font-bold text-red-800 mb-2">{dict?.common?.failedToLoadSettingsTitle || 'Failed to Load Settings'}</h2>
-            <p className="text-red-700 mb-4">
-              {message?.text || dict?.common?.unableToLoadSettings || 'Unable to load tenant settings. Please check your connection and try again.'}
-            </p>
-            <button
-              onClick={() => fetchSettings()}
-              className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 font-medium transition-colors border border-red-700"
-            >
-              {dict?.common?.retry || 'Retry'}
-            </button>
-          </div>
+      <div className="px-4 sm:px-6 py-6">
+        {header}
+        <div className="text-center py-12 bg-white border border-gray-300">
+          <p className="text-sm font-bold text-gray-900">{dict.common?.failedToLoadSettingsTitle || 'Failed to Load Settings'}</p>
+          <p className="text-win8-danger text-sm font-medium mt-1">
+            {message?.text || dict.common?.unableToLoadSettings || 'Unable to load tenant settings. Please check your connection and try again.'}
+          </p>
+          <button
+            onClick={() => fetchSettings()}
+            className="mt-4 inline-flex items-center justify-center px-4 py-2 bg-brand text-white text-sm hover:bg-brand-hover transition-colors"
+          >
+            {dict.common?.retry || 'Retry'}
+          </button>
         </div>
       </div>
     );
   }
 
   return (
-    <div>
-      <div className="px-4 sm:px-6 py-6">
-        <div className="mb-6 sm:mb-8">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">
-            {dict?.admin?.hardwareSettings || 'Hardware Settings'}
-          </h1>
-          <p className="text-gray-600">
-            {dict?.admin?.hardwareSettingsSubtitle || 'Configure printers, barcode scanners, QR readers, cash drawers, and other hardware devices.'}
-          </p>
-        </div>
+    <div className="px-4 sm:px-6 py-6">
+      {header}
 
-        {message && (
-          <div
-            className={`mb-6 p-4 border ${
-              message.type === 'success'
-                ? 'bg-green-50 text-green-800 border-green-300'
-                : 'bg-red-50 text-red-800 border-red-300'
-            }`}
-          >
-            {message.text}
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2">
-            <fieldset disabled={!canManage} className="bg-white border border-gray-300 p-5 sm:p-6 lg:p-8">
-              <HardwareSettings
-                hideSaveButton={true}
-                config={settings.hardwareConfig}
-                onChange={(hardwareConfig) => {
-                  updateHardwareConfig(hardwareConfig);
-                }}
-              />
-              {canManage && (
-                <div className="flex justify-end pt-6 mt-8 border-t border-gray-200">
-                  <button
-                    onClick={handleSave}
-                    disabled={saving}
-                    className="px-6 py-3 bg-brand text-white hover:bg-brand-hover font-semibold transition-all duration-200 border border-brand-hover disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                  >
-                    {saving ? (
-                      <>
-                        <div className="animate-spin h-5 w-5 border-b-2 border-white"></div>
-                        <span>{dict?.settings?.saving || 'Saving...'}</span>
-                      </>
-                    ) : (
-                      <>
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
-                        <span>{dict?.admin?.saveHardwareSettings || 'Save Hardware Settings'}</span>
-                      </>
-                    )}
-                  </button>
-                </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+        <div className="lg:col-span-2 space-y-6">
+          {importedFromDevice && canManage && (
+            <div className="bg-brand-soft border border-brand p-4 text-sm text-brand-navy flex items-center justify-between gap-3 flex-wrap">
+              <span>
+                {dict.admin?.hardwareImportedFromDevice ||
+                  'These settings were loaded from this device and are not saved for your store yet. Review them, then save to apply them to every terminal.'}
+              </span>
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={saving}
+                className="inline-flex items-center justify-center px-4 py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover disabled:opacity-50 transition-colors shrink-0"
+              >
+                {saving ? (dict.settings?.saving || 'Saving…') : (dict.admin?.saveForAllTerminals || 'Save for All Terminals')}
+              </button>
+            </div>
+          )}
+          <fieldset disabled={!canManage}>
+            <HardwareSettings
+              hideSaveButton={true}
+              config={settings.hardwareConfig ?? {}}
+              onChange={(hardwareConfig) => {
+                updateHardwareConfig(hardwareConfig);
+              }}
+            />
+          </fieldset>
+          {canManage && (
+            <div className="bg-white border border-gray-300 p-4 flex items-center justify-end gap-3 flex-wrap">
+              {message?.type === 'error' && (
+                <p className="mr-auto text-sm font-medium text-win8-danger">{message.text}</p>
               )}
-            </fieldset>
-          </div>
-          <div className="lg:col-span-1">
-            <HardwareStatusChecker showActions={false} autoRefresh={true} sidebar={true} />
-          </div>
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={saving}
+                className="inline-flex items-center justify-center px-4 py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover disabled:opacity-50 transition-colors"
+              >
+                {saving ? (dict.settings?.saving || 'Saving…') : (dict.admin?.saveHardwareSettings || 'Save Hardware Settings')}
+              </button>
+            </div>
+          )}
+        </div>
+        <div className="lg:col-span-1 lg:sticky lg:top-4">
+          <HardwareStatusChecker showActions={false} autoRefresh={true} sidebar={true} />
         </div>
       </div>
     </div>

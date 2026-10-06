@@ -106,7 +106,12 @@ export default function BundlesPage() {
   const businessTypeConfig = settings ? getBusinessTypeConfig(getBusinessType(settings)) : null;
   const bundlesAllowed = businessTypeConfig?.productTypes?.includes('bundle') ?? true;
   const { canAccess } = usePermissions();
+  // Page access: any bundle action. Each control below checks its own action.
   const canManage = canAccess('bundles.manage');
+  const canCreate = canAccess('bundles.create');
+  const canEdit = canAccess('bundles.edit');
+  const canDelete = canAccess('bundles.delete');
+  const canViewAnalytics = canAccess('bundles.analytics');
 
   const { bundles, loading, error, fetchBundles, deleteBundle, toggleBundleStatus, bulkToggleStatus } = useBundlesList();
   const { analytics, loading: analyticsLoading, fetchAnalytics: fetchAnalyticsData } = useBundlesAnalytics();
@@ -462,7 +467,7 @@ export default function BundlesPage() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex justify-end gap-1.5">
-                      {bundlesAllowed && (
+                      {bundlesAllowed && canEdit && (
                         <button
                           type="button"
                           onClick={() => openBundleForm(bundle)}
@@ -473,7 +478,7 @@ export default function BundlesPage() {
                           <Icon d={ICON.edit} />
                         </button>
                       )}
-                      <button
+                      {canEdit && (<button
                         type="button"
                         onClick={() => handleToggleStatus(bundle)}
                         disabled={busy}
@@ -482,8 +487,8 @@ export default function BundlesPage() {
                         className={`${btnRowIcon} ${bundle.isActive ? 'bg-win8-danger' : 'bg-win8-success'}`}
                       >
                         {busy ? SPINNER_SM : <Icon d={bundle.isActive ? ICON.deactivate : ICON.activate} />}
-                      </button>
-                      <button
+                      </button>)}
+                      {canDelete && (<button
                         type="button"
                         onClick={() => handleDeleteBundle(bundle)}
                         disabled={busy}
@@ -492,7 +497,7 @@ export default function BundlesPage() {
                         className={`${btnRowIcon} bg-win8-danger`}
                       >
                         <Icon d={ICON.delete} />
-                      </button>
+                      </button>)}
                     </div>
                   </td>
                 </tr>
@@ -523,7 +528,7 @@ export default function BundlesPage() {
           )}
 
           {/* Bundle Analytics */}
-          <section className="bg-white border border-gray-300">
+          {canViewAnalytics && (<section className="bg-white border border-gray-300">
             <div className={`px-6 py-4 flex items-center justify-between gap-3 ${showAnalytics ? 'border-b border-gray-300' : ''}`}>
               <h2 className="text-base font-bold text-gray-900">{dict.admin?.bundleAnalytics || 'Bundle Analytics'}</h2>
               <button
@@ -636,7 +641,7 @@ export default function BundlesPage() {
                 )}
               </div>
             )}
-          </section>
+          </section>)}
 
           {/* Toolbar */}
           <div className="bg-white border border-gray-300">
@@ -701,15 +706,15 @@ export default function BundlesPage() {
                     </button>
                   </div>
                 </div>
-                {bundlesAllowed && (
+                {bundlesAllowed && (canCreate || canEdit) && (
                   <>
                     <Link href={`/${tenant}/${lang}/admin/file-upload`} className={`${btnSecondary} inline-flex items-center gap-2`}>
                       <Icon d={ICON.upload} />
                       {dict.admin?.uploadImages || 'Upload Images'}
                     </Link>
-                    <button type="button" onClick={() => openBundleForm(null)} className={btnPrimary}>
+                    {canCreate && (<button type="button" onClick={() => openBundleForm(null)} className={btnPrimary}>
                       + {dict.admin?.addBundle || 'Add Bundle'}
-                    </button>
+                    </button>)}
                   </>
                 )}
               </div>
@@ -788,7 +793,7 @@ export default function BundlesPage() {
             )}
           </div>
 
-          {selectedBundles.size > 0 && (
+          {canEdit && selectedBundles.size > 0 && (
             <div className="p-3 bg-brand-soft border border-brand flex items-center justify-between flex-wrap gap-2">
               <span className="text-sm font-semibold text-brand-navy tabular-nums">
                 {selectedBundles.size} {dict.admin?.selected || 'selected'}

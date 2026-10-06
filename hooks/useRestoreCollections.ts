@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 
 export interface RestoreResults {
-  [collection: string]: { restored: number; cleared: number };
+  [collection: string]: { restored: number; cleared: number; skipped?: number };
 }
 
 export function useRestoreCollections(tenant: string) {

@@ -33,7 +33,10 @@ export default function ExpensesPage() {
   // Remounts the form on every open so it re-initializes even when reopening the same expense.
   const [formKey, setFormKey] = useState(0);
   const { canAccess } = usePermissions();
-  const canManage = canAccess('expenses.manage');
+  const canCreate = canAccess('expenses.create');
+  const canEdit = canAccess('expenses.edit');
+  const canDelete = canAccess('expenses.delete');
+  const showRowActions = canEdit || canDelete;
 
   const {
     expenses,
@@ -160,7 +163,7 @@ export default function ExpensesPage() {
               <th className="px-4 py-3 text-right font-medium">{dict.admin?.amount || 'Amount'}</th>
               <th className="px-4 py-3 text-left font-medium">{dict.admin?.paymentMethod || 'Payment Method'}</th>
               <th className="px-4 py-3 text-left font-medium">{dict.admin?.user || 'User'}</th>
-              {canManage && <th className="px-4 py-3 text-right font-medium">{dict.common?.actions || 'Actions'}</th>}
+              {showRowActions && <th className="px-4 py-3 text-right font-medium">{dict.common?.actions || 'Actions'}</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
@@ -181,10 +184,10 @@ export default function ExpensesPage() {
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap text-gray-700">{getPaymentMethodLabel(expense.paymentMethod, dict)}</td>
                   <td className="px-4 py-3 whitespace-nowrap text-gray-700">{userName}</td>
-                  {canManage && (
+                  {showRowActions && (
                     <td className="px-4 py-3">
                       <div className="flex justify-end gap-1.5">
-                        <button
+                        {canEdit && (<button
                           type="button"
                           onClick={() => openForm(expense)}
                           title={editLabel}
@@ -194,8 +197,8 @@ export default function ExpensesPage() {
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M11 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z" />
                           </svg>
-                        </button>
-                        <button
+                        </button>)}
+                        {canDelete && (<button
                           type="button"
                           onClick={() => handleDeleteExpense(expense)}
                           disabled={deleting}
@@ -210,7 +213,7 @@ export default function ExpensesPage() {
                               <path strokeLinecap="round" strokeLinejoin="round" d="M6 7h12M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m2 0-.7 12.1a2 2 0 0 1-2 1.9H9.7a2 2 0 0 1-2-1.9L7 7h10Z" />
                             </svg>
                           )}
-                        </button>
+                        </button>)}
                       </div>
                     </td>
                   )}
@@ -303,7 +306,7 @@ export default function ExpensesPage() {
                 {dict.common?.clearFilters || 'Clear Filters'}
               </button>
             )}
-            {canManage && (
+            {canCreate && (
               <button
                 type="button"
                 onClick={() => openForm(null)}

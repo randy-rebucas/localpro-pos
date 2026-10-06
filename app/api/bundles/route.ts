@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import prisma from '@/lib/db';
 import { Prisma } from '@prisma/client';
-import { getTenantIdFromRequest } from '@/lib/api-tenant';
+import { getTenantIdForUser } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -12,8 +12,8 @@ import { serializeBundle } from '@/lib/bundle-serializer';
 
 export async function GET(request: NextRequest) {
   try {
-    await requireAuth(request);
-    const tenantId = await getTenantIdFromRequest(request);
+    const user = await requireAuth(request);
+    const tenantId = await getTenantIdForUser(request, user);
     const t = await getValidationTranslatorFromRequest(request);
 
     if (!tenantId) {
@@ -81,14 +81,14 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const user = await requireAuth(request);
-    const tenantId = await getTenantIdFromRequest(request);
+    const tenantId = await getTenantIdForUser(request, user);
     const t = await getValidationTranslatorFromRequest(request);
 
     if (!tenantId) {
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
-    if (!(await hasTenantPermission(user.role, tenantId, 'bundles.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenantId, 'bundles.create'))) {
       return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
     }
 

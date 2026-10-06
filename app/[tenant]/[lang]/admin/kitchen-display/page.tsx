@@ -52,7 +52,8 @@ export default function KitchenDisplayPage() {
   const tenant = params.tenant as string;
 
   const { canAccess } = usePermissions();
-  const canManage = canAccess('kitchen_display.manage');
+  const canManage = canAccess('kitchen_display.view');
+  const canUpdateStatus = canAccess('kitchen_display.update_status');
 
   const { settings } = useTenantSettings();
   const kitchenDisplayEnabled = supportsFeature(settings ?? undefined, 'kitchenDisplay');
@@ -213,6 +214,7 @@ export default function KitchenDisplayPage() {
                   key={item.id}
                   type="button"
                   onClick={() => handleAdvance(ticket.id, item)}
+                  disabled={!canUpdateStatus}
                   className="w-full text-left bg-white border border-gray-200 rounded-lg p-4 shadow-sm hover:shadow-md active:scale-[0.98] transition-all"
                 >
                   <div className="flex items-center justify-between mb-2">

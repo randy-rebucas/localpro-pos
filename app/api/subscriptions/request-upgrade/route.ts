@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
-import { getTenantIdFromRequest } from '@/lib/api-tenant';
+import { getTenantIdForUser } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
 
     // Require authentication for upgrade requests
     const user = await requireAuth(request);
-    const tenantId = await getTenantIdFromRequest(request);
+    const tenantId = await getTenantIdForUser(request, user);
 
     if (!tenantId) {
       return NextResponse.json(
@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!(await hasTenantPermission(user.role, tenantId, 'subscriptions.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenantId, 'subscriptions.change_plan'))) {
       return NextResponse.json(
         { success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') },
         { status: 403 }

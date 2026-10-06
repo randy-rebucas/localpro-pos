@@ -1,3 +1,4 @@
+import { getFetchErrorMessage } from '@/lib/fetch-error';
 import { useCallback, useState } from 'react';
 
 export interface Deposit {
@@ -61,7 +62,7 @@ export function useDepositList(tenant: string, filters: DepositFilters) {
         onError?.(errorMsg);
       }
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to fetch deposits';
+      const errorMsg = getFetchErrorMessage(err, 'Failed to fetch deposits');
       setError(errorMsg);
       onError?.(errorMsg);
     } finally {
@@ -99,7 +100,7 @@ export function useDepositList(tenant: string, filters: DepositFilters) {
           onError?.(errorMsg);
         }
       } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'Failed to update deposit';
+        const errorMsg = getFetchErrorMessage(err, 'Failed to update deposit');
         onError?.(errorMsg);
       } finally {
         clearTimeout(timeout);
@@ -130,7 +131,7 @@ export function useDepositList(tenant: string, filters: DepositFilters) {
           onError?.(errorMsg);
         }
       } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'Failed to cancel deposit';
+        const errorMsg = getFetchErrorMessage(err, 'Failed to cancel deposit');
         onError?.(errorMsg);
       } finally {
         clearTimeout(timeout);

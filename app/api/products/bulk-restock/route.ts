@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
       const tenantAccess = await requireTenantAccess(request);
       tenantId = tenantAccess.tenantId;
       userId = tenantAccess.user.userId;
-      if (!(await hasTenantPermission(tenantAccess.user.role, tenantId, 'products.manage'))) {
+      if (!(await hasTenantPermission(tenantAccess.user.role, tenantId, 'products.restock'))) {
         return NextResponse.json(
           { success: false, error: 'Forbidden: Insufficient permissions' },
           { status: 403 }

@@ -6,91 +6,57 @@ import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
 import { checkRateLimit } from '@/lib/rate-limit';
+import {
+  BACKUP_COLLECTION_SPECS,
+  getCollectionSpec,
+  isCollectionKey,
+  delegateName,
+  orderForReset,
+  getMissingResetDependencies,
+  collectionLabel,
+  type CollectionSpec,
+  type ChildSpec,
+} from '@/lib/backup-reset-collections';
 
-// Map collection names (as used by the tenant-settings backup/reset UI) to
-// their Prisma delegate. Kept as `any` because each delegate has a different
-// generated type and we only ever call the shared `findMany`/`deleteMany`/
-// `createMany` shape on them here.
+// Which tables are covered, their cascade child tables, FK-safe ordering and
+// reset dependencies all live in lib/backup-reset-collections.ts (checked
+// against prisma/schema.prisma by __tests__/backup-reset-collections.test.ts).
+
+// Delegates are typed `any` because each has a different generated type and
+// we only call the shared findMany/deleteMany/createMany shape on them.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const COLLECTION_MODELS: Record<string, any> = {
-  // Products & Inventory
-  products: prisma.product,
-  productBundles: prisma.productBundle,
-  categories: prisma.category,
-  stockMovements: prisma.stockMovement,
-  // Sales & Transactions
-  transactions: prisma.transaction,
-  payments: prisma.payment,
-  invoices: prisma.invoice,
-  // Customer Management
-  customers: prisma.customer,
-  addresses: prisma.address,
-  customerOTPs: prisma.customerOTP,
-  // Discounts & Promotions
-  discounts: prisma.discount,
-  savedCarts: prisma.savedCart,
-  // Loyalty Program
-  loyaltyConfigs: prisma.loyaltyConfig,
-  loyaltyTransactions: prisma.loyaltyTransaction,
-  // Tax & Compliance
-  taxRules: prisma.taxRule,
-  // Organizational
-  branches: prisma.branch,
-  expenses: prisma.expense,
-  // Cash Management
-  cashDrawerSessions: prisma.cashDrawerSession,
-  // Staff & Operations
-  attendance: prisma.attendance,
-  // Bookings & Services
-  bookings: prisma.booking,
-  // Audit & Compliance
-  auditLogs: prisma.auditLog,
-};
+function delegate(client: any, model: string): any {
+  return client[delegateName(model)];
+}
 
-// FK-safe delete order: children before parents (see prisma/schema.prisma
-// relations). A restrict-mode FK (the Prisma default when `onDelete` isn't
-// specified) blocks deleting the parent row while a child still references
-// it, so rows with an FK to another listed collection must be cleared first.
-// - payments/invoices/loyaltyTransactions/stockMovements reference
-//   transactions (restrict) -> before transactions
-// - savedCarts (via saved_cart_items) and productBundles (via
-//   product_bundle_items) reference products (restrict) -> before products
-// - invoices/loyaltyTransactions reference customers (restrict) -> before
-//   customers
-// - products reference categories (restrict) -> before categories
-const RESET_ORDER = [
-  'auditLogs',
-  'payments',
-  'invoices',
-  'loyaltyTransactions',
-  'stockMovements',
-  'transactions',
-  'savedCarts',
-  'productBundles',
-  'products',
-  'categories',
-  'taxRules',
-  'discounts',
-  'customerOTPs',
-  'addresses',
-  'customers',
-  'cashDrawerSessions',
-  'expenses',
-  'attendance',
-  'bookings',
-  'branches',
-  'loyaltyConfigs',
-];
+function findChild(spec: CollectionSpec, key: string): ChildSpec | undefined {
+  return spec.children?.find((c) => c.key === key);
+}
 
-function orderCollections(collections: string[]): string[] {
-  const set = new Set(collections);
-  const ordered = RESET_ORDER.filter((c) => set.has(c));
-  // Any collection not in RESET_ORDER (shouldn't happen given validation
-  // against COLLECTION_MODELS) is appended last.
-  for (const c of collections) {
-    if (!ordered.includes(c)) ordered.push(c);
-  }
-  return ordered;
+// Tenant filter for a child table without its own tenantId: walk the
+// relation chain up to the tenant-scoped collection model.
+function childScope(spec: CollectionSpec, child: ChildSpec, tenantId: string): Record<string, unknown> {
+  const parentChild = findChild(spec, child.parent);
+  const parentScope = parentChild ? childScope(spec, parentChild, tenantId) : { tenantId };
+  const scope: Record<string, unknown> = { [child.parentRelation]: parentScope };
+  if (child.hasTenantId) scope.tenantId = tenantId;
+  return scope;
+}
+
+// Filter + model for the rows a child's FK is allowed to point at.
+function parentTarget(spec: CollectionSpec, child: ChildSpec, tenantId: string) {
+  const parentChild = findChild(spec, child.parent);
+  return parentChild
+    ? { model: parentChild.model, where: childScope(spec, parentChild, tenantId) }
+    : { model: spec.model, where: { tenantId } };
+}
+
+const ID_CHUNK = 5000;
+
+function describeMissing(missing: { collection: string; missing: string[] }[]): string {
+  return missing
+    .map((m) => `${collectionLabel(m.collection)} (also needs: ${m.missing.map(collectionLabel).join(', ')})`)
+    .join('; ');
 }
 
 // Backup endpoint - GET
@@ -133,12 +99,12 @@ export async function GET(
 
     const searchParams = request.nextUrl.searchParams;
     const collectionsParam = searchParams.get('collections');
-    const collections = collectionsParam ? collectionsParam.split(',') : Object.keys(COLLECTION_MODELS);
+    const collections = collectionsParam
+      ? collectionsParam.split(',')
+      : BACKUP_COLLECTION_SPECS.map((s) => s.key);
 
     // Validate collection names
-    const invalidCollections = collections.filter(
-      (col: string) => !COLLECTION_MODELS[col]
-    );
+    const invalidCollections = collections.filter((col: string) => !isCollectionKey(col));
     if (invalidCollections.length > 0) {
       return NextResponse.json(
         { success: false, error: `Invalid collections: ${invalidCollections.join(', ')}` },
@@ -149,12 +115,20 @@ export async function GET(
     const backup: Record<string, unknown[]> = {};
     const counts: Record<string, number> = {};
 
-    // Export data from each collection
+    // Export each collection plus the cascade child tables that hold its line
+    // items/details (they have no tenantId of their own, so are scoped via
+    // their parent relation).
     for (const collectionName of collections) {
-      const model = COLLECTION_MODELS[collectionName];
-      const documents = await model.findMany({ where: { tenantId: tenant.id } });
+      const spec = getCollectionSpec(collectionName)!;
+      const documents = await delegate(prisma, spec.model).findMany({ where: { tenantId: tenant.id } });
       backup[collectionName] = documents;
       counts[collectionName] = documents.length;
+
+      for (const child of spec.children || []) {
+        const rows = await delegate(prisma, child.model).findMany({ where: childScope(spec, child, tenant.id) });
+        backup[child.key] = rows;
+        counts[child.key] = rows.length;
+      }
     }
 
     const backupData = {
@@ -251,9 +225,7 @@ export async function POST(
     }
 
     // Validate collection names
-    const invalidCollections = collections.filter(
-      (col: string) => !COLLECTION_MODELS[col]
-    );
+    const invalidCollections = collections.filter((col: unknown) => typeof col !== 'string' || !isCollectionKey(col));
     if (invalidCollections.length > 0) {
       return NextResponse.json(
         { success: false, error: `Invalid collections: ${invalidCollections.join(', ')}` },
@@ -261,10 +233,25 @@ export async function POST(
       );
     }
 
+    // Rows in an unselected collection that hold a required (RESTRICT) FK
+    // would make the delete fail mid-transaction; reject up front instead.
+    const missingDependencies = getMissingResetDependencies(collections);
+    if (missingDependencies.length > 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `${t('validation.resetDependenciesMissing', 'Some selected collections are still referenced by others and must be reset together')}: ${describeMissing(missingDependencies)}`,
+          missingDependencies,
+        },
+        { status: 400 }
+      );
+    }
+
     // Atomic: either every selected collection is cleared, or none are — a
-    // failure partway through (e.g. an FK-order mistake) must not leave the
-    // tenant with some collections wiped and others untouched.
-    const orderedCollections = orderCollections(collections);
+    // failure partway through must not leave the tenant with some
+    // collections wiped and others untouched. Cascade child tables are
+    // removed by the database with their parent rows.
+    const orderedCollections = orderForReset(collections);
     // Prisma's default 5s transaction timeout is easy to blow through when
     // deleting across ~20 collections for a tenant with real data volume; a
     // timed-out transaction fully rolls back (still atomic) but the reset
@@ -272,13 +259,12 @@ export async function POST(
     const results = await dbTransaction(async (tx) => {
       const r: Record<string, { deleted: number }> = {};
       for (const collectionName of orderedCollections) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const model = (tx as any)[modelKeyFor(collectionName)];
-        const result = await model.deleteMany({ where: { tenantId: tenant.id } });
+        const spec = getCollectionSpec(collectionName)!;
+        const result = await delegate(tx, spec.model).deleteMany({ where: { tenantId: tenant.id } });
         r[collectionName] = { deleted: result.count || 0 };
       }
       return r;
-    }, { timeout: 60_000, maxWait: 10_000 });
+    }, { timeout: 120_000, maxWait: 10_000 });
 
     // Create audit log
     await createAuditLog(request, {
@@ -380,48 +366,86 @@ export async function PUT(
     // Atomic: a partial failure (bad document, unique-key clash, etc.) must
     // not leave collections cleared-but-not-restored, or one collection
     // restored while a later one silently fails.
-    const collectionNames = Object.keys(backupData.collections).filter((c) => COLLECTION_MODELS[c]);
-    const orderedForClear = orderCollections(collectionNames);
+    // Child-table keys (e.g. transactionItems) are restored with their parent
+    // collection, never on their own.
+    const collectionNames = Object.keys(backupData.collections).filter((c) => isCollectionKey(c));
+    const orderedForClear = orderForReset(collectionNames);
     const orderedForRestore = [...orderedForClear].reverse(); // parents-first insert order
 
+    if (clearExisting) {
+      const missingDependencies = getMissingResetDependencies(collectionNames);
+      if (missingDependencies.length > 0) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `${t('validation.restoreClearDependenciesMissing', 'Existing data cannot be cleared because other collections not in this backup still reference it')}: ${describeMissing(missingDependencies)}`,
+            missingDependencies,
+          },
+          { status: 400 }
+        );
+      }
+    }
+
     // Same rationale as the reset transaction above: clearing + bulk-inserting
-    // across ~20 collections can exceed Prisma's 5s default transaction timeout.
+    // across many tables can exceed Prisma's 5s default transaction timeout.
     const results = await dbTransaction(async (tx) => {
-      const r: Record<string, { restored: number; cleared: number }> = {};
+      const r: Record<string, { restored: number; cleared: number; skipped?: number }> = {};
 
       if (clearExisting) {
         for (const collectionName of orderedForClear) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const model = (tx as any)[modelKeyFor(collectionName)];
-          const deleteResult = await model.deleteMany({ where: { tenantId: tenant.id } });
+          const spec = getCollectionSpec(collectionName)!;
+          const deleteResult = await delegate(tx, spec.model).deleteMany({ where: { tenantId: tenant.id } });
           r[collectionName] = { restored: 0, cleared: deleteResult.count || 0 };
         }
       }
 
       for (const collectionName of orderedForRestore) {
+        const spec = getCollectionSpec(collectionName)!;
         const documents = backupData.collections[collectionName];
-        if (!Array.isArray(documents) || documents.length === 0) {
+        if (Array.isArray(documents) && documents.length > 0) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const documentsToInsert = documents.map((doc: any) => {
+            const row = { ...doc, tenantId: tenant.id };
+            for (const field of spec.stripOnRestore || []) row[field] = null;
+            return row;
+          });
+          const created = await delegate(tx, spec.model).createMany({ data: documentsToInsert, skipDuplicates: true });
+          r[collectionName] = { restored: created.count ?? 0, cleared: r[collectionName]?.cleared ?? 0 };
+        } else {
           r[collectionName] = r[collectionName] || { restored: 0, cleared: 0 };
-          continue;
         }
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const model = (tx as any)[modelKeyFor(collectionName)];
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const documentsToInsert = documents.map((doc: any) => ({
-          ...doc,
-          tenantId: tenant.id,
-        }));
+        // Child rows carry no tenantId, so a crafted backup could point them
+        // at another tenant's parent rows. Only insert children whose parent
+        // id resolves to a row inside this tenant.
+        for (const child of spec.children || []) {
+          const rows = backupData.collections[child.key];
+          if (!Array.isArray(rows) || rows.length === 0) continue;
 
-        await model.createMany({ data: documentsToInsert, skipDuplicates: true });
-        r[collectionName] = {
-          restored: documentsToInsert.length,
-          cleared: r[collectionName]?.cleared ?? 0,
-        };
+          const target = parentTarget(spec, child, tenant.id);
+          const parentIds = [...new Set(rows.map((row: Record<string, unknown>) => row?.[child.fk]).filter((v): v is string => typeof v === 'string'))];
+          const allowed = new Set<string>();
+          for (let i = 0; i < parentIds.length; i += ID_CHUNK) {
+            const found = await delegate(tx, target.model).findMany({
+              where: { ...target.where, id: { in: parentIds.slice(i, i + ID_CHUNK) } },
+              select: { id: true },
+            });
+            for (const p of found) allowed.add(p.id);
+          }
+
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const safeRows = rows.filter((row: any) => allowed.has(row?.[child.fk]))
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            .map((row: any) => (child.hasTenantId ? { ...row, tenantId: tenant.id } : row));
+          const created = safeRows.length > 0
+            ? await delegate(tx, child.model).createMany({ data: safeRows, skipDuplicates: true })
+            : { count: 0 };
+          r[child.key] = { restored: created.count ?? 0, cleared: 0, skipped: rows.length - safeRows.length };
+        }
       }
 
       return r;
-    }, { timeout: 60_000, maxWait: 10_000 });
+    }, { timeout: 120_000, maxWait: 10_000 });
 
     // Create audit log
     await createAuditLog(request, {
@@ -458,35 +482,4 @@ export async function PUT(
       { status: 500 }
     );
   }
-}
-
-// Prisma's transaction client (`tx`) is keyed by camelCase model name, not by
-// the human-facing collection name used in the UI/backup JSON — map between
-// them explicitly rather than relying on name equality.
-const MODEL_KEY_MAP: Record<string, string> = {
-  products: 'product',
-  productBundles: 'productBundle',
-  categories: 'category',
-  stockMovements: 'stockMovement',
-  transactions: 'transaction',
-  payments: 'payment',
-  invoices: 'invoice',
-  customers: 'customer',
-  addresses: 'address',
-  customerOTPs: 'customerOTP',
-  discounts: 'discount',
-  savedCarts: 'savedCart',
-  loyaltyConfigs: 'loyaltyConfig',
-  loyaltyTransactions: 'loyaltyTransaction',
-  taxRules: 'taxRule',
-  branches: 'branch',
-  expenses: 'expense',
-  cashDrawerSessions: 'cashDrawerSession',
-  attendance: 'attendance',
-  bookings: 'booking',
-  auditLogs: 'auditLog',
-};
-
-function modelKeyFor(collectionName: string): string {
-  return MODEL_KEY_MAP[collectionName] || collectionName;
 }

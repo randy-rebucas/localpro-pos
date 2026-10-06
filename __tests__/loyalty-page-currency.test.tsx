@@ -84,6 +84,27 @@ describe('LoyaltyPage currency display', () => {
     expect(screen.queryByText(/₱/)).not.toBeInTheDocument();
   });
 
+  it('uses the tenant currency in translated labels, not a ₱ baked into the dictionary', async () => {
+    const enDict = (await import('@/app/[tenant]/[lang]/dictionaries/en.json')).default;
+    const { getDictionaryClient } = await import('@/app/[tenant]/[lang]/dictionaries-client');
+    vi.mocked(getDictionaryClient).mockResolvedValueOnce(enDict as never);
+    mockTenantSettings.mockReturnValue({
+      settings: {
+        currency: 'USD',
+        currencySymbol: '$',
+        currencyPosition: 'before',
+        numberFormat: { decimalSeparator: '.', thousandsSeparator: ',', decimalPlaces: 2 },
+      },
+      loading: false,
+      refreshSettings: vi.fn(),
+    });
+
+    render(<LoyaltyPage />);
+    expect(await screen.findByText('Points per $1 spent')).toBeInTheDocument();
+    expect(screen.getByText('Min redeem: 100 points ($10.00)')).toBeInTheDocument();
+    expect(screen.queryByText(/₱/)).not.toBeInTheDocument();
+  });
+
   it('falls back to ₱ while tenant settings are still loading', async () => {
     mockTenantSettings.mockReturnValue({ settings: null, loading: true, refreshSettings: vi.fn() });
 

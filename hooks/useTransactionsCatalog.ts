@@ -47,7 +47,11 @@ export interface CatalogExpense {
 
 export type CatalogStatus = 'loading' | 'ready' | 'error';
 
-export function useTransactionsCatalog(tenant: string, page: number) {
+/**
+ * @param includeExpenses false when the role lacks expenses.view — the expenses
+ *   request is skipped (an empty list, not an error) so transactions still load.
+ */
+export function useTransactionsCatalog(tenant: string, page: number, includeExpenses = true) {
   const [transactions, setTransactions] = useState<CatalogTransaction[]>([]);
   const [expenses, setExpenses] = useState<CatalogExpense[]>([]);
   const [totalPages, setTotalPages] = useState(1);
@@ -60,9 +64,14 @@ export function useTransactionsCatalog(tenant: string, page: number) {
     try {
       const [txRes, expRes] = await Promise.all([
         fetch(`/api/transactions?page=${page}&limit=10&tenant=${tenant}`, { credentials: 'include' }),
-        fetch(`/api/expenses?tenant=${tenant}`, { credentials: 'include' }),
+        includeExpenses
+          ? fetch(`/api/expenses?tenant=${tenant}`, { credentials: 'include' })
+          : Promise.resolve(null),
       ]);
-      const [txData, expData] = await Promise.all([txRes.json(), expRes.json()]);
+      const [txData, expData] = await Promise.all([
+        txRes.json(),
+        expRes ? expRes.json() : Promise.resolve({ success: true, data: [] }),
+      ]);
 
       let txOk = false;
       let expOk = false;
@@ -105,7 +114,7 @@ export function useTransactionsCatalog(tenant: string, page: number) {
       setTotalPages(1);
       setStatus('error');
     }
-  }, [tenant, page]);
+  }, [tenant, page, includeExpenses]);
 
   useEffect(() => {
     refetch();

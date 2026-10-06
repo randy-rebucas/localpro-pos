@@ -56,15 +56,16 @@ describe('FeatureFlagsPage', () => {
       })
     );
     render(<FeatureFlagsPage />);
-    expect(screen.getByText('Loading...')).toBeInTheDocument();
+    expect(await screen.findByText('Loading feature flags…')).toBeInTheDocument();
 
     resolveFetch({ json: () => Promise.resolve({ success: true, data: { ...baseSettings } }) });
-    await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText('Loading feature flags…')).not.toBeInTheDocument());
   });
 
   it('renders every flag from FEATURE_FLAGS as a checkbox', async () => {
     render(<FeatureFlagsPage />);
-    expect(await screen.findByRole('heading', { name: 'Feature Flags' })).toBeInTheDocument();
+    await screen.findAllByRole('checkbox');
+    expect(screen.getByRole('heading', { level: 1, name: 'Feature Flags' })).toBeInTheDocument();
 
     // FEATURE_FLAGS currently lists 14 toggles (lib/feature-flags-helpers.ts).
     const checkboxes = screen.getAllByRole('checkbox');
@@ -83,7 +84,7 @@ describe('FeatureFlagsPage', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
 
-    expect(await screen.findByRole('heading', { name: 'Feature Flags' })).toBeInTheDocument();
+    expect(await screen.findAllByRole('checkbox')).toHaveLength(14);
   });
 
   // -------------------------------------------------------------------------
@@ -92,7 +93,7 @@ describe('FeatureFlagsPage', () => {
   it('disables every checkbox and hides Save when the user lacks settings.manage', async () => {
     mockCanAccess.mockReturnValue(false);
     render(<FeatureFlagsPage />);
-    await screen.findByRole('heading', { name: 'Feature Flags' });
+    await screen.findAllByRole('checkbox');
 
     const checkboxes = screen.getAllByRole('checkbox') as HTMLInputElement[];
     checkboxes.forEach((cb) => expect(cb).toBeDisabled());
@@ -101,7 +102,7 @@ describe('FeatureFlagsPage', () => {
 
   it('enables checkboxes and shows Save when the user has settings.manage', async () => {
     render(<FeatureFlagsPage />);
-    await screen.findByRole('heading', { name: 'Feature Flags' });
+    await screen.findAllByRole('checkbox');
 
     const checkboxes = screen.getAllByRole('checkbox') as HTMLInputElement[];
     checkboxes.forEach((cb) => expect(cb).not.toBeDisabled());
@@ -113,26 +114,41 @@ describe('FeatureFlagsPage', () => {
   // -------------------------------------------------------------------------
   it('checks a flag explicitly set to true', async () => {
     render(<FeatureFlagsPage />);
-    await screen.findByRole('heading', { name: 'Feature Flags' });
+    await screen.findAllByRole('checkbox');
     expect((document.getElementById('enableInventory') as HTMLInputElement).checked).toBe(true);
   });
 
   it('unchecks a flag explicitly set to false', async () => {
     render(<FeatureFlagsPage />);
-    await screen.findByRole('heading', { name: 'Feature Flags' });
+    await screen.findAllByRole('checkbox');
     expect((document.getElementById('enableDiscounts') as HTMLInputElement).checked).toBe(false);
   });
 
-  it('defaults a flag missing from the API response to checked, even when the business-type default for it is false', async () => {
-    // enableWorkOrders is not among the 6 keys useFeatureFlagsSettings backfills,
-    // and the API response here omits it entirely (simulating a tenant whose
-    // TenantSettings row predates this flag). The page's `!== false` check
-    // renders it as checked, even though every other consumer of this same
-    // field (lib/business-types.ts, lib/business-type-helpers.ts) falls back
-    // to the business type's default, which is `false` for most types.
+  // Nullable flag columns (Boolean? in prisma/schema.prisma) mean "follow the
+  // business type" — the page must resolve them like supportsFeature() does in
+  // lib/business-type-helpers.ts, not treat missing as on.
+  it('resolves a flag missing from the API response to the business-type default (general → off)', async () => {
     render(<FeatureFlagsPage />);
-    await screen.findByRole('heading', { name: 'Feature Flags' });
+    await screen.findAllByRole('checkbox');
+    expect((document.getElementById('enableWorkOrders') as HTMLInputElement).checked).toBe(false);
+  });
+
+  it('resolves a null flag to the business-type default (service → work orders on)', async () => {
+    mockFetch.mockResolvedValue({
+      json: () => Promise.resolve({ success: true, data: { ...baseSettings, businessType: 'service', enableWorkOrders: null } }),
+    });
+    render(<FeatureFlagsPage />);
+    await screen.findAllByRole('checkbox');
     expect((document.getElementById('enableWorkOrders') as HTMLInputElement).checked).toBe(true);
+  });
+
+  it('does not show a null flag as on when its business-type default is off (retail → expenses off)', async () => {
+    mockFetch.mockResolvedValue({
+      json: () => Promise.resolve({ success: true, data: { ...baseSettings, businessType: 'retail', enableExpenses: null } }),
+    });
+    render(<FeatureFlagsPage />);
+    await screen.findAllByRole('checkbox');
+    expect((document.getElementById('enableExpenses') as HTMLInputElement).checked).toBe(false);
   });
 
   // -------------------------------------------------------------------------
@@ -140,7 +156,7 @@ describe('FeatureFlagsPage', () => {
   // -------------------------------------------------------------------------
   it('toggles a flag and saves the updated settings', async () => {
     render(<FeatureFlagsPage />);
-    await screen.findByRole('heading', { name: 'Feature Flags' });
+    await screen.findAllByRole('checkbox');
 
     const discounts = document.getElementById('enableDiscounts') as HTMLInputElement;
     expect(discounts.checked).toBe(false);
@@ -159,7 +175,8 @@ describe('FeatureFlagsPage', () => {
         '/api/tenants/test-tenant/settings',
         expect.objectContaining({
           method: 'PUT',
-          body: JSON.stringify({ settings: { ...baseSettings, enableDiscounts: true } }),
+          // Only the changed flag — untouched null flags must keep following the business type.
+          body: JSON.stringify({ settings: { enableDiscounts: true } }),
         })
       );
     });
@@ -167,9 +184,23 @@ describe('FeatureFlagsPage', () => {
     expect(await screen.findByText('Feature flags saved successfully!')).toBeInTheDocument();
   });
 
+  it('does not send a PUT when nothing changed', async () => {
+    render(<FeatureFlagsPage />);
+    await screen.findAllByRole('checkbox');
+
+    fireEvent.click(screen.getByRole('button', { name: /Save Feature Flags/i }));
+
+    expect(await screen.findByText('Feature flags saved successfully!')).toBeInTheDocument();
+    expect(mockFetch).not.toHaveBeenCalledWith(
+      '/api/tenants/test-tenant/settings',
+      expect.objectContaining({ method: 'PUT' })
+    );
+  });
+
   it('shows an error message and keeps prior settings when save fails', async () => {
     render(<FeatureFlagsPage />);
-    await screen.findByRole('heading', { name: 'Feature Flags' });
+    await screen.findAllByRole('checkbox');
+    fireEvent.click(document.getElementById('enableDiscounts') as HTMLInputElement);
 
     mockFetch.mockResolvedValueOnce({
       json: () => Promise.resolve({ success: false, error: 'Failed to save feature flags' }),
@@ -182,7 +213,8 @@ describe('FeatureFlagsPage', () => {
 
   it('surfaces an unauthorized-specific message on a 401/403 save response', async () => {
     render(<FeatureFlagsPage />);
-    await screen.findByRole('heading', { name: 'Feature Flags' });
+    await screen.findAllByRole('checkbox');
+    fireEvent.click(document.getElementById('enableDiscounts') as HTMLInputElement);
 
     mockFetch.mockResolvedValueOnce({
       status: 403,
@@ -204,14 +236,14 @@ describe('FeatureFlagsPage', () => {
       refreshSettings: vi.fn(),
     });
     render(<FeatureFlagsPage />);
-    await screen.findByRole('heading', { name: 'Feature Flags' });
+    await screen.findAllByRole('checkbox');
 
     expect(screen.getByText(/Current Business Type:/)).toBeInTheDocument();
   });
 
   it('omits the business type banner when tenant settings are unavailable', async () => {
     render(<FeatureFlagsPage />);
-    await screen.findByRole('heading', { name: 'Feature Flags' });
+    await screen.findAllByRole('checkbox');
 
     expect(screen.queryByText(/Current Business Type:/)).not.toBeInTheDocument();
   });

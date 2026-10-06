@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
     try {
       const tenantAccess = await requireTenantAccess(request);
       tenantId = tenantAccess.tenantId;
-      if (!(await hasTenantPermission(tenantAccess.user.role, tenantId, 'customers.manage'))) {
+      if (!(await hasTenantPermission(tenantAccess.user.role, tenantId, 'customers.create'))) {
         return NextResponse.json(
           { success: false, error: 'Forbidden: Insufficient permissions' },
           { status: 403 }

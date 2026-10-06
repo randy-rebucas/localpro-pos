@@ -13,12 +13,26 @@
 | Layer | File | Role |
 |---|---|---|
 | Nav entry | [components/admin/AdminSidebar.tsx:166](components/admin/AdminSidebar.tsx#L166) | `{ label: 'Backup & Reset', href: '${base}/admin/backup-reset', permission: 'reset_collections.manage' }` |
-| Page | [app/[tenant]/[lang]/admin/backup-reset/page.tsx](app/[tenant]/[lang]/admin/backup-reset/page.tsx) | Client component: Backup / Restore / Reset, three independent action sections sharing one collection-checkbox list |
+| Page | [app/[tenant]/[lang]/admin/backup-reset/page.tsx](app/[tenant]/[lang]/admin/backup-reset/page.tsx) | Client component (Win8 flat styling): a top "Collections" card (checkbox grid + Select All / Clear All + selected count) feeding the Backup and Reset sections, plus a Restore section; Reset shows a permanent danger box, Restore shows one while "clear existing data" is checked |
 | Backup fetch | `GET /api/tenants/{tenant}/reset-collections?collections=...` | Auth + `reset_collections.manage` required, exports selected tenant-scoped collections as a downloadable JSON file |
 | Restore | `PUT /api/tenants/{tenant}/reset-collections` | Auth + permission required, optional `clearExisting`, transactional clear+insert |
 | Reset (delete) | `POST /api/tenants/{tenant}/reset-collections` | Auth + permission required, transactional `deleteMany` across every selected collection — **irreversible** without a prior backup |
-| Collection list / labels | `lib/backup-reset-helpers.ts` (`BACKUP_RESET_COLLECTIONS`) and `route.ts` (`COLLECTION_MODELS`) | Two independently maintained lists that must stay in sync (verified below, §2) |
-| FK-safe delete/restore order | `route.ts` (`RESET_ORDER`, `orderCollections`) | Children-before-parents for delete, parents-first for restore insert |
+| Collection registry | `lib/backup-reset-collections.ts` (`BACKUP_COLLECTION_SPECS`, `EXCLUDED_TENANT_MODELS`) | Single source of truth for UI + API (2026-10-06): 56 selectable collections, their 28 cascade child tables, `blockedBy` reset dependencies, and the reasoned list of excluded tenant models. `BACKUP_RESET_COLLECTIONS` in `lib/backup-reset-helpers.ts` is derived from it |
+| FK-safe delete/restore order | `lib/backup-reset-collections.ts` (`RESET_ORDER`, `orderForReset`) | Every table before the tables it references for delete; reversed for restore |
+| Schema guard | `__tests__/backup-reset-collections.test.ts` | Parses `prisma/schema.prisma` and fails when a tenant model is neither covered nor excluded, a cascade child table is missing, `RESET_ORDER` violates an FK, or `blockedBy` disagrees with the required FKs |
+
+### Coverage update (2026-10-06)
+
+The original list covered 21 of ~65 tenant-scoped models, and backups exported only parent rows, so restoring a backup lost every transaction line item, invoice line, product variation/modifier, bundle item, saved-cart item, etc. Fixed:
+
+- **Every tenant-scoped model** is now covered except the ones listed in `EXCLUDED_TENANT_MODELS` with reasons (tenant record, `TenantSettings`, `User` (credentials / lockout), subscription & billing, feature-flag overrides, role-permission overrides, e-commerce integrations (API credentials), `Counter` (OR/invoice sequences must never restart)).
+- **Cascade child tables** (no `tenantId` of their own) are exported/restored with their parent collection, scoped through the parent relation (e.g. `transactionItemModifiers` via `transactionItem.transaction.tenantId`).
+- **Restore cross-tenant guard for child rows:** a child row is inserted only if its parent id resolves to a row inside the restoring tenant; others are reported as `skipped`.
+- **Reset dependencies:** resetting a collection that unselected collections still reference with a required (`RESTRICT`) FK previously failed mid-transaction (e.g. Transactions while Kitchen Tickets existed, Products while Purchase Orders existed). The API now rejects it up front with `missingDependencies`, and the page shows a warning with an "Add Required Collections" button. The same check applies to restore with "clear existing data".
+- `addresses` is the `Address` model (staff user addresses), previously mislabeled "Customer Addresses"; customer addresses are `customerAddresses`, a child of Customers.
+- `posTables.currentOrderId` is cleared on restore (circular reference with transactions).
+
+**Open follow-up:** restore forces `tenantId` on every row, but it does not yet validate *other* foreign keys inside top-level rows (e.g. a crafted backup's `payments[].transactionId` or `createdById` pointing at another tenant's row). `scripts/reset-collections.ts` (CLI) still uses its own short table list.
 
 This is the highest blast-radius admin page in the codebase — the Reset action permanently deletes tenant data with no soft-delete/undo, so it gets the same "verify before trusting a prior pass" treatment as the tenant-isolation and role-permission audits.
 
@@ -29,7 +43,7 @@ This is the highest blast-radius admin page in the codebase — the Reset action
 - Three independent hooks (`useBackupCollections`, `useRestoreCollections`, `useResetCollections`) each own their own loading/error/result state; the page composes them but doesn't share state between them.
 - Collection selection (`selectedCollections`) is shared between the Backup section and the Reset section (same checkbox list), but **not** used by Restore, which operates on whatever collections exist inside the uploaded backup file instead.
 - **Reset always requires a native `confirm()` dialog** (`buildResetConfirmMessage`, listing the selected collection count and names) before calling the API — cannot be bypassed from the UI. Restore only prompts `confirm()` when "Clear existing data" is checked (data-loss path); a plain restore-without-clearing needs no confirmation, which is correct since it's non-destructive (uses `createMany({ skipDuplicates: true })`).
-- Traced `BACKUP_RESET_COLLECTIONS` (UI labels) against `COLLECTION_MODELS` (server-side Prisma delegate map) key-by-key — **all 21 keys match exactly**, so the UI can't offer to back up/reset a collection the server doesn't recognize, or vice versa. Also verified `RESET_ORDER` (route.ts) contains all 21 `COLLECTION_MODELS` keys exactly once each — no collection is silently skipped during a delete/restore because it's missing from the FK-ordering list.
+- UI and API share one registry (`lib/backup-reset-collections.ts`), so the UI can't offer a collection the server doesn't recognize; `RESET_ORDER` completeness and FK ordering are enforced by `__tests__/backup-reset-collections.test.ts` (superseding the 2026-09-21 manual 21-key trace).
 - Both `POST` (reset) and `PUT` (restore) wrap their multi-table writes in `dbTransaction` — confirmed atomic (all-or-nothing) per the transaction semantics in `lib/db.ts`. This matches [[workflow-integrity]]'s multi-write atomicity check.
 
 ---

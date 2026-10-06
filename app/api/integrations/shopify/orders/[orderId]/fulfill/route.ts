@@ -19,7 +19,7 @@ export async function POST(
   try {
     const user = await getCurrentUser(request);
     if (!user) return NextResponse.json({ success: false, error: t('validation.unauthorized', 'Unauthorized') }, { status: 401 });
-    if (!(await hasTenantPermission(user.role, user.tenantId, 'integrations.manage'))) {
+    if (!(await hasTenantPermission(user.role, user.tenantId, 'integrations.sync'))) {
       return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden') }, { status: 403 });
     }
 
@@ -36,7 +36,10 @@ export async function POST(
       where: { tenantId: user.tenantId, provider: 'shopify', isActive: true },
     });
     if (!integration?.shopDomain) {
-      return NextResponse.json({ success: false, error: t('validation.noActiveShopifyIntegration', 'No active Shopify integration') }, { status: 400 });
+      return NextResponse.json(
+        { success: false, code: 'SHOPIFY_NOT_CONNECTED', error: t('validation.noActiveShopifyIntegration', 'No active Shopify integration') },
+        { status: 400 }
+      );
     }
 
     // Idempotency guard: if the local transaction already recorded a Shopify

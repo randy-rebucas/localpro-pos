@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
@@ -21,7 +21,7 @@ export default function LoyaltyCustomerPage() {
   const customerId = params.customerId as string;
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const { canAccess } = usePermissions();
-  const canView = canAccess('loyalty.manage');
+  const canView = canAccess('loyalty.view');
   const canAdjust = canAccess('loyalty.adjust');
 
   useEffect(() => {
