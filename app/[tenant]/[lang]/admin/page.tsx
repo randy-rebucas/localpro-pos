@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   TrendingUp, ShoppingCart, Package, Users, ArrowRight, AlertTriangle,
-  Receipt, Plus, BarChart2, ShieldCheck, Boxes, CalendarClock, Loader2,
+  Receipt, Plus, BarChart2, ShieldCheck, Boxes, CalendarClock,
   Store,
 } from 'lucide-react';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
@@ -33,9 +33,9 @@ interface DashboardData {
   expiringCount: number;
 }
 
-function fmt(n: number | undefined | null, symbol: string) {
+function fmt(n: number | undefined | null, symbol: string, locale: string) {
   const safe = isFinite(Number(n)) ? Number(n) : 0;
-  return `${symbol ?? ''}${safe.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return `${symbol ?? ''}${safe.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function greeting(dict: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -58,6 +58,7 @@ export default function AdminDashboard() {
   const currencySymbol = tenantSettings.currencySymbol || '₱';
   const businessType = tenantSettings.businessType;
   const base = `/${tenant}/${lang}`;
+  const locale = lang === 'es' ? 'es-ES' : 'en-PH';
 
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -67,7 +68,7 @@ export default function AdminDashboard() {
     getDictionaryClient(lang as 'en' | 'es').then(setDict);
   }, [lang]);
 
-  const todayStr = new Date().toLocaleDateString('en-PH', {
+  const todayStr = new Date().toLocaleDateString(locale, {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
   });
 
@@ -138,7 +139,7 @@ export default function AdminDashboard() {
   const stats = [
     {
       label: dict?.admin?.todaysRevenue || "Today's Revenue",
-      value: data ? fmt(data.todayRevenue, currencySymbol) : '—',
+      value: data ? fmt(data.todayRevenue, currencySymbol, locale) : '—',
       sub: `${data?.todayTransactions ?? 0} ${dict?.admin?.transactionsSuffix || 'transactions'}`,
       icon: TrendingUp,
       tile: '#0f9d58',
@@ -203,7 +204,7 @@ export default function AdminDashboard() {
           {data.lowStockCount > 0 && (
             <Link
               href={`${base}/admin/inventory`}
-              className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-300 text-sm text-amber-700 hover:bg-amber-100 transition-colors"
+              className="flex items-center gap-2 px-3 py-2 bg-win8-warning text-white text-sm font-medium hover:brightness-110 transition-[filter]"
             >
               <AlertTriangle className="w-4 h-4 flex-shrink-0" />
               {(dict?.admin?.lowStockAlertMsg || '{count} product(s) low on stock').replace('{count}', String(data.lowStockCount))}
@@ -213,7 +214,7 @@ export default function AdminDashboard() {
           {data.expiringCount > 0 && (
             <Link
               href={`${base}/admin/expiry-tracking`}
-              className="flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-300 text-sm text-red-700 hover:bg-red-100 transition-colors"
+              className="flex items-center gap-2 px-3 py-2 bg-win8-danger text-white text-sm font-medium hover:brightness-110 transition-[filter]"
             >
               <CalendarClock className="w-4 h-4 flex-shrink-0" />
               {(dict?.admin?.expiringAlertMsg || '{count} item(s) expiring soon').replace('{count}', String(data.expiringCount))}
@@ -257,7 +258,7 @@ export default function AdminDashboard() {
             <h2 className="text-sm font-semibold text-gray-900">{dict?.admin?.recentTransactions || 'Recent Transactions'}</h2>
             <Link
               href={`${base}/admin/transactions`}
-              className="text-xs font-medium hover:underline"
+              className="inline-flex items-center text-xs font-medium hover:underline"
               style={{ color: primaryColor }}
             >
               {dict?.admin?.viewAll || 'View all'}
@@ -265,17 +266,17 @@ export default function AdminDashboard() {
           </div>
           {loading ? (
             <div className="flex items-center justify-center py-12">
-              <Loader2 className="w-5 h-5 animate-spin text-gray-300" />
+              <div className="win8-spinner text-brand"><span /><span /><span /><span /><span /></div>
             </div>
           ) : !data?.recentTransactions.length ? (
             <div className="text-center py-12">
-              <Receipt className="w-8 h-8 mx-auto text-gray-200 mb-2" />
-              <p className="text-sm text-gray-400">{dict?.admin?.noTransactionsToday || 'No transactions today'}</p>
+              <Receipt className="w-8 h-8 mx-auto text-gray-300 mb-2" aria-hidden="true" />
+              <p className="text-sm text-gray-400">{dict?.admin?.noRecentTransactions || 'No transactions yet'}</p>
             </div>
           ) : (
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-100 bg-gray-50">
+                <tr className="border-b border-gray-200 bg-gray-50">
                   <th className="text-left px-5 py-2.5 text-xs font-medium text-gray-500">{dict?.admin?.receiptCol || 'Receipt'}</th>
                   <th className="text-left px-3 py-2.5 text-xs font-medium text-gray-500">{dict?.admin?.customerCol || 'Customer'}</th>
                   <th className="text-left px-3 py-2.5 text-xs font-medium text-gray-500">{dict?.admin?.methodCol || 'Method'}</th>
@@ -283,9 +284,9 @@ export default function AdminDashboard() {
                   <th className="text-right px-5 py-2.5 text-xs font-medium text-gray-500">{dict?.admin?.dateCol || 'Date'}</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
+              <tbody className="divide-y divide-gray-200">
                 {data.recentTransactions.map(tx => (
-                  <tr key={tx.id} className="hover:bg-gray-50 transition-colors">
+                  <tr key={tx.id} className="hover:bg-gray-100 transition-colors">
                     <td className="px-5 py-3 font-mono text-xs text-gray-700">
                       {tx.receiptNumber || tx.id.slice(-6).toUpperCase()}
                     </td>
@@ -296,10 +297,10 @@ export default function AdminDashboard() {
                     </td>
                     <td className="px-3 py-3 text-gray-500 capitalize">{tx.paymentMethod}</td>
                     <td className="px-5 py-3 text-right font-semibold text-gray-900">
-                      {fmt(tx.total, currencySymbol)}
+                      {fmt(tx.total, currencySymbol, locale)}
                     </td>
                     <td className="px-5 py-3 text-right text-gray-400 text-xs">
-                      {new Date(tx.createdAt).toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}
+                      {new Date(tx.createdAt).toLocaleString(locale, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}
                     </td>
                   </tr>
                 ))}
@@ -323,7 +324,7 @@ export default function AdminDashboard() {
                     className={`flex items-center gap-2.5 w-full px-3 py-2 text-sm font-medium border transition-colors ${
                       a.primary
                         ? 'text-white'
-                        : 'border-transparent text-gray-700 hover:bg-gray-50 hover:border-gray-200'
+                        : 'border-transparent text-gray-700 hover:bg-gray-100 hover:border-gray-300'
                     }`}
                     style={a.primary ? { backgroundColor: primaryColor, borderColor: primaryColor } : undefined}
                   >
@@ -349,7 +350,7 @@ export default function AdminDashboard() {
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-gray-500">{dict?.admin?.statusLabel || 'Status'}</span>
                   <span className={`text-xs font-semibold ${
-                    subscriptionStatus.isTrial ? 'text-amber-600' : subscriptionStatus.isActive ? 'text-emerald-600' : 'text-red-500'
+                    subscriptionStatus.isTrial ? 'text-win8-warning' : subscriptionStatus.isActive ? 'text-win8-success' : 'text-win8-danger'
                   }`}>
                     {subscriptionStatus.isTrial
                       ? (dict?.admin?.trialLabel || 'Trial')
@@ -367,15 +368,15 @@ export default function AdminDashboard() {
                 {subscriptionStatus.isTrial && subscriptionStatus.trialEndDate && (
                   <div className="flex items-center justify-between">
                     <span className="text-xs text-gray-500">{dict?.admin?.trialEnds || 'Trial ends'}</span>
-                    <span className="text-xs font-semibold text-amber-700">
-                      {new Date(subscriptionStatus.trialEndDate).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })}
+                    <span className="text-xs font-semibold text-win8-warning tabular-nums">
+                      {new Date(subscriptionStatus.trialEndDate).toLocaleDateString(locale, { month: 'short', day: 'numeric' })}
                     </span>
                   </div>
                 )}
               </div>
               <Link
                 href={`${base}/admin/subscriptions`}
-                className="mt-3 flex items-center justify-center gap-2 w-full px-3 py-2 text-sm font-medium border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
+                className="mt-3 flex items-center justify-center gap-2 w-full px-3 py-2 text-sm font-medium border border-gray-300 bg-white text-gray-700 hover:bg-gray-100 transition-colors"
               >
                 {dict?.admin?.managePlan || 'Manage Plan'}
               </Link>

@@ -38,7 +38,7 @@ export function hasNotificationsToSend(notifications: Notification[]): boolean {
 /**
  * Format notification type display text
  */
-type Dict = Record<string, Record<string, string | undefined> | undefined>;
+type Dict = { admin?: Record<string, string | undefined>; common?: Record<string, string | undefined> };
 
 export function formatNotificationType(type: Notification['type'], dict: Dict): string {
   if (type === 'missing_clock_out') {
@@ -52,9 +52,9 @@ export function formatNotificationType(type: Notification['type'], dict: Dict): 
  */
 export function getNotificationBadgeClass(type: Notification['type']): string {
   if (type === 'missing_clock_out') {
-    return 'bg-red-100 text-red-800 border-red-300';
+    return 'bg-win8-danger text-white';
   }
-  return 'bg-yellow-100 text-yellow-800 border-yellow-300';
+  return 'bg-win8-warning text-white';
 }
 
 /**

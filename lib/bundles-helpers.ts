@@ -7,7 +7,7 @@
  * Get CSS classes for status badge
  */
 export function getStatusColor(isActive: boolean): string {
-  return isActive ? 'bg-green-100 text-green-800 border-green-300' : 'bg-red-100 text-red-800 border-red-300';
+  return isActive ? 'bg-win8-success text-white' : 'bg-win8-danger text-white';
 }
 
 /**

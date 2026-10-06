@@ -1,13 +1,12 @@
-﻿'use client';
+'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
-import { useTenantSettings } from '@/contexts/TenantSettingsContext';
-import { getDefaultTenantSettings } from '@/lib/currency';
+import { type TranslationDict } from '@/types/dictionary';
+import AdminPageHeader from '@/components/admin/AdminPageHeader';
 import { logger } from '@/lib/logger';
-import toast from 'react-hot-toast';
+import { showToast } from '@/lib/toast';
 import { usePermissions } from '@/hooks/usePermissions';
 
 interface UploadedFile {
@@ -19,116 +18,99 @@ interface UploadedFile {
   uploadedAt: string;
 }
 
+const ALLOWED_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'application/pdf',
+  'text/csv',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+];
+const MAX_SIZE = 10 * 1024 * 1024;
+
+/** Read `error` from a failed response body without letting a parse failure mask it. */
+async function readError(res: Response, fallback: string): Promise<string> {
+  try {
+    const data = await res.json();
+    return data?.error || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export default function FileUploadPage() {
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<Record<string, unknown> | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [dict, setDict] = useState<TranslationDict | null>(null);
+  const [loadingFiles, setLoadingFiles] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [dragActive, setDragActive] = useState(false);
-  const [showModal, setShowModal] = useState(false);
   const [viewingFile, setViewingFile] = useState<UploadedFile | null>(null);
-  const [deletingFileId, setDeletingFileId] = useState<string | null>(null);
+  const [deletingFile, setDeletingFile] = useState<UploadedFile | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const { canAccess } = usePermissions();
   // Deleting needs files.manage; uploading also works with products/settings access (see /api/upload).
   const canDeleteFiles = canAccess('files.manage');
-  const { settings } = useTenantSettings();
-  const tenantSettings = settings || getDefaultTenantSettings();
-  const primaryColor = tenantSettings.primaryColor || '#35979c';
+
+  // fileUpload.* strings live in their own dictionary section.
+  const fu = (dict as unknown as { fileUpload?: Record<string, string | undefined> } | null)?.fileUpload;
 
   useEffect(() => {
-    getDictionaryClient(lang).then((d) => {
-      setDict(d);
-      setLoading(false);
-    });
+    getDictionaryClient(lang).then(setDict);
   }, [lang]);
 
-  useEffect(() => {
-    fetchUploadedFiles();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tenant]);
-
-  // Fetch uploaded files from database
-  const fetchUploadedFiles = async () => {
+  const fetchUploadedFiles = useCallback(async () => {
+    setLoadingFiles(true);
+    setLoadError(null);
     try {
-      const res = await fetch(`/api/upload?tenant=${tenant}`, {
-        credentials: 'include',
-      });
-
-      if (res.ok) {
-        const data = await res.json() as { success: boolean; data?: UploadedFile[] };
-        if (data.success && data.data) {
-          setUploadedFiles(
-            data.data.map((file: UploadedFile) => ({
-              id: file.id,
-              name: file.name,
-              size: file.size,
-              type: file.type,
-              url: file.url,
-              uploadedAt: file.uploadedAt,
-            }))
-          );
-        }
+      const res = await fetch(`/api/upload?tenant=${tenant}`, { credentials: 'include' });
+      if (!res.ok) {
+        setLoadError(await readError(res, 'Failed to load files'));
+        return;
+      }
+      const data = (await res.json()) as { success: boolean; data?: UploadedFile[]; error?: string };
+      if (data.success) {
+        setUploadedFiles(
+          (data.data || []).map((file) => ({
+            id: file.id,
+            name: file.name,
+            size: file.size,
+            type: file.type,
+            url: file.url,
+            uploadedAt: file.uploadedAt,
+          }))
+        );
+      } else {
+        setLoadError(data.error || 'Failed to load files');
       }
     } catch (error) {
       logger.error('Error fetching files:', error);
+      setLoadError('Failed to load files');
+    } finally {
+      setLoadingFiles(false);
     }
-  };
+  }, [tenant]);
 
-  const handleDrag = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.type === 'dragenter' || e.type === 'dragover') {
-      setDragActive(true);
-    } else if (e.type === 'dragleave') {
-      setDragActive(false);
-    }
-  };
+  useEffect(() => {
+    fetchUploadedFiles();
+  }, [fetchUploadedFiles]);
 
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      handleFile(e.dataTransfer.files[0]);
-    }
-  };
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      handleFile(e.target.files[0]);
-    }
-  };
-
-  const handleFile = async (file: File) => {
-    // Validate file type
-    const allowedTypes = [
-      'image/jpeg',
-      'image/png',
-      'image/gif',
-      'image/webp',
-      'application/pdf',
-      'text/csv',
-      'application/vnd.ms-excel',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    ];
-
-    if (!allowedTypes.includes(file.type)) {
-      toast.error((dict as any)?.fileUpload?.fileTypeNotAllowed || 'File type not allowed. Please upload an image, PDF, or spreadsheet.'); // eslint-disable-line @typescript-eslint/no-explicit-any
-      return;
-    }
-
-    // Validate file size (max 10MB)
-    const maxSize = 10 * 1024 * 1024;
-    if (file.size > maxSize) {
-      toast.error((dict as any)?.fileUpload?.fileSizeExceeded || 'File size exceeds 10MB limit.'); // eslint-disable-line @typescript-eslint/no-explicit-any
-      return;
-    }
-
-    await uploadFile(file);
-  };
+  // Escape closes whichever modal is open.
+  useEffect(() => {
+    if (!viewingFile && !deletingFile) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (deletingFile && !deleting) setDeletingFile(null);
+      else setViewingFile(null);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [viewingFile, deletingFile, deleting]);
 
   const uploadFile = async (file: File) => {
     setUploading(true);
@@ -143,12 +125,8 @@ export default function FileUploadPage() {
       });
 
       if (!res.ok) {
-        try {
-          const data = await res.json();
-          throw new Error(data.error || 'Failed to upload file');
-        } catch {
-          throw new Error('Failed to upload file');
-        }
+        // Surface the server's reason (size/type/quota) instead of a generic message.
+        throw new Error(await readError(res, fu?.uploadFailed || 'Failed to upload file'));
       }
 
       const data = await res.json();
@@ -161,14 +139,48 @@ export default function FileUploadPage() {
         uploadedAt: data.data.uploadedAt || new Date().toISOString(),
       };
 
-      setUploadedFiles([newFile, ...uploadedFiles]);
-      toast.success(((dict as any)?.fileUpload?.uploadedSuccessfully || '{name} uploaded successfully').replace('{name}', file.name)); // eslint-disable-line @typescript-eslint/no-explicit-any
+      setUploadedFiles((prev) => [newFile, ...prev]);
+      showToast.success((fu?.uploadedSuccessfully || '{name} uploaded successfully').replace('{name}', file.name));
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Upload failed';
-      toast.error(errorMsg);
+      showToast.error(error instanceof Error ? error.message : (fu?.uploadFailed || 'Upload failed'));
     } finally {
       setUploading(false);
     }
+  };
+
+  const handleFile = async (file: File) => {
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      showToast.error(fu?.fileTypeNotAllowed || 'File type not allowed. Please upload an image, PDF, or spreadsheet.');
+      return;
+    }
+    if (file.size > MAX_SIZE) {
+      showToast.error(fu?.fileSizeExceeded || 'File size exceeds 10MB limit.');
+      return;
+    }
+    await uploadFile(file);
+  };
+
+  const handleDrag = (e: React.DragEvent<HTMLLabelElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === 'dragenter' || e.type === 'dragover') setDragActive(true);
+    else if (e.type === 'dragleave') setDragActive(false);
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLLabelElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    if (uploading) return;
+    const file = e.dataTransfer.files?.[0];
+    if (file) handleFile(file);
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) handleFile(file);
+    // Allow picking the same file again after an error.
+    e.target.value = '';
   };
 
   const formatFileSize = (bytes: number): string => {
@@ -179,424 +191,337 @@ export default function FileUploadPage() {
     return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + s[i];
   };
 
-  const formatDate = (dateString: string): string => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString(lang === 'es' ? 'es-ES' : 'en-US') + ' ' + date.toLocaleTimeString(undefined, { hour12: true });
+  const formatDate = (dateString: string): string =>
+    new Date(dateString).toLocaleString(lang === 'es' ? 'es-ES' : 'en-US', {
+      year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+    });
+
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast.success(fu?.urlCopied || 'URL copied to clipboard');
+    } catch {
+      showToast.error(fu?.copyFailed || 'Could not copy to clipboard');
+    }
   };
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    toast.success((dict as any)?.fileUpload?.urlCopied || 'URL copied to clipboard'); // eslint-disable-line @typescript-eslint/no-explicit-any
-  };
-
-  const deleteFile = async (fileId: string | undefined) => {
-    if (!fileId) {
-      toast.error((dict as any)?.fileUpload?.fileIdNotFound || 'File ID not found'); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const confirmDelete = async () => {
+    if (!deletingFile?.id) {
+      showToast.error(fu?.fileIdNotFound || 'File ID not found');
       return;
     }
-
+    setDeleting(true);
     try {
-      const res = await fetch(`/api/upload?id=${fileId}&tenant=${tenant}`, {
+      const res = await fetch(`/api/upload?id=${deletingFile.id}&tenant=${tenant}`, {
         method: 'DELETE',
         credentials: 'include',
       });
-
       if (!res.ok) {
-        try {
-          const data = await res.json();
-          throw new Error(data.error || 'Failed to delete file');
-        } catch {
-          throw new Error('Failed to delete file');
-        }
+        throw new Error(await readError(res, fu?.deleteFailed || 'Failed to delete file'));
       }
-
-      // Remove file from state
-      setUploadedFiles(uploadedFiles.filter(f => f.id !== fileId));
-      toast.success((dict as any)?.fileUpload?.fileDeleted || 'File deleted successfully'); // eslint-disable-line @typescript-eslint/no-explicit-any
-      setDeletingFileId(null);
+      setUploadedFiles((prev) => prev.filter((f) => f.id !== deletingFile.id));
+      showToast.success(fu?.fileDeleted || 'File deleted successfully');
+      setDeletingFile(null);
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Delete failed';
-      toast.error(errorMsg);
+      showToast.error(error instanceof Error ? error.message : (fu?.deleteFailed || 'Delete failed'));
+    } finally {
+      setDeleting(false);
     }
   };
 
-  if (!dict || loading) {
+  if (!dict) {
     return (
       <div className="flex items-center justify-center py-24">
-        <div className="text-center">
-          <div
-            className="inline-block animate-spin h-8 w-8 border-b-2"
-            style={{ borderColor: primaryColor, borderBottomColor: 'transparent' }}
-          ></div>
-          <p className="mt-4 text-gray-600">{(dict as Record<string, any>)?.common?.loading || 'Loading...'}</p>
-        </div>
+        <div className="win8-spinner text-brand"><span /><span /><span /><span /><span /></div>
       </div>
     );
   }
 
-  return (
-    <div>
-      <div className="px-4 sm:px-6 py-6">
-        <div className="mb-6 sm:mb-8">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">
-            {(dict as any)?.fileUpload?.title || 'File Upload'} {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
-          </h1>
-          <p className="text-gray-600">
-            {(dict as any)?.fileUpload?.subtitle || 'Upload images, documents, and media files to your account. Max file size: 10MB.'} {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
-          </p>
+  const fileIcon = (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.586a1 1 0 0 1 .707.293l5.414 5.414a1 1 0 0 1 .293.707V19a2 2 0 0 1-2 2Z" />
+    </svg>
+  );
+
+  const renderFiles = () => {
+    if (loadingFiles && uploadedFiles.length === 0) {
+      return (
+        <div className="text-center py-12 bg-white border border-gray-300">
+          <div className="win8-spinner text-brand mx-auto"><span /><span /><span /><span /><span /></div>
+          <p className="mt-3 text-gray-400 text-sm">{fu?.loadingFiles || 'Loading files…'}</p>
         </div>
+      );
+    }
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
-          {/* Right Column (lg:col-span-1) - Upload Section & File Types */}
-          <div className="lg:col-span-1 order-2 lg:order-1">
-            {/* Upload Section */}
-            <div className="bg-white border border-gray-300 p-5 sm:p-6 lg:p-8 mb-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-6">{(dict as any)?.fileUpload?.uploadFile || 'Upload File'}</h2> {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
-              
-              {/* Drag & Drop Area */}
-              <div
-                onDragEnter={handleDrag}
-                onDragLeave={handleDrag}
-                onDragOver={handleDrag}
-                onDrop={handleDrop}
-                className={`w-full border-2 border-dashed p-8 text-center cursor-pointer transition-colors ${
-                  dragActive
-                    ? 'border-brand bg-brand-soft'
-                    : 'border-gray-300 bg-gray-50 hover:border-gray-400'
-                }`}
-            >
-              <input
-                type="file"
-                id="file-upload"
-                onChange={handleChange}
-                disabled={uploading}
-                className="hidden"
-                accept="image/*,.pdf,.csv,.xls,.xlsx"
-              />
-              <label
-                htmlFor="file-upload"
-                className="block cursor-pointer"
-              >
-                <svg
-                  className="mx-auto h-12 w-12 text-gray-400 mb-4"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={1.5}
-                    d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-                  />
-                </svg>
-                <p className="text-lg font-semibold text-gray-900 mb-1">
-                  {(dict as any)?.fileUpload?.dragAndDrop || 'Drag and drop your file here'} {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
-                </p>
-                <p className="text-gray-600 text-sm">
-                  {(dict as any)?.fileUpload?.orClickToSelect || 'or click to select from your computer'} {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
-                </p>
-                <p className="text-gray-500 text-xs mt-2">
-                  {(dict as any)?.fileUpload?.supportedFormats || 'Supported: Images (PNG, JPG, GIF, WebP), PDF, CSV, Excel'} {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
-                </p>
-              </label>
-            </div>
+    if (loadError) {
+      return (
+        <div className="text-center py-12 bg-white border border-gray-300">
+          <p className="text-win8-danger text-sm font-medium">{loadError}</p>
+          <button
+            type="button"
+            onClick={() => fetchUploadedFiles()}
+            className="mt-4 px-4 py-2 bg-brand text-white text-sm hover:bg-brand-hover transition-colors"
+          >
+            {dict.common?.retry || 'Retry'}
+          </button>
+        </div>
+      );
+    }
 
-            {/* File Input */}
-            <div className="mt-6">
-              <label className="block text-sm font-medium text-gray-700 mb-3">
-                {(dict as any)?.fileUpload?.orSelectFile || 'Or select a file'} {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
-              </label>
-              <input
-                type="file"
-                onChange={handleChange}
-                disabled={uploading}
-                className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white disabled:bg-gray-100 disabled:cursor-not-allowed"
-                accept="image/*,.pdf,.csv,.xls,.xlsx"
-              />
-            </div>
+    if (uploadedFiles.length === 0) {
+      return (
+        <div className="text-center py-12 text-gray-400 bg-white border border-gray-300">
+          <p>{fu?.noFilesYet || 'No files uploaded yet'}</p>
+          <p className="text-sm mt-1">{fu?.uploadFirstFile || 'Upload your first file to get started'}</p>
+        </div>
+      );
+    }
 
-            {/* Upload Status */}
-            {uploading && (
-              <div className="mt-6 p-4 bg-brand-soft border border-teal-300">
-                <div className="flex items-center gap-3">
-                  <div className="animate-spin h-5 w-5 border-b-2 border-brand"></div>
-                  <p className="text-brand-navy-deep">{(dict as any)?.fileUpload?.uploadingFile || 'Uploading file...'}</p> {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
-                </div>
-              </div>
-            )}
-            </div>
+    const viewLabel = fu?.view || 'View';
+    const copyLabel = fu?.copy || 'Copy URL';
+    const deleteLabel = fu?.delete || 'Delete';
 
-            {/* File Type Info */}
-            <div className="bg-white border border-gray-300 p-5 sm:p-6 lg:p-8 mt-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">{(dict as any)?.fileUpload?.allowedFileTypes || 'Allowed File Types'}</h2> {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
-              <div className="grid grid-cols-1 gap-4">
-                <div className="p-4 border border-gray-300">
-                  <h3 className="font-semibold text-gray-900 mb-2">{(dict as any)?.fileUpload?.images || 'Images'}</h3> {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
-                  <p className="text-sm text-gray-600">
-                    {(dict as any)?.fileUpload?.imagesDesc || 'PNG, JPG, GIF, WebP - Perfect for logos, product photos, and branding'} {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
-                  </p>
-                </div>
-                <div className="p-4 border border-gray-300">
-                  <h3 className="font-semibold text-gray-900 mb-2">{(dict as any)?.fileUpload?.documents || 'Documents'}</h3> {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
-                  <p className="text-sm text-gray-600">
-                    {(dict as any)?.fileUpload?.documentsDesc || 'PDF - For invoices, receipts, and reports'} {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
-                  </p>
-                </div>
-                <div className="p-4 border border-gray-300">
-                  <h3 className="font-semibold text-gray-900 mb-2">{(dict as any)?.fileUpload?.spreadsheets || 'Spreadsheets'}</h3> {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
-                  <p className="text-sm text-gray-600">
-                    {(dict as any)?.fileUpload?.spreadsheetsDesc || 'CSV, XLS, XLSX - For data imports and exports'} {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
-                  </p>
-                </div>
-                <div className="p-4 border border-gray-300">
-                  <h3 className="font-semibold text-gray-900 mb-2">{(dict as any)?.fileUpload?.sizeLimit || 'Size Limit'}</h3> {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
-                  <p className="text-sm text-gray-600">
-                    {(dict as any)?.fileUpload?.sizeLimitDesc || 'Maximum 10MB per file'} {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Left Column (lg:col-span-2) - Uploaded Files List */}
-          <div className="lg:col-span-2 order-1 lg:order-2">
-            {uploadedFiles.length > 0 && (
-              <div className="bg-white border border-gray-300 p-5 sm:p-6 lg:p-8">
-                <h2 className="text-xl font-bold text-gray-900 mb-6">{(dict as any)?.fileUpload?.uploadedFiles || 'Uploaded Files'}</h2> {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
-                <div className="space-y-3">
-                  {uploadedFiles.map((file, idx) => (
-                  <div
-                    key={idx}
-                    className="border border-gray-300 p-4 hover:bg-gray-50 transition-colors"
-                  >
-                    <div className="flex items-start gap-4 flex-wrap">
-                      <div className="flex-shrink-0">
-                        <div className="w-12 h-12 bg-gray-100 flex items-center justify-center overflow-hidden">
-                          {file.type.startsWith('image/') ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img 
-                              src={file.url}
-                              alt={file.name}
-                              className="w-12 h-12 object-cover"
-                            />
-                          ) : (
-                            <svg
-                              className="w-6 h-6 text-gray-400"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                              />
-                            </svg>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-gray-900 break-all">{file.name}</p>
-                        <div className="flex flex-wrap gap-4 text-sm text-gray-600 mt-1">
-                          <span>{formatFileSize(file.size)}</span>
-                          <span>{formatDate(file.uploadedAt)}</span>
-                        </div>
-                        <div className="mt-3 p-3 bg-gray-50 border border-gray-200">
-                          <p className="text-xs font-semibold text-gray-700 mb-2">{(dict as any)?.fileUpload?.publicUrl || 'Public URL:'}</p> {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <code className="flex-1 text-xs bg-white px-2 py-1 border border-gray-300 text-gray-700 break-all">
-                              {file.url}
-                            </code>
-                            <button
-                              onClick={() => copyToClipboard(file.url)}
-                              className="px-2 py-1 bg-gray-200 text-gray-700 hover:bg-gray-300 text-xs font-medium transition-colors whitespace-nowrap"
-                              title={(dict as any)?.fileUpload?.copy || 'Copy URL'} // eslint-disable-line @typescript-eslint/no-explicit-any
-                            >
-                              {(dict as any)?.fileUpload?.copy || 'Copy'} {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex-shrink-0">
-                        <button
-                          onClick={() => {
-                            setViewingFile(file);
-                            setShowModal(true);
-                          }}
-                          className="px-3 py-1 bg-brand-soft text-brand-hover hover:bg-teal-100 text-sm font-medium transition-colors"
-                        >
-                          {(dict as any)?.fileUpload?.view || 'View'} {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
-                        </button>
-                        {canDeleteFiles && (
-                          <button
-                            onClick={() => setDeletingFileId(file.id || '')}
-                            className="ml-2 px-3 py-1 bg-red-100 text-red-700 hover:bg-red-200 text-sm font-medium transition-colors"
-                            title={(dict as any)?.fileUpload?.delete || 'Delete file'} // eslint-disable-line @typescript-eslint/no-explicit-any
-                          >
-                            {(dict as any)?.fileUpload?.delete || 'Delete'} {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
-                          </button>
-                        )}
-                      </div>
+    return (
+      <div className="overflow-x-auto border border-gray-300 bg-white max-h-[70vh] overflow-y-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-brand-navy text-white text-xs uppercase tracking-wide sticky top-0 z-10">
+            <tr>
+              <th className="px-4 py-3 text-left font-medium">{fu?.fileColumn || 'File'}</th>
+              <th className="px-4 py-3 text-right font-medium">{fu?.sizeColumn || 'Size'}</th>
+              <th className="px-4 py-3 text-left font-medium">{fu?.uploadedColumn || 'Uploaded'}</th>
+              <th className="px-4 py-3 text-right font-medium">{dict.common?.actions || 'Actions'}</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-200">
+            {uploadedFiles.map((file) => (
+              <tr key={file.id || file.url} className="hover:bg-gray-100 transition-colors">
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 shrink-0 bg-gray-100 border border-gray-300 flex items-center justify-center overflow-hidden text-gray-400">
+                      {file.type.startsWith('image/') ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={file.url} alt="" className="w-10 h-10 object-cover" />
+                      ) : fileIcon}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-medium text-gray-900 max-w-[280px] truncate" title={file.name}>{file.name}</p>
+                      <p className="text-xs font-mono text-gray-400 max-w-[280px] truncate" title={file.url}>{file.url}</p>
                     </div>
                   </div>
-                ))}
-                </div>
-              </div>
-            )}
+                </td>
+                <td className="px-4 py-3 text-right whitespace-nowrap tabular-nums text-gray-700">{formatFileSize(file.size)}</td>
+                <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-700">{formatDate(file.uploadedAt)}</td>
+                <td className="px-4 py-3">
+                  <div className="flex justify-end gap-1.5">
+                    <button type="button" onClick={() => setViewingFile(file)} title={viewLabel} aria-label={`${viewLabel}: ${file.name}`} className="inline-flex items-center justify-center p-2.5 text-white bg-brand hover:brightness-110 transition-[filter]">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
+                      </svg>
+                    </button>
+                    <button type="button" onClick={() => copyToClipboard(file.url)} title={copyLabel} aria-label={`${copyLabel}: ${file.name}`} className="inline-flex items-center justify-center p-2.5 text-white bg-brand-navy hover:brightness-110 transition-[filter]">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M8 8V5a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1h-3M5 8h10a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z" />
+                      </svg>
+                    </button>
+                    {canDeleteFiles && (
+                      <button type="button" onClick={() => setDeletingFile(file)} title={deleteLabel} aria-label={`${deleteLabel}: ${file.name}`} className="inline-flex items-center justify-center p-2.5 text-white bg-win8-danger hover:brightness-110 transition-[filter]">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 7h12M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m2 0-.7 12.1a2 2 0 0 1-2 1.9H9.7a2 2 0 0 1-2-1.9L7 7h10Z" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
 
-            {uploadedFiles.length === 0 && !uploading && (
-              <div className="bg-white border border-gray-300 p-12 text-center">
-                <svg
-                  className="mx-auto h-12 w-12 text-gray-400 mb-4"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={1.5}
-                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                  />
-                </svg>
-                <p className="text-gray-500">{(dict as any)?.fileUpload?.noFilesYet || 'No files uploaded yet'}</p> {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
-                <p className="text-gray-400 text-sm mt-1">{(dict as any)?.fileUpload?.uploadFirstFile || 'Upload your first file to get started'}</p> {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
+  return (
+    <>
+      <div className="px-4 sm:px-6 py-6">
+        <AdminPageHeader
+          title={fu?.title || 'File Upload'}
+          description={fu?.subtitle || 'Upload images, documents, and media files to your account. Max file size: 10MB.'}
+        />
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="space-y-4">
+            <section className="bg-white border border-gray-300">
+              <div className="px-6 py-4 border-b border-gray-300">
+                <h2 className="text-base font-bold text-gray-900">{fu?.uploadFile || 'Upload File'}</h2>
               </div>
-            )}
+              <div className="p-6">
+                <label
+                  htmlFor="file-upload"
+                  onDragEnter={handleDrag}
+                  onDragLeave={handleDrag}
+                  onDragOver={handleDrag}
+                  onDrop={handleDrop}
+                  className={`block w-full border-2 border-dashed p-8 text-center transition-colors ${
+                    uploading ? 'cursor-wait border-gray-300 bg-gray-100' : dragActive ? 'cursor-pointer border-brand bg-brand-soft' : 'cursor-pointer border-gray-300 bg-gray-50 hover:border-brand'
+                  }`}
+                >
+                  <input
+                    type="file"
+                    id="file-upload"
+                    onChange={handleChange}
+                    disabled={uploading}
+                    className="sr-only"
+                    accept="image/*,.pdf,.csv,.xls,.xlsx"
+                  />
+                  {uploading ? (
+                    <>
+                      <div className="win8-spinner text-brand mx-auto"><span /><span /><span /><span /><span /></div>
+                      <p className="mt-3 text-sm font-medium text-gray-700">{fu?.uploadingFile || 'Uploading file…'}</p>
+                    </>
+                  ) : (
+                    <>
+                      <span className="mx-auto w-10 h-10 bg-brand text-white flex items-center justify-center">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2M12 16V4m0 0L8 8m4-4 4 4" />
+                        </svg>
+                      </span>
+                      <p className="mt-3 text-sm font-semibold text-gray-900">{fu?.dragAndDrop || 'Drag and drop your file here'}</p>
+                      <p className="text-sm text-gray-500">{fu?.orClickToSelect || 'or click to select from your computer'}</p>
+                      <p className="text-xs text-gray-400 mt-2">{fu?.supportedFormats || 'Supported: Images (PNG, JPG, GIF, WebP), PDF, CSV, Excel'}</p>
+                    </>
+                  )}
+                </label>
+              </div>
+            </section>
+
+            <section className="bg-white border border-gray-300 p-5">
+              <h2 className="text-sm font-bold text-gray-900 mb-3">{fu?.allowedFileTypes || 'Allowed File Types'}</h2>
+              <dl className="divide-y divide-gray-200 text-sm">
+                {[
+                  [fu?.images || 'Images', fu?.imagesDesc || 'PNG, JPG, GIF, WebP - Perfect for logos, product photos, and branding'],
+                  [fu?.documents || 'Documents', fu?.documentsDesc || 'PDF - For invoices, receipts, and reports'],
+                  [fu?.spreadsheets || 'Spreadsheets', fu?.spreadsheetsDesc || 'CSV, XLS, XLSX - For data imports and exports'],
+                  [fu?.sizeLimit || 'Size Limit', fu?.sizeLimitDesc || 'Maximum 10MB per file'],
+                ].map(([title, desc]) => (
+                  <div key={title} className="py-2">
+                    <dt className="font-semibold text-gray-900">{title}</dt>
+                    <dd className="text-gray-500">{desc}</dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
           </div>
+
+          <div className="lg:col-span-2">{renderFiles()}</div>
         </div>
       </div>
 
-      {/* Delete Confirmation Dialog */}
-      {deletingFileId && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white border border-gray-300 max-w-sm w-full">
-            <div className="p-6">
-              <h3 className="text-lg font-bold text-gray-900 mb-2">{(dict as any)?.fileUpload?.deleteFileTitle || 'Delete File?'}</h3> {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
-              <p className="text-gray-600 mb-6">
-                {(dict as any)?.fileUpload?.deleteFileConfirm || 'This action cannot be undone. The file will be permanently deleted from both storage and your account.'} {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
-              </p>
-              <div className="flex gap-3 justify-end">
-                <button
-                  onClick={() => setDeletingFileId(null)}
-                  className="px-4 py-2 bg-gray-200 text-gray-900 hover:bg-gray-300 font-medium transition-colors"
-                >
-                  {(dict as any)?.common?.cancel || 'Cancel'} {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
-                </button>
-                <button
-                  onClick={() => deleteFile(deletingFileId)}
-                  className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 font-medium transition-colors"
-                >
-                  {(dict as any)?.fileUpload?.delete || 'Delete'} {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
-                </button>
-              </div>
+      {deletingFile && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => !deleting && setDeletingFile(null)}>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-file-title"
+            className="bg-white border border-gray-300 w-full max-w-sm p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="delete-file-title" className="text-lg font-bold text-gray-900 mb-1">{fu?.deleteFileTitle || 'Delete File?'}</h2>
+            <p className="text-sm text-gray-500 mb-4 break-all">
+              <span className="font-medium text-gray-700">{deletingFile.name}</span>
+            </p>
+            <p className="text-sm text-gray-600 mb-4">
+              {fu?.deleteFileConfirm || 'This action cannot be undone. The file will be permanently deleted from both storage and your account.'}
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={() => setDeletingFile(null)}
+                disabled={deleting}
+                className="px-4 py-2 border border-gray-300 text-gray-700 text-sm hover:bg-gray-100 bg-white disabled:opacity-50 transition-colors"
+              >
+                {dict.common?.cancel || 'Cancel'}
+              </button>
+              <button
+                type="button"
+                onClick={confirmDelete}
+                disabled={deleting}
+                className="px-4 py-2 bg-win8-danger text-white text-sm font-semibold hover:brightness-110 disabled:opacity-50 transition-[filter]"
+              >
+                {deleting ? (fu?.deleting || 'Deleting…') : (fu?.delete || 'Delete')}
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* File View Modal */}
-      {showModal && viewingFile && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white border border-gray-300 max-w-4xl w-full max-h-[90vh] overflow-auto">
-            {/* Modal Header */}
-            <div className="border-b border-gray-300 p-6 flex items-center justify-between sticky top-0 bg-white">
-              <div className="flex-1 min-w-0">
-                <h2 className="text-lg font-bold text-gray-900 break-all">{viewingFile.name}</h2>
-                <p className="text-sm text-gray-600 mt-1">{formatFileSize(viewingFile.size)}</p>
+      {viewingFile && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setViewingFile(null)}>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="view-file-title"
+            className="bg-white border border-gray-300 max-w-4xl w-full max-h-[90vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-6 py-4 bg-brand-navy text-white shrink-0">
+              <div className="min-w-0">
+                <h2 id="view-file-title" className="text-base font-semibold truncate">{viewingFile.name}</h2>
+                <p className="text-xs text-white/70">{formatFileSize(viewingFile.size)}</p>
               </div>
               <button
-                onClick={() => {
-                  setShowModal(false);
-                  setViewingFile(null);
-                }}
-                className="ml-4 flex-shrink-0 text-gray-500 hover:text-gray-700 transition-colors"
-                aria-label={(dict as any)?.common?.close || 'Close'} // eslint-disable-line @typescript-eslint/no-explicit-any
+                type="button"
+                onClick={() => setViewingFile(null)}
+                title={dict.common?.close || 'Close'}
+                aria-label={dict.common?.close || 'Close'}
+                className="text-white/70 hover:text-white"
               >
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
 
-            {/* Modal Content */}
-            <div className="p-6">
-              {/* URL Section */}
-              <div className="mb-6 p-4 bg-gray-50 border border-gray-200">
-                <p className="text-xs font-semibold text-gray-700 mb-2">{(dict as any)?.fileUpload?.publicUrl || 'Public URL:'}</p> {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
-                <div className="flex items-center gap-2 flex-wrap">
-                  <code className="flex-1 text-xs bg-white px-3 py-2 border border-gray-300 text-gray-700 break-all">
-                    {viewingFile.url}
-                  </code>
-                  <button
-                    onClick={() => copyToClipboard(viewingFile.url)}
-                    className="px-3 py-2 bg-gray-200 text-gray-700 hover:bg-gray-300 text-sm font-medium transition-colors whitespace-nowrap"
-                    title={(dict as any)?.fileUpload?.copy || 'Copy URL'} // eslint-disable-line @typescript-eslint/no-explicit-any
-                  >
-                    {(dict as any)?.fileUpload?.copy || 'Copy'} {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
-                  </button>
-                </div>
+            <div className="p-6 space-y-4 overflow-auto">
+              <div className="flex items-center gap-2">
+                <code className="flex-1 min-w-0 text-xs font-mono bg-gray-100 border border-gray-300 px-3 py-2 text-gray-700 break-all">{viewingFile.url}</code>
+                <button
+                  type="button"
+                  onClick={() => copyToClipboard(viewingFile.url)}
+                  className="px-4 py-2 border border-gray-300 text-gray-700 bg-white text-sm hover:bg-gray-100 transition-colors whitespace-nowrap"
+                >
+                  {fu?.copy || 'Copy'}
+                </button>
               </div>
 
               {viewingFile.type.startsWith('image/') ? (
-                // Image Preview
-                <div className="flex justify-center">
+                <div className="flex justify-center bg-gray-100 border border-gray-300 p-4">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={viewingFile.url}
-                    alt={viewingFile.name}
-                    className="max-w-full max-h-[calc(90vh-200px)] object-contain"
-                  />
+                  <img src={viewingFile.url} alt={viewingFile.name} className="max-w-full max-h-[calc(90vh-220px)] object-contain" />
                 </div>
               ) : viewingFile.type === 'application/pdf' ? (
-                // PDF Embed
-                <div className="space-y-4">
-                  <iframe
-                    src={viewingFile.url}
-                    className="w-full h-[500px] border border-gray-300"
-                    title={viewingFile.name}
-                  />
-                  <a
-                    href={viewingFile.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-brand text-white hover:bg-brand-hover font-medium transition-colors"
-                  >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                    </svg>
-                    {(dict as any)?.fileUpload?.downloadPdf || 'Download PDF'} {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
-                  </a>
-                </div>
+                <iframe src={viewingFile.url} className="w-full h-[500px] border border-gray-300" title={viewingFile.name} />
               ) : (
-                // Other file types (CSV, Excel, etc.)
-                <div className="space-y-4 text-center py-8">
-                  <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  <div>
-                    <p className="font-semibold text-gray-900 mb-2">{viewingFile.name}</p>
-                    <p className="text-gray-600 text-sm mb-4">{(dict as any)?.fileUpload?.previewNotAvailable || 'Preview not available for this file type'}</p> {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
-                  </div>
-                  <a
-                    href={viewingFile.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-brand text-white hover:bg-brand-hover font-medium transition-colors"
-                  >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                    </svg>
-                    {(dict as any)?.fileUpload?.downloadFile || 'Download File'} {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
-                  </a>
-                </div>
+                <p className="text-sm text-gray-400 italic text-center py-8">{fu?.previewNotAvailable || 'Preview not available for this file type'}</p>
               )}
+
+              <div className="flex justify-end">
+                <a
+                  href={viewingFile.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-1m-4-4-4 4m0 0-4-4m4 4V4" />
+                  </svg>
+                  {viewingFile.type === 'application/pdf' ? (fu?.downloadPdf || 'Download PDF') : (fu?.downloadFile || 'Download File')}
+                </a>
+              </div>
             </div>
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }

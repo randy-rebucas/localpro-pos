@@ -16,21 +16,21 @@ export type PurchaseOrderStatus = typeof PURCHASE_ORDER_STATUSES[number]['value'
 export function getStatusColor(status: PurchaseOrderStatus): string {
   switch (status) {
     case 'draft':
-      return 'bg-gray-100 text-gray-800';
+      return 'bg-gray-500 text-white';
     case 'ordered':
-      return 'bg-blue-100 text-blue-800';
+      return 'bg-win8-info text-white';
     case 'partially_received':
-      return 'bg-orange-100 text-orange-800';
+      return 'bg-win8-suspended text-white';
     case 'received':
-      return 'bg-green-100 text-green-800';
+      return 'bg-win8-success text-white';
     case 'cancelled':
-      return 'bg-red-100 text-red-800';
+      return 'bg-win8-danger text-white';
     default:
-      return 'bg-gray-100 text-gray-800';
+      return 'bg-gray-500 text-white';
   }
 }
 
-type Dict = Record<string, Record<string, string | undefined> | undefined>;
+type Dict = { admin?: Record<string, string | undefined>; common?: Record<string, string | undefined> };
 
 export function getStatusLabel(status: PurchaseOrderStatus, dict?: Dict): string {
   const labels: Record<PurchaseOrderStatus, string> = {

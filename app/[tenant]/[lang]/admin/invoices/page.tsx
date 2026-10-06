@@ -619,7 +619,7 @@ export default function InvoicesPage() {
                 <button
                   type="button"
                   onClick={addItem}
-                  className="px-3 py-1 text-xs border border-gray-300 text-gray-700 bg-white hover:bg-gray-100 transition-colors"
+                  className="inline-flex items-center justify-center px-4 py-2 text-sm border border-gray-300 text-gray-700 bg-white hover:bg-gray-100 transition-colors"
                 >
                   + {dict.admin?.addItem || 'Add Item'}
                 </button>

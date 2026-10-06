@@ -52,7 +52,9 @@ export function useSendNotificationEmails() {
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
           signal: controller.signal,
-          body: JSON.stringify({ notifications: notificationsWithEmail }),
+          body: JSON.stringify({
+            notifications: notificationsWithEmail.map(({ attendanceId, type }) => ({ attendanceId, type })),
+          }),
         });
         clearTimeout(timeoutId);
 

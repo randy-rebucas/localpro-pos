@@ -24,6 +24,7 @@ export const useLoyaltyCustomerData = (customerId: string) => {
   const [data, setData] = useState<LoyaltyData | null>(null);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const fetchData = useCallback(
@@ -34,6 +35,7 @@ export const useLoyaltyCustomerData = (customerId: string) => {
         abortControllerRef.current = controller;
 
         setLoading(true);
+        setError(null);
 
         const res = await fetch(`/api/loyalty/customers/${customerId}?page=${pageNum}&limit=20`, {
           signal: controller.signal,
@@ -45,11 +47,11 @@ export const useLoyaltyCustomerData = (customerId: string) => {
         if (json.success) {
           setData(json.data);
         } else {
-          console.error('Failed to load loyalty data:', json.error);
+          setError(json.error || 'Failed to load loyalty data');
         }
       } catch (error: unknown) {
         if (error instanceof Error && error.name !== 'AbortError') {
-          console.error('Error fetching loyalty data:', error);
+          setError('Failed to load loyalty data');
         }
       } finally {
         setLoading(false);
@@ -61,10 +63,10 @@ export const useLoyaltyCustomerData = (customerId: string) => {
   const goToPage = useCallback(
     (pageNum: number) => {
       const validPage = Math.max(1, Math.min(pageNum, data?.pagination.totalPages ?? 1));
+      // The effect on `page` does the fetch.
       setPage(validPage);
-      fetchData(validPage);
     },
-    [data?.pagination.totalPages, fetchData]
+    [data?.pagination.totalPages]
   );
 
   useEffect(() => {
@@ -81,6 +83,7 @@ export const useLoyaltyCustomerData = (customerId: string) => {
     data,
     page,
     loading,
+    error,
     setPage: goToPage,
     refetch: () => fetchData(page),
   };

@@ -26,30 +26,30 @@ export type LaundryOrderStatus = typeof LAUNDRY_ORDER_STATUSES[number]['value'];
 export function getLaundryStatusColor(status: LaundryOrderStatus): string {
   switch (status) {
     case 'booked':
-      return 'bg-yellow-100 text-yellow-800';
+      return 'bg-win8-warning text-white';
     case 'picked_up':
-      return 'bg-blue-100 text-blue-800';
+      return 'bg-win8-info text-white';
     case 'received':
-      return 'bg-indigo-100 text-indigo-800';
+      return 'bg-brand-navy text-white';
     case 'sorting':
     case 'washing':
     case 'drying':
     case 'folding':
-      return 'bg-purple-100 text-purple-800';
+      return 'bg-win8-accent text-white';
     case 'ready':
-      return 'bg-teal-100 text-teal-800';
+      return 'bg-brand text-white';
     case 'out_for_delivery':
-      return 'bg-orange-100 text-orange-800';
+      return 'bg-win8-suspended text-white';
     case 'completed':
-      return 'bg-green-100 text-green-800';
+      return 'bg-win8-success text-white';
     case 'cancelled':
-      return 'bg-gray-100 text-gray-800';
+      return 'bg-gray-500 text-white';
     default:
-      return 'bg-gray-100 text-gray-800';
+      return 'bg-gray-500 text-white';
   }
 }
 
-type Dict = Record<string, Record<string, string | undefined> | undefined>;
+type Dict = { admin?: Record<string, string | undefined>; common?: Record<string, string | undefined> };
 
 export function getLaundryStatusLabel(status: LaundryOrderStatus, dict?: Dict): string {
   const labels: Record<LaundryOrderStatus, string> = {

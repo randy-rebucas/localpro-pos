@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import toast from 'react-hot-toast';
-import { ChefHat } from 'lucide-react';
+import { getDictionaryClient } from '../../dictionaries-client';
+import { type TranslationDict } from '@/types/dictionary';
+import AdminPageHeader from '@/components/admin/AdminPageHeader';
+import { showToast } from '@/lib/toast';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { supportsFeature } from '@/lib/business-type-helpers';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -41,15 +43,28 @@ interface KitchenTicket {
   items: KitchenTicketItem[];
 }
 
-const BOARD_COLUMNS: { status: KitchenItemStatus; title: string }[] = [
-  { status: 'queued', title: 'Queued' },
-  { status: 'preparing', title: 'Preparing' },
-  { status: 'ready', title: 'Ready' },
-];
+const BOARD_COLUMNS: KitchenItemStatus[] = ['queued', 'preparing', 'ready'];
+
+function useOnlineStatus() {
+  const [online, setOnline] = useState(() => (typeof navigator !== 'undefined' ? navigator.onLine : true));
+  useEffect(() => {
+    const on = () => setOnline(true);
+    const off = () => setOnline(false);
+    window.addEventListener('online', on);
+    window.addEventListener('offline', off);
+    return () => {
+      window.removeEventListener('online', on);
+      window.removeEventListener('offline', off);
+    };
+  }, []);
+  return online;
+}
 
 export default function KitchenDisplayPage() {
   const params = useParams();
   const tenant = params.tenant as string;
+  const lang = params.lang as 'en' | 'es';
+  const [dict, setDict] = useState<TranslationDict | null>(null);
 
   const { canAccess } = usePermissions();
   const canManage = canAccess('kitchen_display.view');
@@ -59,36 +74,58 @@ export default function KitchenDisplayPage() {
   const kitchenDisplayEnabled = supportsFeature(settings ?? undefined, 'kitchenDisplay');
 
   const [tickets, setTickets] = useState<KitchenTicket[]>([]);
+  const [tableNames, setTableNames] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const isOnline = useOnlineStatus();
 
   const { updateItemStatus } = useKitchenTicketActions(tenant);
 
+  useEffect(() => {
+    getDictionaryClient(lang).then(setDict);
+  }, [lang]);
+
   const fetchTickets = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const res = await globalThis.fetch(`/api/kitchen-tickets?tenant=${tenant}`, { credentials: 'include' });
       const data = await res.json();
       if (data.success) {
         setTickets(data.data || []);
       } else {
-        toast.error(data.error || 'Failed to fetch kitchen tickets');
+        setError(data.error || 'Failed to fetch kitchen tickets');
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to fetch kitchen tickets');
+      setError(err instanceof Error ? err.message : 'Failed to fetch kitchen tickets');
     } finally {
       setLoading(false);
+    }
+  }, [tenant]);
+
+  // Tickets only carry a tableId; resolve names so cooks see "T4", not a UUID.
+  const fetchTableNames = useCallback(async () => {
+    try {
+      const res = await globalThis.fetch(`/api/tables?tenant=${tenant}`, { credentials: 'include' });
+      const data = await res.json();
+      if (data.success) {
+        setTableNames(
+          Object.fromEntries((data.data || []).map((t: { id: string; name: string }) => [t.id, t.name]))
+        );
+      }
+    } catch {
+      // Non-critical: cards just omit the table line.
     }
   }, [tenant]);
 
   useEffect(() => {
     if (kitchenDisplayEnabled && canManage) {
       fetchTickets();
+      fetchTableNames();
     } else {
       setLoading(false);
     }
-  }, [fetchTickets, kitchenDisplayEnabled, canManage]);
-
-  const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+  }, [fetchTickets, fetchTableNames, kitchenDisplayEnabled, canManage]);
 
   useKitchenTicketStream({
     tenant,
@@ -136,18 +173,34 @@ export default function KitchenDisplayPage() {
       item.id,
       next,
       undefined,
-      (error) => {
-        toast.error(error);
+      (err) => {
+        showToast.error(err);
         fetchTickets();
       }
     );
   };
 
+  if (!dict) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <div className="win8-spinner text-brand"><span /><span /><span /><span /><span /></div>
+      </div>
+    );
+  }
+
+  const header = (
+    <AdminPageHeader
+      title={dict.admin?.kitchenDisplay || 'Kitchen Display'}
+      description={canUpdateStatus ? (dict.admin?.kitchenDisplayHint || 'Tap a card to advance it to the next stage') : undefined}
+    />
+  );
+
   if (!kitchenDisplayEnabled) {
     return (
       <div className="px-4 sm:px-6 py-6">
-        <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3">
-          Kitchen Display is turned off for this store. Enable it in Settings → Business Features.
+        {header}
+        <div className="p-3 bg-white border border-win8-warning text-win8-warning text-sm">
+          {dict.admin?.kitchenDisplayDisabled || 'Kitchen Display is turned off for this store. Enable it in Settings → Business Features.'}
         </div>
       </div>
     );
@@ -156,85 +209,111 @@ export default function KitchenDisplayPage() {
   if (!canManage) {
     return (
       <div className="px-4 sm:px-6 py-6">
-        <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3">
-          You do not have permission to view the Kitchen Display.
+        {header}
+        <div className="p-3 bg-white border border-win8-danger text-win8-danger text-sm">
+          {dict.admin?.kitchenDisplayNoPermission || 'You do not have permission to view the Kitchen Display.'}
         </div>
       </div>
     );
   }
 
-  if (loading && tickets.length === 0) {
-    return (
-      <div className="flex items-center justify-center py-24">
-        <div className="text-center">
-          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-brand"></div>
-          <p className="mt-4 text-gray-600">Loading kitchen tickets...</p>
+  const renderBoard = () => {
+    if (loading && tickets.length === 0) {
+      return (
+        <div className="text-center py-12 bg-white border border-gray-300">
+          <div className="win8-spinner text-brand mx-auto"><span /><span /><span /><span /><span /></div>
+          <p className="mt-3 text-gray-400 text-sm">{dict.admin?.loadingKitchenTickets || 'Loading kitchen tickets…'}</p>
         </div>
-      </div>
-    );
-  }
-
-  // Flatten all non-terminal items across active tickets, grouped by status column.
-  const itemsByStatus: Record<KitchenItemStatus, { ticket: KitchenTicket; item: KitchenTicketItem }[]> = {
-    queued: [],
-    preparing: [],
-    ready: [],
-    served: [],
-    cancelled: [],
-  };
-  for (const ticket of tickets) {
-    for (const item of ticket.items) {
-      itemsByStatus[item.status].push({ ticket, item });
+      );
     }
-  }
+
+    if (error) {
+      return (
+        <div className="text-center py-12 bg-white border border-gray-300">
+          <p className="text-win8-danger text-sm font-medium">{error}</p>
+          <button
+            type="button"
+            onClick={() => fetchTickets()}
+            className="mt-4 px-4 py-2 bg-brand text-white text-sm hover:bg-brand-hover transition-colors"
+          >
+            {dict.common?.retry || 'Retry'}
+          </button>
+        </div>
+      );
+    }
+
+    // Flatten all non-terminal items across active tickets, grouped by status column.
+    const itemsByStatus: Record<KitchenItemStatus, { ticket: KitchenTicket; item: KitchenTicketItem }[]> = {
+      queued: [],
+      preparing: [],
+      ready: [],
+      served: [],
+      cancelled: [],
+    };
+    for (const ticket of tickets) {
+      for (const item of ticket.items) {
+        itemsByStatus[item.status].push({ ticket, item });
+      }
+    }
+
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {BOARD_COLUMNS.map((status) => (
+          <section key={status} className="bg-white border border-gray-300 flex flex-col min-h-[60vh]">
+            <div className="px-4 py-3 bg-brand-navy text-white flex items-center justify-between">
+              <h2 className="text-sm font-semibold uppercase tracking-wide">{getStatusLabel(status, dict)}</h2>
+              <span className="px-2 py-0.5 text-xs font-semibold bg-white/15 tabular-nums">{itemsByStatus[status].length}</span>
+            </div>
+            <div className="p-3 space-y-3 overflow-y-auto flex-1 bg-gray-50">
+              {itemsByStatus[status].length === 0 && (
+                <p className="text-sm text-gray-400 italic text-center py-8">{dict.admin?.noKitchenItems || 'No items'}</p>
+              )}
+              {itemsByStatus[status].map(({ ticket, item }) => {
+                const tableName = ticket.tableId ? tableNames[ticket.tableId] : null;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => handleAdvance(ticket.id, item)}
+                    disabled={!canUpdateStatus}
+                    className="w-full text-left bg-white border border-gray-300 p-4 hover:border-brand hover:bg-gray-100 disabled:hover:border-gray-300 disabled:hover:bg-white disabled:cursor-default transition-colors"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className={`px-2 py-0.5 text-xs font-semibold ${getStatusColor(item.status)}`}>
+                        {getStatusLabel(item.status, dict)}
+                      </span>
+                      {item.station && (
+                        <span className="text-xs text-gray-500 uppercase tracking-wide">{item.station}</span>
+                      )}
+                    </div>
+                    <p className="font-semibold text-gray-900">
+                      {item.transactionItem?.quantity ? <span className="tabular-nums">{item.transactionItem.quantity}× </span> : null}
+                      {item.transactionItem?.name || (dict.admin?.item || 'Item')}
+                    </p>
+                    {tableName && (
+                      <p className="text-xs text-gray-500 mt-1">{dict.admin?.table || 'Table'}: {tableName}</p>
+                    )}
+                    {ticket.notes && <p className="text-xs text-gray-500 mt-1 italic">{ticket.notes}</p>}
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        ))}
+      </div>
+    );
+  };
 
   return (
     <div className="px-4 sm:px-6 py-6">
-      <div className="mb-6 flex items-center gap-3">
-        <ChefHat className="w-7 h-7 text-brand" />
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Kitchen Display</h1>
-          <p className="text-sm text-gray-500">Tap a card to advance it to the next stage</p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {BOARD_COLUMNS.map((column) => (
-          <div key={column.status} className="bg-gray-50 border border-gray-200 rounded-lg flex flex-col min-h-[60vh]">
-            <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
-              <h2 className="font-semibold text-gray-900">{column.title}</h2>
-              <span className="text-sm text-gray-500">{itemsByStatus[column.status].length}</span>
-            </div>
-            <div className="p-3 space-y-3 overflow-y-auto flex-1">
-              {itemsByStatus[column.status].length === 0 && (
-                <p className="text-sm text-gray-400 text-center py-8">No items</p>
-              )}
-              {itemsByStatus[column.status].map(({ ticket, item }) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => handleAdvance(ticket.id, item)}
-                  disabled={!canUpdateStatus}
-                  className="w-full text-left bg-white border border-gray-200 rounded-lg p-4 shadow-sm hover:shadow-md active:scale-[0.98] transition-all"
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className={`text-xs font-medium px-2 py-1 rounded ${getStatusColor(item.status)}`}>
-                      {getStatusLabel(item.status)}
-                    </span>
-                    {item.station && (
-                      <span className="text-xs text-gray-500 uppercase tracking-wide">{item.station}</span>
-                    )}
-                  </div>
-                  <p className="font-semibold text-gray-900">
-                    {item.transactionItem?.quantity ? `${item.transactionItem.quantity}x ` : ''}
-                    {item.transactionItem?.name || 'Item'}
-                  </p>
-                  {ticket.tableId && <p className="text-xs text-gray-500 mt-1">Table: {ticket.tableId}</p>}
-                </button>
-              ))}
-            </div>
+      {header}
+      <div className="space-y-4">
+        {!isOnline && (
+          <div className="p-3 bg-white border border-win8-warning text-win8-warning text-sm">
+            {dict.admin?.kitchenDisplayOffline || 'You are offline. Live updates are paused until the connection returns.'}
           </div>
-        ))}
+        )}
+        {renderBoard()}
       </div>
     </div>
   );

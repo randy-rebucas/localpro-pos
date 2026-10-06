@@ -62,10 +62,11 @@ function ErrorFallback({ error, onReset }: { error: Error | null; onReset: () =>
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 py-12">
-      <div className="max-w-md w-full bg-white border-2 border-red-300 p-6 sm:p-8 text-center">
+      <div className="max-w-md w-full bg-white border border-gray-300 p-6 sm:p-8 text-center">
         <div className="mb-6">
           <svg
-            className="mx-auto h-16 w-16 text-red-400"
+            className="mx-auto h-12 w-12 text-win8-danger"
+            aria-hidden="true"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -87,18 +88,14 @@ function ErrorFallback({ error, onReset }: { error: Error | null; onReset: () =>
         <div className="space-y-3">
           <button
             onClick={onReset}
-            className="w-full text-white px-4 py-2.5 sm:py-3 rounded-md font-medium transition-colors text-sm sm:text-base"
-            style={{
-              backgroundColor: primaryColor,
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = `${primaryColor}dd`; }}
-            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = primaryColor; }}
+            className="w-full text-white px-4 py-2.5 sm:py-3 font-semibold hover:brightness-110 transition-[filter] text-sm sm:text-base"
+            style={{ backgroundColor: primaryColor }}
           >
             {dict?.components?.errorBoundary?.tryAgain || dict?.common?.tryAgain || 'Try Again'}
           </button>
           <button
             onClick={() => window.location.reload()}
-            className="w-full bg-gray-100 text-gray-700 px-4 py-2.5 sm:py-3 rounded-md hover:bg-gray-200 font-medium transition-colors text-sm sm:text-base"
+            className="w-full bg-white border border-gray-300 text-gray-700 px-4 py-2.5 sm:py-3 hover:bg-gray-100 font-medium transition-colors text-sm sm:text-base"
           >
             {dict?.components?.errorBoundary?.reloadPage || dict?.common?.reloadPage || 'Reload Page'}
           </button>

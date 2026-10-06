@@ -3,14 +3,12 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import { type TranslationDict } from '@/types/dictionary';
+import AdminPageHeader from '@/components/admin/AdminPageHeader';
 import { showToast } from '@/lib/toast';
 import { useLoyaltyCustomerData } from '@/hooks/useLoyaltyCustomerData';
 import { useLoyaltyAdjustment } from '@/hooks/useLoyaltyAdjustment';
-import {
-  typeColors,
-  getAdjustPointsSuccessMessage,
-  getAdjustPointsErrorMessage,
-} from '@/lib/loyalty-customer-helpers';
+import { typeColors } from '@/lib/loyalty-customer-helpers';
 import { getDictionaryClient } from '../../../dictionaries-client';
 import { usePermissions } from '@/hooks/usePermissions';
 
@@ -19,7 +17,7 @@ export default function LoyaltyCustomerPage() {
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
   const customerId = params.customerId as string;
-  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const [dict, setDict] = useState<TranslationDict | null>(null);
   const { canAccess } = usePermissions();
   const canView = canAccess('loyalty.view');
   const canAdjust = canAccess('loyalty.adjust');
@@ -28,149 +26,226 @@ export default function LoyaltyCustomerPage() {
     getDictionaryClient(lang).then(setDict);
   }, [lang]);
 
-  const { data, page, loading, setPage, refetch } = useLoyaltyCustomerData(customerId);
+  const { data, page, loading, error, setPage, refetch } = useLoyaltyCustomerData(customerId);
   const { form, saving: adjusting, updateForm, submitAdjustment } = useLoyaltyAdjustment(customerId);
+  const [adjustError, setAdjustError] = useState('');
+
+  // loyalty.* strings live in their own dictionary section.
+  const ly = (dict as unknown as { loyalty?: Record<string, string | undefined> } | null)?.loyalty;
 
   const handleAdjust = async (e: React.FormEvent) => {
     e.preventDefault();
+    setAdjustError('');
     const result = await submitAdjustment();
     if (result.success) {
-      showToast.success(getAdjustPointsSuccessMessage());
-      setPage(1);
-      refetch();
+      showToast.success(ly?.pointsAdjusted || 'Points adjusted successfully');
+      // Newest entries are on page 1; changing the page triggers the fetch itself.
+      if (page !== 1) setPage(1);
+      else refetch();
     } else {
-      showToast.error(getAdjustPointsErrorMessage(result.error));
+      setAdjustError(result.error || (ly?.adjustFailed || 'Failed to adjust points'));
     }
   };
+
+  if (!dict) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <div className="win8-spinner text-brand"><span /><span /><span /><span /><span /></div>
+      </div>
+    );
+  }
 
   if (!canView) {
     return (
       <div className="px-4 sm:px-6 py-6">
-        <div className="bg-red-50 border-2 border-red-300 p-6">
-          <h2 className="text-lg font-bold text-red-800 mb-1">{dict?.admin?.accessRestricted || 'Access Restricted'}</h2>
-          <p className="text-sm text-red-700">
-            {dict?.admin?.accessRestrictedLoyalty || "You don't have permission to view loyalty. Contact an admin or owner."}
+        <div className="bg-white border border-win8-danger p-6" role="alert">
+          <h2 className="text-base font-bold text-win8-danger mb-1">{dict.admin?.accessRestricted || 'Access Restricted'}</h2>
+          <p className="text-sm text-gray-700">
+            {dict.admin?.accessRestrictedLoyalty || "You don't have permission to view loyalty. Contact an admin or owner."}
           </p>
         </div>
       </div>
     );
   }
 
-  return (
-    <div>
-      <div className="w-full p-6">
-        <div className="mb-4">
-          <Link
-            href={`/${tenant}/${lang}/admin/loyalty`}
-            className="text-sm text-brand hover:underline"
+  const typeLabel = (type: string) =>
+    type === 'earn' ? (ly?.typeEarn || 'Earn') : type === 'redeem' ? (ly?.typeRedeem || 'Redeem') : (ly?.typeAdjust || 'Adjust');
+
+  const backLink = (
+    <Link
+      href={`/${tenant}/${lang}/admin/loyalty`}
+      className="inline-flex items-center justify-center px-4 py-2 border border-gray-300 text-gray-700 bg-white text-sm hover:bg-gray-100 transition-colors"
+    >
+      {ly?.backToLoyaltyProgram || '← Back to Loyalty Program'}
+    </Link>
+  );
+
+  if (loading && !data) {
+    return (
+      <div className="px-4 sm:px-6 py-6">
+        <AdminPageHeader title={ly?.loyaltyPointsAccount || 'Loyalty Points Account'} actions={backLink} />
+        <div className="text-center py-12 bg-white border border-gray-300">
+          <div className="win8-spinner text-brand mx-auto"><span /><span /><span /><span /><span /></div>
+          <p className="mt-3 text-gray-400 text-sm">{dict.common?.loading || 'Loading…'}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="px-4 sm:px-6 py-6">
+        <AdminPageHeader title={ly?.loyaltyPointsAccount || 'Loyalty Points Account'} actions={backLink} />
+        <div className="text-center py-12 bg-white border border-gray-300">
+          <p className="text-win8-danger text-sm font-medium">{error || (ly?.loadFailed || 'Failed to load loyalty data')}</p>
+          <button
+            type="button"
+            onClick={() => refetch()}
+            className="mt-4 px-4 py-2 bg-brand text-white text-sm hover:bg-brand-hover transition-colors"
           >
-            {dict?.loyalty?.backToLoyaltyProgram || '← Back to Loyalty Program'}
-          </Link>
+            {dict.common?.retry || 'Retry'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const p = data.pagination;
+
+  return (
+    <div className="px-4 sm:px-6 py-6">
+      <AdminPageHeader
+        title={data.customerName}
+        description={ly?.loyaltyPointsAccount || 'Loyalty Points Account'}
+        actions={backLink}
+      />
+
+      <div className="space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="bg-white border border-gray-300 p-5">
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide leading-tight">{ly?.pointsBalance || 'Points balance'}</p>
+            <p className="text-3xl font-bold tabular-nums text-brand mt-1.5">{data.loyaltyPointsBalance.toLocaleString()}</p>
+          </div>
+          <div className="bg-white border border-gray-300 p-5">
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide leading-tight">{ly?.historyEntries || 'History entries'}</p>
+            <p className="text-3xl font-bold tabular-nums text-gray-900 mt-1.5">{p.total.toLocaleString()}</p>
+          </div>
         </div>
 
-        {loading && !data ? (
-          <div className="text-center py-20 text-gray-400">{dict?.common?.loading || 'Loading...'}</div>
-        ) : data ? (
-          <>
-            {/* Header */}
-            <div className="bg-white shadow p-6 mb-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h1 className="text-xl font-bold text-gray-900">{data.customerName}</h1>
-                  <p className="text-sm text-gray-500 mt-0.5">{dict?.loyalty?.loyaltyPointsAccount || 'Loyalty Points Account'}</p>
-                </div>
-                <div className="text-right">
-                  <div className="text-3xl font-bold text-brand">
-                    {data.loyaltyPointsBalance.toLocaleString()}
-                  </div>
-                  <div className="text-xs text-gray-400">{dict?.loyalty?.pointsBalance || 'points balance'}</div>
-                </div>
-              </div>
+        {canAdjust && (
+          <section className="bg-white border border-gray-300">
+            <div className="px-6 py-4 border-b border-gray-300">
+              <h2 className="text-base font-bold text-gray-900">{ly?.manualAdjustment || 'Manual Adjustment'}</h2>
             </div>
-
-            {/* Manual Adjustment */}
-            {canAdjust && (
-              <div className="bg-white shadow p-6 mb-6">
-                <h2 className="text-base font-semibold text-gray-800 mb-3">{dict?.loyalty?.manualAdjustment || 'Manual Adjustment'}</h2>
-                <form onSubmit={handleAdjust} className="flex flex-col sm:flex-row gap-3">
+            <form onSubmit={handleAdjust} className="p-6 space-y-3">
+              <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
+                <div>
+                  <label htmlFor="loyalty-points" className="block text-xs font-medium text-gray-600 mb-1">{ly?.points || 'Points'}</label>
                   <input
+                    id="loyalty-points"
                     type="number"
-                    placeholder={dict?.loyalty?.pointsPlaceholder || 'Points (+ to add, - to deduct)'}
+                    placeholder={ly?.pointsPlaceholder || 'Points (+ to add, - to deduct)'}
                     value={form.points}
                     onChange={(e) => updateForm({ points: e.target.value })}
-                    className="border border-gray-300 px-3 py-2 text-sm w-full sm:w-48 focus:outline-none focus:ring-2 focus:ring-brand"
+                    className="border border-gray-300 px-3 py-2 text-sm w-full sm:w-48 tabular-nums"
                   />
+                </div>
+                <div className="flex-1">
+                  <label htmlFor="loyalty-reason" className="block text-xs font-medium text-gray-600 mb-1">{ly?.reason || 'Reason'}</label>
                   <input
+                    id="loyalty-reason"
                     type="text"
-                    placeholder={dict?.loyalty?.reasonPlaceholder || 'Reason / description'}
+                    placeholder={ly?.reasonPlaceholder || 'Reason / description'}
                     value={form.description}
                     onChange={(e) => updateForm({ description: e.target.value })}
-                    className="border border-gray-300 px-3 py-2 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-brand"
+                    className="border border-gray-300 px-3 py-2 text-sm w-full"
                   />
-                  <button
-                    type="submit"
-                    disabled={adjusting}
-                    className="bg-brand text-white px-5 py-2 text-sm font-medium hover:bg-brand-hover disabled:opacity-60 whitespace-nowrap"
-                  >
-                    {adjusting ? (dict?.admin?.saving || 'Saving...') : (dict?.loyalty?.apply || 'Apply')}
-                  </button>
-                </form>
+                </div>
+                <button
+                  type="submit"
+                  disabled={adjusting}
+                  className="px-4 py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover disabled:opacity-50 transition-colors whitespace-nowrap"
+                >
+                  {adjusting ? (dict.common?.saving || 'Saving…') : (ly?.apply || 'Apply')}
+                </button>
               </div>
-            )}
+              {adjustError && <p className="p-3 bg-white border border-win8-danger text-win8-danger text-sm">{adjustError}</p>}
+            </form>
+          </section>
+        )}
 
-            {/* History */}
-            <div className="bg-white shadow p-6">
-              <h2 className="text-base font-semibold text-gray-800 mb-4">{dict?.loyalty?.pointsHistory || 'Points History'}</h2>
-              {data.history.length === 0 ? (
-                <div className="text-center py-8 text-gray-400 text-sm">{dict?.loyalty?.noHistory || 'No history yet.'}</div>
-              ) : (
-                <div className="space-y-3">
-                  {data.history.map(entry => (
-                    <div key={entry._id} className="flex items-start justify-between py-2 border-b last:border-0">
-                      <div className="flex items-start gap-3">
-                        <span className={`text-xs font-medium px-2 py-0.5 mt-0.5 ${typeColors[entry.type]}`}>
-                          {entry.type}
+        <div className="border border-gray-300 bg-white">
+          <div className="px-4 py-3 border-b border-gray-300">
+            <h2 className="text-sm font-bold text-gray-900">{ly?.pointsHistory || 'Points History'}</h2>
+          </div>
+          {data.history.length === 0 ? (
+            <p className="text-center py-12 text-gray-400 text-sm">{ly?.noHistory || 'No history yet.'}</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-brand-navy text-white text-xs uppercase tracking-wide">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-medium">{dict.admin?.type || 'Type'}</th>
+                    <th className="px-4 py-3 text-left font-medium">{dict.admin?.description || 'Description'}</th>
+                    <th className="px-4 py-3 text-left font-medium">{dict.admin?.date || 'Date'}</th>
+                    <th className="px-4 py-3 text-right font-medium">{ly?.balanceLabel || 'Balance'}</th>
+                    <th className="px-4 py-3 text-right font-medium">{ly?.points || 'Points'}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {data.history.map((entry) => (
+                    <tr key={entry._id} className="hover:bg-gray-100 transition-colors">
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span className={`px-2 py-0.5 text-xs font-semibold ${typeColors[entry.type] || 'bg-gray-500 text-white'}`}>
+                          {typeLabel(entry.type)}
                         </span>
-                        <div>
-                          <p className="text-sm text-gray-800">{entry.description}</p>
-                          <p className="text-xs text-gray-400">
-                            {new Date(entry.createdAt).toLocaleString(undefined, { hour12: true })} · {dict?.loyalty?.balanceLabel || 'Balance:'} {entry.balanceBefore} → {entry.balanceAfter}
-                          </p>
-                        </div>
-                      </div>
-                      <span className={`text-sm font-semibold ml-4 ${entry.points > 0 ? 'text-green-600' : 'text-red-500'}`}>
-                        {entry.points > 0 ? `+${entry.points}` : entry.points}
-                      </span>
-                    </div>
+                      </td>
+                      <td className="px-4 py-3 text-gray-900">{entry.description || '—'}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-700">
+                        {new Date(entry.createdAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-right text-xs text-gray-500 tabular-nums">
+                        {entry.balanceBefore.toLocaleString()} → {entry.balanceAfter.toLocaleString()}
+                      </td>
+                      <td className={`px-4 py-3 whitespace-nowrap text-right font-semibold tabular-nums ${entry.points > 0 ? 'text-win8-success' : 'text-win8-danger'}`}>
+                        {entry.points > 0 ? `+${entry.points.toLocaleString()}` : entry.points.toLocaleString()}
+                      </td>
+                    </tr>
                   ))}
-                </div>
-              )}
-
-              {/* Pagination */}
-              {data.pagination.totalPages > 1 && (
-                <div className="flex justify-center gap-2 mt-4">
-                  <button
-                    onClick={() => setPage(Math.max(1, page - 1))}
-                    disabled={page === 1}
-                    className="px-3 py-1 border text-sm disabled:opacity-40"
-                  >
-                    {dict?.loyalty?.prev || 'Prev'}
-                  </button>
-                  <span className="px-3 py-1 text-sm text-gray-600">
-                    {page} / {data.pagination.totalPages}
-                  </span>
-                  <button
-                    onClick={() => setPage(Math.min(data.pagination.totalPages, page + 1))}
-                    disabled={page === data.pagination.totalPages}
-                    className="px-3 py-1 border text-sm disabled:opacity-40"
-                  >
-                    {dict?.common?.next || 'Next'}
-                  </button>
-                </div>
-              )}
+                </tbody>
+              </table>
             </div>
-          </>
-        ) : null}
+          )}
+
+          {p.totalPages > 1 && (
+            <div className="border-t border-gray-300 px-4 py-3 flex items-center justify-between text-sm text-gray-500">
+              <span className="tabular-nums">
+                {(dict.common?.showingRange || 'Showing {from}–{to} of {total}')
+                  .replace('{from}', String((p.page - 1) * p.limit + 1))
+                  .replace('{to}', String(Math.min(p.page * p.limit, p.total)))
+                  .replace('{total}', String(p.total))}
+              </span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPage(page - 1)}
+                  disabled={page <= 1 || loading}
+                  className="inline-flex items-center justify-center px-4 py-2 border border-gray-300 bg-white disabled:opacity-40 hover:bg-gray-100"
+                >
+                  ← {ly?.prev || 'Prev'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPage(page + 1)}
+                  disabled={page >= p.totalPages || loading}
+                  className="inline-flex items-center justify-center px-4 py-2 border border-gray-300 bg-white disabled:opacity-40 hover:bg-gray-100"
+                >
+                  {dict.common?.next || 'Next'} →
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

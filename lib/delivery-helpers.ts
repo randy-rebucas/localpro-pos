@@ -23,25 +23,25 @@ export type DeliveryType = 'pickup' | 'delivery';
 export function getStatusColor(status: DeliveryStatus): string {
   switch (status) {
     case 'pending':
-      return 'bg-yellow-100 text-yellow-800';
+      return 'bg-win8-warning text-white';
     case 'assigned':
-      return 'bg-blue-100 text-blue-800';
+      return 'bg-win8-info text-white';
     case 'picked_up':
-      return 'bg-indigo-100 text-indigo-800';
+      return 'bg-brand-navy text-white';
     case 'in_transit':
-      return 'bg-purple-100 text-purple-800';
+      return 'bg-win8-accent text-white';
     case 'delivered':
-      return 'bg-green-100 text-green-800';
+      return 'bg-win8-success text-white';
     case 'failed':
-      return 'bg-red-100 text-red-800';
+      return 'bg-win8-danger text-white';
     case 'cancelled':
-      return 'bg-gray-100 text-gray-800';
+      return 'bg-gray-500 text-white';
     default:
-      return 'bg-gray-100 text-gray-800';
+      return 'bg-gray-500 text-white';
   }
 }
 
-type Dict = Record<string, Record<string, string | undefined> | undefined>;
+type Dict = { admin?: Record<string, string | undefined>; common?: Record<string, string | undefined> };
 
 export function getStatusLabel(status: DeliveryStatus, dict?: Dict): string {
   const labels: Record<DeliveryStatus, string> = {

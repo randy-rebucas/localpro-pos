@@ -4,7 +4,6 @@ import { ReactNode, useEffect, useRef, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { Loader2 } from 'lucide-react';
 import { getDictionaryClient } from '@/app/[tenant]/[lang]/dictionaries-client';
 
 interface SubscriptionGuardProps {
@@ -98,7 +97,7 @@ export function SubscriptionGuard({ children }: SubscriptionGuardProps) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+          <div className="win8-spinner text-brand mx-auto mb-4"><span /><span /><span /><span /><span /></div>
           <p className="text-gray-600">
             {isCreatingTrial ? (dict?.admin?.settingUpTrial || 'Setting up your trial...') : (dict?.admin?.checkingSubscription || 'Checking subscription...')}
           </p>
@@ -112,7 +111,7 @@ export function SubscriptionGuard({ children }: SubscriptionGuardProps) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+          <div className="win8-spinner text-brand mx-auto mb-4"><span /><span /><span /><span /><span /></div>
           <p className="text-gray-600">{dict?.admin?.preparingAccount || 'Preparing your account...'}</p>
         </div>
       </div>

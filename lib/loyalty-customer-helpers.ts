@@ -1,7 +1,7 @@
 export const typeColors: Record<string, string> = {
-  earn: 'bg-green-100 text-green-700',
-  redeem: 'bg-orange-100 text-orange-700',
-  adjust: 'bg-brand-soft text-brand-hover',
+  earn: 'bg-win8-success text-white',
+  redeem: 'bg-win8-suspended text-white',
+  adjust: 'bg-brand text-white',
 };
 
 export const getAdjustPointsErrorMessage = (error: string): string => {

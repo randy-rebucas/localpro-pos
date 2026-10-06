@@ -51,27 +51,27 @@ export default function NotificationBell() {
       >
         <Bell className="w-5 h-5" />
         {unreadCount > 0 && (
-          <span className="absolute top-1 right-1 min-w-[16px] h-4 px-1 flex items-center justify-center bg-red-500 text-white text-[10px] font-semibold leading-none rounded-full">
+          <span className="absolute top-1 right-1 min-w-[16px] h-4 px-1 flex items-center justify-center bg-win8-danger text-white text-[10px] font-semibold leading-none tabular-nums">
             {unreadCount > 99 ? '99+' : unreadCount}
           </span>
         )}
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-80 max-h-96 bg-white border border-gray-300 shadow-lg z-50 flex flex-col">
-          <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
-            <span className="text-sm font-semibold text-gray-900">Notifications</span>
-            {unreadCount > 0 && <span className="text-xs text-gray-500">{unreadCount} unread</span>}
+        <div className="absolute right-0 mt-2 w-80 max-h-96 bg-white border border-gray-300 z-50 flex flex-col">
+          <div className="px-4 py-3 bg-brand-navy text-white flex items-center justify-between">
+            <span className="text-sm font-semibold">Notifications</span>
+            {unreadCount > 0 && <span className="text-xs text-white/70 tabular-nums">{unreadCount} unread</span>}
           </div>
           <div className="overflow-y-auto flex-1">
             {notifications.length === 0 && (
-              <div className="px-4 py-8 text-center text-sm text-gray-500">No notifications</div>
+              <div className="px-4 py-8 text-center text-sm text-gray-400">No notifications</div>
             )}
             {notifications.map((n) => {
               const body = (
                 <div
-                  className={`px-4 py-3 border-b border-gray-100 hover:bg-gray-50 flex items-start gap-2 ${
-                    !n.isRead ? 'bg-brand-soft/40' : ''
+                  className={`px-4 py-3 border-b border-gray-200 hover:bg-gray-100 flex items-start gap-2 ${
+                    !n.isRead ? 'bg-brand-soft' : ''
                   }`}
                 >
                   <div className="flex-1 min-w-0" onClick={() => !n.isRead && markAsRead(n._id)}>
@@ -85,10 +85,10 @@ export default function NotificationBell() {
                       e.stopPropagation();
                       dismiss(n._id);
                     }}
-                    className="p-1 text-gray-400 hover:text-gray-700 flex-shrink-0"
+                    className="inline-flex items-center justify-center p-2.5 text-gray-400 hover:text-gray-700 hover:bg-gray-200 flex-shrink-0"
                     aria-label="Dismiss"
                   >
-                    <X className="w-3.5 h-3.5" />
+                    <X className="w-4 h-4" aria-hidden="true" />
                   </button>
                 </div>
               );

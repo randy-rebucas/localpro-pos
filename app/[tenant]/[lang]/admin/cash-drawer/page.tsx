@@ -220,14 +220,14 @@ export default function CashDrawerPage() {
               <button
                 onClick={() => setPage(p => Math.max(1, p - 1))}
                 disabled={page === 1}
-                className="px-3 py-1 border border-gray-300 bg-white disabled:opacity-40 hover:bg-gray-100"
+                className="inline-flex items-center justify-center px-4 py-2 border border-gray-300 bg-white disabled:opacity-40 hover:bg-gray-100"
               >
                 ← {dict.transactions?.previous || dict.common?.previous || 'Prev'}
               </button>
               <button
                 onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                 disabled={page >= totalPages}
-                className="px-3 py-1 border border-gray-300 bg-white disabled:opacity-40 hover:bg-gray-100"
+                className="inline-flex items-center justify-center px-4 py-2 border border-gray-300 bg-white disabled:opacity-40 hover:bg-gray-100"
               >
                 {dict.transactions?.next || dict.common?.next || 'Next'} →
               </button>

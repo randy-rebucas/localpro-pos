@@ -27,6 +27,7 @@ export interface SupplierFormData {
 interface UseSupplierListReturn {
   suppliers: Supplier[];
   loading: boolean;
+  error: string | null;
   message: { type: 'success' | 'error'; text: string } | null;
   fetchSuppliers: () => Promise<void>;
   createSupplier: (form: SupplierFormData) => Promise<true | string>;
@@ -39,20 +40,22 @@ interface UseSupplierListReturn {
 export function useSupplierList(): UseSupplierListReturn {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const fetchSuppliers = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const res = await fetch('/api/suppliers', { credentials: 'include' });
       const data = await res.json();
       if (data.success) {
         setSuppliers(data.data || []);
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to fetch suppliers' });
+        setError(data.error || 'Failed to fetch suppliers');
       }
     } catch {
-      setMessage({ type: 'error', text: 'Failed to fetch suppliers' });
+      setError('Failed to fetch suppliers');
     } finally {
       setLoading(false);
     }
@@ -72,11 +75,9 @@ export function useSupplierList(): UseSupplierListReturn {
         return true;
       }
       const errorText = data.error || 'Failed to save supplier';
-      setMessage({ type: 'error', text: errorText });
       return errorText;
     } catch {
       const errorText = 'Failed to save supplier';
-      setMessage({ type: 'error', text: errorText });
       return errorText;
     }
   }, []);
@@ -95,11 +96,9 @@ export function useSupplierList(): UseSupplierListReturn {
         return true;
       }
       const errorText = data.error || 'Failed to update supplier';
-      setMessage({ type: 'error', text: errorText });
       return errorText;
     } catch {
       const errorText = 'Failed to update supplier';
-      setMessage({ type: 'error', text: errorText });
       return errorText;
     }
   }, []);
@@ -125,6 +124,7 @@ export function useSupplierList(): UseSupplierListReturn {
   return {
     suppliers,
     loading,
+    error,
     message,
     fetchSuppliers,
     createSupplier,

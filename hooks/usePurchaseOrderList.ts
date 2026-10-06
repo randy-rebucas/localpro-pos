@@ -46,6 +46,7 @@ export interface PurchaseOrderFormData {
 interface UsePurchaseOrderListReturn {
   purchaseOrders: PurchaseOrder[];
   loading: boolean;
+  error: string | null;
   message: { type: 'success' | 'error'; text: string } | null;
   fetchPurchaseOrders: () => Promise<void>;
   createPurchaseOrder: (form: PurchaseOrderFormData) => Promise<true | string>;
@@ -59,20 +60,22 @@ interface UsePurchaseOrderListReturn {
 export function usePurchaseOrderList(): UsePurchaseOrderListReturn {
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const fetchPurchaseOrders = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const res = await fetch('/api/purchase-orders', { credentials: 'include' });
       const data = await res.json();
       if (data.success) {
         setPurchaseOrders(data.data || []);
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to fetch purchase orders' });
+        setError(data.error || 'Failed to fetch purchase orders');
       }
     } catch {
-      setMessage({ type: 'error', text: 'Failed to fetch purchase orders' });
+      setError('Failed to fetch purchase orders');
     } finally {
       setLoading(false);
     }
@@ -92,11 +95,9 @@ export function usePurchaseOrderList(): UsePurchaseOrderListReturn {
         return true;
       }
       const errorText = data.error || 'Failed to create purchase order';
-      setMessage({ type: 'error', text: errorText });
       return errorText;
     } catch {
       const errorText = 'Failed to create purchase order';
-      setMessage({ type: 'error', text: errorText });
       return errorText;
     }
   }, []);
@@ -115,11 +116,9 @@ export function usePurchaseOrderList(): UsePurchaseOrderListReturn {
         return true;
       }
       const errorText = data.error || 'Failed to update purchase order';
-      setMessage({ type: 'error', text: errorText });
       return errorText;
     } catch {
       const errorText = 'Failed to update purchase order';
-      setMessage({ type: 'error', text: errorText });
       return errorText;
     }
   }, []);
@@ -154,11 +153,9 @@ export function usePurchaseOrderList(): UsePurchaseOrderListReturn {
         return true;
       }
       const errorText = data.error || 'Failed to receive stock';
-      setMessage({ type: 'error', text: errorText });
       return errorText;
     } catch {
       const errorText = 'Failed to receive stock';
-      setMessage({ type: 'error', text: errorText });
       return errorText;
     }
   }, []);
@@ -168,6 +165,7 @@ export function usePurchaseOrderList(): UsePurchaseOrderListReturn {
   return {
     purchaseOrders,
     loading,
+    error,
     message,
     fetchPurchaseOrders,
     createPurchaseOrder,
