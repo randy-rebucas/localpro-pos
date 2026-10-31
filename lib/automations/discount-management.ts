@@ -7,6 +7,7 @@ import connectDB from '@/lib/mongodb';
 import Discount from '@/models/Discount';
 import { sendEmail } from '@/lib/notifications';
 import { getAutomationTenants } from './tenants';
+import { formatTenantDate, tenantTimezone } from './local-time';
 import { AutomationResult } from './types';
 
 const USAGE_ALERT_THRESHOLDS = [80, 90, 100];
@@ -102,7 +103,7 @@ export async function manageDiscountStatus(
             await sendEmail({
               to: notifyEmail,
               subject: `Discount Activated: ${discount.code}`,
-              message: `The discount "${discount.code}" (${discount.name || 'No name'}) has been automatically activated.\n\nValid until: ${discount.validUntil.toLocaleDateString()}\nUsage limit:${discount.usageLimit || 'Unlimited'}`,
+              message: `The discount "${discount.code}" (${discount.name || 'No name'}) has been automatically activated.\n\nValid until: ${formatTenantDate(new Date(discount.validUntil), tenantTimezone(tenantSettings))}\nUsage limit:${discount.usageLimit || 'Unlimited'}`,
               type: 'email',
             }).catch(() => {
               // Don't fail if email fails

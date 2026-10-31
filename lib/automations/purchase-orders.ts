@@ -6,7 +6,9 @@
 import connectDB from '@/lib/mongodb';
 import { getLowStockProducts } from '@/lib/stock';
 import { sendEmail } from '@/lib/notifications';
+import { getTenantYmd } from '@/lib/timezone';
 import { getAutomationTenants } from './tenants';
+import { formatTenantDate, tenantTimezone } from './local-time';
 import { AutomationResult } from './types';
 
 export interface PurchaseOrderOptions {
@@ -97,12 +99,14 @@ export async function generatePurchaseOrders(
 
         const totalAmount = purchaseOrderItems.reduce((sum, item) => sum + item.subtotal, 0);
         const orderDate = new Date();
-        const orderNumber = `PO-${orderDate.toISOString().split('T')[0].replace(/-/g, '')}-${Date.now().toString().slice(-6)}`;
+        const tz = tenantTimezone(tenantSettings);
+        // PO number carries the tenant-local date (07:00 Manila is still "yesterday" in UTC)
+        const orderNumber = `PO-${getTenantYmd(orderDate, tz).replace(/-/g, '')}-${Date.now().toString().slice(-6)}`;
 
         // Generate purchase order document (CSV format for now)
         const csvContent = [
           ['Purchase Order', orderNumber],
-          ['Date', orderDate.toLocaleDateString()],
+          ['Date', `"${formatTenantDate(orderDate, tz)}"`],
           ['Tenant', tenant.name],
           [],
           ['Product Name', 'SKU', 'Current Stock', 'Reorder Quantity', 'Unit Price', 'Subtotal'],
@@ -125,7 +129,7 @@ export async function generatePurchaseOrders(
           const emailBody = `Purchase Order Generated for ${companyName}
 
 Order Number: ${orderNumber}
-Date: ${orderDate.toLocaleDateString()}
+Date: ${formatTenantDate(orderDate, tz)}
 
 The following products need to be reordered:
 

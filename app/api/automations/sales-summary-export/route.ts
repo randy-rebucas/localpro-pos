@@ -18,7 +18,9 @@ export async function POST(request: NextRequest) {
     const result = await generateSalesSummaryExport({
       tenantId,
       period: period === 'monthly' ? 'monthly' : 'daily',
-      businessDate: businessDate ? new Date(businessDate) : undefined,
+      businessDate: businessDate
+        ? new Date(typeof businessDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(businessDate) ? `${businessDate}T12:00:00Z` : businessDate)
+        : undefined,
     });
     return NextResponse.json(result);
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -46,7 +48,12 @@ export async function GET(request: NextRequest) {
     const result = await generateSalesSummaryExport({
       tenantId,
       period,
-      businessDate: businessDateParam ? new Date(businessDateParam) : undefined,
+      // A bare 'YYYY-MM-DD' is a calendar day: anchor it at noon UTC so it stays
+      // the same day when read in any tenant timezone (UTC midnight would be the
+      // previous day west of UTC).
+      businessDate: businessDateParam
+        ? new Date(/^\d{4}-\d{2}-\d{2}$/.test(businessDateParam) ? `${businessDateParam}T12:00:00Z` : businessDateParam)
+        : undefined,
     });
     return NextResponse.json(result);
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any

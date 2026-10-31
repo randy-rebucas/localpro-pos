@@ -9,6 +9,7 @@ import CashDrawerSession from '@/models/CashDrawerSession';
 import User from '@/models/User'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { sendEmail, sendSMS } from '@/lib/notifications';
 import { getAutomationTenants } from './tenants';
+import { formatTenantTime, tenantTimezone } from './local-time';
 import { AutomationResult } from './types';
 
 export interface CashCountReminderOptions {
@@ -60,6 +61,7 @@ export async function sendCashCountReminders(
       try {
         const tenantId = tenant._id;
         const tenantSettings = tenant.settings;
+        const tz = tenantTimezone(tenantSettings);
 
         // Manual single-tenant runs bypass the loader filter, so re-check here
         if (!tenantSettings?.emailNotifications && !tenantSettings?.smsNotifications) {
@@ -111,7 +113,7 @@ export async function sendCashCountReminders(
               const companyName = tenantSettings?.companyName || tenant.name || 'Business';
               const reminderMessage = `Reminder: Your shift is ending soon. Please count and close your cash drawer before leaving.
 
-Shift End: ${estimatedShiftEnd.toLocaleTimeString()}
+Shift End: ${formatTenantTime(estimatedShiftEnd, tz)}
 Cash Drawer Session: ${openDrawer._id.toString().slice(-8)}
 
 Thank you,
@@ -133,7 +135,7 @@ ${companyName}`;
               if (tenantSettings?.phone && tenantSettings?.smsNotifications) {
                 await sendSMS({
                   to: tenantSettings.phone,
-                  message: `Reminder: Please count and close cash drawer before shift end at ${estimatedShiftEnd.toLocaleTimeString()}. - ${companyName}`,
+                  message: `Reminder: Please count and close cash drawer before shift end at ${formatTenantTime(estimatedShiftEnd, tz)}. - ${companyName}`,
                   type: 'sms',
                 }).catch(() => {
                   // Don't fail if SMS fails

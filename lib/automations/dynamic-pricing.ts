@@ -6,7 +6,9 @@
 import connectDB from '@/lib/mongodb';
 import Product from '@/models/Product';
 import Transaction from '@/models/Transaction';
+import { getTenantLocalParts } from '@/lib/timezone';
 import { getAutomationTenants } from './tenants';
+import { tenantTimezone } from './local-time';
 import { AutomationResult } from './types';
 import mongoose from 'mongoose';
 
@@ -15,7 +17,12 @@ export interface DynamicPricingOptions {
   enableTimeBased?: boolean; // Enable time-based pricing (e.g., happy hour)
   enableDemandBased?: boolean; // Enable demand-based pricing
   enableStockBased?: boolean; // Enable stock-based pricing (clearance)
+  /** Reference "now" (tests); defaults to the current time. */
+  now?: Date;
 }
+
+/** Happy hour window, tenant-local wall-clock hours [start, end). */
+export const HAPPY_HOUR = { startHour: 14, endHour: 16 };
 
 /**
  * Apply dynamic pricing rules
@@ -42,7 +49,7 @@ export async function applyDynamicPricing(
 
   try {
     // Get tenants to process
-    const tenants = await getAutomationTenants({ tenantId: options.tenantId, select: 'name' });
+    const tenants = await getAutomationTenants({ tenantId: options.tenantId, select: 'name settings.timezone' });
 
     if (tenants.length === 0) {
       results.message = 'No tenants found to process';
@@ -52,14 +59,16 @@ export async function applyDynamicPricing(
     let totalUpdated = 0;
     let totalFailed = 0;
 
-    const now = new Date();
-    const currentHour = now.getHours();
-    const isHappyHour = currentHour >= 14 && currentHour < 16;
+    const now = options.now ?? new Date();
     const last7Days = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
     for (const tenant of tenants) {
       try {
         const tenantId = tenant._id;
+
+        // Time-based rules use the tenant's local wall clock, not the server's (UTC)
+        const currentHour = getTenantLocalParts(now, tenantTimezone(tenant.settings)).hour;
+        const isHappyHour = currentHour >= HAPPY_HOUR.startHour && currentHour < HAPPY_HOUR.endHour;
 
         // Get products
         const products = await Product.find({ tenantId })
