@@ -1,19 +1,11 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
 
-export interface ITransactionItemModifier {
-  name: string;       // e.g. "Temperature"
-  chosenOption: string; // e.g. "Medium Rare"
-  price: number;       // 0 for free options
-}
-
 export interface ITransactionItem {
   product: mongoose.Types.ObjectId;
   name: string;
   price: number;
   quantity: number;
   subtotal: number;
-  modifiers?: ITransactionItemModifier[];
-  prescriptionId?: mongoose.Types.ObjectId; // Pharmacy: links Rx item to prescription
 }
 
 export interface ISplitPayment {
@@ -57,10 +49,6 @@ export interface ITransaction extends Document {
   notes?: string;
   displayCurrency?: string; // Currency code the customer chose to view the total in
   displayTotal?: number;    // Total converted to displayCurrency at time of sale
-  // Restaurant-specific
-  orderType?: 'dine-in' | 'takeout' | 'delivery';
-  tableNumber?: string;
-  tableId?: mongoose.Types.ObjectId;
   // Split billing
   splitCount?: number;
   splitPayments?: ISplitPayment[];
@@ -77,12 +65,6 @@ export interface ITransaction extends Document {
   createdAt: Date;
   updatedAt: Date;
 }
-
-const TransactionItemModifierSchema: Schema = new Schema({
-  name: { type: String, required: true },
-  chosenOption: { type: String, required: true },
-  price: { type: Number, required: true, default: 0 },
-}, { _id: false });
 
 const TransactionItemSchema: Schema = new Schema({
   product: {
@@ -106,14 +88,6 @@ const TransactionItemSchema: Schema = new Schema({
   subtotal: {
     type: Number,
     required: true,
-  },
-  modifiers: {
-    type: [TransactionItemModifierSchema],
-    default: undefined,
-  },
-  prescriptionId: {
-    type: Schema.Types.ObjectId,
-    ref: 'Prescription',
   },
 });
 
@@ -266,19 +240,6 @@ const TransactionSchema: Schema = new Schema(
     displayTotal: {
       type: Number,
       min: 0,
-    },
-    // Restaurant-specific
-    orderType: {
-      type: String,
-      enum: ['dine-in', 'takeout', 'delivery'],
-    },
-    tableNumber: {
-      type: String,
-      trim: true,
-    },
-    tableId: {
-      type: Schema.Types.ObjectId,
-      ref: 'Table',
     },
     // Split billing
     splitCount: {

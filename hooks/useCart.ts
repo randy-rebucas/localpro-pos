@@ -6,23 +6,15 @@ export interface CartItemVariation {
   type?: string;
 }
 
-export interface CartItemModifier {
-  name: string;        // e.g. "Temperature"
-  chosenOption: string; // e.g. "Medium Rare"
-  price: number;        // 0 for free options
-}
-
 export interface CartItem {
   productId: string;
-  cartItemId: string; // unique per line: productId or productId:variationSku or productId:modHash
+  cartItemId: string; // unique per line: productId or productId:variationSku
   name: string;
   price: number;
   quantity: number;
   stock: number;
   variationLabel?: string; // e.g. "S / Blue"
   variation?: CartItemVariation;
-  selectedModifiers?: CartItemModifier[];
-  modifierSurcharge?: number; // sum of all chosen modifier prices
 }
 
 export interface CartVariant {
@@ -38,8 +30,7 @@ interface UseCartReturn {
   setCart: (items: CartItem[]) => void;
   addToCart: (
     product: { _id: string; name: string; price: number; stock: number; trackInventory?: boolean; allowOutOfStockSales?: boolean },
-    variant?: CartVariant,
-    modifiers?: CartItemModifier[]
+    variant?: CartVariant
   ) => void;
   removeFromCart: (cartItemId: string) => void;
   updateQuantity: (cartItemId: string, quantity: number, onError: (message: string) => void) => void;
@@ -72,24 +63,11 @@ export function useCart(showError: (msg: string) => void): UseCartReturn {
 
   const addToCart = useCallback((
     product: { _id: string; name: string; price: number; stock: number; trackInventory?: boolean; allowOutOfStockSales?: boolean },
-    variant?: CartVariant,
-    modifiers?: CartItemModifier[]
+    variant?: CartVariant
   ) => {
     const effectiveStock = variant?.stock ?? product.stock;
-    const basePrice = variant?.price ?? product.price;
-    const surcharge = modifiers ? modifiers.reduce((s, m) => s + m.price, 0) : 0;
-    const effectivePrice = basePrice + surcharge;
-
-    // Build a stable cartItemId that includes modifier choices so different
-    // modifier combos on the same product become separate cart lines.
-    let cartItemId = variant ? `${product._id}:${variant.sku}` : product._id;
-    if (modifiers && modifiers.length > 0) {
-      const modHash = modifiers
-        .map((m) => `${m.name}=${m.chosenOption}`)
-        .sort()
-        .join('|');
-      cartItemId = `${cartItemId}:${modHash}`;
-    }
+    const effectivePrice = variant?.price ?? product.price;
+    const cartItemId = variant ? `${product._id}:${variant.sku}` : product._id;
 
     const displayName = variant ? `${product.name} (${variant.label})` : product.name;
 
@@ -126,8 +104,6 @@ export function useCart(showError: (msg: string) => void): UseCartReturn {
             stock: effectiveStock,
             variationLabel: variant?.label,
             variation: variant?.variation,
-            selectedModifiers: modifiers && modifiers.length > 0 ? modifiers : undefined,
-            modifierSurcharge: surcharge > 0 ? surcharge : undefined,
           },
         ];
       }

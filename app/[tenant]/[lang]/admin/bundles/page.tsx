@@ -354,7 +354,7 @@ export default function BundlesPage() {
                   {dict.admin?.bundlesNotAvailable || 'Bundles Not Available'}
                 </h3>
                 <p className="text-yellow-800">
-                  {(dict.admin?.bundlesNotAvailableDesc || 'Product bundles are not available for {businessType}. This feature is typically used for retail and restaurant businesses.').replace('{businessType}', businessTypeConfig?.name || 'your business type')}
+                  {(dict.admin?.bundlesNotAvailableDesc || 'Product bundles are not available for {businessType}. This feature is typically used for retail businesses.').replace('{businessType}', businessTypeConfig?.name || 'your business type')}
                 </p>
                 <p className="text-sm text-yellow-700 mt-2">
                   {dict.admin?.bundlesNotAvailableHint || 'If you need bundles, please update your business type in Settings.'}

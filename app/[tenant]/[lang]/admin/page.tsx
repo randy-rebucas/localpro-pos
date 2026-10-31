@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   TrendingUp, ShoppingCart, Package, Users, ArrowRight, AlertTriangle,
-  Receipt, Plus, BarChart2, ShieldCheck, Boxes, CalendarClock, Loader2,
+  Receipt, Plus, BarChart2, ShieldCheck, Boxes, Loader2,
   Store,
 } from 'lucide-react';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
@@ -30,7 +30,6 @@ interface DashboardData {
   totalCustomers: number;
   recentTransactions: RecentTx[];
   lowStockCount: number;
-  expiringCount: number;
 }
 
 function fmt(n: number | undefined | null, symbol: string) {
@@ -114,24 +113,13 @@ export default function AdminDashboard() {
         lowStockCount = json.count ?? 0;
       }
 
-      let expiringCount = 0;
-      if (businessType === 'pharmacy') {
-        try {
-          const expRes = await fetch(`/api/reports/expiry?days=30`);
-          if (expRes.ok) {
-            const j = await expRes.json();
-            expiringCount = (j.data?.totalExpired ?? 0) + (j.data?.totalExpiring ?? 0);
-          }
-        } catch { /* ignore */ }
-      }
-
-      setData({ todayRevenue, todayTransactions, totalProducts, totalCustomers, recentTransactions, lowStockCount, expiringCount });
+      setData({ todayRevenue, todayTransactions, totalProducts, totalCustomers, recentTransactions, lowStockCount });
     } catch {
       // ignore
     } finally {
       setLoading(false);
     }
-  }, [tenant, businessType]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tenant]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { fetchDashboard(); }, [fetchDashboard]);
 
@@ -198,7 +186,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* Alerts */}
-      {data && (data.lowStockCount > 0 || data.expiringCount > 0) && (
+      {data && data.lowStockCount > 0 && (
         <div className="flex flex-wrap gap-3 mb-6">
           {data.lowStockCount > 0 && (
             <Link
@@ -207,16 +195,6 @@ export default function AdminDashboard() {
             >
               <AlertTriangle className="w-4 h-4 flex-shrink-0" />
               {(dict?.admin?.lowStockAlertMsg || '{count} product(s) low on stock').replace('{count}', String(data.lowStockCount))}
-              <ArrowRight className="w-3.5 h-3.5 ml-1" />
-            </Link>
-          )}
-          {data.expiringCount > 0 && (
-            <Link
-              href={`${base}/admin/expiry-tracking`}
-              className="flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-300 text-sm text-red-700 hover:bg-red-100 transition-colors"
-            >
-              <CalendarClock className="w-4 h-4 flex-shrink-0" />
-              {(dict?.admin?.expiringAlertMsg || '{count} item(s) expiring soon').replace('{count}', String(data.expiringCount))}
               <ArrowRight className="w-3.5 h-3.5 ml-1" />
             </Link>
           )}

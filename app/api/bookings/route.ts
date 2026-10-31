@@ -13,6 +13,7 @@ import { getTenantSettingsById } from '@/lib/tenant';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { requireBookingSchedulingAccess } from '@/lib/booking-scheduling-access';
 import { getClosedHolidayForDate } from '@/lib/holidays';
+import { getTenantTimezone } from '@/lib/timezone';
 import { logger } from '@/lib/logger';
 
 class BookingConflictError extends Error {
@@ -199,7 +200,7 @@ export async function POST(request: NextRequest) {
     // Block bookings on days the tenant has marked the business closed
     // (Admin → Holidays) — this is the whole point of that calendar.
     const holidaySettings = await getTenantSettingsById(tenantId);
-    const closedHoliday = getClosedHolidayForDate(holidaySettings?.holidays, start);
+    const closedHoliday = getClosedHolidayForDate(holidaySettings?.holidays, start, getTenantTimezone(holidaySettings));
     if (closedHoliday) {
       return NextResponse.json(
         {

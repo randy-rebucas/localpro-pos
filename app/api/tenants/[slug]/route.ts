@@ -6,7 +6,7 @@ import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { handleApiError } from '@/lib/error-handler';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
-import { applyBusinessTypeDefaults } from '@/lib/business-types';
+import { applyBusinessTypeDefaults, isValidBusinessType } from '@/lib/business-types';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   try {
@@ -107,6 +107,12 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       // Check if business type is being changed
       const currentBusinessType = oldTenant.settings?.businessType;
       const newBusinessType = settings.businessType;
+      if (newBusinessType && newBusinessType !== currentBusinessType && !isValidBusinessType(newBusinessType)) {
+        return NextResponse.json(
+          { success: false, error: t('validation.invalidBusinessType', 'Unsupported business type. Choose Retail or General.') },
+          { status: 400 }
+        );
+      }
 
       let updatedSettings = settings;
       settingsKeysToSet = Object.keys(settings);

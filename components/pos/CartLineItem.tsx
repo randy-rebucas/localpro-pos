@@ -29,25 +29,6 @@ function isIncreaseDisabled(item: CartItem, product?: ProductLookup): boolean {
   return trackInventory && !canSellOutOfStock && item.quantity >= item.stock;
 }
 
-function ModifierSummary({ modifiers }: { modifiers: CartItem['selectedModifiers'] }) {
-  if (!modifiers?.length) return null;
-  return (
-    <div className="text-[11px] text-gray-500 mt-0.5 leading-snug">
-      {modifiers.map((m) => (
-        <span key={`${m.name}-${m.chosenOption}`} className="block truncate">
-          {m.name}: {m.chosenOption}
-          {m.price > 0 && (
-            <span className="text-gray-400">
-              {' '}
-              (+<Currency amount={m.price} />)
-            </span>
-          )}
-        </span>
-      ))}
-    </div>
-  );
-}
-
 export default function CartLineItem({
   item,
   variant = 'compact',
@@ -70,7 +51,6 @@ export default function CartLineItem({
       <div className="flex items-center gap-3 bg-gray-50 border border-gray-200 p-3">
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-gray-900 truncate">{item.name}</p>
-          <ModifierSummary modifiers={item.selectedModifiers} />
           <p className="text-sm text-gray-500 mt-0.5">
             <Currency amount={item.price} /> {dict.pos?.each || 'each'}
           </p>
@@ -119,7 +99,6 @@ export default function CartLineItem({
       <div className="flex items-start gap-1.5 mb-1.5">
         <div className="flex-1 min-w-0">
           <div className="font-medium text-gray-900 text-sm leading-snug line-clamp-2">{item.name}</div>
-          <ModifierSummary modifiers={item.selectedModifiers} />
           <div className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
             <Currency amount={item.price} />
             <span className="text-gray-400">×{item.quantity}</span>

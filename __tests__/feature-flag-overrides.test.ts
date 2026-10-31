@@ -92,7 +92,7 @@ describe('feature flag overrides', () => {
 
   it('validates feature names', () => {
     expect(isOverridableFeature('enableLoyaltyProgram')).toBe(true);
-    expect(isOverridableFeature('pdeaReporting')).toBe(true);
+    expect(isOverridableFeature('pdeaReporting')).toBe(false);
     expect(isOverridableFeature('maxUsers')).toBe(false);
     expect(isOverridableFeature('nonsense')).toBe(false);
   });

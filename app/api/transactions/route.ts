@@ -22,7 +22,6 @@ import { calculateTax } from '@/lib/tax-calculation';
 import Customer from '@/models/Customer';
 import LoyaltyConfig from '@/models/LoyaltyConfig';
 import LoyaltyTransaction from '@/models/LoyaltyTransaction';
-import Table from '@/models/Table';
 import Branch from '@/models/Branch';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { wouldExceedCreditLimit } from '@/lib/customer-credit';
@@ -139,7 +138,6 @@ interface TransactionItemRecord {
   categoryId?: string;
   taxExempt?: boolean;
   zeroRated?: boolean;
-  modifiers?: Array<{ name: string; chosenOption: string; price: number }>;
 }
 
 export async function GET(request: NextRequest) {
@@ -266,14 +264,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Restaurant & split-billing fields
-    const rawOrderType = typeof body.orderType === 'string' ? body.orderType : undefined;
-    const orderType =
-      rawOrderType && ['dine-in', 'takeout', 'delivery'].includes(rawOrderType)
-        ? rawOrderType
-        : undefined;
-    const tableNumber = typeof body.tableNumber === 'string' ? body.tableNumber : undefined;
-    const tableId = typeof body.tableId === 'string' ? body.tableId : undefined;
+    // Split-billing fields
     const splitCount = typeof body.splitCount === 'number' ? body.splitCount : undefined;
     const splitPayments = Array.isArray(body.splitPayments) ? body.splitPayments : undefined;
 
@@ -367,7 +358,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Support for multiple payment methods (split payments)
-    // Prefer `payments`; map restaurant `splitPayments` from body when present.
+    // Prefer `payments`; map split-check `splitPayments` from body when present.
     const paymentsFromSplit: PaymentInput[] | undefined =
       Array.isArray(splitPayments) && splitPayments.length > 0
         ? splitPayments.map((sp: { method: string; amount: number; reference?: string }) => ({
@@ -428,7 +419,6 @@ export async function POST(request: NextRequest) {
 
     for (const item of items) {
       const { productId, quantity, variation, bundleId } = item;
-      const itemModifiers = Array.isArray((item as any).modifiers) ? (item as any).modifiers : undefined; // eslint-disable-line @typescript-eslint/no-explicit-any
 
       // Handle bundles
       if (bundleId) {
@@ -536,23 +526,17 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        // Add modifier surcharge to item price
-        const modifierSurcharge = itemModifiers
-          ? (itemModifiers as Array<{ price: number }>).reduce((s, m) => s + (m.price || 0), 0)
-          : 0;
-        const effectiveItemPrice = itemPrice + modifierSurcharge;
-        const itemSubtotal = effectiveItemPrice * quantity;
+        const itemSubtotal = itemPrice * quantity;
         subtotal += itemSubtotal;
 
         transactionItems.push({
           product: product._id,
           name: product.name,
-          price: effectiveItemPrice,
+          price: itemPrice,
           quantity: quantity,
           subtotal: itemSubtotal,
           taxExempt: product.taxExempt || false,
           zeroRated: product.zeroRated || false,
-          modifiers: itemModifiers || undefined,
         });
       }
     }
@@ -846,9 +830,6 @@ export async function POST(request: NextRequest) {
         terminalId: deviceSnapshot?.terminalId,
         deviceSerialNumber: deviceSnapshot?.deviceSerialNumber,
         notes,
-        orderType: orderType || undefined,
-        tableNumber: tableNumber || undefined,
-        tableId: tableId || undefined,
         splitCount: splitCount || undefined,
         splitPayments: splitPayments || undefined,
         ...(idempotencyKey ? { idempotencyKey } : {}),
@@ -1081,19 +1062,6 @@ export async function POST(request: NextRequest) {
           branchId: typeof branchId === 'string' ? branchId : undefined,
           stockReason: 'Transaction sale',
         });
-      }
-    }
-
-    // Reset table status to 'open' after dine-in payment completes
-    if (tableId && orderType === 'dine-in') {
-      try {
-        await Table.findOneAndUpdate(
-          { _id: tableId, tenantId },
-          { status: 'open', currentOrderId: undefined }
-        );
-      } catch (tableErr) {
-        logger.error('Failed to reset table status:', tableErr);
-        // Non-critical — don't fail the response
       }
     }
 

@@ -9,7 +9,6 @@ interface ProductCardProps {
   availableStock: number;
   canAdd: boolean;
   primaryColor: string;
-  businessType: string;
   cardHeightClass: string;
   addLabel: string;
   variant?: 'grid' | 'list';
@@ -79,7 +78,6 @@ export default function ProductCard({
   availableStock,
   canAdd,
   primaryColor,
-  businessType,
   cardHeightClass,
   addLabel,
   variant = 'grid',
@@ -87,11 +85,7 @@ export default function ProductCard({
   onTogglePin,
 }: ProductCardProps) {
   const isPinned = Boolean(product.pinned);
-  const showStockBadge =
-    businessType !== 'restaurant' &&
-    businessType !== 'service' &&
-    businessType !== 'laundry' &&
-    availableStock <= 10;
+  const showStockBadge = availableStock <= 10;
 
   const handleTogglePin = () => onTogglePin(product._id, isPinned);
 
@@ -233,12 +227,6 @@ export default function ProductCard({
           <p className="text-xs text-gray-200 truncate h-4 opacity-90">{product.category || '\u00A0'}</p>
         </div>
         <div className="space-y-1">
-          {(businessType === 'service' || businessType === 'laundry') && product.serviceType && (
-            <p className="text-[10px] text-gray-300 truncate leading-none">
-              {product.serviceType.charAt(0).toUpperCase() +
-                product.serviceType.slice(1).replace(/-/g, ' ')}
-            </p>
-          )}
           <p className="font-semibold text-white text-sm leading-5 line-clamp-2">{product.name}</p>
           <div className="font-bold text-lg leading-tight text-white">
             <Currency
@@ -250,11 +238,6 @@ export default function ProductCard({
         </div>
       </div>
 
-      {businessType === 'restaurant' && product.modifiers?.length ? (
-        <span className="pointer-events-none absolute bottom-10 left-2 z-20 text-[9px] bg-orange-500/90 text-white px-1.5 py-0.5 font-semibold">
-          + options
-        </span>
-      ) : null}
       {product.hasVariations && product.variations?.length ? (
         <span className="pointer-events-none absolute bottom-10 left-2 z-20 text-[9px] bg-brand/90 text-white px-1.5 py-0.5 font-semibold">
           {product.variations.length} variants

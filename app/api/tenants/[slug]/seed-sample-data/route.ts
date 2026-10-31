@@ -12,7 +12,7 @@ import { logger } from '@/lib/logger';
 
 // ── Sample data per business type ────────────────────────────────────────────
 
-type BizType = 'retail' | 'restaurant' | 'laundry' | 'service' | 'general';
+type BizType = 'retail' | 'general';
 
 interface SeedConfig {
   categories: { name: string; description: string }[];
@@ -56,106 +56,6 @@ const SAMPLE_DATA: Record<BizType, SeedConfig> = {
       { code: 'WELCOME10', name: 'Welcome 10% Off', type: 'percentage', value: 10, description: 'First-time customer discount' },
       { code: 'SAVE100',   name: 'Save ₱100',       type: 'fixed',      value: 100, minPurchaseAmount: 800, description: 'Min. ₱800 purchase' },
       { code: 'VIP20',     name: 'VIP 20% Off',     type: 'percentage', value: 20, description: 'Exclusive VIP member discount' },
-    ],
-  },
-
-  restaurant: {
-    categories: [
-      { name: 'Appetizers',  description: 'Starters and sharing plates' },
-      { name: 'Main Course', description: 'Signature main dishes' },
-      { name: 'Desserts',    description: 'Sweet endings' },
-      { name: 'Beverages',   description: 'Drinks — hot, cold, and blended' },
-      { name: 'Set Meals',   description: 'Complete meal bundles' },
-    ],
-    products: [
-      { name: 'Crispy Calamari',       description: 'Golden fried squid rings with aioli dip',                    price: 285,  stock: 999, category: 'Appetizers',  productType: 'regular', trackInventory: false, allergens: ['seafood','gluten'],    modifiers: [{ name: 'Sauce', options: [{ name: 'Aioli', price: 0 }, { name: 'Sweet Chili', price: 0 }], required: true }] },
-      { name: 'Chicken Wings (6pcs)',  description: 'Crispy wings, choose your sauce',                             price: 320,  stock: 999, category: 'Appetizers',  productType: 'regular', trackInventory: false, modifiers: [{ name: 'Sauce', options: [{ name: 'Buffalo', price: 0 }, { name: 'BBQ', price: 0 }, { name: 'Honey Garlic', price: 0 }], required: true }] },
-      { name: 'Grilled Salmon',        description: '180g Atlantic salmon, seasonal vegetables, lemon butter',     price: 680,  stock: 999, category: 'Main Course', productType: 'regular', trackInventory: false, allergens: ['seafood','dairy'],      nutritionInfo: { calories: 420, protein: 38, carbs: 12, fat: 24 } },
-      { name: 'Pork Ribs Half Rack',   description: 'Slow-cooked BBQ ribs, coleslaw, corn bread',                 price: 750,  stock: 999, category: 'Main Course', productType: 'regular', trackInventory: false },
-      { name: 'Truffle Mushroom Pasta',description: 'Tagliatelle, wild mushrooms, truffle cream sauce',            price: 480,  stock: 999, category: 'Main Course', productType: 'regular', trackInventory: false, allergens: ['gluten','dairy'],       modifiers: [{ name: 'Protein', options: [{ name: 'None', price: 0 }, { name: 'Chicken', price: 80 }, { name: 'Shrimp', price: 120 }], required: false }] },
-      { name: 'Wagyu Beef Burger',     description: '150g wagyu patty, brioche bun, truffle fries',               price: 595,  stock: 999, category: 'Main Course', productType: 'regular', trackInventory: false, allergens: ['gluten','dairy'] },
-      { name: 'Chocolate Lava Cake',   description: 'Warm chocolate cake, vanilla ice cream',                     price: 220,  stock: 999, category: 'Desserts',    productType: 'regular', trackInventory: false, allergens: ['gluten','dairy','eggs'] },
-      { name: 'Mango Panna Cotta',     description: 'Silky panna cotta, fresh mango coulis',                      price: 195,  stock: 999, category: 'Desserts',    productType: 'regular', trackInventory: false, allergens: ['dairy'] },
-      { name: 'Artisan Lemonade',      description: 'Fresh-squeezed, rosemary syrup, 500ml',                      price: 150,  stock: 999, category: 'Beverages',   productType: 'regular', trackInventory: false, modifiers: [{ name: 'Size', options: [{ name: 'Regular', price: 0 }, { name: 'Large', price: 50 }], required: true }] },
-      { name: 'Pour-Over Coffee',      description: 'Single-origin, hand-poured',                                 price: 175,  stock: 999, category: 'Beverages',   productType: 'regular', trackInventory: false, modifiers: [{ name: 'Temperature', options: [{ name: 'Hot', price: 0 }, { name: 'Iced', price: 30 }], required: true }] },
-      { name: 'Lunch Set A',           description: 'Soup + any main + iced tea',                                 price: 550,  stock: 999, category: 'Set Meals',   productType: 'bundle',  trackInventory: false },
-      { name: 'Date Night for Two',    description: 'Appetizer + 2 mains + 1 dessert + 2 drinks',                 price: 1480, stock: 999, category: 'Set Meals',   productType: 'bundle',  trackInventory: false },
-    ],
-    customers: [
-      { firstName: 'Elena', lastName: 'Garcia',    email: 'elena.g@example.com', phone: '+63-917-100-0001', tags: ['Regular'] },
-      { firstName: 'Marco', lastName: 'Bautista',                                phone: '+63-917-100-0002', tags: ['VIP', 'Regular'] },
-      { firstName: 'Lena',  lastName: 'Ocampo',   email: 'lena.o@example.com',  phone: '+63-917-100-0003', tags: ['Regular'] },
-    ],
-    discounts: [
-      { code: 'LUNCH15',  name: 'Lunch Promo 15%',      type: 'percentage', value: 15, minPurchaseAmount: 400, description: '11am–2pm weekdays' },
-      { code: 'BDAY',     name: 'Birthday Free Dessert', type: 'fixed',      value: 220, description: 'Free chocolate lava cake on birthday' },
-      { code: 'TABLE10',  name: 'Group Dining 10%',      type: 'percentage', value: 10, minPurchaseAmount: 3000, description: 'Table of 10 or more' },
-    ],
-  },
-
-  laundry: {
-    categories: [
-      { name: 'Wash & Fold',  description: 'Regular laundry wash, dry, and fold service' },
-      { name: 'Dry Cleaning', description: 'Professional dry cleaning for delicate fabrics' },
-      { name: 'Pressing',     description: 'Ironing and pressing service' },
-      { name: 'Specialty',    description: 'Curtains, beddings, and specialty items' },
-      { name: 'Express',      description: 'Same-day and rush service' },
-    ],
-    products: [
-      { name: 'Wash & Fold (per kg)',     description: 'Machine wash, tumble dry, folded. Min. 3kg.',  price: 75,   stock: 999, category: 'Wash & Fold',  productType: 'service', trackInventory: false, serviceType: 'wash',      weightBased: true,  estimatedDuration: 480  },
-      { name: 'Wash & Fold Bundle 10kg',  description: '10kg wash & fold package',                    price: 650,  stock: 999, category: 'Wash & Fold',  productType: 'service', trackInventory: false, serviceType: 'wash',      weightBased: false, estimatedDuration: 480  },
-      { name: 'Dry Clean — Polo Shirt',   description: 'Professional dry clean, pressed and hanger',  price: 180,  stock: 999, category: 'Dry Cleaning', productType: 'service', trackInventory: false, serviceType: 'dry-clean', weightBased: false, estimatedDuration: 1440 },
-      { name: 'Dry Clean — Suit (2pc)',   description: 'Jacket + pants, professionally cleaned',      price: 520,  stock: 999, category: 'Dry Cleaning', productType: 'service', trackInventory: false, serviceType: 'dry-clean', weightBased: false, estimatedDuration: 1440 },
-      { name: 'Dry Clean — Evening Dress',description: 'Formal dress, gentle care',                   price: 380,  stock: 999, category: 'Dry Cleaning', productType: 'service', trackInventory: false, serviceType: 'dry-clean', weightBased: false, estimatedDuration: 1440 },
-      { name: 'Press — Polo / Shirt',     description: 'Steam iron, hanger finish',                   price: 45,   stock: 999, category: 'Pressing',     productType: 'service', trackInventory: false, serviceType: 'press',     weightBased: false, estimatedDuration: 120  },
-      { name: 'Press — Pants / Slacks',   description: 'Creased finish, steam iron',                  price: 55,   stock: 999, category: 'Pressing',     productType: 'service', trackInventory: false, serviceType: 'press',     weightBased: false, estimatedDuration: 120  },
-      { name: 'Comforter / Duvet',        description: 'Full wash & dry for comforters up to queen',  price: 450,  stock: 999, category: 'Specialty',    productType: 'service', trackInventory: false, serviceType: 'wash',      weightBased: false, estimatedDuration: 720  },
-      { name: 'Curtain Set (per pair)',   description: 'Machine wash + press, ready-to-hang',         price: 350,  stock: 999, category: 'Specialty',    productType: 'service', trackInventory: false, serviceType: 'wash',      weightBased: false, estimatedDuration: 720  },
-      { name: 'Express Same-Day (per kg)',description: 'Delivered by 6pm if dropped by 9am',          price: 120,  stock: 999, category: 'Express',      productType: 'service', trackInventory: false, serviceType: 'wash',      weightBased: true,  estimatedDuration: 480, pickupDelivery: true },
-    ],
-    customers: [
-      { firstName: 'Rosario', lastName: 'Mendez',  phone: '+63-917-200-0001', tags: ['Regular'] },
-      { firstName: 'Dante',   lastName: 'Cruz',    phone: '+63-917-200-0002', email: 'dante.c@example.com', tags: ['VIP'] },
-      { firstName: 'Ligaya',  lastName: 'Flores',  phone: '+63-917-200-0003', tags: ['Regular'] },
-    ],
-    discounts: [
-      { code: 'FIRSTWASH', name: '1st Visit 20% Off',    type: 'percentage', value: 20, description: 'New customer welcome offer' },
-      { code: 'MONTHLY',   name: 'Monthly Bundle -10%',  type: 'percentage', value: 10, minPurchaseAmount: 500, description: 'Regular monthly customers' },
-    ],
-  },
-
-  service: {
-    categories: [
-      { name: 'Hair',     description: 'Cuts, color, treatments, and styling' },
-      { name: 'Nails',    description: 'Manicure, pedicure, and nail art' },
-      { name: 'Skin',     description: 'Facials, peels, and skin treatments' },
-      { name: 'Massage',  description: 'Body massage and relaxation therapies' },
-      { name: 'Packages', description: 'Curated service bundles' },
-    ],
-    products: [
-      { name: 'Haircut — Ladies',        description: 'Shampoo, cut, blow-dry and style',               price: 380,  stock: 999, category: 'Hair',     productType: 'service', trackInventory: false, serviceDuration: 60,  staffRequired: 1 },
-      { name: "Haircut — Men's",         description: 'Classic cut, shampoo and style',                 price: 220,  stock: 999, category: 'Hair',     productType: 'service', trackInventory: false, serviceDuration: 30,  staffRequired: 1 },
-      { name: 'Hair Color — Full',       description: 'Full head color, toning + treatment',            price: 1500, stock: 999, category: 'Hair',     productType: 'service', trackInventory: false, serviceDuration: 120, staffRequired: 1 },
-      { name: 'Keratin Treatment',       description: 'Brazilian keratin smoothing, lasts 3–5 months', price: 3500, stock: 999, category: 'Hair',     productType: 'service', trackInventory: false, serviceDuration: 180, staffRequired: 1 },
-      { name: 'Classic Manicure',        description: 'Nail shaping, cuticle care, polish',             price: 200,  stock: 999, category: 'Nails',    productType: 'service', trackInventory: false, serviceDuration: 45,  staffRequired: 1 },
-      { name: 'Gel Pedicure',            description: 'Full pedicure with gel polish, 3-week wear',    price: 450,  stock: 999, category: 'Nails',    productType: 'service', trackInventory: false, serviceDuration: 60,  staffRequired: 1 },
-      { name: 'Hydrating Facial',        description: '60-min deep hydration facial',                  price: 850,  stock: 999, category: 'Skin',     productType: 'service', trackInventory: false, serviceDuration: 60,  staffRequired: 1 },
-      { name: 'Chemical Peel',           description: 'Glycolic peel, resurface and brighten skin',    price: 1200, stock: 999, category: 'Skin',     productType: 'service', trackInventory: false, serviceDuration: 45,  staffRequired: 1 },
-      { name: 'Swedish Massage 60min',   description: 'Full-body relaxation massage, 60 minutes',      price: 750,  stock: 999, category: 'Massage',  productType: 'service', trackInventory: false, serviceDuration: 60,  staffRequired: 1 },
-      { name: 'Hot Stone Massage 90min', description: 'Deep relaxation with heated basalt stones',     price: 1200, stock: 999, category: 'Massage',  productType: 'service', trackInventory: false, serviceDuration: 90,  staffRequired: 1 },
-      { name: 'Pamper Package — Basic',  description: 'Haircut + Manicure + Facial',                   price: 1200, stock: 999, category: 'Packages', productType: 'bundle',  trackInventory: false, serviceDuration: 150, staffRequired: 2 },
-      { name: 'Full Spa Day',            description: 'Hair color + Mani + Pedi + Swedish massage',    price: 3200, stock: 999, category: 'Packages', productType: 'bundle',  trackInventory: false, serviceDuration: 300, staffRequired: 2 },
-    ],
-    customers: [
-      { firstName: 'Clarissa', lastName: 'Ramos',     email: 'clarissa.r@example.com', phone: '+63-917-300-0001', tags: ['VIP', 'Regular'] },
-      { firstName: 'Donna',    lastName: 'Espiritu',                                   phone: '+63-917-300-0002', tags: ['Regular'] },
-      { firstName: 'Hannah',   lastName: 'Soriano',   email: 'hannah.s@example.com',  phone: '+63-917-300-0003', tags: ['VIP'] },
-      { firstName: 'Iris',     lastName: 'Dela Vega',                                 phone: '+63-917-300-0004', tags: ['Regular'] },
-    ],
-    discounts: [
-      { code: 'SPA15',       name: 'Spa 15% Off',     type: 'percentage', value: 15, minPurchaseAmount: 1000, description: 'Packages over ₱1,000' },
-      { code: 'GROOMING',    name: 'Grooming Tuesday', type: 'fixed',      value: 100, description: 'Every Tuesday — ₱100 off any hair service' },
-      { code: 'BRINGAFRIEND',name: 'Bring a Friend',   type: 'percentage', value: 10, description: 'Refer a friend, both get 10% off' },
     ],
   },
 

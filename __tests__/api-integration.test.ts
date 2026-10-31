@@ -148,7 +148,7 @@ describe('API Integration — Tenant Isolation', () => {
   it('should include tenantId in all API request context', () => {
     const tenantId = 'tenant-xyz-123';
     const token = generateTestToken({ tenantId });
-    const request = createAuthRequest('/api/tables', 'GET', token);
+    const request = createAuthRequest('/api/bookings', 'GET', token);
 
     expect(request.headers.get('authorization')).toBeTruthy();
     // Token should include tenant context
@@ -172,7 +172,7 @@ describe('API Integration — Tenant Isolation', () => {
 
 describe('API Integration — Request/Response Patterns', () => {
   it('should handle GET requests with query parameters', () => {
-    const url = new URL('/api/tables?status=open&limit=10', 'http://localhost');
+    const url = new URL('/api/bookings?status=open&limit=10', 'http://localhost');
     const request = new NextRequest(url);
 
     expect(request.nextUrl.searchParams.get('status')).toBe('open');
@@ -180,28 +180,28 @@ describe('API Integration — Request/Response Patterns', () => {
   });
 
   it('should handle POST requests with JSON body', () => {
-    const body = { name: 'Test Table', capacity: 4 };
-    const request = createAuthRequest('/api/tables', 'POST', undefined, body);
+    const body = { serviceName: 'Test Booking', duration: 60 };
+    const request = createAuthRequest('/api/bookings', 'POST', undefined, body);
 
     expect(request.method).toBe('POST');
     expect(request.headers.get('content-type')).toBe('application/json');
   });
 
   it('should handle PATCH requests with partial updates', () => {
-    const body = { name: 'Updated Table' };
-    const request = createAuthRequest('/api/tables/123', 'PATCH', generateTestToken(), body);
+    const body = { serviceName: 'Updated Booking' };
+    const request = createAuthRequest('/api/bookings/123', 'PATCH', generateTestToken(), body);
 
     expect(request.method).toBe('PATCH');
   });
 
   it('should handle DELETE requests', () => {
-    const request = createAuthRequest('/api/tables/123', 'DELETE', generateTestToken());
+    const request = createAuthRequest('/api/bookings/123', 'DELETE', generateTestToken());
     expect(request.method).toBe('DELETE');
   });
 
   it('should return JSON responses with standard format', async () => {
     const mockResponse = NextResponse.json(
-      { success: true, data: { id: 'table-1', name: 'Table 1' } },
+      { success: true, data: { id: 'booking-1', serviceName: 'Booking 1' } },
       { status: 200 }
     );
 
@@ -235,12 +235,12 @@ describe('API Integration — CRUD Operations', () => {
   });
 
   it('should follow HTTP status codes: 200 for READ', async () => {
-    const response = NextResponse.json({ success: true, data: { id: 'table-1' } }, { status: 200 });
+    const response = NextResponse.json({ success: true, data: { id: 'booking-1' } }, { status: 200 });
     expect(response.status).toBe(200);
   });
 
   it('should follow HTTP status codes: 200 for UPDATE (PATCH)', async () => {
-    const response = NextResponse.json({ success: true, data: { id: 'table-1' } }, { status: 200 });
+    const response = NextResponse.json({ success: true, data: { id: 'booking-1' } }, { status: 200 });
     expect(response.status).toBe(200);
   });
 
@@ -251,7 +251,7 @@ describe('API Integration — CRUD Operations', () => {
 
   it('should validate required fields on CREATE', () => {
     // Simulating validation - empty body
-    const request = createAuthRequest('/api/tables', 'POST', generateTestToken(), {});
+    const request = createAuthRequest('/api/bookings', 'POST', generateTestToken(), {});
     expect(request.method).toBe('POST');
     // Real API would validate and return 400
   });
@@ -336,11 +336,11 @@ describe('API Integration — Error Handling', () => {
 
 describe('API Integration — Data Validation', () => {
   it('should validate string fields for length', () => {
-    const validBody = { name: 'Table 5' };
+    const validBody = { serviceName: 'Booking 5' };
     const invalidBody = { name: '' };
 
-    const validReq = createAuthRequest('/api/tables', 'POST', generateTestToken(), validBody);
-    const invalidReq = createAuthRequest('/api/tables', 'POST', generateTestToken(), invalidBody);
+    const validReq = createAuthRequest('/api/bookings', 'POST', generateTestToken(), validBody);
+    const invalidReq = createAuthRequest('/api/bookings', 'POST', generateTestToken(), invalidBody);
 
     expect(validReq.method).toBe('POST');
     expect(invalidReq.method).toBe('POST');
@@ -351,8 +351,8 @@ describe('API Integration — Data Validation', () => {
     const validBody = { capacity: 4 };
     const invalidBody = { capacity: 999 };
 
-    const validReq = createAuthRequest('/api/tables', 'POST', generateTestToken(), validBody);
-    const invalidReq = createAuthRequest('/api/tables', 'POST', generateTestToken(), invalidBody);
+    const validReq = createAuthRequest('/api/bookings', 'POST', generateTestToken(), validBody);
+    const invalidReq = createAuthRequest('/api/bookings', 'POST', generateTestToken(), invalidBody);
 
     expect(validReq.method).toBe('POST');
     expect(invalidReq.method).toBe('POST');
@@ -363,8 +363,8 @@ describe('API Integration — Data Validation', () => {
     const validBody = { status: 'open' };
     const invalidBody = { status: 'invalid-status' };
 
-    const validReq = createAuthRequest('/api/tables', 'PATCH', generateTestToken(), validBody);
-    const invalidReq = createAuthRequest('/api/tables', 'PATCH', generateTestToken(), invalidBody);
+    const validReq = createAuthRequest('/api/bookings', 'PATCH', generateTestToken(), validBody);
+    const invalidReq = createAuthRequest('/api/bookings', 'PATCH', generateTestToken(), invalidBody);
 
     expect(validReq.method).toBe('PATCH');
     expect(invalidReq.method).toBe('PATCH');
@@ -379,10 +379,10 @@ describe('API Integration — Data Validation', () => {
 describe('API Integration — Feature Flags', () => {
   it('should support feature flag checks in requests', () => {
     const token = generateTestToken({ role: 'admin' });
-    const request = createAuthRequest('/api/tables', 'GET', token);
+    const request = createAuthRequest('/api/bookings', 'GET', token);
 
     expect(request.headers.get('authorization')).toBeTruthy();
-    // Real API would check enableTableManagement flag
+    // Real API would check enableBookingScheduling flag
   });
 
   it('should handle feature-gated endpoints gracefully', async () => {
@@ -402,7 +402,7 @@ describe('API Integration — Feature Flags', () => {
 describe('API Integration — Audit Trail', () => {
   it('should log CREATE operations', () => {
     const token = generateTestToken();
-    const request = createAuthRequest('/api/tables', 'POST', token, { name: 'Table 1' });
+    const request = createAuthRequest('/api/bookings', 'POST', token, { serviceName: 'Booking 1' });
 
     expect(request.method).toBe('POST');
     // Real API would call createAuditLog with AuditActions.CREATE
@@ -410,7 +410,7 @@ describe('API Integration — Audit Trail', () => {
 
   it('should log UPDATE operations', () => {
     const token = generateTestToken();
-    const request = createAuthRequest('/api/tables/123', 'PATCH', token, { name: 'Updated' });
+    const request = createAuthRequest('/api/bookings/123', 'PATCH', token, { name: 'Updated' });
 
     expect(request.method).toBe('PATCH');
     // Real API would call createAuditLog with AuditActions.UPDATE
@@ -418,7 +418,7 @@ describe('API Integration — Audit Trail', () => {
 
   it('should log DELETE operations', () => {
     const token = generateTestToken();
-    const request = createAuthRequest('/api/tables/123', 'DELETE', token);
+    const request = createAuthRequest('/api/bookings/123', 'DELETE', token);
 
     expect(request.method).toBe('DELETE');
     // Real API would call createAuditLog with AuditActions.DELETE
@@ -430,7 +430,7 @@ describe('API Integration — Audit Trail', () => {
       tenantId: 'tenant-1',
       email: 'admin@test.com',
     });
-    const request = createAuthRequest('/api/tables', 'POST', token, { name: 'Table' });
+    const request = createAuthRequest('/api/bookings', 'POST', token, { serviceName: 'Booking' });
 
     expect(request.headers.get('authorization')).toBeTruthy();
     // Real API would include user context in audit log
@@ -444,19 +444,19 @@ describe('API Integration — Audit Trail', () => {
 describe('API Integration — Role-Based Access Control', () => {
   it('should support admin role access', () => {
     const token = generateTestToken({ role: 'admin' });
-    const request = createAuthRequest('/api/tables', 'GET', token);
+    const request = createAuthRequest('/api/bookings', 'GET', token);
     expect(request.headers.get('authorization')).toBeTruthy();
   });
 
   it('should support manager role access', () => {
     const token = generateTestToken({ role: 'manager' });
-    const request = createAuthRequest('/api/tables', 'GET', token);
+    const request = createAuthRequest('/api/bookings', 'GET', token);
     expect(request.headers.get('authorization')).toBeTruthy();
   });
 
   it('should support staff role access', () => {
     const token = generateTestToken({ role: 'staff' });
-    const request = createAuthRequest('/api/tables', 'GET', token);
+    const request = createAuthRequest('/api/bookings', 'GET', token);
     expect(request.headers.get('authorization')).toBeTruthy();
   });
 
@@ -469,7 +469,7 @@ describe('API Integration — Role-Based Access Control', () => {
   it('should restrict sensitive operations by role', async () => {
     // Staff role attempting to delete (should be rejected by real API)
     const token = generateTestToken({ role: 'staff' });
-    const request = createAuthRequest('/api/tables/123', 'DELETE', token);
+    const request = createAuthRequest('/api/bookings/123', 'DELETE', token);
     expect(request.method).toBe('DELETE');
     // Real API would check permissions and return 403
   });
@@ -482,7 +482,7 @@ describe('API Integration — Role-Based Access Control', () => {
 describe('API Integration — Rate Limiting', () => {
   it('should apply rate limits to write operations', () => {
     const token = generateTestToken();
-    const request = createAuthRequest('/api/tables', 'POST', token, { name: 'Table' });
+    const request = createAuthRequest('/api/bookings', 'POST', token, { serviceName: 'Booking' });
 
     expect(request.method).toBe('POST');
     // Real API would check rate limit for this IP/tenant combo
@@ -492,7 +492,7 @@ describe('API Integration — Rate Limiting', () => {
     const token = generateTestToken();
 
     for (let i = 0; i < 5; i++) {
-      const request = createAuthRequest(`/api/tables?page=${i + 1}`, 'GET', token);
+      const request = createAuthRequest(`/api/bookings?page=${i + 1}`, 'GET', token);
       expect(request.method).toBe('GET');
     }
     // Real API would allow these reads
@@ -515,12 +515,12 @@ describe('API Integration — Rate Limiting', () => {
 
 describe('API Integration — Dynamic Routes', () => {
   it('should extract dynamic parameters from URL', () => {
-    const url = new URL('/api/tables/table-123/history', 'http://localhost');
+    const url = new URL('/api/bookings/booking-123/history', 'http://localhost');
     const request = new NextRequest(url);
 
     // In a real route handler: const { id } = await params
     const pathParts = request.nextUrl.pathname.split('/');
-    expect(pathParts).toContain('table-123');
+    expect(pathParts).toContain('booking-123');
   });
 
   it('should support nested dynamic routes', () => {
@@ -535,8 +535,8 @@ describe('API Integration — Dynamic Routes', () => {
     const validId = '507f1f77bcf86cd799439011'; // Valid MongoDB ObjectId
     const invalidId = 'not-an-id';
 
-    const validUrl = new URL(`/api/tables/${validId}`, 'http://localhost');
-    const invalidUrl = new URL(`/api/tables/${invalidId}`, 'http://localhost');
+    const validUrl = new URL(`/api/bookings/${validId}`, 'http://localhost');
+    const invalidUrl = new URL(`/api/bookings/${invalidId}`, 'http://localhost');
 
     expect(validUrl.pathname).toContain(validId);
     expect(invalidUrl.pathname).toContain(invalidId);

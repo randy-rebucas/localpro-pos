@@ -80,7 +80,8 @@ export async function sendSalesReport(
           tenant._id.toString(),
           period,
           startDate,
-          endDate
+          endDate,
+          tz
         );
 
         // Format report data

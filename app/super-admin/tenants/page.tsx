@@ -306,7 +306,7 @@ export default function TenantsPage() {
                     <label className="block text-xs font-medium text-gray-600 mb-1">Business Type</label>
                     <select value={formData.businessType} onChange={e => setFormData({ ...formData, businessType: e.target.value })}
                       className="w-full border border-gray-200 px-3 py-2 text-sm bg-white">
-                      {['general', 'retail', 'restaurant', 'laundry', 'service'].map(t => (
+                      {['general', 'retail'].map(t => (
                         <option key={t} value={t} className="capitalize">{t.charAt(0).toUpperCase() + t.slice(1)}</option>
                       ))}
                     </select>

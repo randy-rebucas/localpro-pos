@@ -61,7 +61,6 @@ function makePlanFeatures(overrides: Record<string, unknown> = {}) {
     enableLoyaltyProgram: false,
     enableCustomerManagement: false,
     enableBookingScheduling: false,
-    enableTableManagement: false,
     enableReports: true,
     enableMultiBranch: false,
     enableHardwareIntegration: false,

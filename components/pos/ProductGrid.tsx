@@ -21,7 +21,6 @@ interface ProductGridProps {
   cardHeightClass: string;
   displayMode?: 'grid' | 'list';
   primaryColor: string;
-  businessType: string;
   cart: Array<{ productId: string; quantity: number }>;
   dict: TranslationDict;
   addLabel: string;
@@ -46,7 +45,6 @@ export default function ProductGrid({
   cardHeightClass,
   displayMode = 'grid',
   primaryColor,
-  businessType,
   cart,
   dict,
   addLabel,
@@ -139,7 +137,6 @@ export default function ProductGrid({
                   availableStock={availableStock}
                   canAdd={canAdd}
                   primaryColor={primaryColor}
-                  businessType={businessType}
                   cardHeightClass={cardHeightClass}
                   addLabel={addLabel}
                   variant={displayMode}

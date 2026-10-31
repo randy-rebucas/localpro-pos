@@ -33,8 +33,6 @@ export interface PosRoamingCartProps {
   cart: CartItem[];
   products: PosProduct[];
   businessType: string;
-  orderType: 'dine-in' | 'takeout' | 'delivery';
-  tableNumber: string;
   isCashier: boolean;
   customerDisplayUrl: string | null;
   selectedCustomer: CustomerSummary | null;
@@ -87,8 +85,6 @@ export default function PosRoamingCart(props: PosRoamingCartProps) {
     cart,
     products,
     businessType,
-    orderType,
-    tableNumber,
     isCashier,
     customerDisplayUrl,
     selectedCustomer,
@@ -145,9 +141,6 @@ export default function PosRoamingCart(props: PosRoamingCartProps) {
           dict={dict}
           isCashier={isCashier}
           customerDisplayUrl={customerDisplayUrl}
-          businessType={businessType}
-          orderType={orderType}
-          tableNumber={tableNumber}
           onSaveCart={onSaveCart}
           onClearCart={onClearCart}
           onLoadSavedCarts={onLoadSavedCarts}

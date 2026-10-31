@@ -67,18 +67,6 @@ const PosBranchLookupModal = dynamic(() => import('@/components/pos/modals/PosBr
   ssr: false,
   loading: () => null,
 });
-const PosModifierModal = dynamic(() => import('@/components/pos/modals/PosModifierModal'), {
-  ssr: false,
-  loading: () => null,
-});
-const FloorMap = dynamic(() => import('@/components/FloorMap'), {
-  ssr: false,
-  loading: () => (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
-      <LoadingSpinner label="Loading floor map…" />
-    </div>
-  ),
-});
 import { hardwareService } from '@/lib/hardware';
 import { getAssignedDeviceId } from '@/lib/device-identity';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
@@ -97,8 +85,8 @@ import CartSummaryFooter from '@/components/pos/CartSummaryFooter';
 import CartUpsellSuggestions from '@/components/pos/CartUpsellSuggestions';
 import ProductGrid from '@/components/pos/ProductGrid';
 import { usePosProducts, type PosProduct } from '@/hooks/usePosProducts';
-import { CartVariant, CartItemModifier } from '@/hooks/useCart';
-import { RestaurantMeta, SplitPaymentEntry } from '@/hooks/usePayment';
+import { CartVariant } from '@/hooks/useCart';
+import { SplitPaymentEntry } from '@/hooks/usePayment';
 import type { SplitGuestPayment } from '@/components/pos/modals/PosSplitCheckModal';
 import type { RefundTransaction as PosRefundTransaction } from '@/components/pos/modals/PosRefundModal';
 
@@ -132,7 +120,7 @@ export default function Dashboard() {
   const primaryColor = (settings || getDefaultTenantSettings()).primaryColor || '#35979c';
   const enableOnAccountSales = settings?.enableOnAccountSales === true;
   const rawBt = (settings?.businessType || 'general').toLowerCase();
-  const businessType = (['retail', 'restaurant', 'laundry', 'service'] as const).includes(rawBt as 'retail' | 'restaurant' | 'laundry' | 'service') ? rawBt as 'retail' | 'restaurant' | 'laundry' | 'service' : 'general' as const;
+  const businessType = rawBt === 'retail' ? 'retail' as const : 'general' as const;
   const device = useDeviceType();
   const isHandheld = device.isTouch && (device.isMobile || device.isTablet || device.isIpad);
 
@@ -153,11 +141,6 @@ export default function Dashboard() {
   const [showSavedCartsModal, setShowSavedCartsModal] = useState(false);
   const [showSaveCartModal, setShowSaveCartModal] = useState(false);
 
-  // Restaurant-specific state
-  const [orderType, setOrderType] = useState<'dine-in' | 'takeout' | 'delivery'>('dine-in');
-  const [tableNumber, setTableNumber] = useState('');
-  // Service/laundry: scheduling
-  const [scheduledFor, setScheduledFor] = useState('');
   // Hardware status banner
   const [hwStatusMsg, setHwStatusMsg] = useState<string | null>(null);
 
@@ -180,15 +163,6 @@ export default function Dashboard() {
   const [branchLookupData, setBranchLookupData] = useState<Array<{ branchId: string; stock: number; name: string }>>([]);
   const [loadingBranchLookup, setLoadingBranchLookup] = useState(false);
   const [branchLookupError, setBranchLookupError] = useState<string | null>(null);
-
-  // Restaurant: floor map
-  const [showFloorMap, setShowFloorMap] = useState(false);
-  const [selectedTableId, setSelectedTableId] = useState<string>('');
-
-  // Restaurant: modifier slide-out
-  const [showModifierModal, setShowModifierModal] = useState(false);
-  const [pendingModifierProduct, setPendingModifierProduct] = useState<Product | null>(null);
-  const [selectedModifiers, setSelectedModifiers] = useState<Record<string, { option: string; price: number }>>({});
 
   // Split billing: per-guest state
   const [splitStep, setSplitStep] = useState<'guests' | 'payments'>('guests');
@@ -367,11 +341,9 @@ export default function Dashboard() {
         setShowCashDrawerModal(null);
       } else if (showRoamingCart) {
         setShowRoamingCart(false);
-      } else if (showFloorMap) {
-        setShowFloorMap(false);
       }
     }
-  }, [showAgeVerificationModal, showSplitCheckModal, showPaymentModal, showRefundModal, showSavedCartsModal, showSaveCartModal, showQRScanner, showCashDrawerModal, closingSummary, showRoamingCart, showFloorMap, setCashReceived, setPaymentProvider, setPaymentReference]);
+  }, [showAgeVerificationModal, showSplitCheckModal, showPaymentModal, showRefundModal, showSavedCartsModal, showSaveCartModal, showQRScanner, showCashDrawerModal, closingSummary, showRoamingCart, setCashReceived, setPaymentProvider, setPaymentReference]);
 
   useEffect(() => {
     document.addEventListener('keydown', handleKeyDown);
@@ -530,14 +502,13 @@ export default function Dashboard() {
       !showSaveCartModal &&
       !showAgeVerificationModal &&
       !showSplitCheckModal &&
-      !showRoamingCart &&
-      !showFloorMap
+      !showRoamingCart
     ) {
       if (!device.isTouch) {
         searchInputRef.current?.focus();
       }
     }
-  }, [showPaymentModal, showQRScanner, showRefundModal, showSavedCartsModal, showSaveCartModal, showAgeVerificationModal, showSplitCheckModal, showRoamingCart, showFloorMap, device.isTouch]);
+  }, [showPaymentModal, showQRScanner, showRefundModal, showSavedCartsModal, showSaveCartModal, showAgeVerificationModal, showSplitCheckModal, showRoamingCart, device.isTouch]);
 
   // Handle barcode scanning
   const handleBarcodeScan = useCallback(async (barcode: string) => {
@@ -679,7 +650,7 @@ export default function Dashboard() {
 
   // Wrap addToCart with context-aware checks (e.g. age verification for alcohol)
   const ALCOHOL_PATTERN = /alcohol|beer|wine|spirits|liquor|whiskey|whisky|vodka|rum|gin|brandy|tequila|cider|mead|sake/i;
-  const handleAddToCart = (product: Product, variant?: CartVariant, modifiers?: CartItemModifier[]) => {
+  const handleAddToCart = (product: Product, variant?: CartVariant) => {
     if (ALCOHOL_PATTERN.test(product.category || '') || ALCOHOL_PATTERN.test(product.name || '')) {
       setPendingAgeVerifyProduct(product);
       setShowAgeVerificationModal(true);
@@ -690,13 +661,7 @@ export default function Dashboard() {
       setShowVariantModal(true);
       return;
     }
-    if (businessType === 'restaurant' && product.modifiers?.length && !modifiers) {
-      setPendingModifierProduct(product);
-      setSelectedModifiers({});
-      setShowModifierModal(true);
-      return;
-    }
-    addToCart(product, variant, modifiers);
+    addToCart(product, variant);
   };
 
   const handleBranchLookup = async (product: Product) => {
@@ -1018,10 +983,6 @@ export default function Dashboard() {
   }
 
   const completePayment = async () => {
-    const restaurantMeta: RestaurantMeta | undefined =
-      businessType === 'restaurant'
-        ? { orderType, tableNumber: tableNumber || undefined, tableId: selectedTableId || undefined }
-        : undefined;
     const result = await processPayment(
       cart,
       appliedDiscount,
@@ -1030,7 +991,6 @@ export default function Dashboard() {
       (msg) => showToast.error(msg),
       fetchWithTimeout,
       selectedCustomer?._id,
-      restaurantMeta,
       undefined,
       { name: scPwdName || undefined, id: scPwdId || undefined },
       getAssignedDeviceId(tenant) || undefined
@@ -1051,10 +1011,6 @@ export default function Dashboard() {
       setCashReceived('');
       setPaymentProvider('');
       setPaymentReference('');
-      if (businessType === 'restaurant' && orderType === 'dine-in' && selectedTableId) {
-        setSelectedTableId('');
-        setTableNumber('');
-      }
       if (result.data) {
         printReceipt(result.data);
       }
@@ -1111,10 +1067,6 @@ export default function Dashboard() {
   };
 
   const handleCompleteSplitPayment = async () => {
-    const restaurantMeta: RestaurantMeta | undefined =
-      businessType === 'restaurant'
-        ? { orderType, tableNumber: tableNumber || undefined, tableId: selectedTableId || undefined }
-        : undefined;
     const splitEntries: SplitPaymentEntry[] = guestPayments.map(({ guestIndex, method, amount, reference }) => ({
       guestIndex,
       method,
@@ -1129,7 +1081,6 @@ export default function Dashboard() {
       (msg) => showToast.error(msg),
       fetchWithTimeout,
       selectedCustomer?._id,
-      restaurantMeta,
       splitEntries,
       { name: scPwdName || undefined, id: scPwdId || undefined },
       getAssignedDeviceId(tenant) || undefined
@@ -1151,10 +1102,6 @@ export default function Dashboard() {
       setShowSplitCheckModal(false);
       setSplitStep('guests');
       setGuestPayments([]);
-      if (businessType === 'restaurant' && orderType === 'dine-in' && selectedTableId) {
-        setSelectedTableId('');
-        setTableNumber('');
-      }
       if (result.data) printReceipt(result.data);
     } else if (result) {
       const message =
@@ -1386,9 +1333,6 @@ export default function Dashboard() {
                 dict={dict}
                 isCashier={isCashier}
                 customerDisplayUrl={customerDisplayUrl}
-                businessType={businessType}
-                orderType={orderType}
-                tableNumber={tableNumber}
                 compact
                 onSaveCart={() => setShowSaveCartModal(true)}
                 onClearCart={clearCart}
@@ -1504,151 +1448,24 @@ export default function Dashboard() {
           >
             <div className="mb-4 md:mb-5">
               <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-3 md:mb-4">
-                {/* Restaurant: order-type selector + table number */}
-                {businessType === 'restaurant' ? (
-                  <div className="flex flex-col gap-2 flex-1 min-w-0">
-                    <h1 className="text-xl sm:text-2xl md:text-xl lg:text-2xl font-bold text-gray-900">{dict.pos.title}</h1>
-                    <div className="flex gap-1">
-                      {(['dine-in', 'takeout', 'delivery'] as const).map((type) => (
-                        <button
-                          key={type}
-                          type="button"
-                          onClick={() => setOrderType(type)}
-                          className={`px-3 py-2 text-sm font-semibold border-2 transition-all capitalize ${orderType === type
-                            ? 'text-white border-transparent'
-                            : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
-                            }`}
-                          style={orderType === type ? { backgroundColor: primaryColor, borderColor: primaryColor } : {}}
-                        >
-                          {type === 'dine-in' ? `🍽 ${dictValue('pos.dineIn', 'Dine-in')}` : type === 'takeout' ? `🥡 ${dictValue('pos.takeout', 'Takeout')}` : `🛵 ${dictValue('pos.delivery', 'Delivery')}`}
-                        </button>
-                      ))}
-                    </div>
-                    {orderType === 'dine-in' && (
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-500 font-medium flex-shrink-0">{dictValue('pos.tableNumberLabel', 'Table #')}</span>
-                        <input
-                          type="text"
-                          value={tableNumber}
-                          onChange={(e) => {
-                            setTableNumber(e.target.value.slice(0, 6));
-                            setSelectedTableId('');
-                          }}
-                          placeholder={dictValue('pos.tableNumberPlaceholder', 'e.g. 5A')}
-                          className="w-24 px-3 py-1.5 text-sm border-2 border-gray-300 bg-white font-semibold"
-                          onFocus={(e) => { e.currentTarget.style.borderColor = primaryColor; }}
-                          onBlur={(e) => { e.currentTarget.style.borderColor = '#d1d5db'; }}
-                        />
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <h1 className="text-xl sm:text-2xl md:text-xl lg:text-2xl xl:text-3xl font-bold text-gray-900">{dict.pos.title}</h1>
-                )}
+                <h1 className="text-xl sm:text-2xl md:text-xl lg:text-2xl xl:text-3xl font-bold text-gray-900">{dict.pos.title}</h1>
                 <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap sm:justify-end">
                   {/* Quick Actions Row */}
                   {!isCashier && (
                     <div className={`${roamingMode ? 'grid grid-cols-2 sm:grid-cols-4 gap-2 w-full sm:w-auto' : 'flex flex-wrap sm:flex-nowrap gap-2 max-w-full'}`}>
 
-                      {/* Restaurant: Floor Map table selector + Check Requested */}
-                      {businessType === 'restaurant' && orderType === 'dine-in' ? (
-                        <div className={`flex items-center ${roamingMode ? 'gap-1 w-full' : 'gap-2 flex-shrink-0'}`}>
-                          <button
-                            type="button"
-                            onClick={() => setShowFloorMap(true)}
-                            className={`flex flex-col items-center justify-center gap-1 border-2 transition-all text-xs font-medium min-h-[52px] md:min-h-[56px] ${roamingMode ? 'w-full px-2 py-1.5 text-[11px]' : 'px-4 py-2 min-w-[100px]'} ${selectedTableId
-                              ? 'bg-green-50 border-green-400 text-green-800'
-                              : 'bg-orange-50 border-orange-300 text-orange-700 hover:border-orange-400'
-                              }`}
-                          >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M3 14h18M10 3v18M14 3v18" />
-                            </svg>
-                            {tableNumber || dictValue('pos.selectTableBtn', 'Select Table')}
-                          </button>
-                          {selectedTableId && (
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                try {
-                                  await fetch(`/api/tables/${selectedTableId}`, {
-                                    method: 'PATCH',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    credentials: 'include',
-                                    body: JSON.stringify({ status: 'check-requested' }),
-                                  });
-                                  showToast.success(`${dictValue('pos.checkRequested', 'Check requested for')} ${tableNumber}`);
-                                } catch {
-                                  showToast.error(dictValue('pos.failedToUpdateTableStatus', 'Failed to update table status'));
-                                }
-                              }}
-                              className={`flex flex-col items-center justify-center gap-1 bg-yellow-50 border-2 border-yellow-400 text-yellow-800 hover:bg-yellow-100 transition-all text-xs font-medium min-h-[52px] md:min-h-[56px] ${roamingMode ? 'w-full px-2 py-1.5 text-[11px]' : 'px-3 py-2'}`}
-                              title={dictValue('pos.titleMarkCheckRequested', 'Mark check requested')}
-                            >
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                              </svg>
-                              {dictValue('pos.checkBtn', 'Check')}
-                            </button>
-                          )}
-                        </div>
-                      ) : businessType === 'restaurant' ? (
-                        /* Takeout/delivery: show order type label */
-                        <div className={`flex flex-col justify-center gap-1 bg-orange-50 border-2 border-orange-200 text-gray-700 font-medium text-xs min-h-[52px] md:min-h-[56px] ${roamingMode ? 'w-full px-2 py-1.5 text-[11px]' : 'px-4 py-2 min-w-[100px]'}`}>
-                          <span className="text-[10px] font-semibold text-orange-600 uppercase tracking-wide">{dictValue('pos.orderNumber', 'Order #')}</span>
-                          <input
-                            type="text"
-                            value={tableNumber}
-                            onChange={(e) => {
-                              setTableNumber(e.target.value.slice(0, 8));
-                              setSelectedTableId('');
-                            }}
-                            placeholder={dictValue('pos.orderNumberPlaceholder', 'T/O-1')}
-                            className={`text-sm border border-orange-300 bg-white font-semibold focus:outline-none focus:border-orange-500 ${roamingMode ? 'px-1 py-0.5' : 'px-2 py-1'}`}
-                          />
-                        </div>
-                      ) : (
-                        /* Retail / general: Split Check */
-                        <button
-                          type="button"
-                          onClick={() => { if (cart.length > 0) { setSplitStep('guests'); setGuestPayments([]); setShowSplitCheckModal(true); } else showToast.error(dictValue('pos.cartEmptyAlert', 'Cart is empty')); }}
-                          className={`flex items-center gap-2 min-h-[52px] md:min-h-[56px] bg-white border-2 border-gray-200 hover:border-gray-400 hover:bg-gray-50 transition-all text-gray-700 font-medium text-xs ${roamingMode ? 'w-full px-3 py-2' : 'flex-shrink-0 px-5 py-3'}`}
-                          title={dictValue('pos.titleSplitBill', 'Split bill equally between guests')}
-                        >
-                          <svg className="w-5 h-5 text-gray-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                          </svg>
-                          <span>{dictValue('pos.splitCheck', 'Split Check')}</span>
-                        </button>
-                      )}
-
-                      {/* Restaurant: Split Check button (always available) */}
-                      {businessType === 'restaurant' && (
-                        <button
-                          type="button"
-                          onClick={() => { if (cart.length > 0) { setSplitStep('guests'); setGuestPayments([]); setShowSplitCheckModal(true); } else showToast.error(dictValue('pos.cartEmptyAlert', 'Cart is empty')); }}
-                          className={`flex items-center gap-1.5 min-h-[52px] md:min-h-[56px] bg-white border-2 border-gray-200 hover:border-gray-400 hover:bg-gray-50 transition-all text-gray-700 font-medium text-xs ${roamingMode ? 'w-full px-3 py-2' : 'flex-shrink-0 px-4 py-2'}`}
-                          title={dictValue('pos.titleSplitBill', 'Split bill equally between guests')}
-                        >
-                          <svg className="w-4 h-4 text-gray-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                          </svg>
-                          <span>{dictValue('pos.split', 'Split')}</span>
-                        </button>
-                      )}
-
-                      {/* Service/laundry: Schedule appointment */}
-                      {(businessType === 'service' || businessType === 'laundry') && (
-                        <div className={`flex flex-col justify-center gap-1 bg-brand-soft border-2 border-teal-200 text-gray-700 font-medium text-xs min-h-[52px] md:min-h-[56px] ${roamingMode ? 'w-full px-2 py-1.5 text-[11px]' : 'px-4 py-2 min-w-[140px]'}`}>
-                          <span className="text-[10px] font-semibold text-brand uppercase tracking-wide">{dictValue('pos.scheduleFor', 'Schedule for')}</span>
-                          <input
-                            type="datetime-local"
-                            value={scheduledFor}
-                            onChange={(e) => setScheduledFor(e.target.value)}
-                            className={`border border-teal-300 bg-white font-medium focus:outline-none focus:border-brand ${roamingMode ? 'px-1 py-0.5 text-[10px]' : 'px-1 py-1 text-xs'}`}
-                          />
-                        </div>
-                      )}
+                      {/* Split Check */}
+                      <button
+                        type="button"
+                        onClick={() => { if (cart.length > 0) { setSplitStep('guests'); setGuestPayments([]); setShowSplitCheckModal(true); } else showToast.error(dictValue('pos.cartEmptyAlert', 'Cart is empty')); }}
+                        className={`flex items-center gap-2 min-h-[52px] md:min-h-[56px] bg-white border-2 border-gray-200 hover:border-gray-400 hover:bg-gray-50 transition-all text-gray-700 font-medium text-xs ${roamingMode ? 'w-full px-3 py-2' : 'flex-shrink-0 px-5 py-3'}`}
+                        title={dictValue('pos.titleSplitBill', 'Split bill equally between guests')}
+                      >
+                        <svg className="w-5 h-5 text-gray-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                        </svg>
+                        <span>{dictValue('pos.splitCheck', 'Split Check')}</span>
+                      </button>
 
                       <button
                         type="button"
@@ -1807,7 +1624,6 @@ export default function Dashboard() {
                 cardHeightClass={productCardHeightClass}
                 displayMode={displayMode}
                 primaryColor={primaryColor}
-                businessType={businessType}
                 cart={cart}
                 dict={dict}
                 addLabel={dict.common?.add || 'Add'}
@@ -1870,8 +1686,6 @@ export default function Dashboard() {
           cart={cart}
           products={products}
           businessType={businessType}
-          orderType={orderType}
-          tableNumber={tableNumber}
           isCashier={isCashier}
           customerDisplayUrl={customerDisplayUrl}
           selectedCustomer={selectedCustomer}
@@ -2183,49 +1997,6 @@ export default function Dashboard() {
           onClose={() => {
             setBranchLookupProduct(null);
             setBranchLookupError(null);
-          }}
-        />
-      )}
-
-      {/* Floor Map Modal */}
-      {showFloorMap && (
-        <FloorMap
-          tenant={tenant}
-          selectedTableId={selectedTableId}
-          onSelectTable={async (table) => {
-            setSelectedTableId(table._id);
-            setTableNumber(table.name);
-            setShowFloorMap(false);
-            // Mark table as occupied
-            try {
-              await fetch(`/api/tables/${table._id}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ status: 'occupied' }),
-              });
-            } catch {
-              // non-critical
-            }
-          }}
-          onClose={() => setShowFloorMap(false)}
-        />
-      )}
-
-      {/* Modifier Slide-Out Modal */}
-      {showModifierModal && pendingModifierProduct && (
-        <PosModifierModal
-          product={pendingModifierProduct}
-          selectedModifiers={selectedModifiers}
-          setSelectedModifiers={setSelectedModifiers}
-          onClose={() => {
-            setShowModifierModal(false);
-            setPendingModifierProduct(null);
-          }}
-          onAddToOrder={(modifiers) => {
-            handleAddToCart(pendingModifierProduct, undefined, modifiers);
-            setShowModifierModal(false);
-            setPendingModifierProduct(null);
           }}
         />
       )}

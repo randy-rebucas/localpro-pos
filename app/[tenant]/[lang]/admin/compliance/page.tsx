@@ -104,31 +104,21 @@ export default function CompliancePage() {
   const buildDashboard = useCallback(async () => {
     try {
       // Fetch all compliance data in parallel
-      const [birRes, permitsRes, settingsRes, restaurantRes, retailRes, laundryRes, serviceRes, pharmacyRes] = await Promise.all([
+      const [birRes, permitsRes, settingsRes, retailRes] = await Promise.all([
         fetch(`/api/tenants/${tenant}/bir-settings`),
         fetch(`/api/tenants/${tenant}/business-permits`),
         fetch(`/api/tenants/${tenant}/settings`),
-        fetch(`/api/tenants/${tenant}/restaurant-compliance`),
         fetch(`/api/tenants/${tenant}/retail-compliance`),
-        fetch(`/api/tenants/${tenant}/laundry-compliance`),
-        fetch(`/api/tenants/${tenant}/service-compliance`),
-        fetch(`/api/tenants/${tenant}/pharmacy-settings`),
       ]);
 
-      const [birJson, permitsJson, settingsJson, restaurantJson, retailJson, laundryJson, serviceJson, pharmacyJson] = await Promise.all([
-        birRes.json(), permitsRes.json(), settingsRes.json(),
-        restaurantRes.json(), retailRes.json(), laundryRes.json(),
-        serviceRes.json(), pharmacyRes.json(),
+      const [birJson, permitsJson, settingsJson, retailJson] = await Promise.all([
+        birRes.json(), permitsRes.json(), settingsRes.json(), retailRes.json(),
       ]);
 
       const bir = birJson.success ? birJson.data : {};
       const permits = permitsJson.success ? permitsJson.data : {};
       const tenantSettings = settingsJson.success ? settingsJson.data : {};
-      const restaurant = restaurantJson.success ? restaurantJson.data : {};
       const retail = retailJson.success ? retailJson.data : {};
-      const laundry = laundryJson.success ? laundryJson.data : {};
-      const service = serviceJson.success ? serviceJson.data : {};
-      const pharmacy = pharmacyJson.success ? pharmacyJson.data : {};
 
       const bType = (tenantSettings.businessType as string) ?? '';
       setBusinessType(bType);
@@ -214,11 +204,11 @@ export default function CompliancePage() {
       ];
 
       // Sanitary permit for applicable types
-      if (['restaurant', 'laundry', 'service', 'general'].includes(bType) || !bType) {
+      if (bType === 'general' || !bType) {
         permitsItems.push({
           id: 'sanitary_permit',
           label: 'Sanitary Permit',
-          description: 'Issued by LGU Health Office — required for food and personal service businesses',
+          description: 'Issued by LGU Health Office',
           status: expiryStatus(permits.sanitaryPermitExpiry, !!permits.sanitaryPermitNumber),
           daysUntilExpiry: daysLeft(permits.sanitaryPermitExpiry),
           actionLabel: 'Configure',
@@ -230,48 +220,6 @@ export default function CompliancePage() {
       allItems.push(...permitsItems);
 
       // ── 3. Business-type-specific compliance ──
-      if (bType === 'restaurant') {
-        const restaurantItems: ComplianceItem[] = [
-          {
-            id: 'fda_fbl',
-            label: 'FDA Food Business License (FBL)',
-            description: 'Required for all food businesses under RA 10611 (Food Safety Act)',
-            status: expiryStatus(restaurant.fdaFblExpiry, !!restaurant.fdaFoodBusinessLicense),
-            daysUntilExpiry: daysLeft(restaurant.fdaFblExpiry),
-            actionLabel: 'Configure',
-            actionHref: `${base()}/restaurant-compliance`,
-          },
-          {
-            id: 'food_safety_cert',
-            label: 'Food Safety Certificate',
-            description: 'Certificate of compliance with food safety management system',
-            status: expiryStatus(restaurant.foodSafetyCertificateExpiry, !!restaurant.foodSafetyCertificateNumber),
-            daysUntilExpiry: daysLeft(restaurant.foodSafetyCertificateExpiry),
-            actionLabel: 'Configure',
-            actionHref: `${base()}/restaurant-compliance`,
-          },
-          {
-            id: 'food_handlers',
-            label: 'Food Handlers Health Certificates',
-            description: 'All food-handling staff must have valid health certificates (LGU Health Office)',
-            status: restaurant.foodHandlersCertified ? expiryStatus(restaurant.healthCertificateExpiry, true) : 'missing',
-            daysUntilExpiry: daysLeft(restaurant.healthCertificateExpiry),
-            actionLabel: 'Configure',
-            actionHref: `${base()}/restaurant-compliance`,
-          },
-          {
-            id: 'kitchen_sanitation',
-            label: 'Kitchen Sanitation Standards',
-            description: 'Kitchen meets DOH/LGU sanitation requirements (RA 10611)',
-            status: restaurant.kitchenSanitationCompliant ? 'compliant' : 'missing',
-            actionLabel: 'Configure',
-            actionHref: `${base()}/restaurant-compliance`,
-          },
-        ];
-        allSections.push({ title: 'Restaurant / Food Service Compliance (RA 10611)', items: restaurantItems });
-        allItems.push(...restaurantItems);
-      }
-
       if (bType === 'retail') {
         const retailItems: ComplianceItem[] = [
           {
@@ -311,114 +259,6 @@ export default function CompliancePage() {
         allItems.push(...retailItems);
       }
 
-      if (bType === 'laundry') {
-        const laundryItems: ComplianceItem[] = [
-          {
-            id: 'ecc',
-            label: 'Environmental Compliance Certificate (ECC)',
-            description: 'Required for laundry businesses discharging wastewater — issued by DENR-EMB',
-            status: expiryStatus(laundry.eccExpiry, !!laundry.environmentalComplianceCertificate),
-            daysUntilExpiry: daysLeft(laundry.eccExpiry),
-            actionLabel: 'Configure',
-            actionHref: `${base()}/laundry-compliance`,
-          },
-          {
-            id: 'wastewater_permit',
-            label: 'Wastewater Discharge Permit',
-            description: 'DENR Discharge Permit for effluent release to water bodies or sewage',
-            status: expiryStatus(laundry.wastewaterPermitExpiry, !!laundry.wastewaterDischargePermit),
-            daysUntilExpiry: daysLeft(laundry.wastewaterPermitExpiry),
-            actionLabel: 'Configure',
-            actionHref: `${base()}/laundry-compliance`,
-          },
-          {
-            id: 'solid_waste',
-            label: 'Solid Waste Management Plan (RA 9003)',
-            description: 'Business has an ecological solid waste management program',
-            status: laundry.solidWasteManagementPlan ? 'compliant' : 'missing',
-            actionLabel: 'Configure',
-            actionHref: `${base()}/laundry-compliance`,
-          },
-        ];
-        allSections.push({ title: 'Laundry Service Compliance (DENR/EMB)', items: laundryItems });
-        allItems.push(...laundryItems);
-      }
-
-      if (bType === 'service') {
-        const licenseStatuses = (service.practitionerLicenses ?? []).map((l: { licenseExpiry?: string; prcNumber?: string }) =>
-          expiryStatus(l.licenseExpiry, !!l.prcNumber)
-        );
-        const worstLicense = licenseStatuses.includes('expired') ? 'expired'
-          : licenseStatuses.includes('warning') ? 'warning'
-          : licenseStatuses.includes('missing') ? 'missing'
-          : licenseStatuses.length === 0 ? 'missing' : 'compliant';
-
-        const serviceItems: ComplianceItem[] = [
-          {
-            id: 'doh_accreditation',
-            label: 'DOH Accreditation',
-            description: 'Required for health-related service businesses (spa, massage, wellness)',
-            status: expiryStatus(service.dohAccreditationExpiry, !!service.dohAccreditation),
-            daysUntilExpiry: daysLeft(service.dohAccreditationExpiry),
-            actionLabel: 'Configure',
-            actionHref: `${base()}/service-compliance`,
-          },
-          {
-            id: 'practitioner_licenses',
-            label: `Practitioner PRC Licenses (${(service.practitionerLicenses ?? []).length} on file)`,
-            description: 'All practitioners must hold valid PRC licenses for their profession',
-            status: worstLicense as ComplianceStatus,
-            actionLabel: 'Manage Licenses',
-            actionHref: `${base()}/service-compliance`,
-          },
-        ];
-        allSections.push({ title: 'Service Business Compliance (DOH/PRC)', items: serviceItems });
-        allItems.push(...serviceItems);
-      }
-
-      if (bType === 'pharmacy') {
-        const pharmacyItems: ComplianceItem[] = [
-          {
-            id: 'pharmacist_prc',
-            label: 'Licensed Pharmacist (PRC)',
-            description: 'A PRC-licensed pharmacist must be on duty at all times (RA 5921)',
-            status: pharmacy.pharmacistPRCNumber ? 'compliant' : 'missing',
-            actionLabel: 'Configure',
-            actionHref: `${base()}/pharmacy-compliance`,
-          },
-          {
-            id: 'fda_lto',
-            label: 'FDA License to Operate (LTO)',
-            description: 'Required FDA license for all retail pharmacies',
-            status: expiryStatus(pharmacy.fdaLTOExpiryDate, !!pharmacy.fdaLTO),
-            daysUntilExpiry: daysLeft(pharmacy.fdaLTOExpiryDate),
-            actionLabel: 'Configure',
-            actionHref: `${base()}/pharmacy-compliance`,
-          },
-        ];
-        if (pharmacy.pdeaLicense !== undefined || pharmacy.pdeaLicenseExpiry) {
-          pharmacyItems.push({
-            id: 'pdea_license',
-            label: 'PDEA License (Dangerous Drugs)',
-            description: 'Required for dispensing Schedule 1 (dangerous) drugs',
-            status: expiryStatus(pharmacy.pdeaLicenseExpiry, !!pharmacy.pdeaLicense),
-            daysUntilExpiry: daysLeft(pharmacy.pdeaLicenseExpiry),
-            actionLabel: 'Configure',
-            actionHref: `${base()}/pharmacy-compliance`,
-          });
-        }
-        pharmacyItems.push({
-          id: 'expiry_tracking',
-          label: 'Drug Expiry Tracking',
-          description: 'Monitor expiry dates on all pharmaceutical products',
-          status: pharmacy.trackExpiryDates !== false ? 'compliant' : 'missing',
-          actionLabel: 'View Report',
-          actionHref: `${base()}/expiry-tracking`,
-        });
-        allSections.push({ title: 'Pharmacy Compliance (FDA/DOH/PDEA — RA 5921)', items: pharmacyItems });
-        allItems.push(...pharmacyItems);
-      }
-
       const hasCritical = allItems.some(i => i.status === 'expired' || i.status === 'missing');
       const hasWarning = allItems.some(i => i.status === 'warning');
       setOverallStatus(hasCritical ? 'critical' : hasWarning ? 'action_required' : 'compliant');
@@ -441,15 +281,7 @@ export default function CompliancePage() {
   const quickLinks = [
     { label: 'Business Permits', href: `/${tenant}/${lang}/admin/business-permits` },
     { label: 'BIR Compliance', href: `/${tenant}/${lang}/admin/bir-compliance` },
-    ...(businessType === 'restaurant' ? [{ label: 'Food Service Compliance', href: `/${tenant}/${lang}/admin/restaurant-compliance` }] : []),
     ...(businessType === 'retail' ? [{ label: 'Retail Compliance', href: `/${tenant}/${lang}/admin/retail-compliance` }] : []),
-    ...(businessType === 'laundry' ? [{ label: 'Laundry Compliance', href: `/${tenant}/${lang}/admin/laundry-compliance` }] : []),
-    ...(businessType === 'service' ? [{ label: 'Service Compliance', href: `/${tenant}/${lang}/admin/service-compliance` }] : []),
-    ...(businessType === 'pharmacy' ? [
-      { label: 'Pharmacy Compliance', href: `/${tenant}/${lang}/admin/pharmacy-compliance` },
-      { label: 'Prescriptions', href: `/${tenant}/${lang}/admin/prescriptions` },
-      { label: 'Expiry Tracking', href: `/${tenant}/${lang}/admin/expiry-tracking` },
-    ] : []),
   ];
 
   const compliantCount = sections.flatMap(s => s.items).filter(i => i.status === 'compliant').length;

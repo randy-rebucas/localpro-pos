@@ -12,6 +12,7 @@ import { getValidationTranslatorFromRequest } from '@/lib/validation-translation
 import { getTenantSettingsById } from '@/lib/tenant';
 import { requireBookingSchedulingAccess } from '@/lib/booking-scheduling-access';
 import { getClosedHolidayForDate } from '@/lib/holidays';
+import { getTenantTimezone } from '@/lib/timezone';
 import { isValidBookingStatusTransition, type BookingStatus } from '@/lib/bookings-helpers';
 import { logger } from '@/lib/logger';
 
@@ -168,7 +169,7 @@ export async function PUT(
     // Block rescheduling onto a day the tenant has marked the business closed
     if (startTime) {
       const holidaySettings = await getTenantSettingsById(tenantId);
-      const closedHoliday = getClosedHolidayForDate(holidaySettings?.holidays, newStartTime);
+      const closedHoliday = getClosedHolidayForDate(holidaySettings?.holidays, newStartTime, getTenantTimezone(holidaySettings));
       if (closedHoliday) {
         return NextResponse.json(
           {

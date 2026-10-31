@@ -8,6 +8,7 @@ import {
   getTenantMonthBoundaries,
   getTenantDayBoundaries,
 } from '@/lib/timezone';
+import { getClosedHolidayForDate } from '@/lib/holidays';
 
 describe('tenant timezone helpers', () => {
   it('falls back to Asia/Manila for missing or invalid timezones', () => {
@@ -39,6 +40,13 @@ describe('tenant timezone helpers', () => {
     const { start, end } = getTenantMonthBoundaries(new Date('2026-10-15T00:00:00Z'), 'Asia/Manila');
     expect(start.toISOString()).toBe('2026-09-30T16:00:00.000Z');
     expect(end.toISOString()).toBe('2026-10-31T15:59:59.999Z');
+  });
+
+  it('checks closed holidays on the tenant-local date', () => {
+    const holidays = [{ id: 'h', name: 'All Saints', type: 'single' as const, date: '2026-11-01', isBusinessClosed: true }];
+    // 2026-10-31T17:00Z is 01:00 on Nov 1 in Manila
+    expect(getClosedHolidayForDate(holidays, new Date('2026-10-31T17:00:00Z'), 'Asia/Manila')?.id).toBe('h');
+    expect(getClosedHolidayForDate(holidays, new Date('2026-10-31T15:00:00Z'), 'Asia/Manila')).toBeNull();
   });
 
   it('day boundaries match Manila midnight', () => {

@@ -6,7 +6,7 @@ import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getDefaultTenantSettings } from '@/lib/currency';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
-import { applyBusinessTypeDefaults } from '@/lib/business-types';
+import { applyBusinessTypeDefaults, isValidBusinessType } from '@/lib/business-types';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 
@@ -87,6 +87,12 @@ export async function PUT(
 
     const currentBusinessType = existingTenant?.settings?.businessType;
     const newBusinessType = settings.businessType;
+    if (newBusinessType && newBusinessType !== currentBusinessType && !isValidBusinessType(newBusinessType)) {
+      return NextResponse.json(
+        { success: false, error: t('validation.invalidBusinessType', 'Unsupported business type. Choose Retail or General.') },
+        { status: 400 }
+      );
+    }
 
     // Apply business type defaults if business type is being set or changed
     let updatedSettings = mergedSettings;

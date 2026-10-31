@@ -1,3 +1,5 @@
+import { getTenantLocalParts } from '@/lib/timezone';
+
 export interface HolidayRecurring {
   pattern: 'yearly' | 'monthly' | 'weekly';
   month?: number;
@@ -19,13 +21,24 @@ export interface Holiday {
  * configured holiday calendar (Admin → Holidays). Only holidays with
  * isBusinessClosed: true block anything — informational holidays don't.
  */
-export function getClosedHolidayForDate(holidays: Holiday[] | undefined, date: Date): Holiday | null {
+export function getClosedHolidayForDate(
+  holidays: Holiday[] | undefined,
+  date: Date,
+  /** Tenant timezone. When given, `date` is read in it (use for real instants such
+   *  as a booking start); when omitted, its runtime-local calendar fields are used. */
+  tz?: string
+): Holiday | null {
   if (!holidays?.length) return null;
 
-  const year = date.getFullYear();
-  const month = date.getMonth() + 1; // 1-12
-  const day = date.getDate();
-  const dayOfWeek = date.getDay(); // 0-6, Sunday = 0
+  let year: number, month: number, day: number, dayOfWeek: number;
+  if (tz) {
+    ({ year, month, day, weekday: dayOfWeek } = getTenantLocalParts(date, tz));
+  } else {
+    year = date.getFullYear();
+    month = date.getMonth() + 1; // 1-12
+    day = date.getDate();
+    dayOfWeek = date.getDay(); // 0-6, Sunday = 0
+  }
   const isoDate = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 
   for (const holiday of holidays) {

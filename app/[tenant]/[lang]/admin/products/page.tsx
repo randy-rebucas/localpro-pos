@@ -711,7 +711,6 @@ export default function ProductsPage() {
             }}
             dict={dict}
             businessTypeConfig={businessTypeConfig}
-            settings={settings}
           />
         )}
 
@@ -766,7 +765,6 @@ function ProductModal({
   onSave,
   dict,
   businessTypeConfig,
-  settings,
 }: {
   product: Product | null;
   categories: Category[];
@@ -774,7 +772,6 @@ function ProductModal({
   onSave: () => void;
   dict: any; // eslint-disable-line @typescript-eslint/no-explicit-any
   businessTypeConfig: any; // eslint-disable-line @typescript-eslint/no-explicit-any
-  settings: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 }) {
   const { formData, saving, error, updateFormData, submitForm } = useProductsForm(product, businessTypeConfig);
   const { confirm: confirmDialog, Dialog: DuplicateDialog } = useConfirm();
@@ -917,7 +914,7 @@ function ProductModal({
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const result = await submitForm(settings);
+    const result = await submitForm();
     if (result.success) {
       onSave();
       return;
@@ -935,7 +932,7 @@ function ProductModal({
         { variant: 'warning' }
       );
       if (confirmed) {
-        const retryResult = await submitForm(settings, true);
+        const retryResult = await submitForm(true);
         if (retryResult.success) {
           onSave();
         }
@@ -1269,286 +1266,6 @@ function ProductModal({
               </div>
             )}
 
-            {/* Restaurant-specific fields */}
-            {settings?.businessType?.toLowerCase() === 'restaurant' && (
-              <div className="space-y-4 pt-4 border-t border-gray-200">
-                <h3 className="text-lg font-semibold text-gray-900">{dict.products?.restaurantInfo || 'Restaurant Information'}</h3>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{dict.products?.allergens || 'Allergens (comma-separated)'}</label>
-                  <input
-                    type="text"
-                    value={Array.isArray(formData.allergens) ? formData.allergens.join(', ') : formData.allergens || ''}
-                    onChange={(e) => {
-                      const allergens = e.target.value.split(',').map(a => a.trim()).filter(a => a);
-                      updateFormData({ allergens });
-                    }}
-                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-                    placeholder="e.g., gluten, dairy, nuts"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{dict.products?.calories || 'Calories'}</label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={formData.nutritionInfo?.calories || ''}
-                      onChange={(e) => updateFormData({
-                        ...formData,
-                        nutritionInfo: { ...formData.nutritionInfo, calories: parseInt(e.target.value) || undefined }
-                      })}
-                      className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{dict.products?.protein || 'Protein (g)'}</label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.1"
-                      value={formData.nutritionInfo?.protein || ''}
-                      onChange={(e) => updateFormData({
-                        ...formData,
-                        nutritionInfo: { ...formData.nutritionInfo, protein: parseFloat(e.target.value) || undefined }
-                      })}
-                      className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-                    />
-                  </div>
-                </div>
-
-                {/* Modifier Groups */}
-                <div className="pt-2">
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="text-sm font-semibold text-gray-700">{dict.products?.modifierGroups || 'Modifier Groups'}</label>
-                    <button
-                      type="button"
-                      onClick={() => updateFormData({
-                        modifiers: [
-                          ...(formData.modifiers || []),
-                          { name: '', options: [{ name: '', price: 0 }], required: false },
-                        ],
-                      })}
-                      className="text-xs px-2 py-1 bg-orange-50 border border-orange-300 text-orange-700 hover:bg-orange-100 font-semibold"
-                    >
-                      {dict.products?.addGroup || '+ Add Group'}
-                    </button>
-                  </div>
-                  <div className="space-y-3">
-                    {(formData.modifiers || []).map((group, gi) => (
-                      <div key={gi} className="border border-gray-200 p-3 bg-gray-50 space-y-2">
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="text"
-                            value={group.name}
-                            onChange={(e) => {
-                              const mods = [...(formData.modifiers || [])];
-                              mods[gi] = { ...mods[gi], name: e.target.value };
-                              updateFormData({ modifiers: mods });
-                            }}
-                            placeholder="Group name (e.g. Temperature)"
-                            className="flex-1 px-2 py-1.5 text-sm border border-gray-300 bg-white focus:ring-1 focus:ring-orange-400 focus:outline-none"
-                          />
-                          <label className="flex items-center gap-1 text-xs text-gray-600 flex-shrink-0 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={group.required}
-                              onChange={(e) => {
-                                const mods = [...(formData.modifiers || [])];
-                                mods[gi] = { ...mods[gi], required: e.target.checked };
-                                updateFormData({ modifiers: mods });
-                              }}
-                              className="checkbox-win8"
-                            />
-                            {dict.products?.required || 'Required'}
-                          </label>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const mods = [...(formData.modifiers || [])];
-                              mods.splice(gi, 1);
-                              updateFormData({ modifiers: mods });
-                            }}
-                            className="text-red-500 hover:text-red-700 p-1"
-                            title="Remove group"
-                          >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                          </button>
-                        </div>
-                        {/* Options */}
-                        <div className="pl-2 space-y-1.5">
-                          {group.options.map((opt, oi) => (
-                            <div key={oi} className="flex items-center gap-2">
-                              <input
-                                type="text"
-                                value={opt.name}
-                                onChange={(e) => {
-                                  const mods = [...(formData.modifiers || [])];
-                                  const opts = [...mods[gi].options];
-                                  opts[oi] = { ...opts[oi], name: e.target.value };
-                                  mods[gi] = { ...mods[gi], options: opts };
-                                  updateFormData({ modifiers: mods });
-                                }}
-                                placeholder="Option (e.g. Rare)"
-                                className="flex-1 px-2 py-1 text-sm border border-gray-300 bg-white focus:ring-1 focus:ring-orange-400 focus:outline-none"
-                              />
-                              <span className="text-xs text-gray-400 flex-shrink-0">+$</span>
-                              <input
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                value={opt.price || ''}
-                                onChange={(e) => {
-                                  const mods = [...(formData.modifiers || [])];
-                                  const opts = [...mods[gi].options];
-                                  opts[oi] = { ...opts[oi], price: parseFloat(e.target.value) || 0 };
-                                  mods[gi] = { ...mods[gi], options: opts };
-                                  updateFormData({ modifiers: mods });
-                                }}
-                                placeholder="0.00"
-                                className="w-20 px-2 py-1 text-sm border border-gray-300 bg-white focus:ring-1 focus:ring-orange-400 focus:outline-none"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const mods = [...(formData.modifiers || [])];
-                                  const opts = [...mods[gi].options];
-                                  opts.splice(oi, 1);
-                                  mods[gi] = { ...mods[gi], options: opts };
-                                  updateFormData({ modifiers: mods });
-                                }}
-                                className="text-red-400 hover:text-red-600 p-0.5"
-                                title="Remove option"
-                              >
-                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                              </button>
-                            </div>
-                          ))}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const mods = [...(formData.modifiers || [])];
-                              mods[gi] = { ...mods[gi], options: [...mods[gi].options, { name: '', price: 0 }] };
-                              updateFormData({ modifiers: mods });
-                            }}
-                            className="text-xs text-orange-600 hover:text-orange-800 font-medium"
-                          >
-                            {dict.products?.addOption || '+ Add option'}
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Laundry-specific fields */}
-            {settings?.businessType?.toLowerCase() === 'laundry' && (
-              <div className="space-y-4 pt-4 border-t border-gray-200">
-                <h3 className="text-lg font-semibold text-gray-900">{dict.products?.laundryInfo || 'Laundry Service Information'}</h3>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{dict.products?.serviceType || 'Service Type'}</label>
-                  <select
-                    value={formData.serviceType}
-                    onChange={(e) => updateFormData({ serviceType: e.target.value as any })} // eslint-disable-line @typescript-eslint/no-explicit-any
-                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-                  >
-                    <option value="wash">{dict.products?.serviceTypeWash || 'Wash'}</option>
-                    <option value="dry-clean">{dict.products?.serviceTypeDryClean || 'Dry Clean'}</option>
-                    <option value="press">{dict.products?.serviceTypePress || 'Press'}</option>
-                    <option value="repair">{dict.products?.serviceTypeRepair || 'Repair'}</option>
-                    <option value="other">{dict.products?.serviceTypeOther || 'Other'}</option>
-                  </select>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={formData.weightBased}
-                        onChange={(e) => updateFormData({ weightBased: e.target.checked })}
-                        className="checkbox-win8 mr-2"
-                      />
-                      <span className="text-sm font-medium text-gray-700">{dict.products?.weightBased || 'Weight-based pricing'}</span>
-                    </label>
-                  </div>
-                  <div>
-                    <label className="flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={formData.pickupDelivery}
-                        onChange={(e) => updateFormData({ pickupDelivery: e.target.checked })}
-                        className="checkbox-win8 mr-2"
-                      />
-                      <span className="text-sm font-medium text-gray-700">{dict.products?.pickupDelivery || 'Pickup & Delivery'}</span>
-                    </label>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{dict.products?.estimatedDuration || 'Estimated Duration (minutes)'}</label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={formData.estimatedDuration || ''}
-                    onChange={(e) => updateFormData({ estimatedDuration: parseInt(e.target.value) || undefined })}
-                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Service-specific fields */}
-            {settings?.businessType?.toLowerCase() === 'service' && (
-              <div className="space-y-4 pt-4 border-t border-gray-200">
-                <h3 className="text-lg font-semibold text-gray-900">{dict.products?.serviceInfo || 'Service Information'}</h3>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{dict.products?.serviceDuration || 'Service Duration (minutes)'}</label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={formData.serviceDuration || ''}
-                      onChange={(e) => updateFormData({ serviceDuration: parseInt(e.target.value) || undefined })}
-                      className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{dict.products?.staffRequired || 'Staff Required'}</label>
-                    <input
-                      type="number"
-                      min="1"
-                      value={formData.staffRequired || 1}
-                      onChange={(e) => updateFormData({ staffRequired: parseInt(e.target.value) || 1 })}
-                      className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{dict.products?.equipmentRequired || 'Equipment Required (comma-separated)'}</label>
-                  <input
-                    type="text"
-                    value={Array.isArray(formData.equipmentRequired) ? formData.equipmentRequired.join(', ') : formData.equipmentRequired || ''}
-                    onChange={(e) => {
-                      const equipment = e.target.value.split(',').map(e => e.trim()).filter(e => e);
-                      updateFormData({ equipmentRequired: equipment });
-                    }}
-                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-                    placeholder="e.g., scissors, clippers, styling chair"
-                  />
-                </div>
-              </div>
-            )}
             {error && (
               <div className="bg-red-50 text-red-800 border border-red-300 p-3">
                 {error}

@@ -24,7 +24,6 @@ export interface ISubscriptionPlan extends Document {
     enableLoyaltyProgram: boolean;
     enableCustomerManagement: boolean;
     enableBookingScheduling: boolean;
-    enableTableManagement: boolean;
     enableReports: boolean;
     enableMultiBranch: boolean;
     enableHardwareIntegration: boolean;
@@ -39,12 +38,6 @@ export interface ISubscriptionPlan extends Document {
     casReporting: boolean; // Computerized Accounting System reporting
     auditTrailSystem: boolean; // Full audit trail
     monthlySupport: boolean; // Monthly compliance support
-  };
-  pharmacyCompliance: {
-    enablePharmacyCompliance: boolean;
-    prescriptionManagement: boolean;
-    expiryTracking: boolean;
-    pdeaReporting: boolean;
   };
   isActive: boolean;
   isCustom: boolean;
@@ -161,10 +154,6 @@ const SubscriptionPlanSchema: Schema = new Schema(
         type: Boolean,
         default: false,
       },
-      enableTableManagement: {
-        type: Boolean,
-        default: false,
-      },
       enableReports: {
         type: Boolean,
         default: true,
@@ -215,12 +204,6 @@ const SubscriptionPlanSchema: Schema = new Schema(
         type: Boolean,
         default: false,
       },
-    },
-    pharmacyCompliance: {
-      enablePharmacyCompliance: { type: Boolean, default: false },
-      prescriptionManagement: { type: Boolean, default: false },
-      expiryTracking: { type: Boolean, default: false },
-      pdeaReporting: { type: Boolean, default: false },
     },
     isActive: {
       type: Boolean,

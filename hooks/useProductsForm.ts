@@ -13,25 +13,6 @@ export interface ProductFormData {
   productType: 'regular' | 'bundle' | 'service';
   trackInventory: boolean;
   lowStockThreshold: number;
-  modifiers: Array<{
-    name: string;
-    options: Array<{ name: string; price: number }>;
-    required: boolean;
-  }>;
-  allergens: string[];
-  nutritionInfo?: {
-    calories?: number;
-    protein?: number;
-    carbs?: number;
-    fat?: number;
-  };
-  serviceType: 'wash' | 'dry-clean' | 'press' | 'repair' | 'other';
-  weightBased: boolean;
-  pickupDelivery: boolean;
-  estimatedDuration?: number;
-  serviceDuration?: number;
-  staffRequired: number;
-  equipmentRequired: string[];
 }
 
 interface BusinessTypeConfig {
@@ -67,16 +48,6 @@ const getDefaultFormData = (
     productType: (product?.productType || businessTypeConfig?.productTypes?.[0] || 'regular') as 'service' | 'regular' | 'bundle',
     trackInventory: product?.trackInventory !== undefined ? product.trackInventory : (businessTypeConfig?.defaultFeatures?.enableInventory ?? true),
     lowStockThreshold: product?.lowStockThreshold || 10,
-    modifiers: product?.modifiers || [],
-    allergens: product?.allergens || [],
-    nutritionInfo: product?.nutritionInfo || { calories: undefined, protein: undefined, carbs: undefined, fat: undefined },
-    serviceType: product?.serviceType || 'wash',
-    weightBased: product?.weightBased || false,
-    pickupDelivery: product?.pickupDelivery || false,
-    estimatedDuration: product?.estimatedDuration || undefined,
-    serviceDuration: product?.serviceDuration || undefined,
-    staffRequired: product?.staffRequired || 1,
-    equipmentRequired: product?.equipmentRequired || [],
   };
 };
 
@@ -101,7 +72,6 @@ export const useProductsForm = (product: Product | null, businessTypeConfig: Bus
 
   const submitForm = useCallback(
     async (
-      settings: { businessType?: string } | null,
       confirmDuplicate = false
     ): Promise<{
       success: boolean;
@@ -131,40 +101,6 @@ export const useProductsForm = (product: Product | null, businessTypeConfig: Bus
 
         if (!product && confirmDuplicate) {
           body.confirmDuplicate = true;
-        }
-
-        // Add restaurant-specific fields
-        if (settings?.businessType?.toLowerCase() === 'restaurant') {
-          if (formData.allergens && formData.allergens.length > 0) {
-            body.allergens = formData.allergens;
-          }
-          if (formData.nutritionInfo && (formData.nutritionInfo.calories || formData.nutritionInfo.protein)) {
-            body.nutritionInfo = formData.nutritionInfo;
-          }
-          if (formData.modifiers && formData.modifiers.length > 0) {
-            body.modifiers = formData.modifiers;
-          }
-        }
-
-        // Add laundry-specific fields
-        if (settings?.businessType?.toLowerCase() === 'laundry') {
-          body.serviceType = formData.serviceType;
-          body.weightBased = formData.weightBased;
-          body.pickupDelivery = formData.pickupDelivery;
-          if (formData.estimatedDuration) {
-            body.estimatedDuration = formData.estimatedDuration;
-          }
-        }
-
-        // Add service-specific fields
-        if (settings?.businessType?.toLowerCase() === 'service') {
-          if (formData.serviceDuration) {
-            body.serviceDuration = formData.serviceDuration;
-          }
-          body.staffRequired = formData.staffRequired;
-          if (formData.equipmentRequired && formData.equipmentRequired.length > 0) {
-            body.equipmentRequired = formData.equipmentRequired;
-          }
         }
 
         const res = await fetch(url, {

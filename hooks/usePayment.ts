@@ -19,18 +19,11 @@ export interface SplitPaymentEntry {
   reference?: string;
 }
 
-export interface RestaurantMeta {
-  orderType?: string;
-  tableNumber?: string;
-  tableId?: string;
-}
-
 interface PaymentInputData {
   items: Array<{
     productId: string;
     quantity: number;
     variation?: { size?: string; color?: string; type?: string };
-    modifiers?: Array<{ name: string; chosenOption: string; price: number }>;
   }>;
   paymentMethod: PaymentMethodType;
   cashReceived?: number;
@@ -39,9 +32,6 @@ interface PaymentInputData {
   paymentReference?: string;
   bnplInstallments?: number;
   customerId?: string;
-  orderType?: string;
-  tableNumber?: string;
-  tableId?: string;
   splitCount?: number;
   splitPayments?: SplitPaymentEntry[];
   scPwdName?: string;
@@ -76,7 +66,6 @@ interface UsePaymentReturn {
     onValidationError: (msg: string) => void,
     fetchWithTimeout: (url: string, options?: RequestInit, timeoutMs?: number) => Promise<Response>,
     customerId?: string,
-    restaurantMeta?: RestaurantMeta,
     splitPayments?: SplitPaymentEntry[],
     scPwd?: { name?: string; id?: string },
     deviceId?: string
@@ -179,7 +168,6 @@ export function usePayment(): UsePaymentReturn {
       onValidationError: (msg: string) => void,
       fetchWithTimeout: (url: string, options?: RequestInit, timeoutMs?: number) => Promise<Response>,
       customerId?: string,
-      restaurantMeta?: RestaurantMeta,
       splitPayments?: SplitPaymentEntry[],
       scPwd?: { name?: string; id?: string },
       deviceId?: string
@@ -213,7 +201,6 @@ export function usePayment(): UsePaymentReturn {
             productId: item.productId,
             quantity: item.quantity,
             variation: item.variation,
-            modifiers: item.selectedModifiers,
           })),
           paymentMethod: primaryMethod,
           cashReceived: primaryMethod === 'cash' && !splitPayments ? parseFloat(cashReceived) : undefined,
@@ -222,9 +209,6 @@ export function usePayment(): UsePaymentReturn {
           paymentReference: paymentReference || undefined,
           bnplInstallments: primaryMethod === 'bnpl' ? bnplInstallments : undefined,
           customerId: customerId || undefined,
-          orderType: restaurantMeta?.orderType,
-          tableNumber: restaurantMeta?.tableNumber,
-          tableId: restaurantMeta?.tableId,
           splitCount: splitPayments ? splitPayments.length : undefined,
           splitPayments: splitPayments,
           scPwdName: scPwd?.name || undefined,

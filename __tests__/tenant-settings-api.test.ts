@@ -38,6 +38,7 @@ vi.mock('@/lib/currency', () => ({
 
 vi.mock('@/lib/business-types', () => ({
   applyBusinessTypeDefaults: vi.fn((settings: Record<string, unknown>) => settings),
+  isValidBusinessType: vi.fn((value: unknown) => value === 'retail' || value === 'general'),
 }));
 
 const mockGetCurrentUser = vi.fn();

@@ -14,7 +14,6 @@ export const metadata: Metadata = {
     'inventory management system',
     'multi-tenant POS',
     'retail POS software',
-    'restaurant POS',
     'free POS trial',
   ],
   openGraph: {

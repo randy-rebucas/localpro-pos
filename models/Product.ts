@@ -38,48 +38,6 @@ export interface IProduct extends Document {
   lowStockThreshold?: number; // Product-specific threshold (overrides tenant default)
   lowStockAlertedAt?: Date; // Last low-stock alert that included this product (dedupes the hourly job)
   pinned?: boolean; // Whether the product is pinned to the top
-  
-  // Industry-specific fields (optional, used based on business type)
-  // Restaurant/Food Service
-  modifiers?: Array<{
-    name: string;
-    options: Array<{
-      name: string;
-      price: number;
-    }>;
-    required: boolean;
-  }>;
-  allergens?: string[]; // e.g., ['gluten', 'dairy', 'nuts']
-  nutritionInfo?: {
-    calories?: number;
-    protein?: number;
-    carbs?: number;
-    fat?: number;
-  };
-  
-  // Laundry Service
-  serviceType?: 'wash' | 'dry-clean' | 'press' | 'repair' | 'other';
-  weightBased?: boolean; // If true, price is per unit weight
-  pickupDelivery?: boolean; // If service includes pickup/delivery
-  estimatedDuration?: number; // Estimated service duration in minutes
-  
-  // Service Business
-  serviceDuration?: number; // Service duration in minutes
-  staffRequired?: number; // Number of staff members required
-  equipmentRequired?: string[]; // List of required equipment
-
-  // Pharmacy (Philippine FDA/DOH/PDEA)
-  genericName?: string;
-  manufacturer?: string;
-  prn?: string; // FDA Product Registration Number
-  batchNumber?: string; // Lot/batch for recall tracking
-  expiryDate?: Date;
-  drugSchedule?: 'otc' | 'rx' | 'dangerous';
-  requiresPrescription?: boolean;
-  storageConditions?: string;
-  activeIngredient?: string;
-  dosageStrength?: string; // e.g. "500mg"
-  dosageForm?: string; // tablet, capsule, syrup, etc.
 
   isActive: boolean;
   createdAt: Date;
@@ -203,76 +161,6 @@ const ProductSchema: Schema = new Schema(
       type: Boolean,
       default: false,
     },
-    
-    // Industry-specific fields
-    // Restaurant/Food Service
-    modifiers: [{
-      name: String,
-      options: [{
-        name: String,
-        price: {
-          type: Number,
-          default: 0,
-        },
-      }],
-      required: {
-        type: Boolean,
-        default: false,
-      },
-    }],
-    allergens: [String],
-    nutritionInfo: {
-      calories: Number,
-      protein: Number,
-      carbs: Number,
-      fat: Number,
-    },
-    
-    // Laundry Service
-    serviceType: {
-      type: String,
-      enum: ['wash', 'dry-clean', 'press', 'repair', 'other'],
-    },
-    weightBased: {
-      type: Boolean,
-      default: false,
-    },
-    pickupDelivery: {
-      type: Boolean,
-      default: false,
-    },
-    estimatedDuration: {
-      type: Number,
-      min: 0,
-    },
-    
-    // Service Business
-    serviceDuration: {
-      type: Number,
-      min: 0,
-    },
-    staffRequired: {
-      type: Number,
-      min: 0,
-      default: 1,
-    },
-    equipmentRequired: [String],
-
-    // Pharmacy fields
-    genericName: { type: String, trim: true },
-    manufacturer: { type: String, trim: true },
-    prn: { type: String, trim: true },
-    batchNumber: { type: String, trim: true },
-    expiryDate: { type: Date },
-    drugSchedule: {
-      type: String,
-      enum: ['otc', 'rx', 'dangerous'],
-    },
-    requiresPrescription: { type: Boolean, default: false },
-    storageConditions: { type: String, trim: true },
-    activeIngredient: { type: String, trim: true },
-    dosageStrength: { type: String, trim: true },
-    dosageForm: { type: String, trim: true },
 
     isActive: {
       type: Boolean,
@@ -393,8 +281,6 @@ ProductSchema.index({ tenantId: 1, productType: 1, trackInventory: 1 });
 ProductSchema.index({ tenantId: 1, hasVariations: 1 });
 // Compound index for POS pinned product queries (pinned first, then newest)
 ProductSchema.index({ tenantId: 1, pinned: -1, createdAt: -1 });
-// Pharmacy: near-expiry report and drug schedule lookup
-ProductSchema.index({ tenantId: 1, expiryDate: 1 });
 // Category-filtered product list (same sort as the pinned index above)
 ProductSchema.index({ tenantId: 1, categoryId: 1, pinned: -1, createdAt: -1 });
 // Inventory-tracked product scans (low-stock alerts, stock automations)

@@ -36,8 +36,6 @@ export const getFeatureFlagLabel = (flagKey: string, dict: any): string => {
       dict?.admin?.enableCustomerManagement || 'Enable Customer Management',
     enableBookingScheduling:
       dict?.admin?.enableBookingScheduling || 'Enable Booking & Scheduling',
-    enableTableManagement:
-      dict?.admin?.enableTableManagement || 'Enable Table Management',
     enableAttendance: dict?.admin?.enableAttendance || 'Attendance Tracking',
     enableExpenses: dict?.admin?.enableExpenses || 'Expense Management',
     enableMultiCurrency: dict?.admin?.enableMultiCurrency || 'Multi-Currency Support',
@@ -59,10 +57,7 @@ export const getFeatureFlagDescription = (flagKey: string, dict: any): string =>
       dict?.admin?.enableCustomerManagementDesc || 'Enable customer profiles and history tracking',
     enableBookingScheduling:
       dict?.admin?.enableBookingSchedulingDesc ||
-      'Enable appointment booking and scheduling features for salons, cleaners, and service businesses',
-    enableTableManagement:
-      dict?.admin?.enableTableManagementDesc ||
-      'Enable table management for restaurants and service businesses',
+      'Enable appointment booking and scheduling features',
   };
   return descriptionMap[flagKey] || '';
 };
@@ -74,7 +69,6 @@ export const FEATURE_FLAGS = [
   'enableLoyaltyProgram',
   'enableCustomerManagement',
   'enableBookingScheduling',
-  'enableTableManagement',
 ] as const;
 
 export type FeatureFlagKey = (typeof FEATURE_FLAGS)[number];
@@ -87,7 +81,6 @@ export const getFeatureFlagDefault = (flagKey: FeatureFlagKey): boolean => {
     enableLoyaltyProgram: false,
     enableCustomerManagement: false,
     enableBookingScheduling: false,
-    enableTableManagement: false,
   };
   return defaults[flagKey];
 };

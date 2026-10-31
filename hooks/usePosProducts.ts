@@ -15,8 +15,6 @@ export interface PosProduct {
   pinned?: boolean;
   trackInventory?: boolean;
   allowOutOfStockSales?: boolean;
-  serviceType?: string;
-  modifiers?: Array<{ name: string; options: Array<{ name: string; price: number }>; required: boolean }>;
   hasVariations?: boolean;
   variations?: Array<{
     size?: string;

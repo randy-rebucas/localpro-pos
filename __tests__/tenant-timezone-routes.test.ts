@@ -8,7 +8,6 @@
  */
 process.env.TZ = 'UTC';
 process.env.JWT_SECRET = 'test-secret-for-tz-route-tests-32-chars!!';
-process.env.NODE_ENV = 'test';
 process.env.MONGODB_URI = 'mongodb://test:test@localhost:27017/localpro-pos-test';
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';

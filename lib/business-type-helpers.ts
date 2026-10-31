@@ -4,7 +4,7 @@
  * Utilities for working with business types and industry-specific features
  */
 
-import { getBusinessTypeConfig, BusinessType, getAllowedProductTypes } from './business-types'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import { getBusinessTypeConfig, BusinessType, getAllowedProductTypes, isValidBusinessType } from './business-types'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { ITenantSettings } from '@/types/tenant';
 import { IProduct } from '@/models/Product';
 
@@ -15,8 +15,8 @@ export function getBusinessType(settings?: ITenantSettings): BusinessType {
   if (!settings?.businessType) {
     return 'general';
   }
-  const type = settings.businessType.toLowerCase() as BusinessType;
-  return ['retail', 'restaurant', 'laundry', 'service', 'general', 'pharmacy'].includes(type) ? type : 'general';
+  const type = settings.businessType.toLowerCase();
+  return isValidBusinessType(type) ? type : 'general';
 }
 
 /**
@@ -74,28 +74,6 @@ export function getRelevantProductFields(product: IProduct, businessType?: Busin
     relevant.branchStock = product.branchStock;
   }
 
-  // Restaurant-specific fields
-  if (type === 'restaurant') {
-    relevant.modifiers = product.modifiers;
-    relevant.allergens = product.allergens;
-    relevant.nutritionInfo = product.nutritionInfo;
-  }
-
-  // Laundry-specific fields
-  if (type === 'laundry') {
-    relevant.serviceType = product.serviceType;
-    relevant.weightBased = product.weightBased;
-    relevant.pickupDelivery = product.pickupDelivery;
-    relevant.estimatedDuration = product.estimatedDuration;
-  }
-
-  // Service-specific fields
-  if (type === 'service') {
-    relevant.serviceDuration = product.serviceDuration;
-    relevant.staffRequired = product.staffRequired;
-    relevant.equipmentRequired = product.equipmentRequired;
-  }
-
   return relevant;
 }
 
@@ -131,19 +109,6 @@ export function validateProductForBusiness(
     );
   }
 
-  // Business-specific validations
-  if (businessType === 'restaurant' && product.modifiers) {
-    for (const modifier of product.modifiers) {
-      if (!modifier.name || !modifier.options || modifier.options.length === 0) {
-        errors.push('Modifiers must have a name and at least one option');
-      }
-    }
-  }
-
-  if (businessType === 'laundry' && product.weightBased && product.price === undefined) {
-    errors.push('Weight-based services must have a base price per unit');
-  }
-
   return {
     valid: errors.length === 0,
     errors,
@@ -168,18 +133,6 @@ export function getDefaultProductSettings(settings: ITenantSettings): Partial<IP
     defaults.allowOutOfStockSales = false;
   }
 
-  // Service defaults
-  if (businessType === 'service' || businessType === 'laundry') {
-    defaults.trackInventory = false;
-    defaults.productType = 'service';
-  }
-
-  // Restaurant defaults
-  if (businessType === 'restaurant') {
-    defaults.trackInventory = true;
-    defaults.productType = 'regular';
-  }
-
   return defaults;
 }
 
@@ -191,7 +144,6 @@ export function formatProductForDisplay(
   settings: ITenantSettings
 ): {
   title: string;
-  subtitle?: string;
   price: string;
   details: string[];
 } {
@@ -199,45 +151,8 @@ export function formatProductForDisplay(
   const details: string[] = [];
 
   const title = product.name;
-  let subtitle: string | undefined;
 
   // Format based on business type
-  if (businessType === 'restaurant') {
-    if (product.allergens && product.allergens.length > 0) {
-      details.push(`Allergens: ${product.allergens.join(', ')}`);
-    }
-    if (product.nutritionInfo?.calories) {
-      details.push(`${product.nutritionInfo.calories} calories`);
-    }
-    if (product.modifiers && product.modifiers.length > 0) {
-      details.push(`${product.modifiers.length} modifier${product.modifiers.length > 1 ? 's' : ''} available`);
-    }
-  }
-
-  if (businessType === 'laundry') {
-    if (product.serviceType) {
-      subtitle = product.serviceType.charAt(0).toUpperCase() + product.serviceType.slice(1).replace('-', ' ');
-    }
-    if (product.estimatedDuration) {
-      details.push(`Estimated: ${product.estimatedDuration} minutes`);
-    }
-    if (product.weightBased) {
-      details.push('Price per unit weight');
-    }
-    if (product.pickupDelivery) {
-      details.push('Pickup & Delivery available');
-    }
-  }
-
-  if (businessType === 'service') {
-    if (product.serviceDuration) {
-      details.push(`Duration: ${product.serviceDuration} minutes`);
-    }
-    if (product.staffRequired && product.staffRequired > 1) {
-      details.push(`${product.staffRequired} staff required`);
-    }
-  }
-
   if (businessType === 'retail') {
     if (product.sku) {
       details.push(`SKU: ${product.sku}`);
@@ -249,7 +164,6 @@ export function formatProductForDisplay(
 
   return {
     title,
-    subtitle,
     price: `$${product.price.toFixed(2)}`,
     details,
   };

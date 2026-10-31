@@ -5,7 +5,7 @@
  * while maintaining consistency with the Standard POS Architecture Baseline
  */
 
-export type BusinessType = 'retail' | 'restaurant' | 'laundry' | 'service' | 'general' | 'pharmacy';
+export type BusinessType = 'retail' | 'general';
 
 export interface BusinessTypeConfig {
   type: BusinessType;
@@ -47,72 +47,6 @@ export const BUSINESS_TYPE_CONFIGS: Record<BusinessType, BusinessTypeConfig> = {
       enableCategories: true,
     },
   },
-  restaurant: {
-    type: 'restaurant',
-    name: 'Restaurant / Food Service',
-    description: 'Restaurant, cafe, or food service establishment',
-    defaultFeatures: {
-      enableInventory: true,
-      enableCategories: true,
-      enableDiscounts: true,
-      enableLoyaltyProgram: true,
-      enableCustomerManagement: true,
-      enableBookingScheduling: true,
-    },
-    productTypes: ['regular', 'bundle', 'service'],
-    requiredFields: ['name', 'price'],
-    optionalFields: ['description', 'image', 'modifiers', 'allergens', 'nutritionInfo'],
-    defaultSettings: {
-      businessType: 'restaurant',
-      enableInventory: true,
-      enableCategories: true,
-      enableBookingScheduling: true,
-    },
-  },
-  laundry: {
-    type: 'laundry',
-    name: 'Laundry Service',
-    description: 'Laundry, dry cleaning, or garment care service',
-    defaultFeatures: {
-      enableInventory: false,
-      enableCategories: true,
-      enableDiscounts: true,
-      enableLoyaltyProgram: true,
-      enableCustomerManagement: true,
-      enableBookingScheduling: true,
-    },
-    productTypes: ['service'],
-    requiredFields: ['name', 'price'],
-    optionalFields: ['description', 'serviceType', 'weightBased', 'pickupDelivery', 'estimatedDuration'],
-    defaultSettings: {
-      businessType: 'laundry',
-      enableInventory: false,
-      enableCategories: true,
-      enableBookingScheduling: true,
-    },
-  },
-  service: {
-    type: 'service',
-    name: 'Service Business',
-    description: 'General service business (salon, spa, repair, etc.)',
-    defaultFeatures: {
-      enableInventory: false,
-      enableCategories: true,
-      enableDiscounts: true,
-      enableLoyaltyProgram: true,
-      enableCustomerManagement: true,
-      enableBookingScheduling: true,
-    },
-    productTypes: ['service'],
-    requiredFields: ['name', 'price'],
-    optionalFields: ['description', 'serviceDuration', 'staffRequired', 'equipmentRequired'],
-    defaultSettings: {
-      businessType: 'service',
-      enableInventory: false,
-      enableCategories: true,
-      enableBookingScheduling: true,
-    },
-  },
   general: {
     type: 'general',
     name: 'General Business',
@@ -134,34 +68,15 @@ export const BUSINESS_TYPE_CONFIGS: Record<BusinessType, BusinessTypeConfig> = {
       enableCategories: true,
     },
   },
-  pharmacy: {
-    type: 'pharmacy',
-    name: 'Pharmacy',
-    description: 'Licensed pharmacy or drug store under Philippine FDA, DOH, and PDEA regulations',
-    defaultFeatures: {
-      enableInventory: true,
-      enableCategories: true,
-      enableDiscounts: true,
-      enableLoyaltyProgram: true,
-      enableCustomerManagement: true,
-      enableBookingScheduling: false,
-    },
-    productTypes: ['regular'],
-    requiredFields: ['name', 'price', 'sku', 'prn', 'expiryDate', 'batchNumber'],
-    optionalFields: [
-      'description', 'image', 'genericName', 'manufacturer', 'activeIngredient',
-      'dosageStrength', 'dosageForm', 'drugSchedule', 'storageConditions', 'requiresPrescription',
-    ],
-    defaultSettings: {
-      businessType: 'pharmacy',
-      enableInventory: true,
-      enableCategories: true,
-      trackExpiry: true,
-      requirePrescriptionForRx: true,
-      expiryAlertDays: 90,
-    },
-  },
 };
+
+/**
+ * Check whether a value is a supported business type (case-insensitive)
+ */
+export function isValidBusinessType(value: unknown): value is BusinessType {
+  return typeof value === 'string'
+    && Object.prototype.hasOwnProperty.call(BUSINESS_TYPE_CONFIGS, value.toLowerCase());
+}
 
 /**
  * Get business type configuration

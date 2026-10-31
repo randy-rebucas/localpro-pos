@@ -4,7 +4,7 @@ import Tenant from '@/models/Tenant';
 import { requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { handleApiError } from '@/lib/error-handler';
-import { applyBusinessTypeDefaults } from '@/lib/business-types';
+import { applyBusinessTypeDefaults, isValidBusinessType } from '@/lib/business-types';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   try {
@@ -60,6 +60,12 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (settings !== undefined) {
       const currentBusinessType = oldTenant.settings?.businessType;
       const newBusinessType = settings.businessType;
+      if (newBusinessType && newBusinessType !== currentBusinessType && !isValidBusinessType(newBusinessType)) {
+        return NextResponse.json(
+          { success: false, error: 'Unsupported business type. Allowed: retail, general' },
+          { status: 400 }
+        );
+      }
       let mergedSettings = { ...oldTenant.settings, ...settings };
       if (newBusinessType && newBusinessType !== currentBusinessType) {
         mergedSettings = applyBusinessTypeDefaults(mergedSettings, newBusinessType);

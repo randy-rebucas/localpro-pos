@@ -9,9 +9,6 @@ interface CartActionBarProps {
   dict: TranslationDict;
   isCashier?: boolean;
   customerDisplayUrl?: string | null;
-  businessType?: string;
-  orderType?: 'dine-in' | 'takeout' | 'delivery';
-  tableNumber?: string;
   showContext?: boolean;
   compact?: boolean;
   onSaveCart?: () => void;
@@ -28,9 +25,6 @@ export default function CartActionBar({
   dict,
   isCashier = false,
   customerDisplayUrl,
-  businessType,
-  orderType,
-  tableNumber,
   showContext = true,
   compact = false,
   onSaveCart,
@@ -50,13 +44,6 @@ export default function CartActionBar({
           {cartLength > 0 && (
             <span className="text-xs font-semibold text-gray-600 tabular-nums whitespace-nowrap">
               {itemCount} {dict.pos?.items || 'items'}
-            </span>
-          )}
-          {businessType === 'restaurant' && orderType && (
-            <span className="text-xs font-medium text-orange-700 bg-orange-50 border border-orange-200 px-1.5 py-0.5 capitalize truncate">
-              {orderType === 'dine-in'
-                ? `${dict.pos?.dineIn || 'Dine-in'}${tableNumber ? ` · ${tableNumber}` : ''}`
-                : orderType}
             </span>
           )}
         </div>

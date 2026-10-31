@@ -8,7 +8,7 @@
  *   npx tsx scripts/apply-business-type-defaults.ts [tenant-slug] [business-type]
  * 
  * Examples:
- *   npx tsx scripts/apply-business-type-defaults.ts my-tenant restaurant
+ *   npx tsx scripts/apply-business-type-defaults.ts my-tenant retail
  *   npx tsx scripts/apply-business-type-defaults.ts  # Apply to all tenants
  */
 
@@ -110,7 +110,7 @@ async function main() {
     console.error('Examples:');
     console.error('  npx tsx scripts/apply-business-type-defaults.ts');
     console.error('  npx tsx scripts/apply-business-type-defaults.ts my-tenant');
-    console.error('  npx tsx scripts/apply-business-type-defaults.ts my-tenant restaurant');
+    console.error('  npx tsx scripts/apply-business-type-defaults.ts my-tenant retail');
     process.exit(1);
   }
   

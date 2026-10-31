@@ -22,7 +22,6 @@ export interface SubscriptionFeatures {
   enableLoyaltyProgram: boolean;
   enableCustomerManagement: boolean;
   enableBookingScheduling: boolean;
-  enableTableManagement: boolean;
   enableReports: boolean;
   enableMultiBranch: boolean;
   enableHardwareIntegration: boolean;
@@ -40,13 +39,6 @@ export interface BirComplianceFeatures {
   monthlySupport: boolean;
 }
 
-export interface PharmacyComplianceFeatures {
-  enablePharmacyCompliance: boolean;
-  prescriptionManagement: boolean;
-  expiryTracking: boolean;
-  pdeaReporting: boolean;
-}
-
 export interface SubscriptionStatus {
   isActive: boolean;
   isTrial: boolean;
@@ -56,7 +48,6 @@ export interface SubscriptionStatus {
   limits: SubscriptionLimits;
   features: SubscriptionFeatures;
   birCompliance: BirComplianceFeatures;
-  pharmacyCompliance: PharmacyComplianceFeatures;
   usage: {
     currentUsers: number;
     currentBranches: number;
@@ -72,7 +63,7 @@ export interface SubscriptionStatus {
 export const FEATURE_OVERRIDE_KEYS = {
   features: [
     'enableInventory', 'enableCategories', 'enableDiscounts', 'enableLoyaltyProgram',
-    'enableCustomerManagement', 'enableBookingScheduling', 'enableTableManagement',
+    'enableCustomerManagement', 'enableBookingScheduling',
     'enableReports', 'enableMultiBranch', 'enableHardwareIntegration', 'prioritySupport',
     'customIntegrations', 'dedicatedAccountManager',
   ] as (keyof SubscriptionFeatures)[],
@@ -80,9 +71,6 @@ export const FEATURE_OVERRIDE_KEYS = {
     'ptuAssistance', 'receiptFormatting', 'birDocumentation', 'casReporting',
     'auditTrailSystem', 'monthlySupport',
   ] as (keyof BirComplianceFeatures)[],
-  pharmacyCompliance: [
-    'enablePharmacyCompliance', 'prescriptionManagement', 'expiryTracking', 'pdeaReporting',
-  ] as (keyof PharmacyComplianceFeatures)[],
 };
 
 export function isOverridableFeature(feature: string): boolean {
@@ -146,7 +134,7 @@ export class SubscriptionService {
       await connectDB();
 
       const subscription = await Subscription.findOne({ tenantId }, '-billingHistory')
-        .populate('planId', 'name tier price features birCompliance pharmacyCompliance')
+        .populate('planId', 'name tier price features birCompliance')
         .lean();
 
       if (!subscription) {
@@ -195,7 +183,6 @@ export class SubscriptionService {
               enableLoyaltyProgram: false,
               enableCustomerManagement: false,
               enableBookingScheduling: false,
-              enableTableManagement: false,
               enableReports: true,
               enableMultiBranch: false,
               enableHardwareIntegration: false,
@@ -210,12 +197,6 @@ export class SubscriptionService {
               casReporting: false,
               auditTrailSystem: false,
               monthlySupport: false,
-            },
-            pharmacyCompliance: {
-              enablePharmacyCompliance: false,
-              prescriptionManagement: false,
-              expiryTracking: false,
-              pdeaReporting: false,
             },
             usage: subscription.usage,
           };
@@ -250,7 +231,6 @@ export class SubscriptionService {
           prioritySupport: plan.features.prioritySupport,
           customIntegrations: plan.features.customIntegrations,
           dedicatedAccountManager: plan.features.dedicatedAccountManager,
-          enableTableManagement: plan.features.enableTableManagement ?? false,
         },
         birCompliance: {
           ptuAssistance: plan.birCompliance?.ptuAssistance ?? false,
@@ -259,12 +239,6 @@ export class SubscriptionService {
           casReporting: plan.birCompliance?.casReporting ?? false,
           auditTrailSystem: plan.birCompliance?.auditTrailSystem ?? false,
           monthlySupport: plan.birCompliance?.monthlySupport ?? false,
-        },
-        pharmacyCompliance: {
-          enablePharmacyCompliance: (plan as any).pharmacyCompliance?.enablePharmacyCompliance ?? false, // eslint-disable-line @typescript-eslint/no-explicit-any
-          prescriptionManagement: (plan as any).pharmacyCompliance?.prescriptionManagement ?? false, // eslint-disable-line @typescript-eslint/no-explicit-any
-          expiryTracking: (plan as any).pharmacyCompliance?.expiryTracking ?? false, // eslint-disable-line @typescript-eslint/no-explicit-any
-          pdeaReporting: (plan as any).pharmacyCompliance?.pdeaReporting ?? false, // eslint-disable-line @typescript-eslint/no-explicit-any
         },
         usage: subscription.usage,
       };
@@ -365,30 +339,6 @@ export class SubscriptionService {
     }
 
     return status.birCompliance[feature];
-  }
-
-  /**
-   * Check if tenant has access to a pharmacy compliance feature
-   */
-  static async checkPharmacyFeature(
-    tenantId: string,
-    feature: keyof PharmacyComplianceFeatures
-  ): Promise<boolean> {
-    const status = await this.getSubscriptionStatus(tenantId);
-
-    if (!status) {
-      return false;
-    }
-
-    if (!status.isActive && !status.isTrial) {
-      return false;
-    }
-
-    if (status.isExpired || (status.isTrial && status.isTrialExpired)) {
-      return false;
-    }
-
-    return status.pharmacyCompliance[feature];
   }
 
   /**
@@ -707,19 +657,5 @@ export async function checkBirFeatureAccess(
 
   if (!hasAccess) {
     throw new Error(`BIR compliance feature '${feature}' is not available in your current subscription plan. Please upgrade to access this feature.`);
-  }
-}
-
-/**
- * Middleware function to check pharmacy compliance feature access
- */
-export async function checkPharmacyFeatureAccess(
-  tenantId: string,
-  feature: keyof PharmacyComplianceFeatures
-): Promise<void> {
-  const hasAccess = await SubscriptionService.checkPharmacyFeature(tenantId, feature);
-
-  if (!hasAccess) {
-    throw new Error(`Pharmacy compliance feature '${feature}' is not available in your current subscription plan. Please upgrade to access this feature.`);
   }
 }

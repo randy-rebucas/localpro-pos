@@ -57,7 +57,6 @@ interface FormData {
   enableLoyaltyProgram: boolean;
   enableCustomerManagement: boolean;
   enableBookingScheduling: boolean;
-  enableTableManagement: boolean;
   enableOnAccountSales: boolean;
   autoOpenDrawerOnShiftStart: boolean;
   autoOpenDrawerOnShiftEnd: boolean;
@@ -102,10 +101,6 @@ export default function AdminSettingsPage() {
 
   const BUSINESS_TYPES = [
     { value: 'retail', label: dict?.settings?.businessTypeRetail || 'Retail Store' },
-    { value: 'restaurant', label: dict?.settings?.businessTypeRestaurant || 'Restaurant / Food Service' },
-    { value: 'laundry', label: dict?.settings?.businessTypeLaundry || 'Laundry Service' },
-    { value: 'service', label: dict?.settings?.businessTypeService || 'Service Business' },
-    { value: 'pharmacy', label: dict?.settings?.businessTypePharmacy || 'Pharmacy' },
     { value: 'general', label: dict?.settings?.businessTypeGeneralOption || 'General' },
   ];
 
@@ -125,7 +120,7 @@ export default function AdminSettingsPage() {
     taxEnabled: false, taxRate: 0, taxLabel: 'VAT',
     enableInventory: true, enableCategories: true, enableDiscounts: true,
     enableLoyaltyProgram: false, enableCustomerManagement: true,
-    enableBookingScheduling: false, enableTableManagement: false, enableOnAccountSales: false,
+    enableBookingScheduling: false, enableOnAccountSales: false,
     autoOpenDrawerOnShiftStart: false, autoOpenDrawerOnShiftEnd: false,
     lowStockAlert: true, lowStockThreshold: 10,
     emailNotifications: false, smsNotifications: false,
@@ -176,7 +171,6 @@ export default function AdminSettingsPage() {
           enableLoyaltyProgram: s.enableLoyaltyProgram ?? false,
           enableCustomerManagement: s.enableCustomerManagement ?? true,
           enableBookingScheduling: s.enableBookingScheduling ?? false,
-          enableTableManagement: s.enableTableManagement ?? false,
           enableOnAccountSales: s.enableOnAccountSales ?? false,
           autoOpenDrawerOnShiftStart: s.autoOpenDrawerOnShiftStart ?? false,
           autoOpenDrawerOnShiftEnd: s.autoOpenDrawerOnShiftEnd ?? false,
@@ -206,7 +200,7 @@ export default function AdminSettingsPage() {
     branding: ['primaryColor', 'secondaryColor', 'logo'],
     contact: ['email', 'phone', 'website'],
     receipt: ['receiptHeader', 'receiptFooter', 'receiptShowLogo', 'receiptShowAddress', 'receiptShowPhone', 'receiptShowEmail', 'taxEnabled', 'taxRate', 'taxLabel'],
-    features: ['enableInventory', 'enableCategories', 'enableDiscounts', 'enableLoyaltyProgram', 'enableCustomerManagement', 'enableBookingScheduling', 'enableTableManagement', 'enableOnAccountSales', 'autoOpenDrawerOnShiftStart', 'autoOpenDrawerOnShiftEnd'],
+    features: ['enableInventory', 'enableCategories', 'enableDiscounts', 'enableLoyaltyProgram', 'enableCustomerManagement', 'enableBookingScheduling', 'enableOnAccountSales', 'autoOpenDrawerOnShiftStart', 'autoOpenDrawerOnShiftEnd'],
     notifications: ['lowStockAlert', 'lowStockThreshold', 'emailNotifications', 'smsNotifications'],
   };
 
@@ -608,7 +602,6 @@ export default function AdminSettingsPage() {
                   <Toggle label={dict?.settings?.loyaltyProgram || 'Loyalty Program'} desc={dict?.settings?.loyaltyProgramDescShort || 'Earn and redeem loyalty points at checkout'} checked={form.enableLoyaltyProgram} onChange={v => set('enableLoyaltyProgram', v)} />
                   <Toggle label={dict?.settings?.customerManagementLabel || 'Customer Management'} desc={dict?.settings?.customerManagementDescShort || 'Maintain a customer database with profiles'} checked={form.enableCustomerManagement} onChange={v => set('enableCustomerManagement', v)} />
                   <Toggle label={dict?.settings?.bookingScheduling || 'Booking & Scheduling'} desc={dict?.settings?.bookingSchedulingDescShort || 'Accept service appointments and reservations'} checked={form.enableBookingScheduling} onChange={v => set('enableBookingScheduling', v)} />
-                  <Toggle label={dict?.settings?.tableManagementLabel || 'Table Management'} desc={dict?.settings?.tableManagementDesc || 'Manage dining tables and floor layout'} checked={form.enableTableManagement} onChange={v => set('enableTableManagement', v)} />
                   <Toggle label={dict?.settings?.onAccountSalesLabel || 'On-Account Sales'} desc={dict?.settings?.onAccountSalesDescShort || 'Allow customers to purchase on credit / pay later'} checked={form.enableOnAccountSales} onChange={v => set('enableOnAccountSales', v)} />
                 </div>
               </div>

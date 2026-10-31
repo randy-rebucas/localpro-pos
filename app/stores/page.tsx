@@ -28,9 +28,6 @@ interface Tenant {
 
 const BUSINESS_TYPE_META: Record<string, { icon: string; label: string; gradient: string }> = {
   Retail: { icon: '🏪', label: 'Retail', gradient: 'from-brand to-brand-navy' },
-  Restaurant: { icon: '🍕', label: 'Restaurant', gradient: 'from-orange-500 to-red-500' },
-  Laundry: { icon: '👔', label: 'Laundry', gradient: 'from-cyan-500 to-brand-navy' },
-  Service: { icon: '💼', label: 'Service', gradient: 'from-purple-500 to-violet-600' },
   General: { icon: '🔧', label: 'General', gradient: 'from-gray-500 to-slate-600' },
 };
 

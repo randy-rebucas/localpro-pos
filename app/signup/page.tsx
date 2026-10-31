@@ -16,7 +16,7 @@ export default function SignupPage() {
     slug: '',
     name: '',
     companyName: '',
-    businessType: 'general' as 'retail' | 'restaurant' | 'laundry' | 'service' | 'general',
+    businessType: 'general' as 'retail' | 'general',
     // Admin user info
     adminEmail: '',
     adminPassword: '',

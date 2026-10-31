@@ -52,7 +52,6 @@ const defaultMockSubscription: MockSubscription = {
   plan: 'premium',
   status: 'active',
   features: {
-    enableTableManagement: true,
     enableLoyalty: true,
     enableInventory: true,
   },

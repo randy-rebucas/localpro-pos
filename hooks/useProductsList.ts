@@ -21,25 +21,6 @@ export interface Product {
   trackInventory: boolean;
   lowStockThreshold?: number;
   createdAt: string;
-  modifiers?: Array<{
-    name: string;
-    options: Array<{ name: string; price: number }>;
-    required: boolean;
-  }>;
-  allergens?: string[];
-  nutritionInfo?: {
-    calories?: number;
-    protein?: number;
-    carbs?: number;
-    fat?: number;
-  };
-  serviceType?: 'wash' | 'dry-clean' | 'press' | 'repair' | 'other';
-  weightBased?: boolean;
-  pickupDelivery?: boolean;
-  estimatedDuration?: number;
-  serviceDuration?: number;
-  staffRequired?: number;
-  equipmentRequired?: string[];
   isActive?: boolean;
 }
 

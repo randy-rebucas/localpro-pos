@@ -140,7 +140,7 @@
                   "email": { "type": "string", "format": "email" },
                   "password": { "type": "string", "format": "password" },
                   "businessName": { "type": "string" },
-                  "businessType": { "type": "string", "enum": ["retail", "restaurant", "salon", "laundry", "clinic", "fitness", "hotel"] },
+                  "businessType": { "type": "string", "enum": ["retail", "general"] },
                   "phone": { "type": "string" },
                   "address": { "type": "string" }
                 }

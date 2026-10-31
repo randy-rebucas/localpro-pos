@@ -11,7 +11,7 @@ import { requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { handleApiError } from '@/lib/error-handler';
 import { getDefaultTenantSettings } from '@/lib/currency';
-import { applyBusinessTypeDefaults } from '@/lib/business-types';
+import { applyBusinessTypeDefaults, isValidBusinessType } from '@/lib/business-types';
 import crypto from 'crypto';
 
 export async function GET(request: NextRequest) {
@@ -85,6 +85,13 @@ export async function POST(request: NextRequest) {
     if (!/^[a-z0-9-]+$/.test(slug)) {
       return NextResponse.json(
         { success: false, error: 'Slug may only contain lowercase letters, numbers, and hyphens' },
+        { status: 400 }
+      );
+    }
+
+    if (businessType && !isValidBusinessType(businessType)) {
+      return NextResponse.json(
+        { success: false, error: 'Unsupported business type. Allowed: retail, general' },
         { status: 400 }
       );
     }

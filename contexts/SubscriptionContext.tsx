@@ -19,7 +19,6 @@ interface SubscriptionFeatures {
   enableLoyaltyProgram: boolean;
   enableCustomerManagement: boolean;
   enableBookingScheduling: boolean;
-  enableTableManagement: boolean;
   enableReports: boolean;
   enableMultiBranch: boolean;
   enableHardwareIntegration: boolean;

@@ -110,7 +110,7 @@ See [AUTOMATION_QUICK_START.md](./AUTOMATION_QUICK_START.md) for setup instructi
 
 ### Standard POS Architecture
 
-This system follows a **Universal POS Architecture Baseline** that ensures all businesses—laundry, retail, food, services—conform to a common base schema while allowing industry-specific customizations.
+This system follows a **Universal POS Architecture Baseline** that ensures all businesses conform to a common base schema while allowing industry-specific customizations.
 
 **Universal POS Objects**:
 - ✅ **Business Profile** - Core business identity and configuration
@@ -131,18 +131,14 @@ The system supports multiple business types with industry-specific configuration
 
 **Supported Business Types**:
 - 🏪 **Retail** - Product-focused with inventory management, SKU tracking, variations
-- 🍕 **Restaurant** - Menu items with modifiers, allergens, nutrition info, table management
-- 👔 **Laundry** - Service-based with weight pricing, pickup/delivery, duration tracking
-- 💼 **Service** - Time-based services with staff assignment, equipment requirements
 - 🔧 **General** - Flexible configuration for any business type
 
 **Features**:
 - Automatic feature configuration based on business type
-- Industry-specific product fields (modifiers, allergens, service duration, etc.)
 - Business type validation and helpers
 - Consistent base schema across all types
 
-📖 **Documentation**: See [`docs/BUSINESS_TYPES.md`](./docs/BUSINESS_TYPES.md) for business type configuration and examples.
+📖 **Configuration**: Business types are defined in [`lib/business-types.ts`](./lib/business-types.ts). To retire a type's leftover data, see `pnpm db:remove-business-type`.
 
 ### User Management & Authentication
 
@@ -794,7 +790,7 @@ This POS system includes **100+ enterprise features** covering:
 - ✅ Complete POS functionality with multiple payment methods
 - ✅ Advanced inventory management with real-time updates
 - ✅ Multi-tenant architecture with complete data isolation
-- ✅ Multi-business type support (Retail, Restaurant, Laundry, Service, General)
+- ✅ Multi-business type support (Retail, General)
 - ✅ Comprehensive reporting and analytics (Sales, Products, Financial, Tax, Cash Drawer)
 - ✅ User management with Role-Based Access Control (RBAC)
 - ✅ Customer management with lifetime value tracking

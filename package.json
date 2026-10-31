@@ -32,6 +32,7 @@
     "fix:duplicate-attendance": "tsx scripts/fix-duplicate-attendance-sessions.ts",
     "fix:orphaned-stock-movements": "tsx scripts/fix-orphaned-stock-movements.ts",
     "fix:duplicate-products": "tsx scripts/fix-duplicate-products.ts",
+    "db:remove-business-type": "tsx scripts/remove-business-type.ts",
     "load:test:api": "k6 run load-tests/api-endpoints.js",
     "load:test:auth": "k6 run load-tests/auth.js",
     "load:test:transactions": "k6 run load-tests/transactions.js",
