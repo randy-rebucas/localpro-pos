@@ -27,12 +27,10 @@ const AuditLogSchema: Schema = new Schema(
     action: {
       type: String,
       required: [true, 'Action is required'],
-      index: true,
     },
     entityType: {
       type: String,
       required: [true, 'Entity type is required'],
-      index: true,
     },
     entityId: {
       type: String,
@@ -58,11 +56,13 @@ const AuditLogSchema: Schema = new Schema(
 // Indexes for efficient queries
 AuditLogSchema.index({ tenantId: 1, createdAt: -1 });
 AuditLogSchema.index({ tenantId: 1, userId: 1, createdAt: -1 });
-AuditLogSchema.index({ tenantId: 1, entityType: 1, entityId: 1 });
-AuditLogSchema.index({ createdAt: -1 }); // For cleanup queries
-// TTL backstop: auto-purge audit logs after 90 days even if the scheduled
-// cleanup job (app/api/automations/audit-logs/cleanup) never runs.
-AuditLogSchema.index({ createdAt: 1 }, { expireAfterSeconds: 7776000 });
+// Audit log viewer filters by entityType and sorts by createdAt; nothing queries by entityId.
+AuditLogSchema.index({ tenantId: 1, entityType: 1, createdAt: -1 });
+AuditLogSchema.index({ tenantId: 1, action: 1, createdAt: -1 });
+// Cross-tenant super-admin log list (sorted by createdAt). No TTL here: logs are
+// BIR audit trail, so lib/automations/audit-log-cleanup.ts moves entries older
+// than 90 days to ArchivedAuditLog (retained 10 years) instead of deleting them.
+AuditLogSchema.index({ createdAt: -1 });
 
 const AuditLog: Model<IAuditLog> = mongoose.models.AuditLog || mongoose.model<IAuditLog>('AuditLog', AuditLogSchema);
 

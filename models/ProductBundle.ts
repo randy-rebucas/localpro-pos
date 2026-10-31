@@ -84,7 +84,6 @@ const ProductBundleSchema: Schema = new Schema(
     categoryId: {
       type: Schema.Types.ObjectId,
       ref: 'Category',
-      index: true,
     },
     image: {
       type: String,
@@ -104,8 +103,15 @@ const ProductBundleSchema: Schema = new Schema(
 );
 
 // Compound index for tenant-scoped unique SKU
-ProductBundleSchema.index({ tenantId: 1, sku: 1 }, { unique: true, sparse: true });
-ProductBundleSchema.index({ tenantId: 1, isActive: 1 });
+// Partial, not sparse: a sparse compound index still indexes sku-less bundles as
+// null (tenantId is present), so a second sku-less bundle in a tenant hit E11000.
+ProductBundleSchema.index(
+  { tenantId: 1, sku: 1 },
+  { unique: true, partialFilterExpression: { sku: { $gt: '' } } }
+);
+// Bundle list: { tenantId, [isActive], [categoryId] } sorted by createdAt desc.
+// isActive is low-cardinality and filtered at fetch time.
+ProductBundleSchema.index({ tenantId: 1, createdAt: -1 });
 
 const ProductBundle: Model<IProductBundle> = mongoose.models.ProductBundle || mongoose.model<IProductBundle>('ProductBundle', ProductBundleSchema);
 

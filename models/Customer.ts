@@ -23,6 +23,8 @@ export interface ICustomer extends Document {
   creditLimit?: number;
   shopifyCustomerId?: string;
   isActive: boolean;
+  deactivatedAt?: Date;
+  anonymizedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -111,18 +113,44 @@ const CustomerSchema: Schema = new Schema(
       type: Boolean,
       default: true,
     },
+    // Set when the customer is deactivated (soft-deleted); starts the retention
+    // clock for lib/automations/customer-data-retention.ts.
+    deactivatedAt: {
+      type: Date,
+    },
+    // Set once personal data has been removed by the retention job.
+    anonymizedAt: {
+      type: Date,
+    },
   },
   {
     timestamps: true,
   }
 );
 
-// Compound indexes
-CustomerSchema.index({ tenantId: 1, email: 1 }, { unique: true, sparse: true });
-CustomerSchema.index({ tenantId: 1, phone: 1 }, { sparse: true });
-CustomerSchema.index({ tenantId: 1, isActive: 1 });
-CustomerSchema.index({ tenantId: 1, shopifyCustomerId: 1 }, { sparse: true });
-CustomerSchema.index({ tenantId: 1, tags: 1 });
+CustomerSchema.pre('save', function (next) {
+  if (this.isModified('isActive')) {
+    this.set('deactivatedAt', this.get('isActive') === false ? new Date() : undefined);
+  }
+  next();
+});
+
+// Per-tenant email uniqueness. `sparse` has no effect on a compound index whose
+// tenantId is always present (missing email is indexed as null, so a tenant could
+// only ever have one email-less customer). Partial index on non-empty strings only.
+CustomerSchema.index(
+  { tenantId: 1, email: 1 },
+  { unique: true, partialFilterExpression: { email: { $gt: '' } } }
+);
+// OTP login lookup by phone (verify-otp). Skips customers without a phone.
+CustomerSchema.index(
+  { tenantId: 1, phone: 1 },
+  { partialFilterExpression: { phone: { $gt: '' } } }
+);
+// Customer list: newest first, paginated. The UI's default view sends no isActive
+// filter, so isActive must not sit between tenantId and createdAt (that forced an
+// in-memory sort of every tenant customer). isActive is filtered on fetch instead.
+CustomerSchema.index({ tenantId: 1, createdAt: -1 });
 
 // Virtual for full name
 CustomerSchema.virtual('fullName').get(function() {

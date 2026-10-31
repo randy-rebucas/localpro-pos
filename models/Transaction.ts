@@ -52,6 +52,7 @@ export interface ITransaction extends Document {
   terminalId?: string; // Denormalized snapshot of Device.terminalId at time of sale
   deviceSerialNumber?: string; // Denormalized snapshot of Device.serialNumber at time of sale
   receiptNumber?: string;
+  receiptSentAt?: Date; // Set when the receipt email automation has sent this receipt (prevents re-sends)
   idempotencyKey?: string;
   notes?: string;
   displayCurrency?: string; // Currency code the customer chose to view the total in
@@ -133,7 +134,6 @@ const TransactionSchema: Schema = new Schema(
     branchId: {
       type: Schema.Types.ObjectId,
       ref: 'Branch',
-      index: true,
     },
     items: {
       type: [TransactionItemSchema],
@@ -230,12 +230,10 @@ const TransactionSchema: Schema = new Schema(
     userId: {
       type: Schema.Types.ObjectId,
       ref: 'User',
-      index: true,
     },
     deviceId: {
       type: Schema.Types.ObjectId,
       ref: 'Device',
-      index: true,
     },
     terminalId: {
       type: String,
@@ -248,6 +246,9 @@ const TransactionSchema: Schema = new Schema(
     receiptNumber: {
       type: String,
       // unique enforced via compound index { tenantId, receiptNumber } below
+    },
+    receiptSentAt: {
+      type: Date,
     },
     idempotencyKey: {
       type: String,
@@ -323,15 +324,25 @@ const TransactionSchema: Schema = new Schema(
 // Compound indexes
 TransactionSchema.index({ tenantId: 1, createdAt: -1 });
 TransactionSchema.index({ tenantId: 1, branchId: 1, createdAt: -1 });
-TransactionSchema.index({ tenantId: 1, receiptNumber: 1 }, { unique: true, sparse: true });
+// Partial, not sparse: a sparse compound index still indexes docs missing
+// receiptNumber (tenantId is present) as null, so a second receipt-less sale in a
+// tenant (e.g. generateReceiptNumber failure in manual entry) would hit E11000.
+TransactionSchema.index(
+  { tenantId: 1, receiptNumber: 1 },
+  { unique: true, partialFilterExpression: { receiptNumber: { $type: 'string' } } }
+);
 // partialFilterExpression (not sparse) — sparse only excludes missing fields, not
 // explicit nulls, and legacy rows have idempotencyKey: null, which broke the unique build
 TransactionSchema.index(
   { tenantId: 1, idempotencyKey: 1 },
   { unique: true, partialFilterExpression: { idempotencyKey: { $type: 'string' } } }
 );
-TransactionSchema.index({ tenantId: 1, status: 1 });
-TransactionSchema.index({ tenantId: 1, isActive: 1, createdAt: -1 });
+// ESR: status equality + date range/sort — the dominant reporting shape
+// (completed sales in a period). Also serves status-only queries as a prefix.
+TransactionSchema.index({ tenantId: 1, status: 1, createdAt: -1 });
+// Customer purchase history and per-cashier / cash-drawer reconciliation
+TransactionSchema.index({ tenantId: 1, customerId: 1, createdAt: -1 });
+TransactionSchema.index({ tenantId: 1, userId: 1, createdAt: -1 });
 TransactionSchema.index(
   { tenantId: 1, channelSyncKey: 1 },
   {

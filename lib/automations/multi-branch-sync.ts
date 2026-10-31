@@ -8,7 +8,7 @@ import Product from '@/models/Product';
 import Customer from '@/models/Customer'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import Discount from '@/models/Discount'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import Branch from '@/models/Branch';
-import Tenant from '@/models/Tenant';
+import { getAutomationTenants } from './tenants';
 import { AutomationResult } from './types';
 
 export interface MultiBranchSyncOptions {
@@ -42,13 +42,7 @@ export async function syncMultiBranchData(
     const conflictResolution = options.conflictResolution || 'last-write-wins'; // eslint-disable-line @typescript-eslint/no-unused-vars
 
     // Get tenants to process
-    let tenants;
-    if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).lean();
-      tenants = tenant ? [tenant] : [];
-    } else {
-      tenants = await Tenant.find({ status: 'active' }).lean();
-    }
+    const tenants = await getAutomationTenants({ tenantId: options.tenantId, select: 'name' });
 
     if (tenants.length === 0) {
       results.message = 'No tenants found to process';
@@ -60,32 +54,20 @@ export async function syncMultiBranchData(
 
     for (const tenant of tenants) {
       try {
-        const tenantId = tenant._id.toString();
+        const tenantId = tenant._id;
 
-        // Get all branches
-        const branches = await Branch.find({ tenantId, isActive: true }).lean();
+        // Count active branches
+        const branchCount = await Branch.countDocuments({ tenantId, isActive: true });
         
-        if (branches.length < 2) {
+        if (branchCount < 2) {
           continue; // Need at least 2 branches to sync
         }
 
         // Sync products (pricing, descriptions, etc.)
         if (syncProducts) {
-          // Get master product data (from first branch or tenant-level)
-          const masterProducts = await Product.find({ tenantId }).lean();
-
-          // For each product, sync pricing and basic info across branches
-          // Note: Stock levels are branch-specific and shouldn't be synced
-          for (const product of masterProducts) {
-            try {
-              // Product updates are already tenant-level, so no sync needed
-              // Branch stock is intentionally separate
-              totalSynced++;
-            } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-              totalFailed++;
-              results.errors?.push(`Product ${product._id}: ${error.message}`);
-            }
-          }
+          // Product data (pricing, descriptions) is already tenant-level, so no sync
+          // is needed; just count it. Branch stock is intentionally separate.
+          totalSynced += await Product.countDocuments({ tenantId });
         }
 
         // Sync customers (customer data should be tenant-level, not branch-specific)

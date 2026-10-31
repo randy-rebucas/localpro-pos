@@ -55,7 +55,6 @@ const BookingSchema: Schema = new Schema(
     startTime: {
       type: Date,
       required: [true, 'Start time is required'],
-      index: true,
     },
     endTime: {
       type: Date,
@@ -74,7 +73,6 @@ const BookingSchema: Schema = new Schema(
     staffId: {
       type: Schema.Types.ObjectId,
       ref: 'User',
-      index: true,
     },
     staffName: {
       type: String,
@@ -105,9 +103,16 @@ const BookingSchema: Schema = new Schema(
 // Compound indexes for efficient queries
 BookingSchema.index({ tenantId: 1, startTime: 1 });
 BookingSchema.index({ tenantId: 1, staffId: 1, startTime: 1 });
-BookingSchema.index({ startTime: 1, endTime: 1 }); // For conflict detection
-// Covers both status filtering and date-sorted queries; replaces the simpler { tenantId, status } index
-BookingSchema.index({ tenantId: 1, status: 1, createdAt: -1 });
+// ESR: status equality + startTime range — reminders, no-show, availability and conflict checks
+BookingSchema.index({ tenantId: 1, status: 1, startTime: 1 });
+// Customer booking history lookups
+BookingSchema.index({ tenantId: 1, customerEmail: 1, startTime: -1 });
+// Retention: bookings are removed 5 years after they end. Paid bookings are
+// also recorded as transactions, which are kept for the 10-year BIR period.
+export const BOOKING_RETENTION_SECONDS = 5 * 366 * 24 * 60 * 60;
+BookingSchema.index({ endTime: 1 }, { expireAfterSeconds: BOOKING_RETENTION_SECONDS });
+// (No { tenantId, status, createdAt } index: no query sorts bookings by createdAt, and
+// status-only filters such as auto-confirm use the { tenantId, status, startTime } prefix.)
 
 // Virtual to check if booking is in the past
 BookingSchema.virtual('isPast').get(function(this: IBooking) {

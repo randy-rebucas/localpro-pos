@@ -111,7 +111,12 @@ AttendanceSchema.index(
 );
 // Tenant-wide active session scan (automations: auto-clockout, break detection, cash-count reminders)
 AttendanceSchema.index({ tenantId: 1, clockOut: 1 }, { partialFilterExpression: { clockOut: null } });
-AttendanceSchema.index({ tenantId: 1, isActive: 1 });
+// Retention: employment/time records are kept 5 years (the Labor Code requires
+// at least 3, and money claims prescribe after 3), then removed by TTL.
+export const ATTENDANCE_RETENTION_SECONDS = 5 * 366 * 24 * 60 * 60;
+AttendanceSchema.index({ clockIn: 1 }, { expireAfterSeconds: ATTENDANCE_RETENTION_SECONDS });
+// No { tenantId, isActive } index: isActive is only ever filtered as `$ne: false`
+// alongside tenantId (+ userId/clockIn), which the indexes above already serve.
 
 const Attendance: Model<IAttendance> = mongoose.models.Attendance || mongoose.model<IAttendance>('Attendance', AttendanceSchema);
 

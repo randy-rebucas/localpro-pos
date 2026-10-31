@@ -27,94 +27,113 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(50, Math.max(1, parseInt(searchParams.get('limit') ?? '20')));
     const skip = (page - 1) * limit;
 
-    // Get order counts per customer
-    // NOTE: tenantId from requireTenantAccess() is a string, but Transaction.tenantId
-    // is stored as ObjectId — aggregate() pipelines don't auto-cast like .find() does,
-    // so this must be cast explicitly or the $match silently matches nothing.
+    // NOTE: tenantId from requireTenantAccess() is a string, but tenantId is
+    // stored as ObjectId — aggregate() pipelines don't auto-cast like .find()
+    // does, so this must be cast explicitly or $match silently matches nothing.
     const tenantObjectId = new mongoose.Types.ObjectId(tenantId);
-    const orderStats = await Transaction.aggregate([
-      { $match: { tenantId: tenantObjectId, status: 'completed' } },
-      {
-        $group: {
-          _id: '$customerId',
-          orderCount: { $sum: 1 },
-          totalSpent: { $sum: '$total' },
-        },
-      },
-    ]);
-
-    const orderMap = new Map<string, { orderCount: number; totalSpent: number }>(
-      orderStats
-        .filter((s) => s._id != null)
-        .map((s) => [String(s._id), { orderCount: s.orderCount, totalSpent: s.totalSpent }])
-    );
 
     const now = new Date();
     const lapsedCutoff = new Date(now.getTime() - LAPSED_DAYS * 86400000);
     const atRiskCutoff = new Date(now.getTime() - AT_RISK_DAYS * 86400000);
 
-    // Classify each customer
-    const classifySegment = (c: {
-      _id: mongoose.Types.ObjectId;
-      lastPurchaseDate?: Date;
-      loyaltyPointsBalance?: number;
-    }): string => {
-      const stats = orderMap.get(String(c._id));
-      const orderCount = stats?.orderCount ?? 0;
-      const totalSpent = stats?.totalSpent ?? 0;
-      const lp = c.loyaltyPointsBalance ?? 0;
-      const lastBuy = c.lastPurchaseDate ? new Date(c.lastPurchaseDate) : null;
-
-      if (orderCount === 0) return 'prospect';
-      if (lastBuy && lastBuy < lapsedCutoff) return 'lapsed';
-      if (lastBuy && lastBuy < atRiskCutoff && orderCount < 5) return 'at_risk';
-      if (totalSpent >= VIP_SPEND_THRESHOLD || lp >= VIP_POINTS_THRESHOLD || orderCount >= VIP_ORDERS_THRESHOLD) return 'vip';
-      if (orderCount <= 2) return 'new';
-      return 'regular';
+    // Segment rules (evaluated in order, first match wins):
+    //   prospect — no completed orders
+    //   lapsed   — last purchase older than LAPSED_DAYS
+    //   at_risk  — last purchase older than AT_RISK_DAYS and < 5 orders
+    //   vip      — spend / points / order-count thresholds
+    //   new      — <= 2 orders
+    //   regular  — everything else
+    // `$type: 'date'` guard: in aggregation a missing/null date compares as
+    // less than any Date, which would wrongly mark it lapsed.
+    const hasLastBuy = { $eq: [{ $type: '$lastPurchaseDate' }, 'date'] };
+    const segmentExpr = {
+      $switch: {
+        branches: [
+          { case: { $eq: ['$_orderCount', 0] }, then: 'prospect' },
+          { case: { $and: [hasLastBuy, { $lt: ['$lastPurchaseDate', lapsedCutoff] }] }, then: 'lapsed' },
+          {
+            case: { $and: [hasLastBuy, { $lt: ['$lastPurchaseDate', atRiskCutoff] }, { $lt: ['$_orderCount', 5] }] },
+            then: 'at_risk',
+          },
+          {
+            case: {
+              $or: [
+                { $gte: ['$_orderSpent', VIP_SPEND_THRESHOLD] },
+                { $gte: [{ $ifNull: ['$loyaltyPointsBalance', 0] }, VIP_POINTS_THRESHOLD] },
+                { $gte: ['$_orderCount', VIP_ORDERS_THRESHOLD] },
+              ],
+            },
+            then: 'vip',
+          },
+          { case: { $lte: ['$_orderCount', 2] }, then: 'new' },
+        ],
+        default: 'regular',
+      },
     };
 
-    // Fetch all active customers (for counts)
-    const allCustomers = await Customer.find(
-      { tenantId, isActive: true },
-      { _id: 1, firstName: 1, lastName: 1, email: 1, phone: 1, lastPurchaseDate: 1, loyaltyPointsBalance: 1, totalSpent: 1, tags: 1 }
-    ).lean();
+    const segmentMatch = segment === 'all' ? [] : [{ $match: { computedSegment: segment } }];
 
-    // Compute segment counts
+    // One aggregate instead of loading every customer (and every completed
+    // transaction) into memory: per-customer order stats come from an indexed
+    // $lookup ({tenantId, customerId, createdAt} on transactions), segments
+    // are computed server-side, and only the counts + one page are returned.
+    const [facet] = await Customer.aggregate<{
+      counts: { _id: string; n: number }[];
+      customers: Record<string, unknown>[];
+      total: { n: number }[];
+    }>([
+      { $match: { tenantId: tenantObjectId, isActive: true } },
+      {
+        $project: {
+          _id: 1, firstName: 1, lastName: 1, email: 1, phone: 1,
+          lastPurchaseDate: 1, loyaltyPointsBalance: 1, totalSpent: 1, tags: 1,
+        },
+      },
+      {
+        $lookup: {
+          from: Transaction.collection.collectionName,
+          localField: '_id',
+          foreignField: 'customerId',
+          pipeline: [
+            { $match: { tenantId: tenantObjectId, status: 'completed' } },
+            { $group: { _id: null, orderCount: { $sum: 1 }, totalSpent: { $sum: '$total' } } },
+          ],
+          as: '_stats',
+        },
+      },
+      {
+        $addFields: {
+          _orderCount: { $ifNull: [{ $first: '$_stats.orderCount' }, 0] },
+          _orderSpent: { $ifNull: [{ $first: '$_stats.totalSpent' }, 0] },
+        },
+      },
+      { $addFields: { computedSegment: segmentExpr, orderCount: '$_orderCount' } },
+      { $project: { _stats: 0, _orderCount: 0, _orderSpent: 0 } },
+      {
+        $facet: {
+          counts: [{ $group: { _id: '$computedSegment', n: { $sum: 1 } } }],
+          customers: [...segmentMatch, { $sort: { _id: 1 } }, { $skip: skip }, { $limit: limit }],
+          total: [...segmentMatch, { $count: 'n' }],
+        },
+      },
+    ]);
+
     const counts: Record<string, number> = { all: 0, new: 0, regular: 0, vip: 0, at_risk: 0, lapsed: 0, prospect: 0 };
-    const segmentedMap = new Map<string, typeof allCustomers>();
-
-    for (const c of allCustomers) {
-      const seg = classifySegment(c as Parameters<typeof classifySegment>[0]);
-      counts.all++;
-      counts[seg] = (counts[seg] ?? 0) + 1;
-      const arr = segmentedMap.get(seg) ?? [];
-      arr.push(c);
-      segmentedMap.set(seg, arr);
+    for (const { _id, n } of facet?.counts ?? []) {
+      counts.all += n;
+      counts[_id] = (counts[_id] ?? 0) + n;
     }
-
-    // Get requested page of customers in segment
-    let filtered: typeof allCustomers;
-    if (segment === 'all') {
-      filtered = allCustomers;
-    } else {
-      filtered = segmentedMap.get(segment) ?? [];
-    }
-
-    // Enrich with computed orderCount
-    const enriched = filtered.slice(skip, skip + limit).map((c) => ({
-      ...c,
-      orderCount: orderMap.get(String(c._id))?.orderCount ?? 0,
-      computedSegment: classifySegment(c as Parameters<typeof classifySegment>[0]),
-    }));
+    const total = facet?.total?.[0]?.n ?? 0;
+    const enriched = facet?.customers ?? [];
 
     return NextResponse.json({
       success: true,
       data: {
         counts,
         customers: enriched,
-        total: filtered.length,
+        total,
         page,
-        totalPages: Math.ceil(filtered.length / limit),
+        totalPages: Math.ceil(total / limit),
       },
     });
   } catch (error) {

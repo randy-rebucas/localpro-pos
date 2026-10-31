@@ -18,6 +18,7 @@ export interface ISavedCart extends Document {
   total: number;
   userId: mongoose.Types.ObjectId;
   isActive: boolean;
+  reminderSentAt?: Date; // Set by the abandoned-cart automation so a cart is only emailed once
   createdAt: Date;
   updatedAt: Date;
 }
@@ -89,11 +90,13 @@ const SavedCartSchema: Schema = new Schema(
       type: Schema.Types.ObjectId,
       ref: 'User',
       required: true,
-      index: true,
     },
     isActive: {
       type: Boolean,
       default: true,
+    },
+    reminderSentAt: {
+      type: Date,
     },
   },
   {
@@ -103,7 +106,15 @@ const SavedCartSchema: Schema = new Schema(
 
 // Indexes for efficient queries
 SavedCartSchema.index({ tenantId: 1, userId: 1, createdAt: -1 });
-SavedCartSchema.index({ tenantId: 1, name: 1 });
+// Abandoned-cart cron: { tenantId, reminderSentAt: { $exists: false }, updatedAt: { $lte } }
+// sorted by updatedAt desc (ESR; missing reminderSentAt is indexed as null).
+SavedCartSchema.index({ tenantId: 1, reminderSentAt: 1, updatedAt: -1 });
+// TTL: soft-deleted carts (isActive:false) are purged 30 days after the delete.
+// The soft delete is a findOneAndUpdate, which bumps updatedAt via timestamps.
+SavedCartSchema.index(
+  { updatedAt: 1 },
+  { expireAfterSeconds: 30 * 24 * 60 * 60, partialFilterExpression: { isActive: false } }
+);
 
 const SavedCart: Model<ISavedCart> = mongoose.models.SavedCart || mongoose.model<ISavedCart>('SavedCart', SavedCartSchema);
 

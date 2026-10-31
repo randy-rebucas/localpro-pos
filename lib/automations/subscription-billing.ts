@@ -108,7 +108,7 @@ export async function processSubscriptionBilling(
       status: 'active',
       autoRenew: true,
       nextBillingDate: { $lte: upcomingDue, $gte: now },
-    });
+    }, '-billingHistory');
 
     for (const sub of dueSoonSubs) {
       try {
@@ -171,7 +171,7 @@ export async function processSubscriptionBilling(
       autoRenew: true,
       nextBillingDate: { $lte: now },
       paymentOverdue: false,
-    });
+    }, '-billingHistory');
 
     for (const sub of overdueSubs) {
       try {
@@ -222,7 +222,7 @@ export async function processSubscriptionBilling(
       paymentOverdue: true,
       gracePeriodEndDate: { $lte: now, $gte: reminderWindowStart },
       deactivatedAt: { $exists: false },
-    });
+    }, '-billingHistory');
 
     for (const sub of remindSubs) {
       try {
@@ -261,7 +261,7 @@ export async function processSubscriptionBilling(
       paymentOverdue: true,
       gracePeriodEndDate: { $lte: deactivationCutoff },
       deactivatedAt: { $exists: false },
-    });
+    }, '-billingHistory');
 
     for (const sub of toDeactivate) {
       try {
@@ -305,7 +305,8 @@ export async function processSubscriptionBilling(
       }
     }
 
-    // 5. Late fee (15 days past due)
+    // 5. Late fee (15 days past due). Loaded in full (no '-billingHistory'
+    //    projection) because this step pushes onto billingHistory and saves.
     const lateFeeCutoff = new Date(now.getTime() - LATE_FEE_DAYS * DAY_MS);
     const toLateFee = await Subscription.find({
       ...tenantFilter,
@@ -364,7 +365,7 @@ export async function processSubscriptionBilling(
       paymentOverdue: true,
       nextBillingDate: { $lte: reactivationCutoff },
       reactivationFeeAppliedAt: { $exists: false },
-    });
+    }, '-billingHistory');
 
     for (const sub of toReactivationFee) {
       try {

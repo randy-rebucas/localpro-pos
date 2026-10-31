@@ -42,10 +42,17 @@ async function resolveCategoryId(
     return { categoryId: cached, category: categoryName.trim() };
   }
 
-  let category = await Category.findOne({
-    tenantId,
-    name: { $regex: new RegExp(`^${categoryName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
-  });
+  // Exact match first (served by the unique {tenantId, name} index). That index has no
+  // collation, so a case-insensitive match can only be done with a regex scan — only
+  // fall back to it when the exact lookup misses.
+  const trimmedName = categoryName.trim();
+  let category = await Category.findOne({ tenantId, name: trimmedName });
+  if (!category) {
+    category = await Category.findOne({
+      tenantId,
+      name: { $regex: new RegExp(`^${trimmedName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+    });
+  }
 
   if (!category) {
     category = await Category.create({

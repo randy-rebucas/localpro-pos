@@ -70,7 +70,9 @@ const CampaignSchema: Schema = new Schema(
   { timestamps: true }
 );
 
-CampaignSchema.index({ tenantId: 1, status: 1, createdAt: -1 });
+// Campaign list: find({ tenantId }).sort({ createdAt: -1 }).limit(50). No query
+// filters by status without _id, so status in the key only forced an in-memory sort.
+CampaignSchema.index({ tenantId: 1, createdAt: -1 });
 
 const Campaign: Model<ICampaign> =
   mongoose.models.Campaign || mongoose.model<ICampaign>('Campaign', CampaignSchema);

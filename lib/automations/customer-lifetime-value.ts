@@ -6,9 +6,8 @@
 import connectDB from '@/lib/mongodb';
 import Customer from '@/models/Customer';
 import Transaction from '@/models/Transaction';
-import Tenant from '@/models/Tenant';
+import { getAutomationTenants } from './tenants';
 import { AutomationResult } from './types';
-import mongoose from 'mongoose';
 
 export interface CustomerLifetimeValueOptions {
   tenantId?: string;
@@ -35,13 +34,7 @@ export async function calculateCustomerLifetimeValue(
     const updateCustomers = options.updateCustomers !== false;
 
     // Get tenants to process
-    let tenants;
-    if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).lean();
-      tenants = tenant ? [tenant] : [];
-    } else {
-      tenants = await Tenant.find({ status: 'active' }).lean();
-    }
+    const tenants = await getAutomationTenants({ tenantId: options.tenantId, select: 'name' });
 
     if (tenants.length === 0) {
       results.message = 'No tenants found to process';
@@ -53,75 +46,66 @@ export async function calculateCustomerLifetimeValue(
 
     for (const tenant of tenants) {
       try {
-        const tenantId = tenant._id.toString();
+        const tenantId = tenant._id;
 
-        // Get all customers
-        const customers = await Customer.find({ tenantId }).lean();
+        // Calculate totals for every customer in one aggregate over completed
+        // transactions linked by customerId
+        const stats: { _id: unknown; totalSpent: number; lastPurchase: Date }[] =
+          await Transaction.aggregate([
+            {
+              $match: {
+                tenantId,
+                status: 'completed',
+                customerId: { $ne: null },
+              },
+            },
+            {
+              $group: {
+                _id: '$customerId',
+                totalSpent: { $sum: '$total' },
+                lastPurchase: { $max: '$createdAt' },
+              },
+            },
+          ]);
+        const statsByCustomer = new Map(stats.map((s) => [String(s._id), s]));
 
+        // Get all customers (only the fields being compared)
+        const customers = await Customer.find({ tenantId })
+          .select('_id totalSpent lastPurchaseDate')
+          .lean();
+
+        // Simple CLV calculation: totalSpent (can be enhanced with predictive models).
+        // Only write customers whose computed values changed.
+        const updates = [];
         for (const customer of customers) {
-          try {
-            // Calculate total spent from transactions
-            // Match by customer email or customer ID (if transactions have customerId field)
-            const transactions = await Transaction.aggregate([
-              {
-                $match: {
-                  tenantId: new mongoose.Types.ObjectId(tenantId),
-                  status: 'completed',
-                  // Match by email in notes or customerId if field exists
-                  $or: [
-                    customer.email ? { notes: { $regex: customer.email, $options: 'i' } } : {},
-                    // Add customerId match if field exists in Transaction model
-                  ],
-                },
-              },
-              {
-                $group: {
-                  _id: null,
-                  totalSpent: { $sum: '$total' },
-                  transactionCount: { $sum: 1 },
-                  firstPurchase: { $min: '$createdAt' },
-                  lastPurchase: { $max: '$createdAt' },
-                },
-              },
-            ]);
+          const clvData = statsByCustomer.get(String(customer._id));
+          const totalSpent = clvData?.totalSpent ?? 0;
+          const lastPurchase = clvData?.lastPurchase ? new Date(clvData.lastPurchase) : undefined;
 
-            const clvData = transactions[0] || {
-              totalSpent: 0,
-              transactionCount: 0,
-              firstPurchase: null,
-              lastPurchase: null,
-            };
-
-            // Calculate average order value
-            const avgOrderValue = clvData.transactionCount > 0 // eslint-disable-line @typescript-eslint/no-unused-vars
-              ? clvData.totalSpent / clvData.transactionCount
-              : 0;
-
-            // Calculate purchase frequency (transactions per month)
-            const monthsActive = clvData.firstPurchase
-              ? Math.max(1, (Date.now() - new Date(clvData.firstPurchase).getTime()) / (1000 * 60 * 60 * 24 * 30))
-              : 1;
-            const purchaseFrequency = clvData.transactionCount / monthsActive; // eslint-disable-line @typescript-eslint/no-unused-vars
-
-            // Simple CLV calculation: totalSpent (can be enhanced with predictive models)
-            const clv = clvData.totalSpent; // eslint-disable-line @typescript-eslint/no-unused-vars
-
-            if (updateCustomers) {
-              // Update customer record
-              await Customer.findByIdAndUpdate(customer._id, {
-                totalSpent: clvData.totalSpent,
-                lastPurchaseDate: clvData.lastPurchase ? new Date(clvData.lastPurchase) : undefined,
-                // Store CLV in notes or custom field (if model supports it)
-                notes: customer.notes || '',
-              });
-            }
-
-            totalUpdated++;
-          } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-            totalFailed++;
-            results.errors?.push(`Customer ${customer._id}: ${error.message}`);
+          const $set: Record<string, unknown> = {};
+          if (Math.abs((customer.totalSpent ?? 0) - totalSpent) > 1e-9) {
+            $set.totalSpent = totalSpent;
           }
+          if (lastPurchase && customer.lastPurchaseDate?.getTime() !== lastPurchase.getTime()) {
+            $set.lastPurchaseDate = lastPurchase;
+          }
+          if (Object.keys($set).length === 0) continue;
+
+          updates.push({
+            updateOne: {
+              filter: { tenantId, _id: customer._id },
+              update: { $set },
+            },
+          });
         }
+
+        if (updateCustomers && updates.length > 0) {
+          // Derived stats: don't bump updatedAt (customer-data-retention uses it
+          // as the deactivation time for customers predating deactivatedAt).
+          await Customer.bulkWrite(updates, { ordered: false, timestamps: false });
+        }
+
+        totalUpdated += updates.length;
       } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
         totalFailed++;
         results.errors?.push(`Tenant ${tenant.name}: ${error.message}`);

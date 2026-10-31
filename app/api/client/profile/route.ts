@@ -140,10 +140,9 @@ export async function PUT(request: NextRequest) {
         );
       }
 
-      // Check if email is already taken by another user in this tenant
-      const existingUser = await User.findOne({
+      // Emails are unique across all tenants (unique index on User.email)
+      const existingUser = await User.exists({
         email: email.toLowerCase(),
-        tenantId: tenant._id,
         _id: { $ne: userId },
       });
 

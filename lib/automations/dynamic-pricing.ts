@@ -6,10 +6,9 @@
 import connectDB from '@/lib/mongodb';
 import Product from '@/models/Product';
 import Transaction from '@/models/Transaction';
-import Tenant from '@/models/Tenant';
-import { getTenantSettingsById } from '@/lib/tenant';
+import { getAutomationTenants } from './tenants';
 import { AutomationResult } from './types';
-import mongoose from 'mongoose'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import mongoose from 'mongoose';
 
 export interface DynamicPricingOptions {
   tenantId?: string;
@@ -25,8 +24,6 @@ export interface DynamicPricingOptions {
 export async function applyDynamicPricing(
   options: DynamicPricingOptions = {}
 ): Promise<AutomationResult> {
-  await connectDB();
-
   const results: AutomationResult = {
     success: true,
     message: '',
@@ -35,15 +32,17 @@ export async function applyDynamicPricing(
     errors: [],
   };
 
+  // Nothing to do without at least one rule; skip all DB access
+  if (!options.enableTimeBased && !options.enableDemandBased && !options.enableStockBased) {
+    results.message = 'No dynamic pricing rules enabled';
+    return results;
+  }
+
+  await connectDB();
+
   try {
     // Get tenants to process
-    let tenants;
-    if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).lean();
-      tenants = tenant ? [tenant] : [];
-    } else {
-      tenants = await Tenant.find({ status: 'active' }).lean();
-    }
+    const tenants = await getAutomationTenants({ tenantId: options.tenantId, select: 'name' });
 
     if (tenants.length === 0) {
       results.message = 'No tenants found to process';
@@ -53,61 +52,105 @@ export async function applyDynamicPricing(
     let totalUpdated = 0;
     let totalFailed = 0;
 
+    const now = new Date();
+    const currentHour = now.getHours();
+    const isHappyHour = currentHour >= 14 && currentHour < 16;
+    const last7Days = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
     for (const tenant of tenants) {
       try {
-        const tenantId = tenant._id.toString();
-        const tenantSettings = await getTenantSettingsById(tenantId); // eslint-disable-line @typescript-eslint/no-unused-vars
+        const tenantId = tenant._id;
 
         // Get products
-        const products = await Product.find({ tenantId }).lean();
+        const products = await Product.find({ tenantId })
+          .select('price basePrice stock')
+          .lean();
+
+        if (products.length === 0) {
+          continue;
+        }
+
+        // Demand: number of completed transactions per product in the last 7 days
+        // (one aggregate per tenant; $setUnion counts each transaction once per product)
+        const recentSalesMap = new Map<string, number>();
+        if (options.enableDemandBased) {
+          const recentSales: Array<{ _id: mongoose.Types.ObjectId; count: number }> =
+            await Transaction.aggregate([
+              {
+                $match: {
+                  tenantId,
+                  status: 'completed',
+                  createdAt: { $gte: last7Days },
+                },
+              },
+              { $project: { products: { $setUnion: ['$items.product', []] } } },
+              { $unwind: '$products' },
+              { $group: { _id: '$products', count: { $sum: 1 } } },
+            ]);
+          for (const row of recentSales) {
+            if (row._id) recentSalesMap.set(row._id.toString(), row.count);
+          }
+        }
+
+        const updates: mongoose.AnyBulkWriteOperation[] = [];
 
         for (const product of products) {
-          try {
-            let newPrice = product.price;
-            let priceChanged = false;
-            const now = new Date();
-            const currentHour = now.getHours();
+          // Rules apply to the original price so adjustments don't compound across runs
+          const basePrice = product.basePrice ?? product.price;
+          let multiplier = 1;
 
-            // Time-based pricing (e.g., happy hour 2-4 PM: 10% discount)
-            if (options.enableTimeBased && currentHour >= 14 && currentHour < 16) {
-              newPrice = product.price * 0.9; // 10% discount
-              priceChanged = true;
-            }
-
-            // Stock-based pricing (clearance: 20% discount if stock > 50)
-            if (options.enableStockBased && product.stock > 50) {
-              newPrice = product.price * 0.8; // 20% discount for clearance
-              priceChanged = true;
-            }
-
-            // Demand-based pricing (increase price if high demand)
-            if (options.enableDemandBased) {
-              const last7Days = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-              const recentSales = await Transaction.countDocuments({
-                tenantId,
-                'items.product': product._id,
-                createdAt: { $gte: last7Days },
-                status: 'completed',
-              });
-
-              if (recentSales > 20) {
-                // High demand - increase price by 5%
-                newPrice = product.price * 1.05;
-                priceChanged = true;
-              }
-            }
-
-            // Update product price if changed
-            if (priceChanged && newPrice !== product.price) {
-              await Product.findByIdAndUpdate(product._id, {
-                price: Math.round(newPrice * 100) / 100, // Round to 2 decimals
-              });
-              totalUpdated++;
-            }
-          } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-            totalFailed++;
-            results.errors?.push(`Product ${product._id}: ${error.message}`);
+          // Time-based pricing (e.g., happy hour 2-4 PM: 10% discount)
+          if (options.enableTimeBased && isHappyHour) {
+            multiplier = 0.9; // 10% discount
           }
+
+          // Stock-based pricing (clearance: 20% discount if stock > 50)
+          if (options.enableStockBased && product.stock > 50) {
+            multiplier = 0.8; // 20% discount for clearance
+          }
+
+          // Demand-based pricing (increase price if high demand)
+          if (options.enableDemandBased && (recentSalesMap.get(product._id.toString()) || 0) > 20) {
+            // High demand - increase price by 5%
+            multiplier = 1.05;
+          }
+
+          if (multiplier === 1) {
+            // No rule applies: restore the original price and drop the marker
+            if (product.basePrice != null) {
+              updates.push({
+                updateOne: {
+                  filter: { _id: product._id, tenantId },
+                  update: { $set: { price: product.basePrice }, $unset: { basePrice: 1 } },
+                },
+              });
+              if (product.basePrice !== product.price) totalUpdated++;
+            }
+            continue;
+          }
+
+          const newPrice = Math.round(basePrice * multiplier * 100) / 100; // Round to 2 decimals
+
+          // Only write when the price actually changes
+          if (newPrice !== product.price) {
+            updates.push({
+              updateOne: {
+                filter: { _id: product._id, tenantId },
+                update: {
+                  $set: {
+                    price: newPrice,
+                    // Remember the original price on the first adjustment
+                    ...(product.basePrice == null ? { basePrice: product.price } : {}),
+                  },
+                },
+              },
+            });
+            totalUpdated++;
+          }
+        }
+
+        if (updates.length > 0) {
+          await Product.bulkWrite(updates, { ordered: false });
         }
       } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
         totalFailed++;

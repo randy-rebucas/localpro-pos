@@ -46,12 +46,18 @@ export async function GET(
     const endDate = searchParams.get('endDate');
 
     // Build query
+    // Only match on identifiers the customer actually has — an undefined
+    // email/phone would otherwise match every booking missing that field.
+    const identityMatch: Record<string, string>[] = [];
+    if (customer.email) identityMatch.push({ customerEmail: customer.email });
+    if (customer.phone) identityMatch.push({ customerPhone: customer.phone });
+    if (identityMatch.length === 0) {
+      return NextResponse.json({ success: true, data: [] });
+    }
+
     const query: any = { // eslint-disable-line @typescript-eslint/no-explicit-any
       tenantId: customer.tenantId,
-      $or: [
-        { customerEmail: customer.email },
-        { customerPhone: customer.phone },
-      ],
+      $or: identityMatch,
     };
 
     // Add status filter

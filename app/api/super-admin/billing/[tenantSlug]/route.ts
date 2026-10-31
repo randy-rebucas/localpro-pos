@@ -69,7 +69,7 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
-    const subscription = await Subscription.findOne({ tenantId: tenant._id }).lean();
+    const subscription = await Subscription.findOne({ tenantId: tenant._id }, '_id').lean();
     if (!subscription) {
       return NextResponse.json({ success: false, error: 'No subscription found for this tenant' }, { status: 404 });
     }

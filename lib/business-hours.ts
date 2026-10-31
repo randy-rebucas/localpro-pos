@@ -1,9 +1,20 @@
 /**
  * Business Hours Management
- * Handles business hours, special hours, and holiday checking
+ * Handles business hours, special hours, and holiday checking.
+ *
+ * All calendar/clock checks are evaluated in the business's timezone, never
+ * the server's (Vercel runs UTC). Timezone resolution order: explicit `tz`
+ * argument (callers should pass getTenantTimezone(tenant.settings)), then
+ * `businessHours.timezone`, then the default (Asia/Manila).
  */
 
-import { ITenantSettings } from '@/models/Tenant'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import {
+  addDaysToYmd,
+  getTenantDayBoundaries,
+  getTenantLocalParts,
+  getTenantTimezone,
+  tenantLocalTimeToUtc,
+} from '@/lib/timezone';
 
 export interface BusinessHours {
   timezone?: string;
@@ -43,72 +54,122 @@ export interface Holiday {
 
 const DAYS_OF_WEEK = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
+function resolveTimezone(businessHours?: BusinessHours, tz?: string): string {
+  return getTenantTimezone({ timezone: tz || businessHours?.timezone });
+}
+
+type DaySchedule = NonNullable<BusinessHours['schedule']>[string];
+
+/** Schedule entry for a weekday; supports plain objects (lean) and Mongoose Maps. */
+function getScheduleEntry(businessHours: BusinessHours | undefined, dayName: string): DaySchedule | undefined {
+  const schedule = businessHours?.schedule as unknown;
+  if (!schedule) return undefined;
+  if (schedule instanceof Map) return schedule.get(dayName);
+  return (schedule as Record<string, DaySchedule>)[dayName];
+}
+
+function toMinutes(hhmm: string): number {
+  const [h, m] = hhmm.split(':').map(Number);
+  return (h || 0) * 60 + (m || 0);
+}
+
+export interface EffectiveDayHours {
+  /** Local calendar date 'YYYY-MM-DD' in the business timezone */
+  ymd: string;
+  /** Lower-case weekday name of that local date */
+  dayName: string;
+  /** false when closed all day (holiday, special closure or disabled weekday) */
+  enabled: boolean;
+  openTime?: string;
+  closeTime?: string;
+  breaks?: Array<{ start: string; end: string }>;
+  reason?: string;
+  /** Where the hours came from; 'none' means nothing is configured */
+  source: 'holiday' | 'special' | 'schedule' | 'none';
+}
+
 /**
- * Check if business is open at a given date/time
+ * The hours that apply on the local calendar day containing `date`
+ * (holidays first, then special hours, then the weekly schedule).
+ */
+export function getEffectiveHoursForDate(
+  date: Date,
+  businessHours?: BusinessHours,
+  holidays?: Holiday[],
+  tz?: string
+): EffectiveDayHours {
+  const zone = resolveTimezone(businessHours, tz);
+  const local = getTenantLocalParts(date, zone);
+  const dayName = DAYS_OF_WEEK[local.weekday];
+  const base = { ymd: local.ymd, dayName };
+
+  if (holidays) {
+    const holiday = getHolidayForDate(date, holidays, zone);
+    if (holiday && holiday.isBusinessClosed) {
+      return { ...base, enabled: false, reason: `Closed for ${holiday.name}`, source: 'holiday' };
+    }
+  }
+
+  const specialHour = businessHours?.specialHours?.find((sh) => sh.date === local.ymd);
+  if (specialHour) {
+    if (!specialHour.enabled) {
+      return { ...base, enabled: false, reason: specialHour.note || 'Closed (special hours)', source: 'special' };
+    }
+    if (specialHour.openTime && specialHour.closeTime) {
+      return { ...base, enabled: true, openTime: specialHour.openTime, closeTime: specialHour.closeTime, source: 'special' };
+    }
+  }
+
+  if (businessHours?.schedule) {
+    const daySchedule = getScheduleEntry(businessHours, dayName);
+    if (!daySchedule || !daySchedule.enabled) {
+      return { ...base, enabled: false, reason: `Closed on ${dayName}`, source: 'schedule' };
+    }
+    return {
+      ...base,
+      enabled: true,
+      openTime: daySchedule.openTime,
+      closeTime: daySchedule.closeTime,
+      breaks: daySchedule.breaks,
+      source: 'schedule',
+    };
+  }
+
+  return { ...base, enabled: true, source: 'none' };
+}
+
+/**
+ * Check if business is open at a given date/time (evaluated in the business timezone)
  */
 export function isBusinessOpen(
   date: Date,
   businessHours?: BusinessHours,
-  holidays?: Holiday[]
+  holidays?: Holiday[],
+  tz?: string
 ): { isOpen: boolean; reason?: string; nextOpen?: Date } {
-  // Check if it's a holiday and business is closed
-  if (holidays) {
-    const holiday = getHolidayForDate(date, holidays);
-    if (holiday && holiday.isBusinessClosed) {
-      return {
-        isOpen: false,
-        reason: `Closed for ${holiday.name}`,
-      };
-    }
+  const zone = resolveTimezone(businessHours, tz);
+  const hours = getEffectiveHoursForDate(date, businessHours, holidays, zone);
+
+  if (!hours.enabled) {
+    return { isOpen: false, reason: hours.reason };
   }
 
-  // Check special hours first
-  if (businessHours?.specialHours) {
-    const dateStr = formatDateString(date);
-    const specialHour = businessHours.specialHours.find((sh) => sh.date === dateStr);
-    if (specialHour) {
-      if (!specialHour.enabled) {
-        return {
-          isOpen: false,
-          reason: specialHour.note || 'Closed (special hours)',
-        };
-      }
-      if (specialHour.openTime && specialHour.closeTime) {
-        return checkTimeRange(date, specialHour.openTime, specialHour.closeTime);
-      }
-    }
-  }
+  if (hours.openTime && hours.closeTime) {
+    const timeCheck = checkTimeRange(date, hours.openTime, hours.closeTime, zone);
 
-  // Check regular schedule
-  if (businessHours?.schedule) {
-    const dayName = DAYS_OF_WEEK[date.getDay()];
-    const daySchedule = businessHours.schedule[dayName];
-    
-    if (!daySchedule || !daySchedule.enabled) {
-      return {
-        isOpen: false,
-        reason: `Closed on ${dayName}`,
-      };
-    }
-
-    if (daySchedule.openTime && daySchedule.closeTime) {
-      const timeCheck = checkTimeRange(date, daySchedule.openTime, daySchedule.closeTime);
-      
-      // Check breaks
-      if (timeCheck.isOpen && daySchedule.breaks) {
-        for (const breakTime of daySchedule.breaks) {
-          const breakCheck = checkTimeRange(date, breakTime.start, breakTime.end);
-          if (!breakCheck.isOpen) {
-            return {
-              isOpen: false,
-              reason: 'Closed for break',
-            };
-          }
+    // Inside a break range means closed
+    if (timeCheck.isOpen && hours.breaks) {
+      for (const breakTime of hours.breaks) {
+        if (checkTimeRange(date, breakTime.start, breakTime.end, zone).isOpen) {
+          return {
+            isOpen: false,
+            reason: 'Closed for break',
+          };
         }
       }
-
-      return timeCheck;
     }
+
+    return timeCheck;
   }
 
   // Default: assume open if no schedule is set
@@ -116,60 +177,42 @@ export function isBusinessOpen(
 }
 
 /**
- * Check if time falls within a range
+ * Check if the local time of `date` (in `tz`) falls within [openTime, closeTime)
  */
-function checkTimeRange(date: Date, openTime: string, closeTime: string): { isOpen: boolean; nextOpen?: Date } {
-  const [openHour, openMinute] = openTime.split(':').map(Number);
-  const [closeHour, closeMinute] = closeTime.split(':').map(Number);
-
-  const currentHour = date.getHours();
-  const currentMinute = date.getMinutes();
-  const currentTime = currentHour * 60 + currentMinute;
-  const openTimeMinutes = openHour * 60 + openMinute;
-  const closeTimeMinutes = closeHour * 60 + closeMinute;
+function checkTimeRange(
+  date: Date,
+  openTime: string,
+  closeTime: string,
+  tz: string
+): { isOpen: boolean; nextOpen?: Date } {
+  const local = getTenantLocalParts(date, tz);
+  const currentTime = local.hour * 60 + local.minute;
+  const openTimeMinutes = toMinutes(openTime);
+  const closeTimeMinutes = toMinutes(closeTime);
 
   // Handle overnight hours (e.g., 22:00 - 02:00)
-  if (closeTimeMinutes < openTimeMinutes) {
-    const isOpen = currentTime >= openTimeMinutes || currentTime < closeTimeMinutes;
-    if (!isOpen) {
-      // Next open is today if we're before close, otherwise tomorrow
-      const nextOpen = new Date(date);
-      if (currentTime < openTimeMinutes) {
-        nextOpen.setHours(openHour, openMinute, 0, 0);
-      } else {
-        nextOpen.setDate(nextOpen.getDate() + 1);
-        nextOpen.setHours(openHour, openMinute, 0, 0);
-      }
-      return { isOpen: false, nextOpen };
-    }
-    return { isOpen: true };
-  }
+  const isOpen = closeTimeMinutes < openTimeMinutes
+    ? currentTime >= openTimeMinutes || currentTime < closeTimeMinutes
+    : currentTime >= openTimeMinutes && currentTime < closeTimeMinutes;
 
-  // Normal hours
-  const isOpen = currentTime >= openTimeMinutes && currentTime < closeTimeMinutes;
-  if (!isOpen) {
-    const nextOpen = new Date(date);
-    if (currentTime < openTimeMinutes) {
-      nextOpen.setHours(openHour, openMinute, 0, 0);
-    } else {
-      nextOpen.setDate(nextOpen.getDate() + 1);
-      nextOpen.setHours(openHour, openMinute, 0, 0);
-    }
-    return { isOpen: false, nextOpen };
-  }
+  if (isOpen) return { isOpen: true };
 
-  return { isOpen: true };
+  // Next opening: today at openTime if still ahead, otherwise tomorrow (local wall clock)
+  const nextOpen = currentTime < openTimeMinutes
+    ? tenantLocalTimeToUtc(local.ymd, openTime, tz)
+    : tenantLocalTimeToUtc(addDaysToYmd(local.ymd, 1), openTime, tz);
+  return { isOpen: false, nextOpen };
 }
 
 /**
- * Get holiday for a specific date
+ * Get holiday for a specific date (the local calendar day of `date` in `tz`)
  */
-export function getHolidayForDate(date: Date, holidays: Holiday[]): Holiday | null {
-  const dateStr = formatDateString(date);
-  const year = date.getFullYear(); // eslint-disable-line @typescript-eslint/no-unused-vars
-  const month = date.getMonth() + 1;
-  const day = date.getDate();
-  const dayOfWeek = date.getDay();
+export function getHolidayForDate(date: Date, holidays: Holiday[], tz?: string): Holiday | null {
+  const local = getTenantLocalParts(date, getTenantTimezone({ timezone: tz }));
+  const dateStr = local.ymd;
+  const month = local.month;
+  const day = local.day;
+  const dayOfWeek = local.weekday;
 
   for (const holiday of holidays) {
     if (holiday.type === 'single') {
@@ -207,30 +250,22 @@ export function getHolidayForDate(date: Date, holidays: Holiday[]): Holiday | nu
 }
 
 /**
- * Format date as YYYY-MM-DD
- */
-function formatDateString(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
-/**
  * Get next business open time
  */
 export function getNextOpenTime(
   fromDate: Date,
   businessHours?: BusinessHours,
-  holidays?: Holiday[]
+  holidays?: Holiday[],
+  tz?: string
 ): Date | null {
-  const checkDate = new Date(fromDate);
+  const zone = resolveTimezone(businessHours, tz);
+  let checkDate = new Date(fromDate);
   let attempts = 0;
   const maxAttempts = 365; // Prevent infinite loop
 
   while (attempts < maxAttempts) {
-    const status = isBusinessOpen(checkDate, businessHours, holidays);
-    
+    const status = isBusinessOpen(checkDate, businessHours, holidays, zone);
+
     if (status.isOpen) {
       return checkDate;
     }
@@ -239,9 +274,9 @@ export function getNextOpenTime(
       return status.nextOpen;
     }
 
-    // Move to next day and check opening time
-    checkDate.setDate(checkDate.getDate() + 1);
-    checkDate.setHours(0, 0, 0, 0);
+    // Move to the start of the next local day and check again
+    const ymd = getTenantLocalParts(checkDate, zone).ymd;
+    checkDate = getTenantDayBoundaries(addDaysToYmd(ymd, 1), zone).start;
     attempts++;
   }
 
@@ -259,5 +294,5 @@ export function getBusinessHoursForDay(
     return null;
   }
 
-  return businessHours.schedule[dayName.toLowerCase()] || null;
+  return getScheduleEntry(businessHours, dayName.toLowerCase()) || null;
 }

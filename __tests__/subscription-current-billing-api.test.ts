@@ -84,7 +84,7 @@ describe('GET /api/subscriptions/current', () => {
 
     expect(status).toBe(200);
     expect(body.success).toBe(true);
-    expect(mockSubscriptionFindOne).toHaveBeenCalledWith({ tenantId: TENANT_A });
+    expect(mockSubscriptionFindOne).toHaveBeenCalledWith({ tenantId: TENANT_A }, '-billingHistory');
   });
 
   it('never leaks a different tenant\'s subscription', async () => {
@@ -94,8 +94,8 @@ describe('GET /api/subscriptions/current', () => {
 
     await getCurrent(createRequest('/api/subscriptions/current'));
 
-    expect(mockSubscriptionFindOne).not.toHaveBeenCalledWith({ tenantId: TENANT_A });
-    expect(mockSubscriptionFindOne).toHaveBeenCalledWith({ tenantId: TENANT_B });
+    expect(mockSubscriptionFindOne).not.toHaveBeenCalledWith({ tenantId: TENANT_A }, expect.anything());
+    expect(mockSubscriptionFindOne).toHaveBeenCalledWith({ tenantId: TENANT_B }, '-billingHistory');
   });
 
   it('returns 500 with a translated error when the tenant lookup throws', async () => {

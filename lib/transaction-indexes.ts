@@ -4,6 +4,12 @@ import { logger } from '@/lib/logger';
 
 let indexesEnsured = false;
 
+// Bump when the reconciliation below changes so it re-runs once per database.
+// Without this marker the two updateMany calls (which can't use an index) were
+// full scans of `transactions` on every cold start.
+const MIGRATION_ID = 'transaction-indexes-v2';
+const MIGRATIONS_COLLECTION = 'app_migrations';
+
 const LEGACY_RECEIPT_INDEX = 'receiptNumber_1';
 const CHANNEL_SYNC_INDEX = 'tenantId_1_channelSyncKey_1';
 const IDEMPOTENCY_INDEX = 'tenantId_1_idempotencyKey_1';
@@ -16,6 +22,12 @@ const IDEMPOTENCY_INDEX = 'tenantId_1_idempotencyKey_1';
  */
 export async function ensureTransactionIndexes(): Promise<void> {
   if (indexesEnsured || mongoose.connection.readyState !== 1) {
+    return;
+  }
+
+  const migrations = mongoose.connection.collection<{ _id: string; completedAt: Date }>(MIGRATIONS_COLLECTION);
+  if (await migrations.findOne({ _id: MIGRATION_ID }, { projection: { _id: 1 } })) {
+    indexesEnsured = true;
     return;
   }
 
@@ -70,6 +82,11 @@ export async function ensureTransactionIndexes(): Promise<void> {
   }
 
   await Transaction.syncIndexes();
+  await migrations.updateOne(
+    { _id: MIGRATION_ID },
+    { $set: { completedAt: new Date() } },
+    { upsert: true }
+  );
   indexesEnsured = true;
 }
 

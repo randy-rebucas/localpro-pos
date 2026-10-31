@@ -5,7 +5,9 @@ import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
-import { getDailySalesAggregate, startOfBusinessDay } from '@/lib/bir-readings';
+import { getDailySalesAggregate, getBusinessDayRange, parseBusinessDateInput } from '@/lib/bir-readings';
+import { getTenantSettingsById } from '@/lib/tenant';
+import { getTenantTimezone } from '@/lib/timezone';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
 
@@ -29,10 +31,16 @@ export async function GET(request: NextRequest) {
     }
 
     const searchParams = request.nextUrl.searchParams;
-    const businessDate = searchParams.get('date') ? new Date(searchParams.get('date')!) : new Date();
+    // 'YYYY-MM-DD' means that calendar day in the tenant's timezone (not the server's — Vercel is UTC).
+    const businessDate = parseBusinessDateInput(searchParams.get('date'));
+    if (businessDate === null) {
+      return NextResponse.json({ success: false, error: t('validation.invalidDate', 'Invalid date') }, { status: 400 });
+    }
+    const tz = getTenantTimezone(await getTenantSettingsById(tenantId));
+    const { start: businessDayStart, ymd } = getBusinessDayRange(businessDate, tz);
 
     const [aggregate, tenant] = await Promise.all([
-      getDailySalesAggregate(tenantId, businessDate),
+      getDailySalesAggregate(tenantId, ymd, tz),
       Tenant.findById(tenantId).select('grandTotalSales grandTotalTransactionCount').lean(),
     ]);
 
@@ -41,13 +49,15 @@ export async function GET(request: NextRequest) {
       userId: user.userId,
       action: AuditActions.X_READING_VIEW,
       entityType: 'x_reading',
-      metadata: { businessDate: startOfBusinessDay(businessDate).toISOString() },
+      metadata: { businessDate: businessDayStart.toISOString(), businessDay: ymd, timezone: tz },
     });
 
     return NextResponse.json({
       success: true,
       data: {
         ...aggregate,
+        businessDay: ymd,
+        timezone: tz,
         currentGrandTotal: tenant?.grandTotalSales ?? 0,
         currentGrandTotalTransactionCount: tenant?.grandTotalTransactionCount ?? 0,
       },

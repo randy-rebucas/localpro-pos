@@ -6,7 +6,9 @@ import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
-import { getDailySalesAggregate, startOfBusinessDay } from '@/lib/bir-readings';
+import { getDailySalesAggregate, getBusinessDayRange, parseBusinessDateInput } from '@/lib/bir-readings';
+import { getTenantSettingsById } from '@/lib/tenant';
+import { getTenantTimezone } from '@/lib/timezone';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
@@ -71,9 +73,31 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json().catch(() => ({}));
-    const businessDate = startOfBusinessDay(body.date ? new Date(body.date) : new Date());
+    // body.date 'YYYY-MM-DD' means that calendar day in the tenant's timezone; the business
+    // day is [local 00:00, next local 00:00) and businessDate is stored as the UTC instant of
+    // local midnight (e.g. Manila 2026-10-30 -> 2026-10-29T16:00:00.000Z).
+    const requestedDate = parseBusinessDateInput(body?.date);
+    if (requestedDate === null) {
+      return NextResponse.json({ success: false, error: t('validation.invalidDate', 'Invalid date') }, { status: 400 });
+    }
+    const tz = getTenantTimezone(await getTenantSettingsById(tenantId));
+    const { start: businessDate, end: nextBusinessDay, ymd } = getBusinessDayRange(requestedDate, tz);
+    // Z-Readings are currently tenant-wide: the aggregate and Grand Total accumulator below are
+    // not branch-scoped and create() stores no branchId. The unique index is
+    // {tenantId, branchId, businessDate}, where a missing branchId indexes as null — so match
+    // branchId: null (missing or null) to hit exactly that key and never return a
+    // branch-scoped reading for the same date.
+    // The duplicate check matches any businessDate inside the local day window, not only the
+    // exact local-midnight key: readings generated before business days were tenant-timezone
+    // aware were keyed at UTC midnight (08:00 Manila of the same calendar day), and must still
+    // be returned as a reprint rather than allowing a second Z-Reading for that day.
+    const tenantReadingFilter = {
+      tenantId,
+      branchId: null,
+      businessDate: { $gte: businessDate, $lt: nextBusinessDay },
+    };
 
-    const existing = await ZReading.findOne({ tenantId, businessDate }).populate('generatedBy', 'name email').lean();
+    const existing = await ZReading.findOne(tenantReadingFilter).populate('generatedBy', 'name email').lean();
     if (existing) {
       await createAuditLog(request, {
         tenantId,
@@ -81,13 +105,13 @@ export async function POST(request: NextRequest) {
         action: AuditActions.Z_READING_VIEW,
         entityType: 'z_reading',
         entityId: existing._id.toString(),
-        metadata: { businessDate: businessDate.toISOString(), reprint: true },
+        metadata: { businessDate: businessDate.toISOString(), businessDay: ymd, timezone: tz, reprint: true },
       });
       return NextResponse.json({ success: true, data: existing, reprint: true });
     }
 
     const [aggregate, tenant] = await Promise.all([
-      getDailySalesAggregate(tenantId, businessDate),
+      getDailySalesAggregate(tenantId, ymd, tz),
       Tenant.findById(tenantId).select('grandTotalSales').lean(),
     ]);
 
@@ -115,7 +139,7 @@ export async function POST(request: NextRequest) {
     } catch (createErr: unknown) {
       // Unique index race: another request generated it first — return that one as a reprint.
       if (createErr instanceof Error && 'code' in createErr && (createErr as { code?: number }).code === 11000) {
-        const race = await ZReading.findOne({ tenantId, businessDate }).populate('generatedBy', 'name email').lean();
+        const race = await ZReading.findOne(tenantReadingFilter).populate('generatedBy', 'name email').lean();
         if (race) {
           return NextResponse.json({ success: true, data: race, reprint: true });
         }
@@ -131,6 +155,8 @@ export async function POST(request: NextRequest) {
       entityId: zReading._id.toString(),
       changes: {
         businessDate: businessDate.toISOString(),
+        businessDay: ymd,
+        timezone: tz,
         grossSales: aggregate.grossSales,
         beginningGT,
         endingGT,

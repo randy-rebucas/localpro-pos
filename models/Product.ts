@@ -19,6 +19,7 @@ export interface IProduct extends Document {
   name: string;
   description?: string;
   price: number;
+  basePrice?: number; // Original price before dynamic pricing adjustments
   stock: number; // Master stock (used when no branches/variations)
   sku?: string;
   barcode?: string;
@@ -35,6 +36,7 @@ export interface IProduct extends Document {
   trackInventory: boolean; // Whether to track inventory for this product
   allowOutOfStockSales?: boolean; // Whether to allow sales when out of stock
   lowStockThreshold?: number; // Product-specific threshold (overrides tenant default)
+  lowStockAlertedAt?: Date; // Last low-stock alert that included this product (dedupes the hourly job)
   pinned?: boolean; // Whether the product is pinned to the top
   
   // Industry-specific fields (optional, used based on business type)
@@ -105,6 +107,11 @@ const ProductSchema: Schema = new Schema(
       required: [true, 'Product price is required'],
       min: [0, 'Price must be positive'],
     },
+    // Original price before dynamic pricing adjustments (set on first adjustment)
+    basePrice: {
+      type: Number,
+      min: 0,
+    },
     stock: {
       type: Number,
       required: [true, 'Stock quantity is required'],
@@ -126,7 +133,6 @@ const ProductSchema: Schema = new Schema(
     categoryId: {
       type: Schema.Types.ObjectId,
       ref: 'Category',
-      index: true,
     },
     image: {
       type: String,
@@ -189,10 +195,13 @@ const ProductSchema: Schema = new Schema(
       type: Number,
       min: 0,
     },
+    // Last low-stock alert that included this product (dedupes the hourly alert job)
+    lowStockAlertedAt: {
+      type: Date,
+    },
     pinned: {
       type: Boolean,
       default: false,
-      index: true,
     },
     
     // Industry-specific fields
@@ -318,23 +327,27 @@ async function checkProductDependencies(filter: Record<string, unknown>) {
   if (!doc) return;
 
   const Transaction = mongoose.model('Transaction');
-  const activeTransactionCount = await Transaction.countDocuments({
+  // Tenant-scoped existence checks (stop at the first match) instead of
+  // counting across every tenant's transactions.
+  const referencedByTransaction = await Transaction.exists({
+    tenantId: doc.tenantId,
+    status: 'completed',
     'items.product': doc._id,
-    status: { $in: ['completed'] },
   });
-  if (activeTransactionCount > 0) {
+  if (referencedByTransaction) {
     throw new Error(
-      `Cannot delete product "${doc.name}": ${activeTransactionCount} completed transaction(s) reference this product. Consider deactivating it instead.`
+      `Cannot delete product "${doc.name}": completed transactions reference this product. Consider deactivating it instead.`
     );
   }
 
   const SavedCart = mongoose.model('SavedCart');
-  const savedCartCount = await SavedCart.countDocuments({
+  const referencedBySavedCart = await SavedCart.exists({
+    tenantId: doc.tenantId,
     'items.productId': doc._id,
   });
-  if (savedCartCount > 0) {
+  if (referencedBySavedCart) {
     throw new Error(
-      `Cannot delete product "${doc.name}": ${savedCartCount} saved cart(s) reference this product. Remove the product from saved carts first.`
+      `Cannot delete product "${doc.name}": saved carts reference this product. Remove the product from saved carts first.`
     );
   }
 }
@@ -357,10 +370,24 @@ ProductSchema.pre('deleteOne', { document: false, query: true }, async function 
   }
 });
 
+/** Case-insensitive (strength 2) collation shared by the {tenantId, name} index and its queries. */
+export const PRODUCT_NAME_COLLATION = { locale: 'en', strength: 2 } as const;
+
 // Compound index for tenant-scoped unique SKU
-ProductSchema.index({ tenantId: 1, sku: 1 }, { unique: true, sparse: true });
-// Compound index for tenant-scoped unique barcode
-ProductSchema.index({ tenantId: 1, barcode: 1 }, { unique: true, sparse: true });
+// Partial, not sparse (see barcode note below). `$gt: ''` alone implies a non-empty
+// string, and equality lookups like { tenantId, sku: 'ABC' } satisfy it, so the
+// planner can still use this index for SKU lookups.
+ProductSchema.index(
+  { tenantId: 1, sku: 1 },
+  { unique: true, partialFilterExpression: { sku: { $gt: '' } } }
+);
+// Compound index for tenant-scoped unique barcode. Partial, not sparse: a sparse
+// compound index still indexes docs missing barcode (tenantId is present), so
+// every barcode-less product in a tenant would collide on {tenantId, null}.
+ProductSchema.index(
+  { tenantId: 1, barcode: 1 },
+  { unique: true, partialFilterExpression: { barcode: { $type: 'string', $gt: '' } } }
+);
 // Index for product type and inventory tracking
 ProductSchema.index({ tenantId: 1, productType: 1, trackInventory: 1 });
 ProductSchema.index({ tenantId: 1, hasVariations: 1 });
@@ -368,7 +395,14 @@ ProductSchema.index({ tenantId: 1, hasVariations: 1 });
 ProductSchema.index({ tenantId: 1, pinned: -1, createdAt: -1 });
 // Pharmacy: near-expiry report and drug schedule lookup
 ProductSchema.index({ tenantId: 1, expiryDate: 1 });
-ProductSchema.index({ tenantId: 1, drugSchedule: 1 });
+// Category-filtered product list (same sort as the pinned index above)
+ProductSchema.index({ tenantId: 1, categoryId: 1, pinned: -1, createdAt: -1 });
+// Inventory-tracked product scans (low-stock alerts, stock automations)
+ProductSchema.index({ tenantId: 1, trackInventory: 1 });
+// Case-insensitive exact name lookups (duplicate-name check on create). Queries must pass
+// the same collation (PRODUCT_NAME_COLLATION) or the planner won't use this index.
+// Non-unique: duplicate names are allowed after the user confirms.
+ProductSchema.index({ tenantId: 1, name: 1 }, { collation: PRODUCT_NAME_COLLATION });
 
 const Product: Model<IProduct> = mongoose.models.Product || mongoose.model<IProduct>('Product', ProductSchema);
 

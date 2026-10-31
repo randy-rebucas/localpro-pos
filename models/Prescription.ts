@@ -111,8 +111,11 @@ const PrescriptionSchema: Schema = new Schema(
 PrescriptionSchema.index({ tenantId: 1, createdAt: -1 });
 PrescriptionSchema.index({ tenantId: 1, status: 1, createdAt: -1 });
 PrescriptionSchema.index({ tenantId: 1, prescriptionNumber: 1 }, { unique: true });
-PrescriptionSchema.index({ tenantId: 1, validUntil: 1 });
 PrescriptionSchema.index({ tenantId: 1, patientName: 'text' });
+// Retention: prescriptions support dispensing records and SC/PWD-discounted
+// sales, so they follow the 10-year BIR record period, then are removed by TTL.
+export const PRESCRIPTION_RETENTION_SECONDS = 10 * 366 * 24 * 60 * 60;
+PrescriptionSchema.index({ createdAt: 1 }, { expireAfterSeconds: PRESCRIPTION_RETENTION_SECONDS });
 
 const Prescription: Model<IPrescription> =
   mongoose.models.Prescription ||

@@ -1,6 +1,7 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
+import { invalidateUserCache } from '@/lib/db-cache';
 
 export interface IUser extends Document {
   email: string;
@@ -26,7 +27,6 @@ const UserSchema: Schema = new Schema(
       lowercase: true,
       trim: true,
       match: [/^\S+@\S+\.\S+$/, 'Please provide a valid email'],
-      index: true,
     },
     password: {
       type: String,
@@ -49,7 +49,6 @@ const UserSchema: Schema = new Schema(
       type: String,
       unique: true,
       sparse: true, // Allow null values but enforce uniqueness when present
-      index: true,
     },
     tenantId: {
       type: Schema.Types.ObjectId,
@@ -59,7 +58,6 @@ const UserSchema: Schema = new Schema(
     branchId: {
       type: Schema.Types.ObjectId,
       ref: 'Branch',
-      index: true,
     },
     isActive: {
       type: Boolean,
@@ -102,13 +100,32 @@ UserSchema.methods.comparePassword = async function (candidatePassword: string):
   return bcrypt.compare(candidatePassword, this.password);
 };
 
-// Compound index for tenant and email
-UserSchema.index({ tenantId: 1, email: 1 }, { unique: true });
+// No {tenantId, email} index: email is globally unique (one account per email
+// across tenants; super-admin login looks up by email alone), and that unique
+// index already serves the tenant-scoped login lookup {email, tenantId}.
 
 // Index for tenant and role queries
 UserSchema.index({ tenantId: 1, role: 1, isActive: 1 });
-// Index for branch assignment queries
-UserSchema.index({ tenantId: 1, branchId: 1, isActive: 1 });
+// No branchId index: nothing in app/ or lib/ queries users by branch. Add
+// { tenantId, branchId } back when a branch-scoped user lookup exists.
+
+// Keep lib/db-cache.ts (auth's isActive/tenantId lookup) in sync with user
+// writes made in this process.
+function invalidateForFilter(filter: Record<string, unknown> | undefined): void {
+  const id = filter?._id;
+  if (id && (typeof id === 'string' || id instanceof mongoose.Types.ObjectId)) {
+    invalidateUserCache(id.toString());
+  } else {
+    invalidateUserCache();
+  }
+}
+
+UserSchema.post(['updateOne', 'updateMany', 'findOneAndUpdate', 'replaceOne', 'deleteOne', 'deleteMany', 'findOneAndDelete'], function () {
+  invalidateForFilter(this.getFilter());
+});
+UserSchema.post('save', function (doc: IUser) {
+  invalidateUserCache(String(doc._id));
+});
 
 const User: Model<IUser> = mongoose.models.User || mongoose.model<IUser>('User', UserSchema);
 

@@ -44,7 +44,7 @@ k6 load/stress/security test scripts also exist under `load-tests/` — check `p
 
   When adding or modifying an API route, follow this exact sequence and never skip the `tenantId` scoping — cross-tenant data leaks have been a real issue here (subscriptions endpoints previously leaked cross-tenant). Look at an existing route in the same feature folder for the concrete pattern before writing a new one.
 - **Super-admin panel**: separate area at `app/super-admin/` (dashboard, tenants, users, billing, subscriptions, plans, coupons, business-types, analytics, backups, logs, settings, login). This area uses a **Windows 8 / Metro-style flat design system** (`app/globals.css`, e.g. `.checkbox-win8`) — no rounded corners, solid tiles, flat colors. Any layout/styling change in `app/super-admin/` must match this system, not the tenant-facing app's styling.
-- **Cron/automations**: `lib/cron.ts` uses `node-cron` to schedule jobs defined in `lib/automations/` (booking reminders, no-show detection, low stock alerts, scheduled sales reports, auto clock-out, cash drawer auto-close, dynamic pricing, backups, audit log cleanup). Can be deployed via Vercel Cron (`vercel.json`), self-hosted node-cron, or an external cron service.
+- **Cron/automations**: jobs live in `lib/automations/`, each exposed as a cron-authenticated route under `app/api/automations/`. `vercel.json` is the only schedule (Vercel Cron, times in UTC); `lib/cron.ts` (node-cron) is unused legacy — don't add jobs there. Data retention: TTL indexes on ephemeral collections, `audit-log-cleanup` (90-day live window → `ArchivedAuditLog`, kept 10 years), `data-archiving` (financial records older than 10 years), `customer-data-retention` (anonymises long-deactivated customers).
 
 ## Folder structure
 

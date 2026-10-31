@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
+import { invalidateSubscriptionCache } from '@/lib/db-cache';
 
 export type SubscriptionTier = 'starter' | 'pro' | 'business' | 'enterprise';
 
@@ -280,8 +281,13 @@ SubscriptionPlanSchema.pre('deleteOne', { document: false, query: true }, async 
   }
 });
 
-// Create indexes
-SubscriptionPlanSchema.index({ isActive: 1 });
+// No secondary indexes: `tier` is unique (indexed), and the collection holds a
+// handful of plans, so an { isActive } index would cost more than it saves.
+
+// Plan changes affect every subscriber's cached status (lib/db-cache.ts).
+SubscriptionPlanSchema.post(['updateOne', 'updateMany', 'findOneAndUpdate', 'replaceOne', 'deleteOne', 'deleteMany', 'findOneAndDelete', 'save'], function () {
+  invalidateSubscriptionCache();
+});
 
 const SubscriptionPlan: Model<ISubscriptionPlan> = mongoose.models.SubscriptionPlan ||
   mongoose.model<ISubscriptionPlan>('SubscriptionPlan', SubscriptionPlanSchema);

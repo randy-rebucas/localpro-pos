@@ -4,7 +4,6 @@ import Transaction from '@/models/Transaction';
 import Payment from '@/models/Payment';
 import Customer from '@/models/Customer';
 import ProductChannelListing from '@/models/ProductChannelListing';
-import StockMovement from '@/models/StockMovement';
 import { generateReceiptNumber } from '@/lib/receipt';
 import { updateStock } from '@/lib/stock';
 import type { NormalizedPaidOrder } from '@/lib/ecommerce/types';
@@ -95,6 +94,9 @@ export async function importPaidChannelOrder(
     session.startTransaction();
 
     const syncNote = `channelSyncKey:${key}`;
+    // Pre-allocate the Transaction _id so stock movements are written with transactionId
+    // directly — no follow-up updateMany keyed on the unindexed `notes` field.
+    const txnId = new mongoose.Types.ObjectId();
 
     for (const item of items) {
       await updateStock(
@@ -103,6 +105,7 @@ export async function importPaidChannelOrder(
         -item.quantity,
         'sale',
         {
+          transactionId: txnId.toString(),
           reason: STOCK_REASON_CHANNEL_SALE,
           notes: syncNote,
           variation: item.variation,
@@ -119,6 +122,7 @@ export async function importPaidChannelOrder(
     const [txn] = await Transaction.create(
       [
         {
+          _id: txnId,
           tenantId,
           items: items.map((i) => ({
             product: i.productId,
@@ -146,16 +150,6 @@ export async function importPaidChannelOrder(
       { session }
     );
     transactionId = txn._id.toString();
-
-    await StockMovement.updateMany(
-      {
-        tenantId,
-        notes: syncNote,
-        transactionId: { $exists: false },
-      },
-      { $set: { transactionId: txn._id } },
-      { session }
-    );
 
     await Payment.create(
       [
@@ -190,14 +184,7 @@ export async function importPaidChannelOrder(
   }
 
   try {
-    const count = await Transaction.countDocuments({
-      tenantId,
-      createdAt: {
-        $gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
-        $lt: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1),
-      },
-    });
-    await SubscriptionService.updateUsage(tenantId, { transactions: count });
+    await SubscriptionService.recordTransaction(tenantId);
   } catch (e) {
     logger.warn('subscription usage update skipped', { error: e instanceof Error ? e.message : String(e) });
   }

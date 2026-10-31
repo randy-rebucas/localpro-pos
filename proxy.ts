@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import jwt from 'jsonwebtoken';
 import { match } from '@formatjs/intl-localematcher';
 import Negotiator from 'negotiator';
+import { normalizeHost } from '@/lib/host';
 
 // ---------------------------------------------------------------------------
 // Locale + tenant (non-API) — merged from former app/proxy.ts
@@ -41,7 +42,7 @@ function pageNext(request: NextRequest): NextResponse {
 
 function localeTenantRedirect(request: NextRequest): NextResponse {
   const { pathname } = request.nextUrl;
-  const host = request.headers.get('host') || '';
+  const host = normalizeHost(request.headers.get('host'));
 
   if (pathname.includes('/forbidden') || pathname.includes('/error') || pathname.includes('/not-found')) {
     return pageNext(request);
@@ -60,7 +61,7 @@ function localeTenantRedirect(request: NextRequest): NextResponse {
   }
 
   let tenantSlug = defaultTenant;
-  const subdomain = host.split(':')[0].split('.')[0];
+  const subdomain = host.split('.')[0];
   if (subdomain && subdomain !== 'www' && subdomain !== 'localhost' && subdomain !== '127.0.0.1') {
     tenantSlug = subdomain;
   }
@@ -253,7 +254,7 @@ export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // ── Subdomain routing: admin.* → /super-admin/... ──────────────────────
-  const host = (request.headers.get('host') || '').split(':')[0];
+  const host = normalizeHost(request.headers.get('host'));
   const hostParts = host.split('.');
   if (hostParts.length >= 2 && hostParts[0] === 'admin') {
     if (!pathname.startsWith('/super-admin') && !pathname.startsWith('/api/super-admin')) {

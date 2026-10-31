@@ -343,15 +343,76 @@ export async function checkLowStock(
 export async function getLowStockProducts(
   tenantId: string,
   branchId?: string,
-  threshold?: number
+  threshold?: number,
+  options: { select?: string } = {}
 ): Promise<any[]> { // eslint-disable-line @typescript-eslint/no-explicit-any
   await connectDB();
 
-  const products = await Product.find({
+  // Effective threshold: explicit threshold, else product.lowStockThreshold, else 10
+  // (same `||` semantics as the JS check below, so 0 falls through).
+  const thresholdExpr = threshold || {
+    $cond: [{ $gt: [{ $ifNull: ['$lowStockThreshold', 0] }, 0] }, '$lowStockThreshold', 10],
+  };
+
+  // Pre-filter in the database so only low-stock candidates are returned. Mirrors the
+  // variation / branch / master-stock branches of the loop below, which still computes
+  // currentStock and remains the exact check.
+  const branches: Record<string, unknown>[] = [
+    {
+      case: { $and: [{ $eq: ['$hasVariations', true] }, { $isArray: '$variations' }] },
+      then: {
+        $anyElementTrue: [{
+          $map: {
+            input: '$variations',
+            as: 'v',
+            in: { $lte: [{ $ifNull: ['$$v.stock', 0] }, thresholdExpr] },
+          },
+        }],
+      },
+    },
+  ];
+  if (branchId) {
+    branches.push({
+      case: { $isArray: '$branchStock' },
+      then: {
+        $let: {
+          vars: {
+            bs: {
+              $arrayElemAt: [{
+                $filter: {
+                  input: '$branchStock',
+                  as: 'b',
+                  cond: { $eq: [{ $toString: '$$b.branchId' }, branchId] },
+                },
+              }, 0],
+            },
+          },
+          in: {
+            $and: [
+              { $ne: [{ $type: '$$bs' }, 'missing'] },
+              { $lte: ['$$bs.stock', thresholdExpr] },
+            ],
+          },
+        },
+      },
+    });
+  }
+
+  const query = Product.find({
     tenantId,
     trackInventory: true,
     isActive: { $ne: false },
-  }).lean();
+    $expr: {
+      $switch: {
+        branches,
+        default: { $lte: [{ $ifNull: ['$stock', 0] }, thresholdExpr] },
+      },
+    },
+  });
+  if (options.select) {
+    query.select(options.select);
+  }
+  const products = await query.lean();
 
   const lowStockProducts = [];
 

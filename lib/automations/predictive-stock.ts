@@ -6,9 +6,8 @@
 import connectDB from '@/lib/mongodb';
 import Product from '@/models/Product';
 import Transaction from '@/models/Transaction';
-import Tenant from '@/models/Tenant';
 import { sendEmail } from '@/lib/notifications';
-import { getTenantSettingsById } from '@/lib/tenant';
+import { getAutomationTenants } from './tenants';
 import { AutomationResult } from './types';
 import mongoose from 'mongoose';
 
@@ -39,14 +38,16 @@ export async function predictStockNeeds(
     const predictionDays = options.predictionDays || 7;
     const analysisStartDate = new Date(Date.now() - analysisDays * 24 * 60 * 60 * 1000);
 
-    // Get tenants to process
-    let tenants;
-    if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).lean();
-      tenants = tenant ? [tenant] : [];
-    } else {
-      tenants = await Tenant.find({ status: 'active' }).lean();
-    }
+    // Get tenants to process. The report is only delivered by email, so tenants
+    // without email notifications and an address are filtered out up front.
+    const tenants = await getAutomationTenants({
+      tenantId: options.tenantId,
+      filter: {
+        'settings.enableInventory': { $ne: false },
+        'settings.emailNotifications': true,
+        'settings.email': { $nin: [null, ''] },
+      },
+    });
 
     if (tenants.length === 0) {
       results.message = 'No tenants found to process';
@@ -58,87 +59,86 @@ export async function predictStockNeeds(
 
     for (const tenant of tenants) {
       try {
-        const tenantId = tenant._id.toString();
-        const tenantSettings = await getTenantSettingsById(tenantId);
+        const tenantId = tenant._id;
+        const tenantSettings = tenant.settings;
 
-        // Get all products with inventory tracking
+        // Manual single-tenant runs bypass the filter; nothing to send without email
+        if (!tenantSettings?.emailNotifications || !tenantSettings?.email) {
+          continue;
+        }
+
+        // Units sold per product over the analysis window, in one aggregate
+        const salesByProduct: Array<{ _id: mongoose.Types.ObjectId; quantity: number }> =
+          await Transaction.aggregate([
+            {
+              $match: {
+                tenantId,
+                status: 'completed',
+                createdAt: { $gte: analysisStartDate },
+              },
+            },
+            { $project: { 'items.product': 1, 'items.quantity': 1 } },
+            { $unwind: '$items' },
+            {
+              $group: {
+                _id: '$items.product',
+                quantity: { $sum: '$items.quantity' },
+              },
+            },
+          ]);
+
+        const salesMap = new Map<string, number>();
+        for (const row of salesByProduct) {
+          if (row._id) salesMap.set(row._id.toString(), row.quantity || 0);
+        }
+
+        if (salesMap.size === 0) {
+          continue; // No sales history
+        }
+
+        // Only inventory-tracked products that actually sold need a prediction
         const products = await Product.find({
           tenantId,
           trackInventory: true,
-        }).lean();
+          _id: { $in: salesByProduct.map(row => row._id).filter(Boolean) },
+        })
+          .select('name sku stock lowStockThreshold')
+          .lean();
 
         const predictions: any[] = []; // eslint-disable-line @typescript-eslint/no-explicit-any
 
         for (const product of products) {
-          try {
-            // Get sales history for this product
-            const salesHistory = await Transaction.aggregate([
-              {
-                $match: {
-                  tenantId: new mongoose.Types.ObjectId(tenantId),
-                  createdAt: { $gte: analysisStartDate },
-                  status: 'completed',
-                  'items.product': product._id,
-                },
-              },
-              {
-                $unwind: '$items',
-              },
-              {
-                $match: {
-                  'items.product': product._id,
-                },
-              },
-              {
-                $group: {
-                  _id: {
-                    $dateToString: { format: '%Y-%m-%d', date: '$createdAt' },
-                  },
-                  quantity: { $sum: '$items.quantity' },
-                },
-              },
-              {
-                $sort: { _id: 1 },
-              },
-            ]);
+          const totalQuantity = salesMap.get(product._id.toString()) || 0;
 
-            if (salesHistory.length === 0) {
-              continue; // No sales history
-            }
+          // Calculate average daily sales
+          const avgDailySales = totalQuantity / analysisDays;
 
-            // Calculate average daily sales
-            const totalQuantity = salesHistory.reduce((sum, day) => sum + day.quantity, 0);
-            const avgDailySales = totalQuantity / analysisDays;
+          // Predict future needs
+          const predictedNeeds = avgDailySales * predictionDays;
 
-            // Predict future needs
-            const predictedNeeds = avgDailySales * predictionDays;
+          // Get current stock
+          const currentStock = product.stock || 0;
+          const threshold = product.lowStockThreshold || tenantSettings?.lowStockThreshold || 10;
 
-            // Get current stock
-            const currentStock = product.stock || 0;
-            const threshold = product.lowStockThreshold || tenantSettings?.lowStockThreshold || 10;
+          // Predict when stock will hit threshold
+          const daysUntilThreshold = currentStock > threshold
+            ? Math.floor((currentStock - threshold) / avgDailySales)
+            : 0;
 
-            // Predict when stock will hit threshold
-            const daysUntilThreshold = currentStock > threshold
-              ? Math.floor((currentStock - threshold) / avgDailySales)
-              : 0;
+          // If predicted to hit threshold within prediction window, suggest reorder
+          if (daysUntilThreshold <= predictionDays && currentStock > 0) {
+            const suggestedReorderQuantity = Math.ceil(predictedNeeds + threshold - currentStock);
 
-            // If predicted to hit threshold within prediction window, suggest reorder
-            if (daysUntilThreshold <= predictionDays && currentStock > 0) {
-              const suggestedReorderQuantity = Math.ceil(predictedNeeds + threshold - currentStock);
-
-              predictions.push({
-                productId: product._id,
-                productName: product.name,
-                sku: product.sku,
-                currentStock,
-                avgDailySales: Math.round(avgDailySales * 100) / 100,
-                predictedNeeds: Math.ceil(predictedNeeds),
-                daysUntilThreshold,
-                suggestedReorderQuantity,
-              });
-            }
-          } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-            // Skip product on error
+            predictions.push({
+              productId: product._id,
+              productName: product.name,
+              sku: product.sku,
+              currentStock,
+              avgDailySales: Math.round(avgDailySales * 100) / 100,
+              predictedNeeds: Math.ceil(predictedNeeds),
+              daysUntilThreshold,
+              suggestedReorderQuantity,
+            });
           }
         }
 

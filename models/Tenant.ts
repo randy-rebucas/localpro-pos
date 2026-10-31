@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
+import { invalidateTenantCache } from '@/lib/db-cache';
 
 // ITenantSettings lives in types/tenant.ts (no mongoose dependency) so it can
 // be safely imported by client components. Re-export it here so all existing
@@ -22,6 +23,8 @@ export interface ITenant extends Document {
   grandTotalSales?: number;
   /** Non-resettable, all-time completed-transaction counter, paired with grandTotalSales. */
   grandTotalTransactionCount?: number;
+  /** Last time the suspicious-activity automation emailed this tenant (suppresses repeat alerts within a day). */
+  suspiciousActivityAlertedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -41,18 +44,16 @@ const TenantSchema: Schema = new Schema(
       required: [true, 'Tenant name is required'],
       trim: true,
     },
+    // Unique indexes for domain/subdomain are declared below with schema.index().
     domain: {
       type: String,
       trim: true,
-      unique: true,
-      sparse: true,
+      lowercase: true,
     },
     subdomain: {
       type: String,
       trim: true,
       lowercase: true,
-      unique: true,
-      sparse: true,
     },
     settings: {
       // Currency & Localization
@@ -569,13 +570,50 @@ const TenantSchema: Schema = new Schema(
       default: 0,
       min: 0,
     },
+    // Automation marker: last suspicious-activity alert (at most one per day)
+    suspiciousActivityAlertedAt: {
+      type: Date,
+    },
   },
   {
     timestamps: true,
   }
 );
 
-// No explicit indexes needed - unique: true on slug, subdomain, and domain automatically creates indexes
+// Indexes. Tenants are read by _id, by slug (unique: true on the field) and by
+// host (lib/tenant.ts getTenantFromHost: $or [{ subdomain }, { domain }]; each
+// $or branch is served by one of the indexes below).
+// Clearing a domain/subdomain stores null (app/api/tenants/[slug]/route.ts,
+// app/api/super-admin/tenants/[slug]/route.ts). A sparse unique index still
+// indexes explicit nulls, so a second tenant clearing its domain hit E11000.
+// Partial indexes only enforce uniqueness for non-empty string values.
+TenantSchema.index({ domain: 1 }, { unique: true, partialFilterExpression: { domain: { $gt: '' } } });
+TenantSchema.index({ subdomain: 1 }, { unique: true, partialFilterExpression: { subdomain: { $gt: '' } } });
+
+// Keep lib/db-cache.ts in sync with tenant writes made in this process. Pure
+// grand-total counter bumps (one per sale) don't affect anything cached, so
+// they're skipped to avoid wiping the cache on every transaction. Automation
+// markers (not part of cached settings) are skipped for the same reason.
+const COUNTER_ONLY_FIELDS = new Set(['grandTotalSales', 'grandTotalTransactionCount', 'suspiciousActivityAlertedAt', 'updatedAt']);
+
+function isCounterOnlyUpdate(update: unknown): boolean {
+  if (!update || typeof update !== 'object' || Array.isArray(update)) return false;
+  return Object.entries(update as Record<string, unknown>).every(([op, fields]) => {
+    if (op !== '$inc' && op !== '$set' && op !== '$setOnInsert') return false;
+    return !!fields && typeof fields === 'object' && Object.keys(fields).every((f) => COUNTER_ONLY_FIELDS.has(f));
+  });
+}
+
+TenantSchema.post(['updateOne', 'updateMany', 'findOneAndUpdate', 'replaceOne'], function () {
+  if (isCounterOnlyUpdate(this.getUpdate())) return;
+  invalidateTenantCache();
+});
+TenantSchema.post(['deleteOne', 'deleteMany', 'findOneAndDelete'], function () {
+  invalidateTenantCache();
+});
+TenantSchema.post('save', function () {
+  invalidateTenantCache();
+});
 
 const Tenant: Model<ITenant> = mongoose.models.Tenant || mongoose.model<ITenant>('Tenant', TenantSchema);
 

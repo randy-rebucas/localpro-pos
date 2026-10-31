@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import mongoose from 'mongoose';
 import connectDB from '@/lib/mongodb';
 import User from '@/models/User';
 import Tenant from '@/models/Tenant';
@@ -57,7 +58,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Check tenant exists and is active
-    const tenant = await Tenant.findOne({ $or: [ { slug: tenantId }, { _id: tenantId } ], isActive: true });
+    // Only match _id when it is a valid ObjectId; casting a slug to ObjectId throws.
+    const tenant = await Tenant.findOne({
+      $or: mongoose.Types.ObjectId.isValid(tenantId) ? [{ slug: tenantId }, { _id: tenantId }] : [{ slug: tenantId }],
+      isActive: true,
+    }).select('_id');
     if (!tenant) {
       return NextResponse.json(
         { success: false, error: t('validation.tenantNotFound', 'Tenant not found or inactive') },
@@ -65,11 +70,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if user already exists
-    const existingUser = await User.findOne({ email: email.toLowerCase(), tenantId: tenant._id });
+    // Emails are unique across all tenants (unique index on User.email), so check
+    // globally to return a clear error instead of a duplicate-key failure.
+    const existingUser = await User.exists({ email: email.toLowerCase() });
     if (existingUser) {
       return NextResponse.json(
-        { success: false, error: t('validation.emailExists', 'An account with this email already exists for this tenant') },
+        { success: false, error: t('validation.emailExists', 'An account with this email already exists') },
         { status: 400 }
       );
     }

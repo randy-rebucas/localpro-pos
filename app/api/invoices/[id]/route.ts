@@ -4,6 +4,7 @@ import Invoice from '@/models/Invoice';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
+import { INVOICE_CUSTOMER_SELECT, withInvoiceCustomerSummary } from '@/lib/invoice-customer';
 
 export async function GET(
   request: NextRequest,
@@ -23,7 +24,7 @@ export async function GET(
       tenantId,
     })
       .populate('transactionId', 'receiptNumber total items')
-      .populate('customerId', 'name email phone address')
+      .populate('customerId', INVOICE_CUSTOMER_SELECT)
       .lean();
 
     if (!invoice) {
@@ -33,7 +34,7 @@ export async function GET(
       );
     }
 
-    return NextResponse.json({ success: true, data: invoice });
+    return NextResponse.json({ success: true, data: withInvoiceCustomerSummary(invoice) });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }

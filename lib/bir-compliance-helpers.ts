@@ -2,22 +2,30 @@
  * BIR Compliance Utilities
  * Helper functions for PTU validation, date formatting, and feature detection
  */
+import { DEFAULT_TENANT_TIMEZONE, addDaysToYmd, getTenantYmd } from '@/lib/timezone';
 
 /**
- * Check if PTU expiry date is within 30 days
+ * Check if PTU expiry date is within 30 days (or already past).
+ *
+ * Compares tenant-local calendar days ('YYYY-MM-DD') rather than raw instants
+ * or the runtime's local clock: `new Date() + 30 days` keeps the time-of-day,
+ * and getFullYear()/getDate() follow whatever timezone the server (UTC on
+ * Vercel) or browser happens to run in.
  */
-export function ptuExpiringSoon(expiryDate: string): boolean {
+export function ptuExpiringSoon(expiryDate: string, tz: string = DEFAULT_TENANT_TIMEZONE): boolean {
   if (!expiryDate) return false;
-  // Compare calendar days (local midnight-to-midnight) rather than raw
-  // instants — `new Date() + 30 days` retains the current time-of-day, so
-  // comparing it directly against a midnight-stored expiry date would make
-  // the 30-day threshold fuzzy by up to a day depending on time of day.
-  const expiry = new Date(expiryDate);
-  const expiryMidnight = new Date(expiry.getFullYear(), expiry.getMonth(), expiry.getDate());
-  const thirtyDaysOut = new Date();
-  thirtyDaysOut.setHours(0, 0, 0, 0);
-  thirtyDaysOut.setDate(thirtyDaysOut.getDate() + 30);
-  return expiryMidnight <= thirtyDaysOut;
+  let expiryYmd: string;
+  // Date-only values are stored as UTC midnight of the entered day ('YYYY-MM-DD' -> new Date()),
+  // so take that calendar day as-is; any other instant is judged in the tenant's timezone.
+  if (/^\d{4}-\d{2}-\d{2}(T00:00:00(\.000)?Z)?$/.test(expiryDate)) {
+    expiryYmd = expiryDate.slice(0, 10);
+  } else {
+    const expiry = new Date(expiryDate);
+    if (isNaN(expiry.getTime())) return false;
+    expiryYmd = getTenantYmd(expiry, tz);
+  }
+  const thirtyDaysOut = addDaysToYmd(getTenantYmd(new Date(), tz), 30);
+  return expiryYmd <= thirtyDaysOut;
 }
 
 /**

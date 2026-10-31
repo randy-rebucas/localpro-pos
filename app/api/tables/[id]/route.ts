@@ -101,6 +101,22 @@ export async function PATCH(
       }
     }
 
+    if (name !== undefined && name !== null && name !== table.name) {
+      // Unique per branch — see the {tenantId, branchId, name} index on Table.
+      const duplicate = await Table.exists({
+        tenantId,
+        branchId: table.branchId ?? null,
+        name,
+        _id: { $ne: table._id },
+      });
+      if (duplicate) {
+        return NextResponse.json(
+          { success: false, error: 'A table with this name already exists in this branch', code: 'DUPLICATE_TABLE_NAME' },
+          { status: 409 }
+        );
+      }
+    }
+
     const oldData = table.toObject();
 
     if (name !== undefined) table.name = name;

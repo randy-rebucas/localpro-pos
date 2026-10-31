@@ -5,6 +5,7 @@ import Product from '@/models/Product';
 import Tenant from '@/models/Tenant';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { getClosedHolidayForDate } from '@/lib/holidays';
+import { getTenantTimezone, getTenantDayBoundaries, getTenantYmd, tenantLocalTimeToUtc } from '@/lib/timezone';
 
 /**
  * GET /api/booking/availability?tenantId={{tenantId}}&serviceId={{serviceId}}&date={{date}}
@@ -61,11 +62,13 @@ export async function GET(request: NextRequest) {
     const startHour = parseInt(searchParams.get('startHour') || '9', 10);
     const endHour = parseInt(searchParams.get('endHour') || '17', 10);
 
-    // Get the selected date boundaries
-    const selectedDate = new Date(dateParam);
-    selectedDate.setHours(0, 0, 0, 0);
-    const endDate = new Date(selectedDate);
-    endDate.setHours(23, 59, 59, 999);
+    // The selected date and the startHour/endHour window are tenant-local wall-clock
+    // values (default Asia/Manila), not the server's (Vercel runs UTC).
+    const tz = getTenantTimezone(tenant.settings);
+    const selectedYmd = /^\d{4}-\d{2}-\d{2}$/.test(dateParam)
+      ? dateParam
+      : getTenantYmd(new Date(dateParam), tz);
+    const { start: selectedDate, end: endDate } = getTenantDayBoundaries(selectedYmd, tz);
 
     // Fetch existing bookings for this date
     const query: Record<string, any> = { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -82,15 +85,15 @@ export async function GET(request: NextRequest) {
 
     // Days the tenant has marked the business closed (Admin → Holidays) have no
     // available slots — mirrors the same check enforced at booking creation/reschedule time.
-    const closedHoliday = getClosedHolidayForDate(tenant.settings?.holidays, selectedDate);
+    // getClosedHolidayForDate reads server-local calendar fields, so hand it a Date
+    // whose local Y/M/D are the tenant-local selected day.
+    const [selY, selM, selD] = selectedYmd.split('-').map(Number);
+    const closedHoliday = getClosedHolidayForDate(tenant.settings?.holidays, new Date(selY, selM - 1, selD));
 
     // Generate time slots
     const slots: Array<{ time: string; available: boolean }> = [];
-    const slotStart = new Date(selectedDate);
-    slotStart.setHours(startHour, 0, 0, 0);
-
-    const dayEnd = new Date(selectedDate);
-    dayEnd.setHours(endHour, 0, 0, 0);
+    const slotStart = tenantLocalTimeToUtc(selectedYmd, `${startHour}:00`, tz);
+    const dayEnd = tenantLocalTimeToUtc(selectedYmd, `${endHour}:00`, tz);
 
     let currentSlot = new Date(slotStart);
 

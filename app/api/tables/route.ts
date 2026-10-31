@@ -99,6 +99,16 @@ export async function POST(request: NextRequest) {
       capacity = cap;
     }
 
+    // Names are unique per branch ({tenantId, branchId, name} unique index; a missing branchId
+    // indexes as null, so `branchId: null` matches exactly the tenant-level tables).
+    const duplicate = await Table.exists({ tenantId, branchId: branchId || null, name });
+    if (duplicate) {
+      return NextResponse.json(
+        { success: false, error: 'A table with this name already exists in this branch', code: 'DUPLICATE_TABLE_NAME' },
+        { status: 409 }
+      );
+    }
+
     const table = await Table.create({
       tenantId,
       name,

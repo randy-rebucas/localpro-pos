@@ -5,11 +5,13 @@
 
 import connectDB from '@/lib/mongodb';
 import Booking from '@/models/Booking';
-import Tenant from '@/models/Tenant';
 import { sendEmail, sendSMS } from '@/lib/notifications';
-import { getTenantSettingsById } from '@/lib/tenant';
 import { formatDate, formatTime } from '@/lib/formatting';
+import { getAutomationTenants } from './tenants';
 import { AutomationResult } from './types';
+
+// Only look back this far for unresolved bookings so each run doesn't scan all history
+const LOOKBACK_DAYS = 7;
 
 export interface NoShowDetectionOptions {
   tenantId?: string;
@@ -36,14 +38,11 @@ export async function detectNoShows(
     const gracePeriodMinutes = options.gracePeriodMinutes || 15;
     const now = new Date();
 
-    // Get tenants to process
-    let tenants;
-    if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).lean();
-      tenants = tenant ? [tenant] : [];
-    } else {
-      tenants = await Tenant.find({ status: 'active' }).lean();
-    }
+    // Get tenants to process (only those with booking scheduling enabled)
+    const tenants = await getAutomationTenants({
+      tenantId: options.tenantId,
+      filter: { 'settings.enableBookingScheduling': true },
+    });
 
     if (tenants.length === 0) {
       results.message = 'No tenants found to process';
@@ -55,27 +54,37 @@ export async function detectNoShows(
 
     for (const tenant of tenants) {
       try {
-        const tenantId = tenant._id.toString();
-        const tenantSettings = await getTenantSettingsById(tenantId);
+        const tenantId = tenant._id;
+        const tenantSettings = tenant.settings;
 
         // Find bookings that:
-        // 1. Are past start time + grace period
+        // 1. Are past start time + grace period (within the lookback window)
         // 2. Are still pending or confirmed (not completed/cancelled/no-show)
         const gracePeriodEnd = new Date(now.getTime() - gracePeriodMinutes * 60 * 1000);
-        
+        const lookbackStart = new Date(now.getTime() - LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
+
         const potentialNoShows = await Booking.find({
           tenantId,
-          startTime: { $lte: gracePeriodEnd },
           status: { $in: ['pending', 'confirmed'] },
-        }).lean();
+          startTime: { $gte: lookbackStart, $lte: gracePeriodEnd },
+        })
+          .select('serviceName startTime staffName customerEmail customerPhone')
+          .lean();
+
+        if (potentialNoShows.length === 0) continue;
+
+        // Mark all as no-show in one write
+        await Booking.updateMany(
+          {
+            tenantId,
+            _id: { $in: potentialNoShows.map((b) => b._id) },
+            status: { $in: ['pending', 'confirmed'] },
+          },
+          { $set: { status: 'no-show' } }
+        );
 
         for (const booking of potentialNoShows) {
           try {
-            // Mark as no-show
-            await Booking.findByIdAndUpdate(booking._id, {
-              status: 'no-show',
-            });
-
             totalNoShows++;
 
             // Send follow-up email/SMS

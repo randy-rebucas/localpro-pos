@@ -7,7 +7,9 @@
 import connectDB from '@/lib/mongodb';
 import Booking from '@/models/Booking';
 import RecurringBookingTemplate from '@/models/RecurringBookingTemplate';
-import Tenant from '@/models/Tenant';
+import { addDaysToYmd, getTenantYmd, tenantLocalTimeToUtc } from '@/lib/timezone';
+import { getAutomationTenants } from './tenants';
+import { tenantTimezone, weekdayOfYmd } from './local-time';
 import { AutomationResult } from './types';
 
 export interface RecurringBookingOptions {
@@ -16,34 +18,31 @@ export interface RecurringBookingOptions {
 }
 
 /**
- * Returns every calendar date between today and today+daysAhead (inclusive)
- * that matches the template's recurrence rule.
+ * Returns every local calendar date ('YYYY-MM-DD' in the tenant's timezone)
+ * between today and today+daysAhead (inclusive) that matches the template's
+ * recurrence rule. Calendar math is done on tenant-local dates, never on the
+ * server clock (UTC on Vercel).
  */
-function getOccurrenceDates(
+export function getOccurrenceDates(
   template: {
     recurrenceType: 'daily' | 'weekly' | 'monthly';
     daysOfWeek?: number[];
     dayOfMonth?: number;
     effectiveFrom: Date;
-    effectiveTo?: Date;
+    effectiveTo?: Date | null;
   },
-  daysAhead: number
-): Date[] {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  daysAhead: number,
+  tz: string,
+  now: Date = new Date()
+): string[] {
+  const today = getTenantYmd(now, tz);
+  const until = addDaysToYmd(today, daysAhead);
+  const effectiveFrom = getTenantYmd(new Date(template.effectiveFrom), tz);
+  const effectiveTo = template.effectiveTo ? getTenantYmd(new Date(template.effectiveTo), tz) : null;
 
-  const until = new Date(today);
-  until.setDate(until.getDate() + daysAhead);
-  until.setHours(23, 59, 59, 999);
-
-  const effectiveFrom = new Date(template.effectiveFrom);
-  effectiveFrom.setHours(0, 0, 0, 0);
-
-  const effectiveTo = template.effectiveTo ? new Date(template.effectiveTo) : null;
-  if (effectiveTo) effectiveTo.setHours(23, 59, 59, 999);
-
-  const dates: Date[] = [];
-  const cursor = new Date(Math.max(today.getTime(), effectiveFrom.getTime()));
+  const dates: string[] = [];
+  // 'YYYY-MM-DD' strings compare correctly as plain strings
+  let cursor = effectiveFrom > today ? effectiveFrom : today;
 
   while (cursor <= until) {
     // Don't generate past the effectiveTo date
@@ -55,16 +54,14 @@ function getOccurrenceDates(
       matches = true;
     } else if (template.recurrenceType === 'weekly') {
       const days = template.daysOfWeek ?? [];
-      matches = days.includes(cursor.getDay());
+      matches = days.includes(weekdayOfYmd(cursor));
     } else if (template.recurrenceType === 'monthly') {
-      matches = cursor.getDate() === (template.dayOfMonth ?? 1);
+      matches = Number(cursor.slice(8, 10)) === (template.dayOfMonth ?? 1);
     }
 
-    if (matches) {
-      dates.push(new Date(cursor));
-    }
+    if (matches) dates.push(cursor);
 
-    cursor.setDate(cursor.getDate() + 1);
+    cursor = addDaysToYmd(cursor, 1);
   }
 
   return dates;
@@ -90,78 +87,97 @@ export async function generateRecurringBookings(
   };
 
   try {
-    // Get tenants to process
-    let tenantIds: string[];
-    if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).select('_id').lean();
-      if (!tenant) {
-        results.message = `Tenant ${options.tenantId} not found`;
-        return results;
-      }
-      tenantIds = [options.tenantId];
-    } else {
-      const tenants = await Tenant.find({ status: 'active' }).select('_id').lean();
-      tenantIds = tenants.map(t => t._id.toString());
+    // Get tenants to process (only those with booking scheduling enabled)
+    const tenants = await getAutomationTenants({
+      tenantId: options.tenantId,
+      filter: { 'settings.enableBookingScheduling': true },
+      select: '_id settings.timezone',
+    });
+    if (options.tenantId && tenants.length === 0) {
+      results.message = `Tenant ${options.tenantId} not found`;
+      return results;
     }
 
-    for (const tenantId of tenantIds) {
+    for (const tenant of tenants) {
+      const tenantId = tenant._id;
+      const tz = tenantTimezone(tenant.settings);
+      const now = new Date();
       const templates = await RecurringBookingTemplate.find({
         tenantId,
         isActive: true,
-        effectiveFrom: { $lte: new Date() },
+        effectiveFrom: { $lte: now },
         $or: [
           { effectiveTo: { $exists: false } },
           { effectiveTo: null },
-          { effectiveTo: { $gte: new Date() } },
+          { effectiveTo: { $gte: now } },
         ],
-      }).lean();
+      })
+        .select(
+          'recurrenceType daysOfWeek dayOfMonth effectiveFrom effectiveTo startTimeHour startTimeMinute duration ' +
+          'customerName customerEmail customerPhone serviceName serviceDescription staffId staffName notes'
+        )
+        .lean();
 
-      for (const template of templates) {
-        const occurrences = getOccurrenceDates(template, daysAhead);
+      if (templates.length === 0) continue;
 
-        for (const date of occurrences) {
-          const startTime = new Date(date);
-          startTime.setHours(template.startTimeHour, template.startTimeMinute, 0, 0);
+      // Expand every template into its upcoming slots
+      const slots = templates.flatMap((template) =>
+        getOccurrenceDates(template, daysAhead, tz, now).map((date) => {
+          // The template's wall-clock start time on that local date, in the tenant's timezone
+          const hhmm = `${String(template.startTimeHour).padStart(2, '0')}:${String(template.startTimeMinute ?? 0).padStart(2, '0')}`;
+          const startTime = tenantLocalTimeToUtc(date, hhmm, tz);
           const endTime = new Date(startTime.getTime() + template.duration * 60_000);
+          return { template, date, startTime, endTime };
+        })
+      );
 
-          try {
-            // Check if a booking for this slot already exists (avoid duplicates)
-            const existing = await Booking.findOne({
-              tenantId,
-              staffId: template.staffId ?? null,
-              startTime,
-              status: { $nin: ['cancelled'] },
-            }).lean();
+      if (slots.length === 0) continue;
 
-            if (existing) continue;
+      // Load existing bookings for all candidate slots in one query (avoid duplicates)
+      const slotKey = (staffId: unknown, startTime: Date) =>
+        `${staffId ? String(staffId) : ''}|${startTime.getTime()}`;
+      const existingBookings = await Booking.find({
+        tenantId,
+        startTime: { $in: [...new Set(slots.map((s) => s.startTime.getTime()))].map((t) => new Date(t)) },
+        status: { $nin: ['cancelled'] },
+      })
+        .select('staffId startTime')
+        .lean();
+      const existingKeys = new Set(existingBookings.map((b) => slotKey(b.staffId, b.startTime)));
 
-            await Booking.create({
-              tenantId,
-              customerName: template.customerName,
-              customerEmail: template.customerEmail,
-              customerPhone: template.customerPhone,
-              serviceName: template.serviceName,
-              serviceDescription: template.serviceDescription,
-              staffId: template.staffId,
-              staffName: template.staffName,
-              startTime,
-              endTime,
-              duration: template.duration,
-              status: 'pending',
-              notes: template.notes
-                ? `[Recurring] ${template.notes}`
-                : '[Recurring booking]',
-              isActive: true,
-            });
+      for (const { template, date, startTime, endTime } of slots) {
+        const key = slotKey(template.staffId, startTime);
+        if (existingKeys.has(key)) continue;
 
-            results.processed++;
-          } catch (err: unknown) {
-            const message = err instanceof Error ? err.message : String(err);
-            results.failed++;
-            results.errors?.push(
-              `Template ${template._id.toString()} on ${date.toISOString().slice(0, 10)}: ${message}`
-            );
-          }
+        try {
+          // Booking.create (not insertMany) so the pre-save staff overlap check still runs
+          await Booking.create({
+            tenantId,
+            customerName: template.customerName,
+            customerEmail: template.customerEmail,
+            customerPhone: template.customerPhone,
+            serviceName: template.serviceName,
+            serviceDescription: template.serviceDescription,
+            staffId: template.staffId,
+            staffName: template.staffName,
+            startTime,
+            endTime,
+            duration: template.duration,
+            status: 'pending',
+            notes: template.notes
+              ? `[Recurring] ${template.notes}`
+              : '[Recurring booking]',
+            isActive: true,
+          });
+
+          existingKeys.add(key);
+          results.processed++;
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : String(err);
+          results.failed++;
+          results.errors?.push(
+            `Template ${template._id.toString()} on ${date}: ${message}`
+          );
         }
       }
     }

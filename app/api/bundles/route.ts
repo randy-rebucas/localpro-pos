@@ -8,6 +8,8 @@ import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
+import { getTenantSettingsById } from '@/lib/tenant';
+import { getTenantTimezone, getTenantDayBoundaries } from '@/lib/timezone';
 
 export async function GET(request: NextRequest) {
   try {
@@ -49,14 +51,12 @@ export async function GET(request: NextRequest) {
       if (minPrice) query.price.$gte = parseFloat(minPrice);
       if (maxPrice) query.price.$lte = parseFloat(maxPrice);
     }
+    // 'YYYY-MM-DD' params are calendar days in the tenant's timezone, not the server's.
     if (startDate || endDate) {
+      const tz = getTenantTimezone(await getTenantSettingsById(tenantId));
       query.createdAt = {};
-      if (startDate) query.createdAt.$gte = new Date(startDate);
-      if (endDate) {
-        const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999);
-        query.createdAt.$lte = end;
-      }
+      if (startDate) query.createdAt.$gte = getTenantDayBoundaries(startDate, tz).start;
+      if (endDate) query.createdAt.$lte = getTenantDayBoundaries(endDate, tz).end;
     }
 
     const bundles = await ProductBundle.find(query)

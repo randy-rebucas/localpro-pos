@@ -4,11 +4,9 @@
  */
 
 import connectDB from '@/lib/mongodb';
-import Product from '@/models/Product'; // eslint-disable-line @typescript-eslint/no-unused-vars
-import Tenant from '@/models/Tenant';
 import { getLowStockProducts } from '@/lib/stock';
 import { sendEmail } from '@/lib/notifications';
-import { getTenantSettingsById } from '@/lib/tenant';
+import { getAutomationTenants } from './tenants';
 import { AutomationResult } from './types';
 
 export interface PurchaseOrderOptions {
@@ -34,14 +32,16 @@ export async function generatePurchaseOrders(
   };
 
   try {
-    // Get tenants to process
-    let tenants;
-    if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).lean();
-      tenants = tenant ? [tenant] : [];
-    } else {
-      tenants = await Tenant.find({ status: 'active' }).lean();
-    }
+    // Get tenants to process. Purchase orders are only delivered by email, so tenants
+    // without email notifications and an address are filtered out up front.
+    const tenants = await getAutomationTenants({
+      tenantId: options.tenantId,
+      filter: {
+        'settings.enableInventory': { $ne: false },
+        'settings.emailNotifications': true,
+        'settings.email': { $nin: [null, ''] },
+      },
+    });
 
     if (tenants.length === 0) {
       results.message = 'No tenants found to process';
@@ -54,12 +54,19 @@ export async function generatePurchaseOrders(
     for (const tenant of tenants) {
       try {
         const tenantId = tenant._id.toString();
-        const tenantSettings = await getTenantSettingsById(tenantId);
+        const tenantSettings = tenant.settings;
+
+        // Manual single-tenant runs bypass the filter; nothing to send without email
+        if (!tenantSettings?.emailNotifications || !tenantSettings?.email) {
+          continue;
+        }
 
         // Get products that need reordering
         // For now, we'll use low stock products as a proxy
         // In production, you'd check reorderPoint field on Product
-        const lowStockProducts = await getLowStockProducts(tenantId);
+        const lowStockProducts = await getLowStockProducts(tenantId, undefined, undefined, {
+          select: 'name sku price stock lowStockThreshold hasVariations variations.stock reorderQuantity',
+        });
 
         // Group products that need reordering
         const productsToReorder = lowStockProducts.filter((product: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any

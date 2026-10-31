@@ -7,9 +7,8 @@ import connectDB from '@/lib/mongodb';
 import Product from '@/models/Product';
 import Branch from '@/models/Branch';
 import StockMovement from '@/models/StockMovement';
-import Tenant from '@/models/Tenant';
 import { sendEmail } from '@/lib/notifications';
-import { getTenantSettingsById } from '@/lib/tenant';
+import { getAutomationTenants } from './tenants';
 import { AutomationResult } from './types';
 import mongoose from 'mongoose';
 
@@ -39,14 +38,18 @@ export async function detectStockImbalances(
     const minStockThreshold = options.minStockThreshold || 5;
     const autoApprove = options.autoApprove || false;
 
-    // Get tenants to process
-    let tenants;
-    if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).lean();
-      tenants = tenant ? [tenant] : [];
-    } else {
-      tenants = await Tenant.find({ status: 'active' }).lean();
-    }
+    // Get tenants to process. Without auto-approve, transfer requests are only
+    // delivered by email, so tenants without email notifications are filtered out.
+    const tenants = await getAutomationTenants({
+      tenantId: options.tenantId,
+      filter: {
+        'settings.enableInventory': { $ne: false },
+        ...(autoApprove ? {} : {
+          'settings.emailNotifications': true,
+          'settings.email': { $nin: [null, ''] },
+        }),
+      },
+    });
 
     if (tenants.length === 0) {
       results.message = 'No tenants found to process';
@@ -58,22 +61,33 @@ export async function detectStockImbalances(
 
     for (const tenant of tenants) {
       try {
-        const tenantId = tenant._id.toString();
-        const tenantSettings = await getTenantSettingsById(tenantId);
+        const tenantId = tenant._id;
+        const tenantSettings = tenant.settings;
+
+        // Manual single-tenant runs bypass the filter; requests need an email to go to
+        if (!autoApprove && (!tenantSettings?.emailNotifications || !tenantSettings?.email)) {
+          continue;
+        }
 
         // Get all branches for this tenant
-        const branches = await Branch.find({ tenantId, isActive: true }).lean();
-        
+        const branches = await Branch.find({ tenantId, isActive: true }).select('name').lean();
+
         if (branches.length < 2) {
           continue; // Need at least 2 branches for transfers
         }
 
-        // Get all products with branch stock
+        // Get all products stocked in at least 2 branches
         const products = await Product.find({
           tenantId,
           trackInventory: true,
-          branchStock: { $exists: true, $ne: [] },
-        }).lean();
+          'branchStock.1': { $exists: true },
+        })
+          .select('name sku branchStock')
+          .lean();
+
+        // Auto-approve writes are collected and applied once per tenant
+        const stockUpdates: mongoose.AnyBulkWriteOperation[] = [];
+        const movements: Record<string, unknown>[] = [];
 
         for (const product of products) {
           try {
@@ -97,10 +111,12 @@ export async function detectStockImbalances(
               continue; // No imbalance
             }
 
+            const highStock = highStockBranches[highStockBranches.length - 1]; // Use highest stock branch
+            // Running source stock for the movement records (both transfers may draw from it)
+            let sourceStock = highStock.stock;
+
             // Create transfer requests
             for (const lowStock of lowStockBranches.slice(0, 2)) { // Limit to 2 transfers per product
-              const highStock = highStockBranches[highStockBranches.length - 1]; // Use highest stock branch
-              
               const transferQuantity = Math.min(
                 Math.ceil((minStockThreshold * 2 - lowStock.stock) / 2), // Transfer enough to bring to 2x threshold
                 Math.floor(highStock.stock / 2) // Don't take more than half from source
@@ -119,62 +135,55 @@ export async function detectStockImbalances(
               }
 
               if (autoApprove) {
-                // Auto-transfer (update stock)
-                const productDoc = await Product.findById(product._id);
-                if (productDoc && productDoc.branchStock) {
-                  // Update source branch stock
-                  const fromBranchStock = productDoc.branchStock.find(
-                    (bs: any) => bs.branchId.toString() === highStock.branchId // eslint-disable-line @typescript-eslint/no-explicit-any
-                  );
-                  if (fromBranchStock) {
-                    fromBranchStock.stock -= transferQuantity;
-                  }
+                // Auto-transfer: atomic $inc on both branch entries (the destination entry
+                // always exists, since low-stock branches come from the product's branchStock)
+                stockUpdates.push({
+                  updateOne: {
+                    filter: { _id: product._id, tenantId },
+                    update: {
+                      $inc: {
+                        'branchStock.$[from].stock': -transferQuantity,
+                        'branchStock.$[to].stock': transferQuantity,
+                      },
+                    },
+                    arrayFilters: [
+                      { 'from.branchId': fromBranch._id },
+                      { 'to.branchId': toBranch._id },
+                    ],
+                  },
+                });
 
-                  // Update destination branch stock
-                  const toBranchStock = productDoc.branchStock.find(
-                    (bs: any) => bs.branchId.toString() === lowStock.branchId // eslint-disable-line @typescript-eslint/no-explicit-any
-                  );
-                  if (toBranchStock) {
-                    toBranchStock.stock += transferQuantity;
-                  } else {
-                    // Add new branch stock entry
-                    productDoc.branchStock.push({
-                      branchId: new mongoose.Types.ObjectId(lowStock.branchId),
-                      stock: transferQuantity,
-                    });
-                  }
-
-                  await productDoc.save();
-
-                  // Create stock movement records
-                  await StockMovement.create({
-                    productId: product._id,
-                    tenantId,
-                    branchId: fromBranch._id,
-                    quantity: -transferQuantity,
-                    reason: `Auto-transfer to ${toBranch.name}`,
-                    type: 'transfer-out',
-                  });
-
-                  await StockMovement.create({
-                    productId: product._id,
-                    tenantId,
-                    branchId: toBranch._id,
-                    quantity: transferQuantity,
-                    reason: `Auto-transfer from ${fromBranch.name}`,
-                    type: 'transfer-in',
-                  });
-                }
-              } else {
+                // Create stock movement records
+                movements.push({
+                  productId: product._id,
+                  tenantId,
+                  branchId: fromBranch._id,
+                  type: 'transfer',
+                  quantity: -transferQuantity,
+                  previousStock: sourceStock,
+                  newStock: sourceStock - transferQuantity,
+                  reason: `Auto-transfer to ${toBranch.name}`,
+                });
+                movements.push({
+                  productId: product._id,
+                  tenantId,
+                  branchId: toBranch._id,
+                  type: 'transfer',
+                  quantity: transferQuantity,
+                  previousStock: lowStock.stock,
+                  newStock: lowStock.stock + transferQuantity,
+                  reason: `Auto-transfer from ${fromBranch.name}`,
+                });
+                sourceStock -= transferQuantity;
+              } else if (tenantSettings?.email) {
                 // Create transfer request (notification only for now)
                 // In production, you might want a TransferRequest model
-                if (tenantSettings?.emailNotifications && tenantSettings?.email) {
-                  const companyName = tenantSettings?.companyName || tenant.name || 'Business';
-                  
-                  await sendEmail({
-                    to: tenantSettings.email,
-                    subject: `Stock Transfer Request: ${product.name}`,
-                    message: `Stock Transfer Request for ${companyName}
+                const companyName = tenantSettings?.companyName || tenant.name || 'Business';
+
+                await sendEmail({
+                  to: tenantSettings.email,
+                  subject: `Stock Transfer Request: ${product.name}`,
+                  message: `Stock Transfer Request for ${companyName}
 
 Product: ${product.name}${product.sku ? ` (SKU: ${product.sku})` : ''}
 
@@ -189,11 +198,10 @@ After Transfer: ${lowStock.stock + transferQuantity}
 Please review and approve this transfer request.
 
 This is an automated stock transfer request from your POS system.`,
-                    type: 'email',
-                  }).catch(() => {
-                    // Don't fail if email fails
-                  });
-                }
+                  type: 'email',
+                }).catch(() => {
+                  // Don't fail if email fails
+                });
               }
 
               totalTransfers++;
@@ -202,6 +210,11 @@ This is an automated stock transfer request from your POS system.`,
             totalFailed++;
             results.errors?.push(`Product ${product._id}: ${error.message}`);
           }
+        }
+
+        if (stockUpdates.length > 0) {
+          await Product.bulkWrite(stockUpdates, { ordered: true });
+          await StockMovement.insertMany(movements);
         }
       } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
         totalFailed++;

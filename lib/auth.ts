@@ -5,6 +5,7 @@ import User from '@/models/User';
 import Tenant from '@/models/Tenant';
 import { isTokenRevoked, isTokenIssuedBeforeRevocation } from '@/lib/token-blacklist';
 import { logger } from '@/lib/logger';
+import { tenantCache, userCache } from '@/lib/db-cache';
 
 export interface JWTPayload {
   userId: string;
@@ -84,9 +85,13 @@ export async function getCurrentUser(request: NextRequest): Promise<{
       return null;
     }
 
-    // Verify user still exists and is active
+    // Verify user still exists and is active. Cached briefly (see lib/db-cache.ts)
+    // since this runs on every authenticated request.
     await connectDB();
-    const user = await User.findById(payload.userId).select('isActive tenantId').lean();
+    const user = (await userCache.getOrLoad(`status:${payload.userId}`, async () => {
+      const doc = await User.findById(payload.userId).select('isActive tenantId').lean();
+      return doc ? { isActive: doc.isActive, tenantId: doc.tenantId?.toString() } : null;
+    })) as { isActive?: boolean; tenantId?: string } | null;
 
     if (!user || !user.isActive) {
       return null;
@@ -94,15 +99,18 @@ export async function getCurrentUser(request: NextRequest): Promise<{
 
     // Guard against missing tenantId before string comparison
     // super_admin users have no tenantId — skip this check
-    if (payload.role !== 'super_admin' && user.tenantId && user.tenantId.toString() !== payload.tenantId) {
+    if (payload.role !== 'super_admin' && user.tenantId && user.tenantId !== payload.tenantId) {
       return null;
     }
 
     // Deactivated tenants (e.g. suspended for non-payment) lose access even with a
     // still-valid token — login blocks new sessions, this blocks existing ones.
     if (payload.role !== 'super_admin' && user.tenantId) {
-      const tenant = await Tenant.findById(user.tenantId).select('isActive').lean();
-      if (!tenant || !tenant.isActive) {
+      const tenantActive = await tenantCache.getOrLoad(`active:${user.tenantId}`, async () => {
+        const tenant = await Tenant.findById(user.tenantId).select('isActive').lean();
+        return !!tenant?.isActive;
+      });
+      if (!tenantActive) {
         return null;
       }
     }

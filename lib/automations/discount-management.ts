@@ -5,10 +5,16 @@
 
 import connectDB from '@/lib/mongodb';
 import Discount from '@/models/Discount';
-import Tenant from '@/models/Tenant';
 import { sendEmail } from '@/lib/notifications';
-import { getTenantSettingsById } from '@/lib/tenant';
+import { getAutomationTenants } from './tenants';
 import { AutomationResult } from './types';
+
+const USAGE_ALERT_THRESHOLDS = [80, 90, 100];
+
+// usageLimit is set (> 0) and usageCount has reached it
+const USAGE_EXHAUSTED_EXPR = {
+  $and: [{ $gt: ['$usageLimit', 0] }, { $gte: ['$usageCount', '$usageLimit'] }],
+};
 
 export interface DiscountManagementOptions {
   tenantId?: string;
@@ -32,14 +38,7 @@ export async function manageDiscountStatus(
 
   try {
     // Get tenants to process
-    let tenants;
-    if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).lean();
-      tenants = tenant ? [tenant] : [];
-    } else {
-      // Get all active tenants
-      tenants = await Tenant.find({ status: 'active' }).lean();
-    }
+    const tenants = await getAutomationTenants({ tenantId: options.tenantId });
 
     if (tenants.length === 0) {
       results.message = 'No tenants found to process';
@@ -53,115 +52,114 @@ export async function manageDiscountStatus(
 
     for (const tenant of tenants) {
       try {
-        const tenantId = tenant._id.toString();
-        const tenantSettings = await getTenantSettingsById(tenantId);
+        const tenantId = tenant._id;
+        const tenantSettings = tenant.settings;
+        const notifyEmail = tenantSettings?.emailNotifications ? tenantSettings.email : undefined;
 
-        // Find discounts that need activation (validFrom has arrived, but not active)
-        const discountsToActivate = await Discount.find({
+        // Discounts that need activation (validFrom has arrived, but not active).
+        // Usage-exhausted ones are excluded so they don't flip back on every run.
+        const activateFilter = {
           tenantId,
+          isActive: false,
           validFrom: { $lte: now },
           validUntil: { $gte: now },
-          isActive: false,
-        }).lean();
+          $expr: { $not: [USAGE_EXHAUSTED_EXPR] },
+        };
 
-        // Find discounts that need deactivation (validUntil has passed, but still active)
-        // First, get all active discounts
-        const allActiveDiscounts = await Discount.find({
+        // Discounts that need deactivation (validUntil has passed or usage limit reached, but still active)
+        const deactivateFilter = {
           tenantId,
           isActive: true,
-        }).lean();
+          $or: [{ validUntil: { $lt: now } }, { $expr: USAGE_EXHAUSTED_EXPR }],
+        };
 
-        // Filter discounts that need deactivation
-        const discountsToDeactivate = allActiveDiscounts.filter((discount) => {
-          // Check if validUntil has passed
-          if (discount.validUntil < now) {
-            return true;
-          }
-          // Check if usage limit reached
-          if (discount.usageLimit && discount.usageCount >= discount.usageLimit) {
-            return true;
-          }
-          return false;
-        });
+        if (!notifyEmail) {
+          // No notifications to send: just flip the flags in two writes
+          const [activated, deactivated] = await Promise.all([
+            Discount.updateMany(activateFilter, { $set: { isActive: true } }),
+            Discount.updateMany(deactivateFilter, { $set: { isActive: false } }),
+          ]);
+          totalActivated += activated.modifiedCount;
+          totalDeactivated += deactivated.modifiedCount;
+          continue;
+        }
+
+        // Notifications enabled: load the affected discounts (for the email content), then batch the writes
+        const [discountsToActivate, discountsToDeactivate] = await Promise.all([
+          Discount.find(activateFilter).select('code name validUntil usageLimit').lean(),
+          Discount.find(deactivateFilter).select('code name validUntil usageLimit usageCount').lean(),
+        ]);
 
         // Activate discounts
-        for (const discount of discountsToActivate) {
-          try {
-            await Discount.findByIdAndUpdate(discount._id, { isActive: true });
-            totalActivated++;
+        if (discountsToActivate.length > 0) {
+          await Discount.updateMany(
+            { tenantId, _id: { $in: discountsToActivate.map((d) => d._id) }, isActive: false },
+            { $set: { isActive: true } }
+          );
+          totalActivated += discountsToActivate.length;
 
-            // Send notification if enabled
-            if (tenantSettings?.emailNotifications && tenantSettings?.email) {
-              const companyName = tenantSettings?.companyName || tenant.name || 'Business'; // eslint-disable-line @typescript-eslint/no-unused-vars
-              await sendEmail({
-                to: tenantSettings.email,
-                subject: `Discount Activated: ${discount.code}`,
-                message: `The discount "${discount.code}" (${discount.name || 'No name'}) has been automatically activated.\n\nValid until: ${discount.validUntil.toLocaleDateString()}\nUsage limit: ${discount.usageLimit || 'Unlimited'}`,
-                type: 'email',
-              }).catch(() => {
-                // Don't fail if email fails
-              });
-            }
-          } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-            totalFailed++;
-            results.errors?.push(`Activate discount ${discount.code}: ${error.message}`);
+          for (const discount of discountsToActivate) {
+            await sendEmail({
+              to: notifyEmail,
+              subject: `Discount Activated: ${discount.code}`,
+              message: `The discount "${discount.code}" (${discount.name || 'No name'}) has been automatically activated.\n\nValid until: ${discount.validUntil.toLocaleDateString()}\nUsage limit:${discount.usageLimit || 'Unlimited'}`,
+              type: 'email',
+            }).catch(() => {
+              // Don't fail if email fails
+            });
           }
         }
 
         // Deactivate discounts
-        for (const discount of discountsToDeactivate) {
-          try {
-            await Discount.findByIdAndUpdate(discount._id, { isActive: false });
-            totalDeactivated++;
+        if (discountsToDeactivate.length > 0) {
+          await Discount.updateMany(
+            { tenantId, _id: { $in: discountsToDeactivate.map((d) => d._id) }, isActive: true },
+            { $set: { isActive: false } }
+          );
+          totalDeactivated += discountsToDeactivate.length;
 
-            // Send notification if enabled
-            if (tenantSettings?.emailNotifications && tenantSettings?.email) {
-              const companyName = tenantSettings?.companyName || tenant.name || 'Business'; // eslint-disable-line @typescript-eslint/no-unused-vars
-              const reason = discount.validUntil < now
-                ? 'expired (validUntil date passed)'
-                : 'reached usage limit';
-              
-              await sendEmail({
-                to: tenantSettings.email,
-                subject: `Discount Deactivated: ${discount.code}`,
-                message: `The discount "${discount.code}" (${discount.name || 'No name'}) has been automatically deactivated.\n\nReason: ${reason}\nUsage count: ${discount.usageCount || 0}${discount.usageLimit ? ` / ${discount.usageLimit}` : ''}`,
-                type: 'email',
-              }).catch(() => {
-                // Don't fail if email fails
-              });
-            }
-          } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-            totalFailed++;
-            results.errors?.push(`Deactivate discount ${discount.code}: ${error.message}`);
+          for (const discount of discountsToDeactivate) {
+            const reason = discount.validUntil < now
+              ? 'expired (validUntil date passed)'
+              : 'reached usage limit';
+
+            await sendEmail({
+              to: notifyEmail,
+              subject: `Discount Deactivated: ${discount.code}`,
+              message: `The discount "${discount.code}" (${discount.name || 'No name'}) has been automatically deactivated.\n\nReason: ${reason}\nUsage count:${discount.usageCount || 0}${discount.usageLimit ? ` / ${discount.usageLimit}` : ''}`,
+              type: 'email',
+            }).catch(() => {
+              // Don't fail if email fails
+            });
           }
         }
 
-        // Check for discounts approaching usage limits (#10 - Discount Usage Limit Alerts)
+        // Check for discounts approaching usage limits (#10 - Discount Usage Limit Alerts).
+        // Only discounts at >= 80% that haven't been alerted for their current threshold yet.
         const activeDiscounts = await Discount.find({
           tenantId,
           isActive: true,
-          usageLimit: { $exists: true, $ne: null },
-        }).lean();
+          usageLimit: { $gt: 0 },
+          $expr: { $gte: [{ $multiply: ['$usageCount', 100] }, { $multiply: ['$usageLimit', USAGE_ALERT_THRESHOLDS[0]] }] },
+        })
+          .select('code name usageLimit usageCount usageAlertThreshold')
+          .lean();
 
+        const alertUpdates = [];
         for (const discount of activeDiscounts) {
           if (!discount.usageLimit) continue;
-          
-          const usagePercent = (discount.usageCount / discount.usageLimit) * 100;
-          const alertThresholds = [80, 90, 100];
-          
-          // Check if we should send an alert (80%, 90%, or 100%)
-          const shouldAlert = alertThresholds.some(threshold => {
-            return usagePercent >= threshold && usagePercent < threshold + 5; // 5% window to avoid duplicate alerts
-          });
 
-          if (shouldAlert && tenantSettings?.emailNotifications && tenantSettings?.email) {
-            const threshold = Math.floor(usagePercent / 10) * 10; // Round to nearest 10
-            const companyName = tenantSettings?.companyName || tenant.name || 'Business';
-            
-            await sendEmail({
-              to: tenantSettings.email,
-              subject: `Discount Usage Alert: ${discount.code} - ${threshold}% Used`,
-              message: `Discount Usage Alert for ${companyName}
+          const usagePercent = (discount.usageCount / discount.usageLimit) * 100;
+          // Highest threshold reached; alert once per threshold
+          const threshold = [...USAGE_ALERT_THRESHOLDS].reverse().find((t) => usagePercent >= t);
+          if (!threshold || (discount.usageAlertThreshold ?? 0) >= threshold) continue;
+
+          const companyName = tenantSettings?.companyName || tenant.name || 'Business';
+
+          await sendEmail({
+            to: notifyEmail,
+            subject: `Discount Usage Alert: ${discount.code} - ${threshold}% Used`,
+            message: `Discount Usage Alert for ${companyName}
 
 The discount "${discount.code}" (${discount.name || 'No name'}) has reached ${usagePercent.toFixed(1)}% of its usage limit.
 
@@ -171,11 +169,21 @@ Remaining Uses: ${discount.usageLimit - discount.usageCount}
 ${usagePercent >= 100 ? '⚠️ This discount has reached its usage limit and will be deactivated.' : 'Please review and consider creating a new discount if needed.'}
 
 This is an automated alert from your POS system.`,
-              type: 'email',
-            }).catch(() => {
-              // Don't fail if email fails
-            });
-          }
+            type: 'email',
+          }).catch(() => {
+            // Don't fail if email fails
+          });
+
+          alertUpdates.push({
+            updateOne: {
+              filter: { tenantId, _id: discount._id },
+              update: { $set: { usageAlertThreshold: threshold } },
+            },
+          });
+        }
+
+        if (alertUpdates.length > 0) {
+          await Discount.bulkWrite(alertUpdates, { ordered: false });
         }
       } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
         totalFailed++;

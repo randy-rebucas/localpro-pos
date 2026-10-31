@@ -9,7 +9,9 @@ import CashDrawerSession from '@/models/CashDrawerSession';
 import AuditLog from '@/models/AuditLog';
 import Tenant from '@/models/Tenant';
 import { sendEmail } from '@/lib/notifications';
-import { getTenantSettingsById } from '@/lib/tenant';
+import { DEFAULT_TENANT_TIMEZONE, getTenantDayBoundaries } from '@/lib/timezone';
+import { getAutomationTenants, type AutomationTenant } from './tenants';
+import { formatTenantDate, tenantTimezone } from './local-time';
 import { AutomationResult } from './types';
 
 export interface SuspiciousActivityOptions {
@@ -42,17 +44,30 @@ export async function detectSuspiciousActivity(
     const discountThreshold = options.discountThreshold || 100;
     const failedLoginThreshold = options.failedLoginThreshold || 5;
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const now = new Date();
+    // "Today" is the tenant's local calendar day. Most tenants use the default
+    // timezone, so tenants already alerted since the default-zone midnight are
+    // skipped in the query; tenants with another timezone are checked per tenant.
+    const defaultTodayStart = getTenantDayBoundaries(now, DEFAULT_TENANT_TIMEZONE).start;
 
-    // Get tenants to process
-    let tenants;
-    if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).lean();
-      tenants = tenant ? [tenant] : [];
-    } else {
-      tenants = await Tenant.find({ status: 'active' }).lean();
-    }
+    // Get tenants to process. Alerts only go out by email, and at most once per
+    // tenant per local day (runs hourly), so skip everyone else before querying.
+    // Manual single-tenant runs bypass the filter and may re-alert.
+    const tenants = (await getAutomationTenants({
+      tenantId: options.tenantId,
+      filter: {
+        'settings.emailNotifications': true,
+        'settings.email': { $nin: [null, ''] },
+        $or: [
+          {
+            'settings.timezone': { $in: [null, '', DEFAULT_TENANT_TIMEZONE] },
+            suspiciousActivityAlertedAt: { $not: { $gte: defaultTodayStart } },
+          },
+          { 'settings.timezone': { $nin: [null, '', DEFAULT_TENANT_TIMEZONE] } },
+        ],
+      },
+      select: 'name slug settings suspiciousActivityAlertedAt',
+    })) as Array<AutomationTenant & { suspiciousActivityAlertedAt?: Date | null }>;
 
     if (tenants.length === 0) {
       results.message = 'No tenants found to process';
@@ -64,80 +79,96 @@ export async function detectSuspiciousActivity(
 
     for (const tenant of tenants) {
       try {
-        const tenantId = tenant._id.toString();
-        const tenantSettings = await getTenantSettingsById(tenantId);
+        const tenantId = tenant._id;
+        const tenantSettings = tenant.settings;
+
+        // Nothing to do without somewhere to send the alert (manual runs bypass the filter)
+        if (!tenantSettings?.emailNotifications || !tenantSettings?.email) {
+          continue;
+        }
+
+        const tz = tenantTimezone(tenantSettings);
+        const today = getTenantDayBoundaries(now, tz).start;
+
+        // Already alerted during this local day (scheduled runs only; see above)
+        if (
+          !options.tenantId &&
+          tenant.suspiciousActivityAlertedAt &&
+          new Date(tenant.suspiciousActivityAlertedAt) >= today
+        ) {
+          continue;
+        }
 
         const suspiciousActivities: string[] = [];
 
-        // Check for excessive refunds
-        const refundsToday = await Transaction.countDocuments({
-          tenantId,
-          status: 'refunded',
-          updatedAt: { $gte: today },
-        });
+        const [txStats, failedLogins, drawersWithDiscrepancies] = await Promise.all([
+          // Refunds, voids and large discounts in one pass over today's transactions.
+          // Every refund creates a new 'refunded' transaction, so refunds made today
+          // are counted by createdAt (keeps the scan on the tenantId+createdAt index).
+          Transaction.aggregate<{ refunds: number; voids: number; largeDiscounts: number }>([
+            { $match: { tenantId, createdAt: { $gte: today } } },
+            {
+              $group: {
+                _id: null,
+                refunds: { $sum: { $cond: [{ $eq: ['$status', 'refunded'] }, 1, 0] } },
+                voids: { $sum: { $cond: [{ $eq: ['$status', 'cancelled'] }, 1, 0] } },
+                largeDiscounts: { $sum: { $cond: [{ $gte: ['$discountAmount', discountThreshold] }, 1, 0] } },
+              },
+            },
+          ]),
+          // Check for failed login attempts
+          AuditLog.countDocuments({
+            tenantId,
+            action: 'LOGIN',
+            'metadata.success': false,
+            createdAt: { $gte: today },
+          }),
+          // Check for cash drawer discrepancies
+          CashDrawerSession.countDocuments({
+            tenantId,
+            closingTime: { $gte: today },
+            $or: [
+              { shortage: { $gte: 50 } },
+              { overage: { $gte: 100 } },
+            ],
+          }),
+        ]);
 
+        const { refunds: refundsToday = 0, voids: voidsToday = 0, largeDiscounts = 0 } = txStats[0] ?? {};
+
+        // Check for excessive refunds
         if (refundsToday >= refundThreshold) {
           suspiciousActivities.push(`Excessive refunds: ${refundsToday} refunds today (threshold: ${refundThreshold})`);
         }
 
         // Check for excessive voids/cancellations
-        const voidsToday = await Transaction.countDocuments({
-          tenantId,
-          status: 'cancelled',
-          createdAt: { $gte: today },
-        });
-
         if (voidsToday >= voidThreshold) {
           suspiciousActivities.push(`Excessive voids: ${voidsToday} cancelled transactions today (threshold: ${voidThreshold})`);
         }
 
         // Check for large discounts
-        const largeDiscounts = await Transaction.find({
-          tenantId,
-          discountAmount: { $gte: discountThreshold },
-          createdAt: { $gte: today },
-        }).lean();
-
-        if (largeDiscounts.length > 0) {
-          suspiciousActivities.push(`Large discounts detected: ${largeDiscounts.length} transactions with discounts >= $${discountThreshold}`);
+        if (largeDiscounts > 0) {
+          suspiciousActivities.push(`Large discounts detected: ${largeDiscounts} transactions with discounts >= $${discountThreshold}`);
         }
-
-        // Check for failed login attempts
-        const failedLogins = await AuditLog.countDocuments({
-          tenantId,
-          action: 'LOGIN',
-          'metadata.success': false,
-          createdAt: { $gte: today },
-        });
 
         if (failedLogins >= failedLoginThreshold) {
           suspiciousActivities.push(`Multiple failed login attempts: ${failedLogins} failed logins today (threshold: ${failedLoginThreshold})`);
         }
 
-        // Check for cash drawer discrepancies
-        const drawersWithDiscrepancies = await CashDrawerSession.find({
-          tenantId,
-          closingTime: { $gte: today },
-          $or: [
-            { shortage: { $gte: 50 } },
-            { overage: { $gte: 100 } },
-          ],
-        }).lean();
-
-        if (drawersWithDiscrepancies.length > 0) {
-          suspiciousActivities.push(`Cash drawer discrepancies: ${drawersWithDiscrepancies.length} drawers with significant shortages/overages`);
+        if (drawersWithDiscrepancies > 0) {
+          suspiciousActivities.push(`Cash drawer discrepancies: ${drawersWithDiscrepancies} drawers with significant shortages/overages`);
         }
 
         // Send alert if suspicious activities found
-        if (suspiciousActivities.length > 0 && tenantSettings?.emailNotifications && tenantSettings?.email) {
+        if (suspiciousActivities.length > 0) {
           const companyName = tenantSettings?.companyName || tenant.name || 'Business';
           
-          await sendEmail({
+          const sent = await sendEmail({
             to: tenantSettings.email,
             subject: `🚨 Suspicious Activity Alert - ${companyName}`,
             message: `Suspicious Activity Detected for ${companyName}
 
-Date: ${today.toLocaleDateString()}
+Date: ${formatTenantDate(today, tz)}
 
 The following suspicious activities were detected:
 
@@ -147,9 +178,16 @@ Please review these activities immediately.
 
 This is an automated security alert from your POS system.`,
             type: 'email',
-          }).catch(() => {
-            // Don't fail if email fails
-          });
+          }).catch(() => false); // Don't fail if email fails
+
+          // Mark the tenant as alerted today so later runs skip it (a failed send is
+          // retried next run). timestamps: false keeps this a marker-only write, which
+          // doesn't invalidate the tenant cache.
+          if (sent) await Tenant.updateOne(
+            { _id: tenantId },
+            { $set: { suspiciousActivityAlertedAt: new Date() } },
+            { timestamps: false }
+          );
 
           totalAlerts++;
         }

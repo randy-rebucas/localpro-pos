@@ -81,7 +81,6 @@ const TaxRuleSchema: Schema = new Schema(
 // Compound index for tenant and active status
 TaxRuleSchema.index({ tenantId: 1, isActive: 1, priority: -1 });
 // Index for efficient tax rule lookup
-TaxRuleSchema.index({ tenantId: 1, appliesTo: 1, isActive: 1 });
 
 const TaxRule: Model<ITaxRule> = mongoose.models.TaxRule || mongoose.model<ITaxRule>('TaxRule', TaxRuleSchema);
 

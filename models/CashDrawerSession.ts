@@ -29,7 +29,6 @@ const CashDrawerSessionSchema: Schema = new Schema(
       type: Schema.Types.ObjectId,
       ref: 'User',
       required: [true, 'User ID is required'],
-      index: true,
     },
     openingAmount: {
       type: Number,
@@ -56,7 +55,6 @@ const CashDrawerSessionSchema: Schema = new Schema(
       type: Date,
       required: true,
       default: Date.now,
-      index: true,
     },
     closingTime: {
       type: Date,
@@ -93,6 +91,13 @@ CashDrawerSessionSchema.index({ tenantId: 1, openingTime: -1 });
 CashDrawerSessionSchema.index(
   { tenantId: 1, status: 1 },
   { unique: true, partialFilterExpression: { status: 'open' } }
+);
+// Daily discrepancy scan (lib/automations/suspicious-activity.ts) filters on
+// { tenantId, closingTime >= today }. Partial so open sessions (no closingTime)
+// carry no entry: one index write per session, at close.
+CashDrawerSessionSchema.index(
+  { tenantId: 1, closingTime: -1 },
+  { partialFilterExpression: { closingTime: { $exists: true } } }
 );
 
 const CashDrawerSession: Model<ICashDrawerSession> = 

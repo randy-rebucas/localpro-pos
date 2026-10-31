@@ -7,6 +7,8 @@ import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
+import { getTenantSettingsById } from '@/lib/tenant';
+import { getTenantTimezone, getTenantDayBoundaries } from '@/lib/timezone';
 
 export async function GET(request: NextRequest) {
   try {
@@ -22,10 +24,14 @@ export async function GET(request: NextRequest) {
 
     const query: any = { tenantId, isActive: { $ne: false } }; // eslint-disable-line @typescript-eslint/no-explicit-any
 
+    // Bare 'YYYY-MM-DD' params are inclusive tenant-local calendar days (the server
+    // runs UTC); full ISO timestamps are used as-is.
     if (startDate || endDate) {
+      const tz = getTenantTimezone(await getTenantSettingsById(String(tenantId)));
+      const isYmd = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v);
       query.date = {};
-      if (startDate) query.date.$gte = new Date(startDate);
-      if (endDate) query.date.$lte = new Date(endDate);
+      if (startDate) query.date.$gte = isYmd(startDate) ? getTenantDayBoundaries(startDate, tz).start : new Date(startDate);
+      if (endDate) query.date.$lte = isYmd(endDate) ? getTenantDayBoundaries(endDate, tz).end : new Date(endDate);
     }
 
     if (name) {

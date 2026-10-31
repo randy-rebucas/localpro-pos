@@ -29,6 +29,7 @@ export interface IOfflineTransaction extends Document {
   offlineCreatedAt: Date; // When the transaction was created on the device
   syncStatus: 'pending' | 'processing' | 'synced' | 'failed';
   syncedTransactionId?: mongoose.Types.ObjectId; // Reference to created Transaction after sync
+  syncedAt?: Date; // When syncStatus became 'synced'; drives the TTL cleanup below
   retryCount: number;
   syncError?: string;
   isActive: boolean;
@@ -149,11 +150,13 @@ const OfflineTransactionSchema: Schema = new Schema(
       type: String,
       enum: ['pending', 'processing', 'synced', 'failed'],
       default: 'pending',
-      index: true,
     },
     syncedTransactionId: {
       type: Schema.Types.ObjectId,
       ref: 'Transaction',
+    },
+    syncedAt: {
+      type: Date,
     },
     retryCount: {
       type: Number,
@@ -173,9 +176,16 @@ const OfflineTransactionSchema: Schema = new Schema(
   }
 );
 
-OfflineTransactionSchema.index({ tenantId: 1, syncStatus: 1 });
-OfflineTransactionSchema.index({ tenantId: 1, deviceId: 1, offlineCreatedAt: -1 });
-OfflineTransactionSchema.index({ tenantId: 1, createdAt: -1 });
+// Sync worker: { tenantId, syncStatus: { $in }, retryCount, isActive } sorted by
+// offlineCreatedAt asc (ESR; the $in on syncStatus is merge-sorted).
+OfflineTransactionSchema.index({ tenantId: 1, syncStatus: 1, offlineCreatedAt: 1 });
+// TTL: synced rows are only a queue record (the real Transaction exists), so drop
+// them 30 days after sync. Rows synced before syncedAt existed have no syncedAt and
+// are not expired until backfilled (scripts/backfill-ttl-fields.ts).
+OfflineTransactionSchema.index(
+  { syncedAt: 1 },
+  { expireAfterSeconds: 30 * 24 * 60 * 60, partialFilterExpression: { syncStatus: 'synced' } }
+);
 
 const OfflineTransaction: Model<IOfflineTransaction> =
   mongoose.models.OfflineTransaction ||

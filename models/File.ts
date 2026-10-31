@@ -6,7 +6,6 @@ const FileSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Tenant',
       required: true,
-      index: true,
     },
     name: {
       type: String,
@@ -36,7 +35,6 @@ const FileSchema = new mongoose.Schema(
     uploadedAt: {
       type: Date,
       default: Date.now,
-      index: true,
     },
   },
   {
@@ -49,13 +47,13 @@ const FileSchema = new mongoose.Schema(
 FileSchema.index({ tenantId: 1, uploadedAt: -1 });
 
 export type FileDocument = mongoose.Document & {
-  tenantId: string;
+  tenantId: mongoose.Types.ObjectId;
   name: string;
   filename: string;
   size: number;
   type: string;
   url: string;
-  uploadedBy: string;
+  uploadedBy: mongoose.Types.ObjectId;
   uploadedAt: Date;
   createdAt: Date;
   updatedAt: Date;

@@ -74,7 +74,8 @@ const DeviceSchema: Schema = new Schema(
 // Terminal ID and serial number must be unique per tenant so receipts unambiguously identify a device.
 DeviceSchema.index({ tenantId: 1, terminalId: 1 }, { unique: true });
 DeviceSchema.index({ tenantId: 1, serialNumber: 1 }, { unique: true });
-DeviceSchema.index({ tenantId: 1, isActive: 1 });
+// No { tenantId, isActive } index: the device list sorts by terminalId, so
+// { tenantId, terminalId } serves it; per-device lookups go through _id.
 
 const Device: Model<IDevice> = mongoose.models.Device || mongoose.model<IDevice>('Device', DeviceSchema);
 

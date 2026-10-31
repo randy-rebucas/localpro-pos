@@ -34,6 +34,15 @@ vi.mock('@/models/User', () => ({
   },
 }));
 
+// getCurrentUser also checks the user's tenant is still active
+vi.mock('@/models/Tenant', () => ({
+  default: {
+    findById: vi.fn(() => ({
+      select: () => ({ lean: () => Promise.resolve({ isActive: true }) }),
+    })),
+  },
+}));
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------

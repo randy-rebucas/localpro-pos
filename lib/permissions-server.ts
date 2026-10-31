@@ -1,5 +1,6 @@
 import Tenant from '@/models/Tenant';
 import { hasPermission, isAlwaysAllowedRole } from '@/lib/permissions';
+import { tenantCache } from '@/lib/db-cache';
 
 /**
  * Server-side effective permission check — loads the tenant's configured
@@ -14,6 +15,9 @@ export async function hasTenantPermission(
   if (isAlwaysAllowedRole(role)) return true;
   if (!role) return false;
 
-  const tenant = await Tenant.findById(tenantId).select('settings.rolePermissionOverrides').lean();
-  return hasPermission(role, key, tenant?.settings?.rolePermissionOverrides);
+  const overrides = await tenantCache.getOrLoad(`perm:${tenantId}`, async () => {
+    const tenant = await Tenant.findById(tenantId).select('settings.rolePermissionOverrides').lean();
+    return tenant?.settings?.rolePermissionOverrides;
+  });
+  return hasPermission(role, key, overrides as Parameters<typeof hasPermission>[2]);
 }

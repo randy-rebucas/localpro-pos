@@ -12,6 +12,7 @@
 
 import crypto from 'crypto';
 import mongoose, { Schema, Model } from 'mongoose';
+import { revocationCache } from '@/lib/db-cache';
 
 // ─── MongoDB-backed store ───────────────────────────────────────────────────
 
@@ -52,20 +53,55 @@ function getRevokedTokenModel(): Model<IRevokedToken> {
 interface IUserRevocation {
   userId: string;
   revokedBefore: Date;
+  /** revokedBefore + max JWT lifetime — after this, every affected token has expired anyway. */
+  expiresAt: Date;
 }
 
 const UserRevocationSchema = new Schema<IUserRevocation>({
   userId: {
     type: String,
     required: true,
-    unique: true,
-    index: true,
+    unique: true, // unique implies index
   },
   revokedBefore: {
     type: Date,
     required: true,
   },
+  expiresAt: {
+    type: Date,
+  },
 });
+
+// TTL index — the revocation row is useless once all tokens issued before
+// revokedBefore have naturally expired.
+UserRevocationSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+
+const DEFAULT_MAX_JWT_LIFETIME_SECONDS = 7 * 86400; // lib/auth.ts default JWT_EXPIRES_IN ('7d')
+const FALLBACK_MAX_JWT_LIFETIME_SECONDS = 365 * 86400; // if JWT_EXPIRES_IN can't be parsed, stay conservative
+
+/**
+ * Longest lifetime of a staff/super-admin JWT (the tokens revokeAllUserTokens applies to).
+ * Mirrors lib/auth.ts generateToken: process.env.JWT_EXPIRES_IN || '7d'
+ * (the only other override is impersonation at '1h', which is shorter).
+ * Parses the same formats jsonwebtoken/ms accept ("7d", "12h", "2 days"; a bare
+ * numeric string is milliseconds). Never returns less than the 7d default.
+ */
+export function maxUserJwtLifetimeSeconds(raw: string | undefined = process.env.JWT_EXPIRES_IN): number {
+  if (!raw) return DEFAULT_MAX_JWT_LIFETIME_SECONDS;
+  const m = /^\s*(\d+(?:\.\d+)?)\s*(milliseconds?|msecs?|ms|seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h|days?|d|weeks?|w|years?|yrs?|y)?\s*$/i.exec(raw);
+  if (!m) return FALLBACK_MAX_JWT_LIFETIME_SECONDS;
+  const n = parseFloat(m[1]);
+  const unit = (m[2] || 'ms').toLowerCase();
+  let mult: number;
+  if (/^(milliseconds?|msecs?|ms)$/.test(unit)) mult = 0.001;
+  else if (/^(seconds?|secs?|s)$/.test(unit)) mult = 1;
+  else if (/^(minutes?|mins?|m)$/.test(unit)) mult = 60;
+  else if (/^(hours?|hrs?|h)$/.test(unit)) mult = 3600;
+  else if (/^(days?|d)$/.test(unit)) mult = 86400;
+  else if (/^(weeks?|w)$/.test(unit)) mult = 7 * 86400;
+  else mult = 365.25 * 86400;
+  return Math.max(Math.ceil(n * mult), DEFAULT_MAX_JWT_LIFETIME_SECONDS);
+}
 
 function getUserRevocationModel(): Model<IUserRevocation> {
   return (
@@ -125,6 +161,7 @@ export async function revokeToken(
 
   // Always write to in-memory as immediate cache
   memoryStore.set(key, { expiresAt: expiresAt.getTime(), reason });
+  revocationCache.delete(`tok:${key}`);
 
   // Persist to MongoDB for cross-instance consistency
   if (isMongoConnected()) {
@@ -158,12 +195,19 @@ export async function isTokenRevoked(token: string): Promise<boolean> {
     return true;
   }
 
+  // Recently confirmed not revoked (see lib/db-cache.ts) — skip the DB read.
+  if (revocationCache.has(`tok:${key}`)) {
+    return false;
+  }
+
   // Check MongoDB (cross-instance)
   if (isMongoConnected()) {
     try {
       const RevokedToken = getRevokedTokenModel();
-      const found = await RevokedToken.findOne({ tokenHash: key }).lean();
-      if (found) {
+      const found = await RevokedToken.findOne({ tokenHash: key }).select('reason expiresAt').lean();
+      if (!found) {
+        revocationCache.set(`tok:${key}`, false);
+      } else {
         // Cache in memory for subsequent checks in this instance
         memoryStore.set(key, {
           expiresAt: new Date(found.expiresAt).getTime(),
@@ -188,6 +232,7 @@ export async function revokeAllUserTokens(userId: string): Promise<void> {
 
   // In-memory cache
   userRevokeTimestamps.set(userId, now);
+  revocationCache.delete(`user:${userId}`);
 
   // Persist to MongoDB
   if (isMongoConnected()) {
@@ -195,7 +240,12 @@ export async function revokeAllUserTokens(userId: string): Promise<void> {
       const UserRevocation = getUserRevocationModel();
       await UserRevocation.updateOne(
         { userId },
-        { $set: { revokedBefore: new Date(now) } },
+        {
+          $set: {
+            revokedBefore: new Date(now),
+            expiresAt: new Date(now + maxUserJwtLifetimeSeconds() * 1000),
+          },
+        },
         { upsert: true }
       );
     } catch {
@@ -219,13 +269,22 @@ export async function isTokenIssuedBeforeRevocation(
     return true;
   }
 
+  // Recently looked up (see lib/db-cache.ts): false = no record, number = revokedBefore ms.
+  const cached = revocationCache.get(`user:${userId}`) as number | false | undefined;
+  if (cached !== undefined) {
+    return cached !== false && issuedAt * 1000 < cached;
+  }
+
   // Check MongoDB
   if (isMongoConnected()) {
     try {
       const UserRevocation = getUserRevocationModel();
-      const record = await UserRevocation.findOne({ userId }).lean();
-      if (record) {
+      const record = await UserRevocation.findOne({ userId }).select('revokedBefore').lean();
+      if (!record) {
+        revocationCache.set(`user:${userId}`, false);
+      } else {
         const revokedBefore = new Date(record.revokedBefore).getTime();
+        revocationCache.set(`user:${userId}`, revokedBefore);
         // Cache for future checks
         userRevokeTimestamps.set(userId, revokedBefore);
         return issuedAt * 1000 < revokedBefore;

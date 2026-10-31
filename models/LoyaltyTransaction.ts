@@ -20,6 +20,7 @@ const LoyaltyTransactionSchema: Schema = new Schema(
   {
     tenantId: {
       type: Schema.Types.ObjectId,
+      ref: 'Tenant',
       required: [true, 'Tenant ID is required'],
     },
     customerId: {
@@ -67,8 +68,8 @@ const LoyaltyTransactionSchema: Schema = new Schema(
   }
 );
 
+// Customer loyalty history (newest first) + count. No query filters by transactionId.
 LoyaltyTransactionSchema.index({ tenantId: 1, customerId: 1, createdAt: -1 });
-LoyaltyTransactionSchema.index({ tenantId: 1, transactionId: 1 });
 
 const LoyaltyTransaction: Model<ILoyaltyTransaction> =
   mongoose.models.LoyaltyTransaction ||

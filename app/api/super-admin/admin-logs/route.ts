@@ -4,6 +4,7 @@ import SuperAdminAction from '@/models/SuperAdminAction';
 import User from '@/models/User';
 import { requireRole } from '@/lib/auth';
 import { handleApiError } from '@/lib/error-handler';
+import { getTenantDayBoundaries, DEFAULT_TENANT_TIMEZONE } from '@/lib/timezone';
 
 // GET /api/super-admin/admin-logs
 export async function GET(request: NextRequest) {
@@ -25,13 +26,11 @@ export async function GET(request: NextRequest) {
     if (targetType) query.targetType = targetType;
     if (adminId) query.adminUserId = adminId;
     if (startDate || endDate) {
+      // Cross-tenant view: 'YYYY-MM-DD' filters are platform-timezone (Asia/Manila) days,
+      // not the server's UTC clock.
       const dateFilter: Record<string, Date> = {};
-      if (startDate) dateFilter.$gte = new Date(startDate);
-      if (endDate) {
-        const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999);
-        dateFilter.$lte = end;
-      }
+      if (startDate) dateFilter.$gte = getTenantDayBoundaries(startDate, DEFAULT_TENANT_TIMEZONE).start;
+      if (endDate) dateFilter.$lte = getTenantDayBoundaries(endDate, DEFAULT_TENANT_TIMEZONE).end;
       query.createdAt = dateFilter;
     }
 

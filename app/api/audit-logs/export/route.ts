@@ -8,6 +8,8 @@ import { arrayToCSV } from '@/lib/export';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
+import { getTenantSettingsById } from '@/lib/tenant';
+import { getTenantTimezone, resolveTenantDateRange } from '@/lib/timezone';
 
 /**
  * BIR Electronic Journal / Audit Trail raw dump.
@@ -38,14 +40,14 @@ export async function GET(request: NextRequest) {
     }
 
     const searchParams = request.nextUrl.searchParams;
-    const startDate = searchParams.get('startDate')
-      ? new Date(searchParams.get('startDate')!)
-      : new Date(new Date().setDate(new Date().getDate() - 30));
-    const endDate = searchParams.get('endDate')
-      ? new Date(searchParams.get('endDate')!)
-      : new Date();
-    startDate.setHours(0, 0, 0, 0);
-    if (searchParams.get('endDate')) endDate.setHours(23, 59, 59, 999);
+    // Calendar days are the tenant's (default Asia/Manila), not the server's UTC clock.
+    const tz = getTenantTimezone(await getTenantSettingsById(user.tenantId));
+    const { startDate, endDate } = resolveTenantDateRange(
+      searchParams.get('startDate'),
+      searchParams.get('endDate'),
+      tz,
+      30
+    );
     const format = searchParams.get('format') || 'json'; // json, csv
 
     const query = {

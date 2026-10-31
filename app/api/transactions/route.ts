@@ -14,10 +14,9 @@ import { validateAndSanitize, validateTransaction } from '@/lib/validation';
 import { generateReceiptNumber, isDuplicateReceiptNumberError } from '@/lib/receipt';
 import { updateStock, updateBundleStock, getProductStock } from '@/lib/stock';
 import ProductBundle from '@/models/ProductBundle';
-import StockMovement from '@/models/StockMovement';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { getTenantSettingsById } from '@/lib/tenant';
-import { checkSubscriptionLimit, SubscriptionService, checkFeatureAccess } from '@/lib/subscription';
+import { SubscriptionService, checkFeatureAccess } from '@/lib/subscription';
 import { logger } from '@/lib/logger';
 import { calculateTax } from '@/lib/tax-calculation';
 import Customer from '@/models/Customer';
@@ -279,15 +278,8 @@ export async function POST(request: NextRequest) {
     const splitPayments = Array.isArray(body.splitPayments) ? body.splitPayments : undefined;
 
     // Check subscription transaction limits
-    const currentTransactionCount = await Transaction.countDocuments({
-      tenantId,
-      createdAt: {
-        $gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
-        $lt: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1)
-      }
-    });
     try {
-      await checkSubscriptionLimit(tenantId.toString(), 'maxTransactions', currentTransactionCount);
+      await SubscriptionService.assertTransactionLimit(tenantId.toString());
     } catch (limitError: unknown) {
       return NextResponse.json(
         { success: false, error: (limitError as Error).message },
@@ -778,6 +770,11 @@ export async function POST(request: NextRequest) {
         balanceAfter: number;
       } | null = null;
 
+      // Pre-allocate the transaction _id so stock movements are written with their
+      // transactionId directly (no per-item lookup/backfill after the sale).
+      const transactionObjectId = new mongoose.Types.ObjectId();
+      const transactionIdStr = transactionObjectId.toString();
+
       // Update stock BEFORE creating transaction (critical - must succeed)
       for (const item of items) {
         const { productId, quantity, variation, bundleId } = item;
@@ -794,6 +791,7 @@ export async function POST(request: NextRequest) {
             -quantity,
             'sale',
             {
+              transactionId: transactionIdStr,
               userId: user.userId,
               branchId: typeof branchId === 'string' ? branchId : undefined,
               reason: 'Transaction sale - bundle',
@@ -801,10 +799,8 @@ export async function POST(request: NextRequest) {
             session
           );
         } else if (productId) {
-          const product = await withOptionalSession(
-            Product.findOne({ _id: productId, tenantId }),
-            session
-          );
+          // Already loaded (and validated) above — no need to re-read it.
+          const product = productMap.get(String(productId));
           if (product && product.trackInventory !== false) {
             await updateStock(
               productId,
@@ -812,6 +808,7 @@ export async function POST(request: NextRequest) {
               -quantity,
               'sale',
               {
+                transactionId: transactionIdStr,
                 userId: user.userId,
                 branchId: typeof branchId === 'string' ? branchId : undefined,
                 variation,
@@ -861,7 +858,7 @@ export async function POST(request: NextRequest) {
         receiptNumber = await generateReceiptNumber(tenantId);
         try {
           const [txn] = await Transaction.create(
-            [{ ...txPayloadBase, receiptNumber }],
+            [{ ...txPayloadBase, _id: transactionObjectId, receiptNumber }],
             sessionOpts(session)
           );
           transaction = txn;
@@ -900,22 +897,6 @@ export async function POST(request: NextRequest) {
         { $inc: { grandTotalSales: total, grandTotalTransactionCount: 1 } },
         sessionOpts(session)
       );
-
-      for (const item of items) {
-        const { productId, bundleId } = item;
-        if (productId || bundleId) {
-          await StockMovement.updateOne(
-            {
-              productId: productId || undefined,
-              tenantId,
-              reason: productId ? 'Transaction sale' : 'Transaction sale - bundle',
-              transactionId: { $exists: false },
-            },
-            { $set: { transactionId: transaction._id } },
-            sessionOpts(session)
-          );
-        }
-      }
 
       if (loyaltyEnabled && loyaltyCustomer && loyaltyConfig) {
         const currentBalance = loyaltyCustomer.loyaltyPointsBalance ?? 0;
@@ -1136,16 +1117,7 @@ export async function POST(request: NextRequest) {
 
     // Update subscription usage
     try {
-      const currentTransactionCount = await Transaction.countDocuments({
-        tenantId,
-        createdAt: {
-          $gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1), // Start of current month
-          $lt: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1) // Start of next month
-        }
-      });
-      await SubscriptionService.updateUsage(tenantId.toString(), {
-        transactions: currentTransactionCount
-      });
+      await SubscriptionService.recordTransaction(tenantId.toString());
     } catch (usageError) {
       logger.error('Failed to update subscription usage:', usageError);
       // Don't fail the request if usage update fails

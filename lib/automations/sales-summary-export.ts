@@ -9,7 +9,8 @@
  */
 import connectDB from '@/lib/mongodb';
 import Tenant from '@/models/Tenant';
-import { getDailySalesAggregate, startOfBusinessDay } from '@/lib/bir-readings';
+import { getDailySalesAggregate, getSalesAggregateForRange, startOfBusinessDay } from '@/lib/bir-readings';
+import { addDaysToYmd, getTenantLocalParts, getTenantTimezone, getTenantYmd } from '@/lib/timezone';
 import { formatGrandTotalRegister } from '@/lib/bir-format';
 import { logger } from '@/lib/logger';
 import { AutomationResult } from './types';
@@ -23,7 +24,9 @@ const _importPath = () => import('path');
 export interface SalesSummaryExportOptions {
   tenantId?: string; // If specified, export only this tenant
   period: 'daily' | 'monthly';
-  businessDate?: Date; // Defaults to yesterday (daily) or last month (monthly)
+  // Any instant within the target day/month, judged in each tenant's timezone.
+  // Defaults to yesterday (daily) or last month (monthly) in the tenant's timezone.
+  businessDate?: Date;
   exportPath?: string;
 }
 
@@ -31,6 +34,8 @@ export interface SalesSummaryPayload {
   tenantId: string;
   tenantSlug: string;
   period: 'daily' | 'monthly';
+  timezone: string; // tenant IANA timezone the business day/month is computed in
+  businessDate: string; // tenant-local 'YYYY-MM-DD' (first day of the month for monthly)
   startDate: string;
   endDate: string;
   grossSales: number;
@@ -47,32 +52,35 @@ export interface SalesSummaryPayload {
 }
 
 /**
- * Aggregates a tenant's sales over a month by summing each day's aggregate.
- * Reuses getDailySalesAggregate so daily and monthly figures are always
- * consistent with each other and with the X/Z-Reading reports.
+ * 'YYYY-MM-01' of the tenant-local month to export: the month containing
+ * `ref`, or (no ref) the month before the current tenant-local month.
  */
-async function aggregateMonth(tenantId: string, monthStart: Date) {
-  const monthEnd = new Date(monthStart);
-  monthEnd.setMonth(monthEnd.getMonth() + 1);
+export function resolveExportMonthStartYmd(ref: Date | undefined, tz: string, now: Date = new Date()): string {
+  const { year, month } = getTenantLocalParts(ref ?? now, tz);
+  const [y, m] = ref ? [year, month] : month === 1 ? [year - 1, 12] : [year, month - 1];
+  return `${y}-${String(m).padStart(2, '0')}-01`;
+}
 
-  const totals = {
-    grossSales: 0, vatableSales: 0, vatAmount: 0, vatExemptSales: 0,
-    zeroRatedSales: 0, discountTotal: 0, transactionCount: 0, voidCount: 0,
-  };
+/** Tenant-local 'YYYY-MM-DD' to export daily: the day containing `ref`, or (no ref) yesterday. */
+export function resolveExportDayYmd(ref: Date | undefined, tz: string, now: Date = new Date()): string {
+  return ref ? getTenantYmd(ref, tz) : addDaysToYmd(getTenantYmd(now, tz), -1);
+}
 
-  for (let day = new Date(monthStart); day < monthEnd; day.setDate(day.getDate() + 1)) {
-    const daily = await getDailySalesAggregate(tenantId, new Date(day));
-    totals.grossSales += daily.grossSales;
-    totals.vatableSales += daily.vatableSales;
-    totals.vatAmount += daily.vatAmount;
-    totals.vatExemptSales += daily.vatExemptSales;
-    totals.zeroRatedSales += daily.zeroRatedSales;
-    totals.discountTotal += daily.discountTotal;
-    totals.transactionCount += daily.transactionCount;
-    totals.voidCount += daily.voidCount;
-  }
-
-  return { ...totals, startDate: monthStart, endDate: monthEnd };
+/**
+ * Aggregates a tenant's sales over one tenant-local calendar month,
+ * [local 00:00 on the 1st, local 00:00 on the 1st of the next month).
+ * Uses the same aggregation as getDailySalesAggregate (and the X/Z-Readings),
+ * over the whole month's range in one query, so monthly figures equal the sum
+ * of the daily ones.
+ */
+async function aggregateMonth(tenantId: string, monthStartYmd: string, tz: string) {
+  const [y, m] = monthStartYmd.split('-').map(Number);
+  const nextMonthYmd = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`;
+  return getSalesAggregateForRange(
+    tenantId,
+    startOfBusinessDay(monthStartYmd, tz),
+    startOfBusinessDay(nextMonthYmd, tz)
+  );
 }
 
 export async function generateSalesSummaryExport(
@@ -89,46 +97,53 @@ export async function generateSalesSummaryExport(
   };
 
   try {
-    const tenants = options.tenantId
-      ? await Tenant.find({ _id: options.tenantId, isActive: true }).lean()
-      : await Tenant.find({ isActive: true }).lean();
+    // On serverless hosts (Vercel) the filesystem is read-only and ephemeral, so a
+    // local export file is useless: only tenants with a push endpoint get a
+    // summary, and no file is written. Self-hosted keeps the file export for all.
+    const pushOnly = !!process.env.VERCEL && !options.exportPath;
+    const tenantFilter: Record<string, unknown> = options.tenantId
+      ? { _id: options.tenantId, isActive: true }
+      : { isActive: true };
+    if (pushOnly) tenantFilter['settings.birEsalesPushUrl'] = { $nin: [null, ''] };
+
+    const tenants = await Tenant.find(tenantFilter)
+      .select('slug grandTotalSales settings.birEsalesPushUrl settings.timezone')
+      .lean();
 
     if (tenants.length === 0) {
-      results.message = 'No active tenants found to export';
+      results.message = pushOnly
+        ? 'No active tenants with an eSales push endpoint'
+        : 'No active tenants found to export';
       return results;
     }
 
     const fs = await _importFs();
     const path = await _importPath();
     const exportDir = options.exportPath || path.join(/*turbopackIgnore: true*/ process.cwd(), 'backups', 'esales');
-    await fs.mkdir(exportDir, { recursive: true }).catch(() => {});
+    if (!pushOnly) await fs.mkdir(exportDir, { recursive: true }).catch(() => {});
 
     for (const tenant of tenants) {
       const tenantId = tenant._id.toString();
       try {
         let aggregate: { grossSales: number; vatableSales: number; vatAmount: number; vatExemptSales: number; zeroRatedSales: number; discountTotal: number; transactionCount: number; voidCount: number; startDate: Date; endDate: Date };
+        // Business days/months are the tenant's local calendar (server clock is UTC on Vercel).
+        const tz = getTenantTimezone(tenant.settings);
+        let businessDateYmd: string;
 
         if (options.period === 'daily') {
-          const businessDate = options.businessDate ?? (() => {
-            const d = new Date();
-            d.setDate(d.getDate() - 1); // yesterday, by default (full day of data)
-            return d;
-          })();
-          aggregate = await getDailySalesAggregate(tenantId, businessDate);
+          businessDateYmd = resolveExportDayYmd(options.businessDate, tz); // default: yesterday (full day of data)
+          aggregate = await getDailySalesAggregate(tenantId, businessDateYmd, tz);
         } else {
-          const monthStart = options.businessDate
-            ? startOfBusinessDay(new Date(options.businessDate.getFullYear(), options.businessDate.getMonth(), 1))
-            : (() => {
-                const now = new Date();
-                return startOfBusinessDay(new Date(now.getFullYear(), now.getMonth() - 1, 1)); // last month
-              })();
-          aggregate = await aggregateMonth(tenantId, monthStart);
+          businessDateYmd = resolveExportMonthStartYmd(options.businessDate, tz); // default: last month
+          aggregate = await aggregateMonth(tenantId, businessDateYmd, tz);
         }
 
         const payload: SalesSummaryPayload = {
           tenantId,
           tenantSlug: tenant.slug,
           period: options.period,
+          timezone: tz,
+          businessDate: businessDateYmd,
           startDate: aggregate.startDate.toISOString(),
           endDate: aggregate.endDate.toISOString(),
           grossSales: aggregate.grossSales,
@@ -144,8 +159,11 @@ export async function generateSalesSummaryExport(
           generatedAt: new Date().toISOString(),
         };
 
-        const fileName = `${tenant.slug}-${options.period}-${aggregate.startDate.toISOString().split('T')[0]}.json`;
-        await fs.writeFile(path.join(exportDir, fileName), JSON.stringify(payload, null, 2), 'utf-8');
+        // Name by the tenant-local date: startDate is local midnight as UTC, i.e. the previous UTC day in Manila.
+        const fileName = `${tenant.slug}-${options.period}-${businessDateYmd}.json`;
+        if (!pushOnly) {
+          await fs.writeFile(path.join(exportDir, fileName), JSON.stringify(payload, null, 2), 'utf-8');
+        }
 
         // Push to tenant-configured endpoint, if any (best-effort — local file is the source of truth).
         const pushUrl = tenant.settings?.birEsalesPushUrl;
@@ -164,6 +182,8 @@ export async function generateSalesSummaryExport(
               throw new Error(`Push endpoint responded with HTTP ${res.status}`);
             }
           } catch (pushErr: unknown) {
+            // With no local file (serverless), the push is the export: count it as failed.
+            if (pushOnly) throw pushErr;
             const msg = pushErr instanceof Error ? pushErr.message : String(pushErr);
             results.errors?.push(`${tenant.slug}: push failed — ${msg}`);
             logger.warn(`Sales summary push failed for tenant ${tenant.slug}: ${msg}`);

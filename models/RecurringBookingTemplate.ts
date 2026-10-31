@@ -117,9 +117,8 @@ const RecurringBookingTemplateSchema: Schema = new Schema(
   }
 );
 
+// Only query: recurring-bookings automation, find({ tenantId, isActive: true, effectiveFrom, effectiveTo }).
 RecurringBookingTemplateSchema.index({ tenantId: 1, isActive: 1 });
-RecurringBookingTemplateSchema.index({ tenantId: 1, staffId: 1, isActive: 1 });
-RecurringBookingTemplateSchema.index({ tenantId: 1, recurrenceType: 1, isActive: 1 });
 
 const RecurringBookingTemplate: Model<IRecurringBookingTemplate> =
   mongoose.models.RecurringBookingTemplate ||

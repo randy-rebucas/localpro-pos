@@ -6,6 +6,8 @@ import { hasTenantPermission } from '@/lib/permissions-server';
 import { handleApiError } from '@/lib/error-handler';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { getTenantSettingsById } from '@/lib/tenant';
+import { getTenantTimezone, getTenantLocalParts } from '@/lib/timezone';
 
 export async function GET(request: NextRequest) {
   try {
@@ -70,8 +72,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Missing required fields' }, { status: 400 });
     }
 
-    // Generate prescription number: RX-YYYY-NNNNNN
-    const year = new Date().getFullYear();
+    // Generate prescription number: RX-YYYY-NNNNNN (year in the tenant's timezone)
+    const year = getTenantLocalParts(new Date(), getTenantTimezone(await getTenantSettingsById(user.tenantId))).year;
     const lastRx = await Prescription.findOne(
       { tenantId: user.tenantId, prescriptionNumber: new RegExp(`^RX-${year}-`) },
       { prescriptionNumber: 1 },

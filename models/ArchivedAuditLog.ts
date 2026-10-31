@@ -1,9 +1,12 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
 
 /**
- * ArchivedAuditLog — permanent cold-storage copy of expired audit log entries.
+ * ArchivedAuditLog — cold-storage copy of audit log entries older than the live
+ * window (see lib/automations/audit-log-cleanup.ts). Kept for the BIR 10-year
+ * record retention period, then purged by the TTL index below.
  * Same shape as AuditLog, plus archivedAt to track when it was moved here.
  */
+export const ARCHIVED_AUDIT_LOG_RETENTION_SECONDS = 10 * 366 * 24 * 60 * 60; // ≥ 10 years
 export interface IArchivedAuditLog extends Document {
   tenantId: mongoose.Types.ObjectId;
   userId?: mongoose.Types.ObjectId;
@@ -32,12 +35,10 @@ const ArchivedAuditLogSchema: Schema = new Schema(
     action: {
       type: String,
       required: [true, 'Action is required'],
-      index: true,
     },
     entityType: {
       type: String,
       required: [true, 'Entity type is required'],
-      index: true,
     },
     entityId: {
       type: String,
@@ -58,7 +59,6 @@ const ArchivedAuditLogSchema: Schema = new Schema(
       type: Date,
       required: true,
       default: Date.now,
-      index: true,
     },
     // Preserve original createdAt from AuditLog (not auto-generated)
     createdAt: {
@@ -72,9 +72,15 @@ const ArchivedAuditLogSchema: Schema = new Schema(
   }
 );
 
+// Write-mostly cold storage: nothing in app/ or lib/ reads this collection yet
+// (only insertMany from lib/automations/audit-log-cleanup.ts). Keep a single
+// tenant/date index for compliance retrieval; add others when a reader exists.
 ArchivedAuditLogSchema.index({ tenantId: 1, createdAt: -1 });
-ArchivedAuditLogSchema.index({ tenantId: 1, entityType: 1, entityId: 1 });
-ArchivedAuditLogSchema.index({ tenantId: 1, archivedAt: -1 });
+// Purge after the retention period, measured from the original log time.
+ArchivedAuditLogSchema.index(
+  { createdAt: 1 },
+  { expireAfterSeconds: ARCHIVED_AUDIT_LOG_RETENTION_SECONDS }
+);
 
 const ArchivedAuditLog: Model<IArchivedAuditLog> =
   mongoose.models.ArchivedAuditLog ||

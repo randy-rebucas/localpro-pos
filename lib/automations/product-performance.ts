@@ -6,10 +6,9 @@
 import connectDB from '@/lib/mongodb';
 import Product from '@/models/Product';
 import Transaction from '@/models/Transaction';
-import Tenant from '@/models/Tenant';
 import mongoose from 'mongoose';
 import { sendEmail } from '@/lib/notifications';
-import { getTenantSettingsById } from '@/lib/tenant';
+import { getAutomationTenants } from './tenants';
 import { AutomationResult } from './types';
 
 export interface ProductPerformanceOptions {
@@ -39,14 +38,16 @@ export async function analyzeProductPerformance(
     const slowMovingThreshold = options.slowMovingThreshold || 30;
     const analysisStartDate = new Date(Date.now() - daysToAnalyze * 24 * 60 * 60 * 1000);
 
-    // Get tenants to process
-    let tenants;
-    if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).lean();
-      tenants = tenant ? [tenant] : [];
-    } else {
-      tenants = await Tenant.find({ status: 'active' }).lean();
-    }
+    // Get tenants to process. The report is only delivered by email, so tenants
+    // without email notifications and an address are filtered out up front.
+    const tenants = await getAutomationTenants({
+      tenantId: options.tenantId,
+      filter: {
+        'settings.enableInventory': { $ne: false },
+        'settings.emailNotifications': true,
+        'settings.email': { $nin: [null, ''] },
+      },
+    });
 
     if (tenants.length === 0) {
       results.message = 'No tenants found to process';
@@ -58,87 +59,115 @@ export async function analyzeProductPerformance(
 
     for (const tenant of tenants) {
       try {
-        const tenantId = tenant._id.toString();
-        const tenantSettings = await getTenantSettingsById(tenantId);
+        const tenantId = tenant._id;
+        const tenantSettings = tenant.settings;
 
-        // Skip if notifications disabled
-        if (!tenantSettings?.emailNotifications) {
+        // Skip if notifications disabled (manual single-tenant runs bypass the filter)
+        if (!tenantSettings?.emailNotifications || !tenantSettings?.email) {
           continue;
         }
 
         // Get all products
-        const products = await Product.find({ tenantId, trackInventory: true }).lean();
+        const products = await Product.find({ tenantId, trackInventory: true })
+          .select('name sku')
+          .lean();
+
+        if (products.length === 0) {
+          continue;
+        }
+
+        // Units, revenue and last sale per product in the analysis period, in one aggregate
+        const salesByProduct: Array<{
+          _id: mongoose.Types.ObjectId;
+          totalQuantity: number;
+          totalRevenue: number;
+          lastSaleAt: Date;
+        }> = await Transaction.aggregate([
+          {
+            $match: {
+              tenantId,
+              status: 'completed',
+              createdAt: { $gte: analysisStartDate },
+            },
+          },
+          { $project: { createdAt: 1, 'items.product': 1, 'items.quantity': 1, 'items.subtotal': 1 } },
+          { $unwind: '$items' },
+          {
+            $group: {
+              _id: '$items.product',
+              totalQuantity: { $sum: '$items.quantity' },
+              totalRevenue: { $sum: '$items.subtotal' },
+              lastSaleAt: { $max: '$createdAt' },
+            },
+          },
+        ]);
+
+        const salesMap = new Map(
+          salesByProduct.filter(row => row._id).map(row => [row._id.toString(), row])
+        );
+
+        const daysSince = (date: Date) =>
+          Math.floor((Date.now() - new Date(date).getTime()) / (1000 * 60 * 60 * 24));
+
+        // Products with no sales in the window need their last sale from older history.
+        // When the slow-moving threshold fits inside the window every unsold product is
+        // slow-moving and the date is only displayed, so only look up the ones shown.
+        const unsoldProducts = products.filter(p => !salesMap.has(p._id.toString()));
+        const lookupProducts = slowMovingThreshold <= daysToAnalyze
+          ? unsoldProducts.slice(0, 20)
+          : unsoldProducts;
+        const lastSaleMap = new Map<string, Date>();
+        if (lookupProducts.length > 0) {
+          const lookupIds = lookupProducts.map(p => p._id);
+          const lastSales: Array<{ _id: mongoose.Types.ObjectId; lastSaleAt: Date }> =
+            await Transaction.aggregate([
+              {
+                $match: {
+                  tenantId,
+                  status: 'completed',
+                  createdAt: { $lt: analysisStartDate },
+                  'items.product': { $in: lookupIds },
+                },
+              },
+              { $project: { createdAt: 1, 'items.product': 1 } },
+              { $unwind: '$items' },
+              { $match: { 'items.product': { $in: lookupIds } } },
+              { $group: { _id: '$items.product', lastSaleAt: { $max: '$createdAt' } } },
+            ]);
+          for (const row of lastSales) {
+            lastSaleMap.set(row._id.toString(), row.lastSaleAt);
+          }
+        }
 
         const slowMovingProducts: any[] = []; // eslint-disable-line @typescript-eslint/no-explicit-any
         const topPerformers: any[] = []; // eslint-disable-line @typescript-eslint/no-explicit-any
 
         for (const product of products) {
-          try {
-            // Get sales for this product in the analysis period
-            const sales = await Transaction.aggregate([
-              {
-                $match: {
-                  tenantId: new mongoose.Types.ObjectId(tenantId),
-                  createdAt: { $gte: analysisStartDate },
-                  status: 'completed',
-                  'items.product': product._id,
-                },
-              },
-              {
-                $unwind: '$items',
-              },
-              {
-                $match: {
-                  'items.product': product._id,
-                },
-              },
-              {
-                $group: {
-                  _id: null,
-                  totalQuantity: { $sum: '$items.quantity' },
-                  totalRevenue: { $sum: '$items.subtotal' },
-                },
-              },
-            ]);
+          const salesData = salesMap.get(product._id.toString());
+          const salesCount = salesData?.totalQuantity || 0;
+          const revenue = salesData?.totalRevenue || 0;
 
-            const salesData = sales[0] || { totalQuantity: 0, totalRevenue: 0 };
-            const salesCount = salesData.totalQuantity || 0;
-            const revenue = salesData.totalRevenue || 0;
+          const lastSaleAt = salesData?.lastSaleAt ?? lastSaleMap.get(product._id.toString());
+          const daysSinceLastSale = lastSaleAt ? daysSince(lastSaleAt) : daysToAnalyze;
 
-            // Get last sale date
-            const lastSale = await Transaction.findOne({
-              tenantId,
-              'items.product': product._id,
-              status: 'completed',
-            })
-              .sort({ createdAt: -1 })
-              .lean();
+          // Identify slow-moving products
+          if (daysSinceLastSale >= slowMovingThreshold && salesCount === 0) {
+            slowMovingProducts.push({
+              ...product,
+              daysSinceLastSale,
+              salesCount,
+              revenue,
+            });
+          }
 
-            const daysSinceLastSale = lastSale
-              ? Math.floor((Date.now() - new Date(lastSale.createdAt).getTime()) / (1000 * 60 * 60 * 24))
-              : daysToAnalyze;
-
-            // Identify slow-moving products
-            if (daysSinceLastSale >= slowMovingThreshold && salesCount === 0) {
-              slowMovingProducts.push({
-                ...product,
-                daysSinceLastSale,
-                salesCount,
-                revenue,
-              });
-            }
-
-            // Identify top performers (top 10 by revenue)
-            if (revenue > 0) {
-              topPerformers.push({
-                ...product,
-                daysSinceLastSale,
-                salesCount,
-                revenue,
-              });
-            }
-          } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-            // Skip product on error
+          // Identify top performers (top 10 by revenue)
+          if (revenue > 0) {
+            topPerformers.push({
+              ...product,
+              daysSinceLastSale,
+              salesCount,
+              revenue,
+            });
           }
         }
 

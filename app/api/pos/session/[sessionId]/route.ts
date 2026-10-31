@@ -1,76 +1,111 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
 import mongoose from 'mongoose';
-import { logger } from '@/lib/logger';
+import connectDB from '@/lib/mongodb';
+import PosSession, { IPosSession } from '@/models/PosSession';
+import { requireAuth } from '@/lib/auth';
+import { getTenantId } from '@/lib/tenant';
+import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
+import { handleApiError } from '@/lib/error-handler';
 
-// MongoDB-backed POS session for serverless compatibility
-const posSessionSchema = new mongoose.Schema({
-  sessionId: { type: String, required: true, unique: true, index: true },
-  tenant: { type: String, required: true },
-  cart: { type: Array, default: [] },
-  subtotal: { type: Number, default: 0 },
-  discount: { type: mongoose.Schema.Types.Mixed, default: null },
-  taxAmount: { type: Number },
-  taxRate: { type: Number },
-  taxLabel: { type: String },
-  tip: { type: Number, default: 0 },
-  total: { type: Number, default: 0 },
-  paymentMethod: { type: String, default: null },
-  paymentStatus: { type: String, enum: ['pending', 'processing', 'completed', 'failed'], default: 'pending' },
-  lastUpdate: { type: Number, default: Date.now },
-}, {
-  timestamps: true,
-  // TTL index: auto-delete sessions older than 1 hour
-  expireAfterSeconds: 3600,
-});
+/**
+ * POS <-> customer-display session.
+ *
+ * Both the POS terminal (writes) and the customer display (polls GET, and
+ * POSTs `update-payment-method`) run in the staff member's logged-in browser —
+ * proxy.ts already requires a JWT for every non-public /api/* path. This route
+ * additionally binds the session to the *authenticated* tenant: the
+ * client-supplied `tenant` slug is only accepted when it resolves to the
+ * caller's own tenant, and every lookup is scoped by `tenantId`.
+ */
 
-// Add TTL index on createdAt
-posSessionSchema.index({ lastUpdate: 1 }, { expireAfterSeconds: 3600 });
+// GET is polled roughly once per second by the display; POST fires on every
+// cart change. Generous per-IP-per-session ceiling that still stops floods.
+const RATE_LIMIT = 300;
+const RATE_WINDOW_MS = 60_000;
 
-const PosSession = mongoose.models.PosSession || mongoose.model('PosSession', posSessionSchema);
+type AuthContext = { tenantId: string; slug: string | null };
+
+function json(body: unknown, status: number) {
+  return NextResponse.json(body, { status });
+}
+
+/**
+ * Rate limit + auth + tenant resolution. Returns either a ready error response
+ * or the caller's tenant context.
+ */
+async function authorize(
+  request: NextRequest,
+  sessionId: string,
+  slug: string | null | undefined
+): Promise<NextResponse | AuthContext> {
+  const rl = checkRateLimit(`pos-session:${getClientIp(request)}:${sessionId}`, RATE_LIMIT, RATE_WINDOW_MS);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { success: false, error: 'Too many requests' },
+      { status: 429, headers: { 'Retry-After': String(Math.ceil(rl.resetAfterMs / 1000)) } }
+    );
+  }
+
+  const user = await requireAuth(request); // throws 'Unauthorized' -> 401 via handleApiError
+  if (!user.tenantId || !mongoose.Types.ObjectId.isValid(user.tenantId)) {
+    return json({ success: false, error: 'Forbidden' }, 403);
+  }
+
+  await connectDB();
+
+  if (slug) {
+    const slugTenantId = await getTenantId(slug);
+    if (!slugTenantId || slugTenantId !== String(user.tenantId)) {
+      return json({ success: false, error: 'Forbidden' }, 403);
+    }
+  }
+
+  return { tenantId: String(user.tenantId), slug: slug || null };
+}
+
+/**
+ * A session is owned by the caller when its tenantId matches. Sessions created
+ * before tenantId was stored (TTL ≤ 1h) are matched by the verified slug.
+ */
+function isOwned(session: Pick<IPosSession, 'tenant' | 'tenantId'>, ctx: AuthContext): boolean {
+  if (session.tenantId) return String(session.tenantId) === ctx.tenantId;
+  return !!ctx.slug && session.tenant === ctx.slug;
+}
+
+function serialize(sessionId: string, session: IPosSession) {
+  return {
+    sessionId,
+    cart: session.cart,
+    subtotal: session.subtotal,
+    discount: session.discount,
+    taxAmount: session.taxAmount,
+    taxRate: session.taxRate,
+    taxLabel: session.taxLabel,
+    tip: session.tip,
+    total: session.total,
+    paymentMethod: session.paymentMethod,
+    paymentStatus: session.paymentStatus,
+  };
+}
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ sessionId: string }> }
 ) {
   try {
-    await connectDB();
     const { sessionId } = await params;
-    const tenant = request.nextUrl.searchParams.get('tenant');
+    const ctx = await authorize(request, sessionId, request.nextUrl.searchParams.get('tenant'));
+    if (ctx instanceof NextResponse) return ctx;
 
-    if (!tenant) {
-      return NextResponse.json(
-        { success: false, error: 'Missing tenant' },
-        { status: 400 }
-      );
-    }
+    const session = await PosSession.findOne({ sessionId }).lean<IPosSession>();
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const session = await PosSession.findOne({ sessionId, tenant }).lean() as any;
-
-    if (!session) {
-      return NextResponse.json(
-        { success: false, error: 'Session not found' },
-        { status: 404 }
-      );
+    if (!session || !isOwned(session, ctx)) {
+      return json({ success: false, error: 'Session not found' }, 404);
     }
 
     return NextResponse.json({
       success: true,
-      data: {
-        sessionId,
-        cart: session.cart,
-        subtotal: session.subtotal,
-        discount: session.discount,
-        taxAmount: session.taxAmount,
-        taxRate: session.taxRate,
-        taxLabel: session.taxLabel,
-        tip: session.tip,
-        total: session.total,
-        paymentMethod: session.paymentMethod,
-        paymentStatus: session.paymentStatus,
-        lastUpdate: session.lastUpdate,
-      },
+      data: { ...serialize(sessionId, session), lastUpdate: session.lastUpdate },
     }, {
       headers: {
         'Cache-Control': 'no-store, must-revalidate',
@@ -78,11 +113,7 @@ export async function GET(
       }
     });
   } catch (error) {
-    logger.error('GET /api/pos/session/[sessionId] error:', error);
-    return NextResponse.json(
-      { success: false, error: 'Internal server error' },
-      { status: 500 }
-    );
+    return handleApiError(error, 'Failed to load POS session');
   }
 }
 
@@ -91,7 +122,6 @@ export async function POST(
   { params }: { params: Promise<{ sessionId: string }> }
 ) {
   try {
-    await connectDB();
     const { sessionId } = await params;
 
     let body: { tenant?: string; action?: string; data?: Record<string, unknown> };
@@ -99,37 +129,33 @@ export async function POST(
       body = await request.json();
     } catch {
       // Body can arrive empty/truncated when a sync request is aborted mid-flight; not a server error.
-      return NextResponse.json(
-        { success: false, error: 'Empty or invalid request body' },
-        { status: 400 }
-      );
+      return json({ success: false, error: 'Empty or invalid request body' }, 400);
     }
     const { tenant, action, data } = body;
 
     if (!tenant || !sessionId) {
-      return NextResponse.json(
-        { success: false, error: 'Missing tenant or sessionId' },
-        { status: 400 }
-      );
+      return json({ success: false, error: 'Missing tenant or sessionId' }, 400);
     }
+
+    const ctx = await authorize(request, sessionId, tenant);
+    if (ctx instanceof NextResponse) return ctx;
+
+    const tenantId = new mongoose.Types.ObjectId(ctx.tenantId);
+    // Slug kept on the document for backward compatibility (verified in authorize()).
+    const tenantSlug = tenant;
 
     let session = await PosSession.findOne({ sessionId });
 
-    // Once a session belongs to a tenant, no caller may reassign it to a different
-    // tenant — the client-supplied `tenant` field is otherwise unauthenticated and
-    // sessionId alone must not be enough to hijack or reset another tenant's session.
-    if (session && session.tenant !== tenant) {
-      return NextResponse.json(
-        { success: false, error: 'Session not found' },
-        { status: 404 }
-      );
+    // Never let a sessionId belonging to another tenant be read, reset or hijacked.
+    if (session && !isOwned(session, ctx)) {
+      return json({ success: false, error: 'Session not found' }, 404);
     }
 
     if (action === 'init' && !session) {
-      // Create a brand-new session
       session = await PosSession.create({
         sessionId,
-        tenant,
+        tenant: tenantSlug,
+        tenantId,
         cart: data?.cart || [],
         subtotal: data?.subtotal || 0,
         discount: data?.discount || null,
@@ -143,10 +169,10 @@ export async function POST(
         lastUpdate: Date.now(),
       });
     } else if (action === 'init' && session) {
-      // Reset an existing session owned by the same tenant
       session = await PosSession.findOneAndUpdate(
-        { sessionId },
+        { _id: session._id },
         {
+          tenantId,
           cart: data?.cart || [],
           subtotal: data?.subtotal || 0,
           discount: data?.discount || null,
@@ -164,10 +190,11 @@ export async function POST(
     } else if (action === 'update-cart' && !session) {
       // Auto-create session if it doesn't exist (handles race condition where cart syncs before init completes)
       session = await PosSession.findOneAndUpdate(
-        { sessionId },
+        { sessionId, tenantId },
         {
           sessionId,
-          tenant,
+          tenant: tenantSlug,
+          tenantId,
           cart: data?.cart || [],
           subtotal: data?.subtotal || 0,
           discount: null,
@@ -183,7 +210,7 @@ export async function POST(
         { upsert: true, new: true }
       );
     } else if (session) {
-      const updates: Record<string, unknown> = { lastUpdate: Date.now() };
+      const updates: Record<string, unknown> = { lastUpdate: Date.now(), tenantId };
 
       if (action === 'update-cart' && data) {
         if (data.cart) updates.cart = data.cart;
@@ -217,38 +244,21 @@ export async function POST(
       }
 
       session = await PosSession.findOneAndUpdate(
-        { sessionId },
+        { _id: session._id },
         { $set: updates },
         { new: true }
       );
     } else {
-      return NextResponse.json(
-        { success: false, error: 'Session not found. Please reinitialize.' },
-        { status: 404 }
-      );
+      return json({ success: false, error: 'Session not found. Please reinitialize.' }, 404);
     }
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        sessionId,
-        cart: session.cart,
-        subtotal: session.subtotal,
-        discount: session.discount,
-        taxAmount: session.taxAmount,
-        taxRate: session.taxRate,
-        taxLabel: session.taxLabel,
-        tip: session.tip,
-        total: session.total,
-        paymentMethod: session.paymentMethod,
-        paymentStatus: session.paymentStatus,
-      },
-    });
+    if (!session) {
+      // Expired (TTL) or removed between the lookup and the update.
+      return json({ success: false, error: 'Session not found. Please reinitialize.' }, 404);
+    }
+
+    return NextResponse.json({ success: true, data: serialize(sessionId, session) });
   } catch (error) {
-    logger.error('POST /api/pos/session/[sessionId] error:', error);
-    return NextResponse.json(
-      { success: false, error: 'Internal server error' },
-      { status: 500 }
-    );
+    return handleApiError(error, 'Failed to update POS session');
   }
 }

@@ -5,6 +5,8 @@ import Transaction from '@/models/Transaction';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { logger } from '@/lib/logger';
+import { getTenantSettingsById } from '@/lib/tenant';
+import { getTenantTimezone, getTenantDayBoundaries } from '@/lib/timezone';
 
 /**
  * Get bundle analytics - sales performance metrics
@@ -24,12 +26,12 @@ export async function GET(request: NextRequest) {
     const bundleId = searchParams.get('bundleId');
 
     // Build date query
+    // 'YYYY-MM-DD' params are calendar days in the tenant's timezone, not the server's.
     const dateQuery: any = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
-    if (startDate) dateQuery.$gte = new Date(startDate);
-    if (endDate) {
-      const end = new Date(endDate);
-      end.setHours(23, 59, 59, 999);
-      dateQuery.$lte = end;
+    if (startDate || endDate) {
+      const tz = getTenantTimezone(await getTenantSettingsById(tenantId));
+      if (startDate) dateQuery.$gte = getTenantDayBoundaries(startDate, tz).start;
+      if (endDate) dateQuery.$lte = getTenantDayBoundaries(endDate, tz).end;
     }
 
     // Get all transactions in the date range

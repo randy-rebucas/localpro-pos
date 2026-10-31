@@ -6,6 +6,8 @@ import { getCurrentUser } from '@/lib/auth';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { requireBookingSchedulingAccess } from '@/lib/booking-scheduling-access';
 import { logger } from '@/lib/logger';
+import { getTenantSettingsById } from '@/lib/tenant';
+import { getTenantTimezone, getTenantDayBoundaries, getTenantYmd, tenantLocalTimeToUtc } from '@/lib/timezone';
 
 /**
  * GET - Get available time slots for a given date
@@ -59,15 +61,15 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Parse as a local calendar date directly — `new Date(dateParam)` parses a
-    // bare "YYYY-MM-DD" string as UTC midnight, and the server's local timezone
-    // may be behind UTC, so a subsequent setHours(0,0,0,0) would silently shift
-    // the selected day back by one.
-    const [dateYear, dateMonth, dateDay] = dateParam.split('-').map(Number);
-    const selectedDate = new Date(dateYear, (dateMonth || 1) - 1, dateDay || 1, 0, 0, 0, 0);
-
-    const endDate = new Date(selectedDate);
-    endDate.setHours(23, 59, 59, 999);
+    // The selected date and the startHour/endHour window are tenant-local wall-clock
+    // values (default Asia/Manila), not the server's (Vercel runs UTC). A bare
+    // 'YYYY-MM-DD' is used as the tenant calendar day directly; anything else is
+    // parsed as an instant and mapped to its tenant-local day.
+    const tz = getTenantTimezone(await getTenantSettingsById(tenantId.toString()));
+    const selectedYmd = /^\d{4}-\d{2}-\d{2}$/.test(dateParam)
+      ? dateParam
+      : getTenantYmd(new Date(dateParam), tz);
+    const { start: selectedDate, end: endDate } = getTenantDayBoundaries(selectedYmd, tz);
 
     // Get existing bookings for the date
     const query: any = { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -84,11 +86,8 @@ export async function GET(request: NextRequest) {
 
     // Generate time slots
     const slots: Array<{ time: string; available: boolean; bookingId?: string }> = [];
-    const startTime = new Date(selectedDate);
-    startTime.setHours(startHour, 0, 0, 0);
-
-    const endTime = new Date(selectedDate);
-    endTime.setHours(endHour, 0, 0, 0);
+    const startTime = tenantLocalTimeToUtc(selectedYmd, `${startHour}:00`, tz);
+    const endTime = tenantLocalTimeToUtc(selectedYmd, `${endHour}:00`, tz);
 
     let currentSlot = new Date(startTime);
 

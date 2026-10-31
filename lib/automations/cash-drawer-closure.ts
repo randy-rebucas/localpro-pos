@@ -4,17 +4,94 @@
  */
 
 import connectDB from '@/lib/mongodb';
+import mongoose from 'mongoose';
 import CashDrawerSession from '@/models/CashDrawerSession';
-import Tenant from '@/models/Tenant';
 import Transaction from '@/models/Transaction';
 import Expense from '@/models/Expense';
+import User from '@/models/User'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { sendEmail } from '@/lib/notifications';
-import { getTenantSettingsById } from '@/lib/tenant';
+import type { ITenantSettings } from '@/models/Tenant';
+import { getEffectiveHoursForDate, type BusinessHours, type Holiday } from '@/lib/business-hours';
+import { getTenantDayBoundaries, getTenantLocalParts } from '@/lib/timezone';
+import { getAutomationTenants } from './tenants';
+import { formatTenantDateTime, hhmmToMinutes, tenantTimezone } from './local-time';
 import { AutomationResult } from './types';
 
 export interface CashDrawerClosureOptions {
   tenantId?: string;
   forceClose?: boolean; // Force close even if not end of day
+  /** Reference "now" (tests); defaults to the current time. */
+  now?: Date;
+}
+
+/** Local closing time used when the tenant has no business hours for the day. */
+export const DEFAULT_CLOSE_TIME = '22:00';
+
+/**
+ * Whether the tenant's business day has ended at `now` (tenant-local time).
+ * - Closed today (holiday / special closure / disabled weekday): yes.
+ * - Today's close time from business hours (special hours, then the weekly
+ *   schedule): yes once local time >= close time.
+ * - Overnight hours (close <= open, e.g. 18:00–02:00): the business is still
+ *   trading late in the evening, so not yet (only earlier-day sessions close).
+ * - No business hours configured: yes from 22:00 local.
+ */
+export function isLocalEndOfBusinessDay(
+  now: Date,
+  settings: Pick<ITenantSettings, 'businessHours' | 'holidays'> | undefined | null,
+  tz: string
+): boolean {
+  const hours = getEffectiveHoursForDate(
+    now,
+    settings?.businessHours as BusinessHours | undefined,
+    settings?.holidays as Holiday[] | undefined,
+    tz
+  );
+  if (!hours.enabled) return true;
+
+  const { hour, minute } = getTenantLocalParts(now, tz);
+  const nowMinutes = hour * 60 + minute;
+  const close = hhmmToMinutes(hours.closeTime) ?? hhmmToMinutes(DEFAULT_CLOSE_TIME)!;
+  const open = hhmmToMinutes(hours.openTime);
+  if (hours.closeTime && open != null && close <= open) return false; // overnight hours
+  return nowMinutes >= close;
+}
+
+/**
+ * Sum `amountField` for every session window [start, end] in one aggregate.
+ * Documents are bucketed by the sorted session start times; a session's total
+ * is then the suffix sum of the buckets from its start onwards.
+ */
+async function sumPerSessionStart(
+  model: mongoose.Model<any>, // eslint-disable-line @typescript-eslint/no-explicit-any
+  match: Record<string, unknown>,
+  dateField: string,
+  amountField: string,
+  starts: Date[],
+  end: Date
+): Promise<Map<number, number>> {
+  const boundaries = [...new Set(starts.map(d => d.getTime()))].sort((a, b) => a - b);
+  const totals = new Map<number, number>();
+  if (boundaries.length === 0 || boundaries[0] > end.getTime()) return totals;
+
+  const buckets = await model.aggregate<{ _id: Date; total: number }>([
+    { $match: { ...match, [dateField]: { $gte: new Date(boundaries[0]), $lte: end } } },
+    {
+      $bucket: {
+        groupBy: `$${dateField}`,
+        boundaries: [...boundaries.map(t => new Date(t)), new Date(Math.max(end.getTime(), boundaries[boundaries.length - 1]) + 1)],
+        output: { total: { $sum: `$${amountField}` } },
+      },
+    },
+  ]);
+  const byBoundary = new Map(buckets.map(b => [new Date(b._id).getTime(), b.total]));
+
+  let running = 0;
+  for (let i = boundaries.length - 1; i >= 0; i--) {
+    running += byBoundary.get(boundaries[i]) ?? 0;
+    totals.set(boundaries[i], running);
+  }
+  return totals;
 }
 
 /**
@@ -34,73 +111,72 @@ export async function autoCloseCashDrawers(
   };
 
   try {
-    // Get tenants to process
-    let tenants;
-    if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).lean();
-      tenants = tenant ? [tenant] : [];
-    } else {
-      // Get all active tenants
-      tenants = await Tenant.find({ status: 'active' }).lean();
-    }
+    const now = options.now ?? new Date();
+
+    // Get tenants to process. "End of day" depends on each tenant's timezone and
+    // business hours, so it is decided per tenant below.
+    const tenants = await getAutomationTenants({ tenantId: options.tenantId });
 
     if (tenants.length === 0) {
       results.message = 'No tenants found to process';
       return results;
     }
 
-    const now = new Date();
-    const currentHour = now.getHours();
     let totalProcessed = 0;
     let totalFailed = 0;
 
     for (const tenant of tenants) {
       try {
-        const tenantId = tenant._id.toString();
-        const tenantSettings = await getTenantSettingsById(tenantId);
+        const tenantId = tenant._id;
+        const tenantSettings = tenant.settings;
 
-        // Get business hours (if configured)
-        // For now, we'll use a default end time (e.g., 10 PM) or check if it's past business hours
-        // You can extend this to use tenant business hours configuration
-        const defaultEndHour = 22; // 10 PM
-        const isEndOfDay = currentHour >= defaultEndHour || options.forceClose;
+        const tz = tenantTimezone(tenantSettings);
+        const endOfDay = options.forceClose || isLocalEndOfBusinessDay(now, tenantSettings, tz);
+        const localDayStart = getTenantDayBoundaries(now, tz).start;
 
-        if (!isEndOfDay && !options.forceClose) {
-          continue; // Not end of day yet
-        }
-
-        // Find all open cash drawer sessions
+        // Sessions opened before today's local midnight are left over from an
+        // earlier business day and are always closed; today's sessions only once
+        // the local business day has ended.
         const openSessions = await CashDrawerSession.find({
           tenantId,
           status: 'open',
+          ...(endOfDay ? {} : { openingTime: { $lt: localDayStart } }),
         })
+          .select('userId openingAmount openingTime notes')
           .populate('userId', 'name email')
           .lean();
+
+        if (openSessions.length === 0) continue;
+
+        const sessionEnd = now;
+        const sessionStarts = openSessions.map(s => new Date(s.openingTime));
+
+        // Cash sales and cash expenses for every session, one aggregate each
+        const [cashSalesByStart, cashExpensesByStart] = await Promise.all([
+          sumPerSessionStart(
+            Transaction,
+            { tenantId, status: 'completed', paymentMethod: 'cash' },
+            'createdAt',
+            'total',
+            sessionStarts,
+            sessionEnd
+          ),
+          sumPerSessionStart(
+            Expense,
+            { tenantId, paymentMethod: 'cash' },
+            'date',
+            'amount',
+            sessionStarts,
+            sessionEnd
+          ),
+        ]);
 
         for (const session of openSessions) {
           try {
             // Calculate expected amount
             const sessionStart = new Date(session.openingTime);
-            const sessionEnd = now;
-
-            // Get cash transactions for this session
-            const cashTransactions = await Transaction.find({
-              tenantId,
-              paymentMethod: 'cash',
-              createdAt: { $gte: sessionStart, $lte: sessionEnd },
-              status: 'completed',
-            }).lean();
-
-            const cashSales = cashTransactions.reduce((sum, t) => sum + t.total, 0);
-
-            // Get cash expenses for this session
-            const cashExpenses = await Expense.find({
-              tenantId,
-              paymentMethod: 'cash',
-              date: { $gte: sessionStart, $lte: sessionEnd },
-            }).lean();
-
-            const cashExpensesTotal = cashExpenses.reduce((sum, e) => sum + e.amount, 0);
+            const cashSales = cashSalesByStart.get(sessionStart.getTime()) ?? 0;
+            const cashExpensesTotal = cashExpensesByStart.get(sessionStart.getTime()) ?? 0;
 
             // Calculate expected amount
             const expectedAmount = session.openingAmount + cashSales - cashExpensesTotal;
@@ -114,16 +190,23 @@ export async function autoCloseCashDrawers(
             const shortage = actualDifference < 0 ? Math.abs(actualDifference) : 0;
             const overage = actualDifference > 0 ? actualDifference : 0;
 
-            // Update session
-            await CashDrawerSession.findByIdAndUpdate(session._id, {
+            // Update session (status: 'open' guards against a concurrent manual close).
+            // The unique open-session index allows at most one per tenant, so this
+            // is effectively one write per tenant.
+            const update: Record<string, unknown> = {
               status: 'closed',
               closingTime: sessionEnd,
               closingAmount,
               expectedAmount,
-              shortage: shortage > 0 ? shortage : undefined,
-              overage: overage > 0 ? overage : undefined,
               notes: (session.notes || '') + (session.notes ? '\n' : '') + '[AUTO] Automatically closed at end of business day.',
-            });
+            };
+            if (shortage > 0) update.shortage = shortage;
+            if (overage > 0) update.overage = overage;
+            const writeResult = await CashDrawerSession.updateOne(
+              { tenantId, _id: session._id, status: 'open' },
+              { $set: update }
+            );
+            if (writeResult.modifiedCount === 0) continue;
 
             totalProcessed++;
 
@@ -160,7 +243,7 @@ export async function autoCloseCashDrawers(
     <div class="header">
       <h2>End of Day Cash Drawer Report</h2>
       <p>${companyName}</p>
-      <p>${sessionEnd.toLocaleDateString()} ${sessionEnd.toLocaleTimeString()}</p>
+      <p>${formatTenantDateTime(sessionEnd, tz)}</p>
     </div>
 
     <div class="summary">
@@ -229,7 +312,7 @@ export async function autoCloseCashDrawers(
 
 Cashier: ${user?.name || 'Unknown'}
 Session ID: ${session._id.toString().slice(-8)}
-Time: ${sessionEnd.toLocaleString()}
+Time: ${formatTenantDateTime(sessionEnd, tz)}
 
 ${shortage > 50 ? `SHORTAGE: $${shortage.toFixed(2)}` : ''}
 ${overage > 100 ? `OVERAGE: $${overage.toFixed(2)}` : ''}

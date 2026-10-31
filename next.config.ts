@@ -37,14 +37,10 @@ const nextConfig: NextConfig = {
         hostname: 'localhost',
         port: '3000',
       },
-      // Allow Cloudinary (tenant file storage) - all subdomains
+      // Cloudinary (tenant logos and product image uploads)
       {
         protocol: 'https',
         hostname: 'res.cloudinary.com',
-      },
-      {
-        protocol: 'https',
-        hostname: '*.cloudinary.com',
       },
       // Shopify product images (catalog sync / storefront CDN)
       {
@@ -99,7 +95,7 @@ const nextConfig: NextConfig = {
               "style-src 'self' 'unsafe-inline' https://vercel.live https://*.vercel.live https://*.live",
               "img-src 'self' data: blob: https:",
               "font-src 'self' data: https://vercel.live https://*.vercel.live https://*.live",
-              `connect-src 'self' https://api-m.paypal.com https://api-m.sandbox.paypal.com https://vercel.live https://*.vercel.live https://*.live wss://vercel.live wss://*.vercel.live wss://*.live https://res.cloudinary.com https://api.cloudinary.com https://*.cloudinary.com${CSP_DEV_CONNECT_EXTRAS}`,
+              `connect-src 'self' https://api-m.paypal.com https://api-m.sandbox.paypal.com https://vercel.live https://*.vercel.live https://*.live wss://vercel.live wss://*.vercel.live wss://*.live${CSP_DEV_CONNECT_EXTRAS}`,
               "frame-src https://vercel.live https://*.vercel.live https://*.live",
               "worker-src 'self'",
               "object-src 'none'",
@@ -124,8 +120,8 @@ const nextConfig: NextConfig = {
               "default-src 'self'",
               "script-src 'self'",
               process.env.NODE_ENV !== 'production'
-                ? `connect-src 'self' https://vercel.live https://*.vercel.live wss://vercel.live wss://*.vercel.live https://res.cloudinary.com https://api.cloudinary.com https://*.cloudinary.com${CSP_DEV_CONNECT_EXTRAS}`
-                : "connect-src 'self' https://res.cloudinary.com https://api.cloudinary.com https://*.cloudinary.com",
+                ? `connect-src 'self' https://vercel.live https://*.vercel.live wss://vercel.live wss://*.vercel.live${CSP_DEV_CONNECT_EXTRAS}`
+                : "connect-src 'self'",
             ].join('; '),
           },
         ],

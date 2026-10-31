@@ -1,24 +1,25 @@
 import connectDB from './mongodb';
-import mongoose from 'mongoose';
-
-// Counter schema for atomic sequence generation
-const CounterSchema = new mongoose.Schema({
-  _id: { type: String, required: true }, // e.g., "REC-20241118-tenantId" or "INV-20241118-tenantId"
-  seq: { type: Number, default: 0 },
-});
-
-const Counter = mongoose.models.Counter || mongoose.model('Counter', CounterSchema);
+import Counter, { dailyCounterExpiresAt } from '@/models/Counter';
 
 /**
- * Get next sequence number atomically using MongoDB findOneAndUpdate
+ * Get next sequence number for a per-day counter atomically using findOneAndUpdate.
+ * `day` is the date the key was derived from; expiresAt is set only when the
+ * counter is first created, so the TTL never moves and never hits the current day.
  */
-async function getNextSequence(counterKey: string): Promise<number> {
+async function getNextDailySequence(counterKey: string, day: Date): Promise<number> {
   const result = await Counter.findOneAndUpdate(
     { _id: counterKey },
-    { $inc: { seq: 1 } },
+    {
+      $inc: { seq: 1 },
+      $setOnInsert: { expiresAt: dailyCounterExpiresAt(day) },
+    },
     { new: true, upsert: true }
   );
-  return result.seq;
+  return result!.seq;
+}
+
+function utcDateStr(day: Date): string {
+  return day.toISOString().split('T')[0].replace(/-/g, '');
 }
 
 /**
@@ -29,11 +30,10 @@ export async function generateReceiptNumber(tenantId: string): Promise<string> {
   await connectDB();
 
   const today = new Date();
-  const dateStr = today.toISOString().split('T')[0].replace(/-/g, '');
-  const prefix = `REC-${dateStr}`;
+  const prefix = `REC-${utcDateStr(today)}`;
   const counterKey = `${prefix}-${tenantId}`;
 
-  const seq = await getNextSequence(counterKey);
+  const seq = await getNextDailySequence(counterKey, today);
   return `${prefix}-${seq.toString().padStart(5, '0')}`;
 }
 
@@ -55,10 +55,9 @@ export async function generateInvoiceNumber(tenantId: string): Promise<string> {
   await connectDB();
 
   const today = new Date();
-  const dateStr = today.toISOString().split('T')[0].replace(/-/g, '');
-  const prefix = `INV-${dateStr}`;
+  const prefix = `INV-${utcDateStr(today)}`;
   const counterKey = `${prefix}-${tenantId}`;
 
-  const seq = await getNextSequence(counterKey);
+  const seq = await getNextDailySequence(counterKey, today);
   return `${prefix}-${seq.toString().padStart(5, '0')}`;
 }

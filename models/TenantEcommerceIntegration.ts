@@ -31,7 +31,6 @@ const TenantEcommerceIntegrationSchema = new Schema(
       type: Schema.Types.ObjectId,
       ref: 'Tenant',
       required: true,
-      index: true,
     },
     provider: {
       type: String,
@@ -52,9 +51,11 @@ const TenantEcommerceIntegrationSchema = new Schema(
   { timestamps: true }
 );
 
+// Serves all tenant-scoped lookups ({ tenantId }, { tenantId, provider, ... }).
 TenantEcommerceIntegrationSchema.index({ tenantId: 1, provider: 1 }, { unique: true });
+// Shopify webhooks resolve the tenant by shop domain (lib/ecommerce/process-channel-webhook.ts).
+// WooCommerce webhooks resolve by _id, so siteUrl is not indexed.
 TenantEcommerceIntegrationSchema.index({ shopDomain: 1 }, { sparse: true });
-TenantEcommerceIntegrationSchema.index({ siteUrl: 1, tenantId: 1 }, { sparse: true });
 
 const TenantEcommerceIntegration: Model<ITenantEcommerceIntegration> =
   mongoose.models.TenantEcommerceIntegration ||

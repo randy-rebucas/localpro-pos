@@ -41,7 +41,7 @@ async function checkCategoryDependencies(filter: Record<string, unknown>) {
   if (!doc) return;
 
   const Product = mongoose.model('Product');
-  const productCount = await Product.countDocuments({ categoryId: doc._id });
+  const productCount = await Product.countDocuments({ tenantId: doc.tenantId, categoryId: doc._id });
   if (productCount > 0) {
     throw new Error(
       `Cannot delete category "${doc.name}": ${productCount} product(s) are assigned to this category. Reassign or remove them first.`

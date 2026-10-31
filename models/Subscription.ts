@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
+import { invalidateSubscriptionCache } from '@/lib/db-cache';
 
 export type SubscriptionStatus = 'active' | 'inactive' | 'cancelled' | 'suspended' | 'trial' | 'paused';
 export type BillingCycle = 'monthly' | 'yearly';
@@ -47,6 +48,8 @@ export interface ISubscription extends Document {
     currentBranches: number;
     currentProducts: number;
     currentTransactions: number;
+    /** 'YYYY-MM' that currentTransactions counts (server local time) */
+    transactionsPeriod?: string;
     lastResetDate: Date;
   };
   isTrial: boolean;
@@ -67,7 +70,6 @@ const SubscriptionSchema: Schema = new Schema(
       type: Schema.Types.ObjectId,
       ref: 'SubscriptionPlan',
       required: [true, 'Plan ID is required'],
-      index: true,
     },
     status: {
       type: String,
@@ -207,6 +209,9 @@ const SubscriptionSchema: Schema = new Schema(
         default: 0,
         min: [0, 'Cannot be negative'],
       },
+      transactionsPeriod: {
+        type: String,
+      },
       lastResetDate: {
         type: Date,
         default: Date.now,
@@ -231,13 +236,16 @@ const SubscriptionSchema: Schema = new Schema(
 );
 
 // Create indexes
-SubscriptionSchema.index({ tenantId: 1 }, { unique: true }); // One subscription per tenant
-SubscriptionSchema.index({ status: 1 }); // super-admin cross-tenant analytics (active/trial MRR)
-// Compound index for plan usage reporting
+// One subscription per tenant. Because tenantId is unique, every tenant-scoped
+// query ({ tenantId, ... }) resolves to at most one doc through this index, so
+// compound indexes that start with tenantId would only add write cost.
+SubscriptionSchema.index({ tenantId: 1 }, { unique: true });
+// Cross-tenant cron scans (lib/automations/subscription-billing.ts,
+// subscription-expiry.ts: status + nextBillingDate range) and super-admin
+// analytics/list filters on status (prefix).
+SubscriptionSchema.index({ status: 1, nextBillingDate: 1 });
+// Plan subscriber counts / "plan in use" checks before deleting a plan.
 SubscriptionSchema.index({ planId: 1, status: 1 });
-// Compound index for expiry automation (finding subscriptions due for billing)
-SubscriptionSchema.index({ tenantId: 1, status: 1, nextBillingDate: 1 });
-SubscriptionSchema.index({ tenantId: 1, isActive: 1 });
 
 // Virtual for checking if subscription is expired
 SubscriptionSchema.virtual('isExpired').get(function() {
@@ -292,6 +300,35 @@ SubscriptionSchema.methods.checkLimits = function(usage: {
 
   return { exceeded: true, limits: ['subscription_inactive'] };
 };
+
+// Keep lib/db-cache.ts (cached subscription status) in sync with writes made in this process.
+function invalidateForFilter(filter: Record<string, unknown> | undefined): void {
+  const tenantId = filter?.tenantId;
+  if (tenantId && (typeof tenantId === 'string' || tenantId instanceof mongoose.Types.ObjectId)) {
+    invalidateSubscriptionCache(tenantId.toString());
+  } else {
+    invalidateSubscriptionCache();
+  }
+}
+
+// Usage-counter bumps (one per sale) don't change limits/features, so they
+// don't evict the cached status; its `usage` may lag by up to the cache TTL.
+function isUsageOnlyUpdate(update: unknown): boolean {
+  if (!update || typeof update !== 'object' || Array.isArray(update)) return false;
+  return Object.entries(update as Record<string, unknown>).every(([op, fields]) => {
+    if (op !== '$inc' && op !== '$set') return false;
+    return !!fields && typeof fields === 'object' &&
+      Object.keys(fields).every((f) => f.startsWith('usage.') || f === 'updatedAt');
+  });
+}
+
+SubscriptionSchema.post(['updateOne', 'updateMany', 'findOneAndUpdate', 'replaceOne', 'deleteOne', 'deleteMany', 'findOneAndDelete'], function () {
+  if (isUsageOnlyUpdate(this.getUpdate())) return;
+  invalidateForFilter(this.getFilter());
+});
+SubscriptionSchema.post('save', function (doc) {
+  invalidateSubscriptionCache(doc.tenantId?.toString());
+});
 
 const Subscription: Model<ISubscription> = mongoose.models.Subscription ||
   mongoose.model<ISubscription>('Subscription', SubscriptionSchema);

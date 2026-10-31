@@ -22,7 +22,6 @@ const TableSchema: Schema = new Schema(
     branchId: {
       type: Schema.Types.ObjectId,
       ref: 'Branch',
-      index: true,
     },
     name: {
       type: String,
@@ -52,8 +51,12 @@ const TableSchema: Schema = new Schema(
   }
 );
 
-TableSchema.index({ tenantId: 1, isActive: 1, status: 1 });
-TableSchema.index({ tenantId: 1, name: 1 }, { unique: true, sparse: false });
+// Table names are unique per branch (two branches can each have "Table 1"); tables with no
+// branchId index as null and stay unique among themselves. Also serves the table list
+// ({ tenantId, [branchId], [isActive], [status] } sorted by name): fully when branchId is
+// filtered; for tenant-wide lists the tenantId prefix bounds the scan and the sort is done in
+// memory — per-tenant table counts are tiny, so no separate {tenantId, name} index.
+TableSchema.index({ tenantId: 1, branchId: 1, name: 1 }, { unique: true });
 
 const Table: Model<ITable> = mongoose.models.Table || mongoose.model<ITable>('Table', TableSchema);
 

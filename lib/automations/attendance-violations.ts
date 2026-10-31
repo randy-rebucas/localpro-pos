@@ -5,15 +5,25 @@
 
 import connectDB from '@/lib/mongodb';
 import Attendance from '@/models/Attendance';
-import Tenant from '@/models/Tenant';
 import User from '@/models/User'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { sendEmail } from '@/lib/notifications';
-import { getTenantSettingsById } from '@/lib/tenant';
+import {
+  addDaysToYmd,
+  getTenantDayBoundaries,
+  getTenantYmd,
+  tenantLocalTimeToUtc,
+} from '@/lib/timezone';
+import { getAutomationTenants } from './tenants';
+import { formatTenantTime, formatYmd, tenantTimezone } from './local-time';
 import { AutomationResult } from './types';
 
 export interface AttendanceViolationOptions {
   tenantId?: string;
   lateThresholdMinutes?: number; // Minutes late to trigger alert (default: 15)
+  /** Local calendar day to review ('YYYY-MM-DD'); defaults to the tenant's previous day. */
+  date?: string;
+  /** Reference "now" (tests); defaults to the current time. */
+  now?: Date;
 }
 
 /**
@@ -34,17 +44,19 @@ export async function detectAttendanceViolations(
 
   try {
     const lateThresholdMinutes = options.lateThresholdMinutes || 15;
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const now = options.now ?? new Date();
 
-    // Get tenants to process
-    let tenants;
-    if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).lean();
-      tenants = tenant ? [tenant] : [];
-    } else {
-      tenants = await Tenant.find({ status: 'active' }).lean();
-    }
+    // Get tenants to process. Alerts only go to the manager email, so tenants
+    // without email notifications or an expected start time have nothing to do.
+    const tenants = await getAutomationTenants({
+      tenantId: options.tenantId,
+      filter: {
+        'settings.attendanceNotifications.enabled': { $ne: false },
+        'settings.attendanceNotifications.expectedStartTime': { $nin: [null, ''] },
+        'settings.emailNotifications': true,
+        'settings.email': { $nin: [null, ''] },
+      },
+    });
 
     if (tenants.length === 0) {
       results.message = 'No tenants found to process';
@@ -56,11 +68,14 @@ export async function detectAttendanceViolations(
 
     for (const tenant of tenants) {
       try {
-        const tenantId = tenant._id.toString();
-        const tenantSettings = await getTenantSettingsById(tenantId);
+        const tenantId = tenant._id;
+        const tenantSettings = tenant.settings;
 
-        // Skip if attendance notifications disabled
-        if (!tenantSettings?.attendanceNotifications?.enabled) {
+        // Manual single-tenant runs bypass the loader filter, so re-check here
+        if (tenantSettings?.attendanceNotifications?.enabled === false) {
+          continue;
+        }
+        if (!tenantSettings?.emailNotifications || !tenantSettings?.email) {
           continue;
         }
 
@@ -70,57 +85,60 @@ export async function detectAttendanceViolations(
           continue; // Can't check violations without expected start time
         }
 
-        const [expectedHour, expectedMinute] = expectedStartTime.split(':').map(Number);
-        const expectedStart = new Date(today);
-        expectedStart.setHours(expectedHour, expectedMinute || 0, 0, 0);
+        // The job runs early morning (~06:00 tenant time) and reviews the previous
+        // complete local day; `options.date` ('YYYY-MM-DD') overrides it.
+        const tz = tenantTimezone(tenantSettings);
+        const reviewYmd = options.date ?? addDaysToYmd(getTenantYmd(now, tz), -1);
+        const { end: dayEnd } = getTenantDayBoundaries(reviewYmd, tz);
+        const expectedStart = tenantLocalTimeToUtc(reviewYmd, expectedStartTime, tz);
+        const lateCutoff = new Date(expectedStart.getTime() + lateThresholdMinutes * 60 * 1000);
 
-        // Find attendance records for today
-        const todayAttendance = await Attendance.find({
+        // Only that day's late arrivals (clock-in after the threshold) need loading
+        if (lateCutoff > dayEnd) continue;
+        const lateAttendance = await Attendance.find({
           tenantId,
           clockIn: {
-            $gte: today,
-            $lt: new Date(today.getTime() + 24 * 60 * 60 * 1000),
+            $gt: lateCutoff,
+            $lte: dayEnd,
           },
         })
+          .select('userId clockIn')
           .populate('userId', 'name email')
           .lean();
 
-        // Check for late arrivals
-        for (const attendance of todayAttendance) {
+        const companyName = tenantSettings?.companyName || tenant.name || 'Business';
+
+        // Alert on late arrivals
+        for (const attendance of lateAttendance) {
           try {
             const clockInTime = new Date(attendance.clockIn);
             const minutesLate = (clockInTime.getTime() - expectedStart.getTime()) / (1000 * 60);
 
-            if (minutesLate > lateThresholdMinutes) {
-              const user = attendance.userId as any; // eslint-disable-line @typescript-eslint/no-explicit-any
-              if (!user) continue;
+            const user = attendance.userId as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+            if (!user) continue;
 
-              // Send alert to manager
-              if (tenantSettings?.emailNotifications && tenantSettings?.email) {
-                const companyName = tenantSettings?.companyName || tenant.name || 'Business';
-                
-                await sendEmail({
-                  to: tenantSettings.email,
-                  subject: `Attendance Violation: Late Arrival - ${user.name || 'Employee'}`,
-                  message: `Attendance Violation Alert for ${companyName}
+            // Send alert to manager
+            await sendEmail({
+              to: tenantSettings.email,
+              subject: `Attendance Violation: Late Arrival - ${user.name || 'Employee'}`,
+              message: `Attendance Violation Alert for ${companyName}
 
 Employee: ${user.name || 'Unknown'}
 Email: ${user.email || 'N/A'}
-Expected Start Time: ${expectedStart.toLocaleTimeString()}
-Actual Clock-In Time: ${clockInTime.toLocaleTimeString()}
+Date: ${formatYmd(reviewYmd)}
+Expected Start Time: ${formatTenantTime(expectedStart, tz)}
+Actual Clock-In Time: ${formatTenantTime(clockInTime, tz)}
 Minutes Late: ${Math.round(minutesLate)}
 
 Please review this attendance record.
 
 This is an automated alert from your POS system.`,
-                  type: 'email',
-                }).catch(() => {
-                  // Don't fail if email fails
-                });
+              type: 'email',
+            }).catch(() => {
+              // Don't fail if email fails
+            });
 
-                totalViolations++;
-              }
-            }
+            totalViolations++;
           } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
             totalFailed++;
             results.errors?.push(`Attendance ${attendance._id}: ${error.message}`);

@@ -7,6 +7,7 @@ import { requireAuth } from '@/lib/auth';
 import { sendEmail } from '@/lib/notifications'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
+import { getTenantTimezone, getTenantDayBoundaries, getTenantYmd, tenantLocalTimeToUtc } from '@/lib/timezone';
 
 /**
  * Get attendance notifications - late arrivals, missing clock-outs
@@ -64,11 +65,10 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    // Get today's attendance records to check for late arrivals
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    const todayEnd = new Date();
-    todayEnd.setHours(23, 59, 59, 999);
+    // Get today's attendance records to check for late arrivals.
+    // "Today" and the expected start time are in the tenant's timezone, not the server's.
+    const tz = getTenantTimezone(tenant?.settings);
+    const { start: todayStart, end: todayEnd } = getTenantDayBoundaries(now, tz);
 
     const todayAttendances = await Attendance.find({
       tenantId,
@@ -77,13 +77,10 @@ export async function GET(request: NextRequest) {
       .populate('userId', 'name email')
       .lean();
 
-    // Parse expected start time (HH:MM format)
-    const [expectedHour, expectedMinute] = expectedStartTime.split(':').map(Number);
-
     todayAttendances.forEach((attendance: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
       const clockInTime = new Date(attendance.clockIn);
-      const expectedClockIn = new Date(clockInTime);
-      expectedClockIn.setHours(expectedHour, expectedMinute, 0, 0);
+      // Expected start (HH:MM, tenant wall-clock) on the clock-in's tenant-local day
+      const expectedClockIn = tenantLocalTimeToUtc(getTenantYmd(clockInTime, tz), expectedStartTime, tz);
 
       // Check if clock-in is more than 15 minutes late
       if (clockInTime > expectedClockIn) {

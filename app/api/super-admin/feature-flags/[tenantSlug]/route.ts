@@ -5,6 +5,7 @@ import FeatureFlagOverride from '@/models/FeatureFlagOverride';
 import SuperAdminAction from '@/models/SuperAdminAction';
 import { requireRole } from '@/lib/auth';
 import { handleApiError } from '@/lib/error-handler';
+import { isOverridableFeature } from '@/lib/subscription';
 
 async function resolveTenant(slug: string) {
   return Tenant.findOne({ slug }).select('_id slug name').lean() as Promise<{ _id: unknown; slug: string; name: string } | null>;
@@ -59,6 +60,9 @@ export async function POST(
 
     if (!feature || typeof enabled !== 'boolean') {
       return NextResponse.json({ success: false, error: 'feature and enabled are required' }, { status: 400 });
+    }
+    if (!isOverridableFeature(feature)) {
+      return NextResponse.json({ success: false, error: `Unknown feature "${feature}"` }, { status: 400 });
     }
 
     const override = await FeatureFlagOverride.findOneAndUpdate(

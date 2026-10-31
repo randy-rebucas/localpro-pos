@@ -55,7 +55,6 @@ const PaymentSchema: Schema = new Schema(
       type: Schema.Types.ObjectId,
       ref: 'Transaction',
       required: [true, 'Transaction ID is required'],
-      index: true,
     },
     method: {
       type: String,
@@ -78,7 +77,6 @@ const PaymentSchema: Schema = new Schema(
     processedBy: {
       type: Schema.Types.ObjectId,
       ref: 'User',
-      index: true,
     },
     processedAt: {
       type: Date,
@@ -100,14 +98,12 @@ const PaymentSchema: Schema = new Schema(
   }
 );
 
-// Compound indexes for efficient queries
+// A Payment is written on every POS sale/refund, so keep the index set minimal.
+// Refund + on-account credit lookups: { tenantId, transactionId, status/method }.
 PaymentSchema.index({ tenantId: 1, transactionId: 1 });
-PaymentSchema.index({ tenantId: 1, status: 1, createdAt: -1 });
-PaymentSchema.index({ tenantId: 1, method: 1, createdAt: -1 });
-// Supports GET /api/payments when both status and method filters are applied together
-PaymentSchema.index({ tenantId: 1, status: 1, method: 1, createdAt: -1 });
-PaymentSchema.index({ processedBy: 1, createdAt: -1 });
-PaymentSchema.index({ tenantId: 1, isActive: 1 });
+// GET /api/payments list (newest first). Its optional status/method filters are
+// low-cardinality and have no in-app callers; they are applied while walking this index.
+PaymentSchema.index({ tenantId: 1, createdAt: -1 });
 
 const Payment: Model<IPayment> = mongoose.models.Payment || mongoose.model<IPayment>('Payment', PaymentSchema);
 

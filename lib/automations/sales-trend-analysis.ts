@@ -5,16 +5,17 @@
 
 import connectDB from '@/lib/mongodb';
 import Transaction from '@/models/Transaction';
-import Tenant from '@/models/Tenant';
-import mongoose from 'mongoose';
 import { sendEmail } from '@/lib/notifications';
-import { getTenantSettingsById } from '@/lib/tenant';
+import { getAutomationTenants } from './tenants';
 import { AutomationResult } from './types';
+import { formatYmd, localPeriodBefore, previousCompleteLocalPeriod, tenantTimezone } from './local-time';
 
 export interface SalesTrendAnalysisOptions {
   tenantId?: string;
   period?: 'daily' | 'weekly' | 'monthly';
   comparePeriods?: boolean; // Compare with previous period
+  /** Reference "now" (tests / backfills); defaults to the current time. */
+  now?: Date;
 }
 
 /**
@@ -37,14 +38,14 @@ export async function analyzeSalesTrends(
     const period = options.period || 'weekly';
     const comparePeriods = options.comparePeriods !== false;
 
-    // Get tenants to process
-    let tenants;
-    if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).lean();
-      tenants = tenant ? [tenant] : [];
-    } else {
-      tenants = await Tenant.find({ status: 'active' }).lean();
-    }
+    // Get tenants to process (only those with email notifications and a recipient)
+    const tenants = await getAutomationTenants({
+      tenantId: options.tenantId,
+      filter: {
+        'settings.emailNotifications': true,
+        'settings.email': { $nin: [null, ''] },
+      },
+    });
 
     if (tenants.length === 0) {
       results.message = 'No tenants found to process';
@@ -56,57 +57,50 @@ export async function analyzeSalesTrends(
 
     for (const tenant of tenants) {
       try {
-        const tenantId = tenant._id.toString();
-        const tenantSettings = await getTenantSettingsById(tenantId);
+        const tenantId = tenant._id;
+        const tenantSettings = tenant.settings;
 
-        // Skip if notifications disabled
-        if (!tenantSettings?.emailNotifications) {
+        // Skip if notifications disabled or nowhere to send (manual runs bypass the loader filter)
+        if (!tenantSettings?.emailNotifications || !tenantSettings?.email) {
           continue;
         }
 
-        const now = new Date();
-        let currentPeriodStart: Date;
-        const currentPeriodEnd: Date = now;
-        let previousPeriodStart: Date;
-        let previousPeriodEnd: Date;
+        // Analyse the most recent complete local period (yesterday / last Mon–Sun
+        // week / last calendar month in the tenant's timezone) and compare it with
+        // the period before it. The job runs at ~08:00 tenant time.
+        const tz = tenantTimezone(tenantSettings);
+        const current = previousCompleteLocalPeriod(options.now ?? new Date(), period, tz);
+        const previous = localPeriodBefore(current, period, tz);
+        const currentPeriodStart = current.start;
+        const currentPeriodEnd = current.end;
+        const previousPeriodStart = previous.start;
+        const previousPeriodEnd = previous.end;
 
-        // Calculate period dates
-        switch (period) {
-          case 'daily':
-            currentPeriodStart = new Date(now);
-            currentPeriodStart.setHours(0, 0, 0, 0);
-            previousPeriodStart = new Date(currentPeriodStart);
-            previousPeriodStart.setDate(previousPeriodStart.getDate() - 1);
-            previousPeriodEnd = new Date(currentPeriodStart);
-            break;
-          case 'weekly':
-            const dayOfWeek = now.getDay();
-            currentPeriodStart = new Date(now);
-            currentPeriodStart.setDate(currentPeriodStart.getDate() - dayOfWeek);
-            currentPeriodStart.setHours(0, 0, 0, 0);
-            previousPeriodStart = new Date(currentPeriodStart);
-            previousPeriodStart.setDate(previousPeriodStart.getDate() - 7);
-            previousPeriodEnd = new Date(currentPeriodStart);
-            break;
-          case 'monthly':
-            currentPeriodStart = new Date(now.getFullYear(), now.getMonth(), 1);
-            previousPeriodStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-            previousPeriodEnd = new Date(now.getFullYear(), now.getMonth(), 0);
-            break;
+        // Current and (optionally) previous period sales in one aggregate
+        const periodRanges: Record<string, unknown>[] = [
+          { createdAt: { $gte: currentPeriodStart, $lte: currentPeriodEnd } },
+        ];
+        if (comparePeriods) {
+          periodRanges.push({ createdAt: { $gte: previousPeriodStart, $lte: previousPeriodEnd } });
         }
-
-        // Get current period sales
-        const currentSales = await Transaction.aggregate([
+        const periodSales = await Transaction.aggregate<{
+          _id: 'current' | 'previous';
+          totalSales: number;
+          transactionCount: number;
+          avgTransaction: number;
+        }>([
           {
             $match: {
-              tenantId: new mongoose.Types.ObjectId(tenantId),
-              createdAt: { $gte: currentPeriodStart, $lte: currentPeriodEnd },
+              tenantId,
               status: 'completed',
+              $or: periodRanges,
             },
           },
           {
             $group: {
-              _id: null,
+              _id: {
+                $cond: [{ $gte: ['$createdAt', currentPeriodStart] }, 'current', 'previous'],
+              },
               totalSales: { $sum: '$total' },
               transactionCount: { $sum: 1 },
               avgTransaction: { $avg: '$total' },
@@ -114,38 +108,11 @@ export async function analyzeSalesTrends(
           },
         ]);
 
-        const currentData = currentSales[0] || {
-          totalSales: 0,
-          transactionCount: 0,
-          avgTransaction: 0,
-        };
-
-        let previousData = null;
-        if (comparePeriods) {
-          const previousSales = await Transaction.aggregate([
-            {
-              $match: {
-                tenantId: new mongoose.Types.ObjectId(tenantId),
-                createdAt: { $gte: previousPeriodStart, $lte: previousPeriodEnd },
-                status: 'completed',
-              },
-            },
-            {
-              $group: {
-                _id: null,
-                totalSales: { $sum: '$total' },
-                transactionCount: { $sum: 1 },
-                avgTransaction: { $avg: '$total' },
-              },
-            },
-          ]);
-
-          previousData = previousSales[0] || {
-            totalSales: 0,
-            transactionCount: 0,
-            avgTransaction: 0,
-          };
-        }
+        const emptyPeriod = { totalSales: 0, transactionCount: 0, avgTransaction: 0 };
+        const currentData = periodSales.find(p => p._id === 'current') || emptyPeriod;
+        const previousData = comparePeriods
+          ? periodSales.find(p => p._id === 'previous') || emptyPeriod
+          : null;
 
         // Calculate trends
         let trendAnalysis = '';
@@ -177,7 +144,7 @@ ${salesChangeNum > 0 ? '📈 Sales are increasing!' : salesChangeNum < 0 ? '📉
         const companyName = tenantSettings?.companyName || tenant.name || 'Business';
         const emailBody = `${period.toUpperCase()} Sales Trend Analysis for ${companyName}
 
-Current Period: ${currentPeriodStart.toLocaleDateString()} - ${currentPeriodEnd.toLocaleDateString()}
+Current Period: ${current.startYmd === current.endYmd ? formatYmd(current.startYmd) : `${formatYmd(current.startYmd)} - ${formatYmd(current.endYmd)}`}
 
 CURRENT PERIOD STATISTICS:
 - Total Sales: $${currentData.totalSales.toFixed(2)}

@@ -22,21 +22,23 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     const currentUser = await requireAuth(request);
     const { addressId } = await params;
-    const body = await request.json();
 
-    // Find the address and verify ownership
-    const address = await Address.findById(addressId);
-    if (!address) {
+    // Addresses are tenant-scoped; a caller without a tenant (e.g. super_admin) has none.
+    if (!currentUser.tenantId) {
       return NextResponse.json(
         { success: false, error: t('validation.addressNotFound', 'Address not found') },
         { status: 404 }
       );
     }
+    const body = await request.json();
 
-    if (address.userId.toString() !== currentUser.userId) {
+    // Find the address scoped to the caller's tenant and ownership
+    const ownerFilter = { _id: addressId, tenantId: currentUser.tenantId, userId: currentUser.userId };
+    const address = await Address.findOne(ownerFilter);
+    if (!address) {
       return NextResponse.json(
-        { success: false, error: t('validation.forbidden', 'You can only update your own addresses') },
-        { status: 403 }
+        { success: false, error: t('validation.addressNotFound', 'Address not found') },
+        { status: 404 }
       );
     }
 
@@ -68,8 +70,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const updatedAddress = await Address.findByIdAndUpdate(
-      addressId,
+    const updatedAddress = await Address.findOneAndUpdate(
+      ownerFilter,
       { $set: updates },
       { new: true }
     ).lean();
@@ -108,18 +110,24 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     const currentUser = await requireAuth(request);
     const { addressId } = await params;
 
-    const address = await Address.findOne({ _id: addressId, isActive: true });
-    if (!address) {
+    // Addresses are tenant-scoped; a caller without a tenant (e.g. super_admin) has none.
+    if (!currentUser.tenantId) {
       return NextResponse.json(
         { success: false, error: t('validation.addressNotFound', 'Address not found') },
         { status: 404 }
       );
     }
 
-    if (address.userId.toString() !== currentUser.userId) {
+    const address = await Address.findOne({
+      _id: addressId,
+      tenantId: currentUser.tenantId,
+      userId: currentUser.userId,
+      isActive: true,
+    });
+    if (!address) {
       return NextResponse.json(
-        { success: false, error: t('validation.forbidden', 'You can only delete your own addresses') },
-        { status: 403 }
+        { success: false, error: t('validation.addressNotFound', 'Address not found') },
+        { status: 404 }
       );
     }
 

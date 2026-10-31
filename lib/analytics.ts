@@ -8,6 +8,14 @@ import Expense from '@/models/Expense';
 import CashDrawerSession from '@/models/CashDrawerSession';
 import Product from '@/models/Product';
 import { ITenantSettings } from '@/types/tenant';
+import {
+  DEFAULT_TENANT_TIMEZONE,
+  addDaysToYmd,
+  getTenantDayBoundaries,
+  getTenantLocalParts,
+  getTenantMonthBoundaries,
+  getTenantYmd,
+} from '@/lib/timezone';
 
 export interface SalesReport {
   period: string;
@@ -90,7 +98,8 @@ export async function getSalesReport(
   tenantId: string,
   period: 'daily' | 'weekly' | 'monthly',
   startDate?: Date,
-  endDate?: Date
+  endDate?: Date,
+  tz: string = DEFAULT_TENANT_TIMEZONE
 ): Promise<SalesReport> {
   const now = new Date();
   let start: Date;
@@ -100,18 +109,19 @@ export async function getSalesReport(
     start = startDate;
     end = endDate;
   } else {
+    // Default periods ("today", "this week" from Sunday, "this month") are
+    // tenant-local calendar periods, not the server's (Vercel runs UTC).
     switch (period) {
       case 'daily':
-        start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        start = getTenantDayBoundaries(now, tz).start;
         break;
-      case 'weekly':
-        const dayOfWeek = now.getDay();
-        start = new Date(now);
-        start.setDate(now.getDate() - dayOfWeek);
-        start.setHours(0, 0, 0, 0);
+      case 'weekly': {
+        const { ymd, weekday } = getTenantLocalParts(now, tz);
+        start = getTenantDayBoundaries(addDaysToYmd(ymd, -weekday), tz).start;
         break;
+      }
       case 'monthly':
-        start = new Date(now.getFullYear(), now.getMonth(), 1);
+        start = getTenantMonthBoundaries(now, tz).start;
         break;
     }
   }
@@ -145,7 +155,7 @@ export async function getSalesReport(
     const dayMap = new Map<string, { sales: number; transactions: number }>();
     
     transactions.forEach(t => {
-      const dateStr = new Date(t.createdAt).toISOString().split('T')[0];
+      const dateStr = getTenantYmd(new Date(t.createdAt), tz);
       const existing = dayMap.get(dateStr) || { sales: 0, transactions: 0 };
       dayMap.set(dateStr, {
         sales: existing.sales + t.total,
@@ -290,7 +300,8 @@ export async function getVATReport(
 export async function getProfitLossSummary(
   tenantId: string,
   startDate: Date,
-  endDate: Date
+  endDate: Date,
+  tz: string = DEFAULT_TENANT_TIMEZONE
 ): Promise<ProfitLossSummary> {
   const transactions = await Transaction.find({
     tenantId,
@@ -335,7 +346,7 @@ export async function getProfitLossSummary(
   const profitMargin = revenue.total > 0 ? (netProfit / revenue.total) * 100 : 0;
 
   return {
-    period: `${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}`,
+    period: `${getTenantYmd(startDate, tz)} to ${getTenantYmd(endDate, tz)}`,
     startDate,
     endDate,
     revenue,

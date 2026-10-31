@@ -1,7 +1,7 @@
 /**
  * Subscription Expiry Automation (HTTP trigger)
  *
- * Also runs internally on a schedule via lib/cron.ts — see lib/automations/subscription-expiry.ts.
+ * Scheduled daily by Vercel Cron (vercel.json) — see lib/automations/subscription-expiry.ts.
  */
 
 import { NextRequest, NextResponse } from 'next/server';

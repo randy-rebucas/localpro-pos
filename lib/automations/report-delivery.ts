@@ -4,16 +4,18 @@
  */
 
 import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
 import { sendEmail } from '@/lib/notifications';
-import { getTenantSettingsById } from '@/lib/tenant';
 import { getSalesReport } from '@/lib/analytics';
+import { getAutomationTenants } from './tenants';
 import { AutomationResult } from './types';
+import { formatTenantDateTime, formatYmd, previousCompleteLocalPeriod, tenantTimezone } from './local-time';
 
 export interface ReportDeliveryOptions {
   tenantId?: string;
   reportType?: 'daily' | 'weekly' | 'monthly';
   period?: 'daily' | 'weekly' | 'monthly';
+  /** Reference "now" (tests / backfills); defaults to the current time. */
+  now?: Date;
 }
 
 /**
@@ -35,15 +37,14 @@ export async function sendSalesReport(
   try {
     const period = options.period || 'daily';
 
-    // Get tenants to process
-    let tenants;
-    if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).lean();
-      tenants = tenant ? [tenant] : [];
-    } else {
-      // Get all active tenants
-      tenants = await Tenant.find({ status: 'active' }).lean();
-    }
+    // Get tenants to process (only those with email notifications and a recipient)
+    const tenants = await getAutomationTenants({
+      tenantId: options.tenantId,
+      filter: {
+        'settings.emailNotifications': true,
+        'settings.email': { $nin: [null, ''] },
+      },
+    });
 
     if (tenants.length === 0) {
       results.message = 'No tenants found to process';
@@ -55,9 +56,9 @@ export async function sendSalesReport(
 
     for (const tenant of tenants) {
       try {
-        const tenantSettings = await getTenantSettingsById(tenant._id.toString());
+        const tenantSettings = tenant.settings;
 
-        // Skip if email notifications disabled
+        // Skip if email notifications disabled (manual runs bypass the loader filter)
         if (!tenantSettings?.emailNotifications) {
           continue;
         }
@@ -68,27 +69,11 @@ export async function sendSalesReport(
           continue; // No email to send to
         }
 
-        // Calculate date range based on period
-        const endDate = new Date();
-        let startDate: Date;
-
-        switch (period) {
-          case 'daily':
-            startDate = new Date(endDate);
-            startDate.setHours(0, 0, 0, 0);
-            break;
-          case 'weekly':
-            startDate = new Date(endDate);
-            startDate.setDate(startDate.getDate() - 7);
-            break;
-          case 'monthly':
-            startDate = new Date(endDate);
-            startDate.setMonth(startDate.getMonth() - 1);
-            break;
-          default:
-            startDate = new Date(endDate);
-            startDate.setDate(startDate.getDate() - 1);
-        }
+        // The previous complete local period (the job runs at ~07:00 tenant time):
+        // daily → yesterday, weekly → last Monday–Sunday, monthly → last calendar month.
+        const tz = tenantTimezone(tenantSettings);
+        const { start: startDate, end: endDate, startYmd, endYmd } =
+          previousCompleteLocalPeriod(options.now ?? new Date(), period, tz);
 
         // Generate report
         const report = await getSalesReport(
@@ -101,12 +86,12 @@ export async function sendSalesReport(
         // Format report data
         const companyName = tenantSettings?.companyName || tenant.name || 'Business';
         const periodLabel = period.charAt(0).toUpperCase() + period.slice(1);
-        const dateRange = `${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()}`;
+        const dateRange = startYmd === endYmd ? formatYmd(startYmd) : `${formatYmd(startYmd)} - ${formatYmd(endYmd)}`;
 
         // Build report HTML
         const dailyRows = report.salesByDay?.map((item: { date: string; sales: number; transactions: number }) => `
         <tr>
-          <td>${new Date(item.date).toLocaleDateString()}</td>
+          <td>${formatYmd(item.date)}</td>
           <td style="text-align: right;">${item.sales?.toFixed(2) || '0.00'}</td>
           <td style="text-align: right;">${item.transactions || 0}</td>
         </tr>
@@ -200,7 +185,7 @@ export async function sendSalesReport(
 
     <div class="footer">
       <p>This is an automated report from your POS system.</p>
-      <p>Generated on ${new Date().toLocaleString()}</p>
+      <p>Generated on ${formatTenantDateTime(new Date(), tz)}</p>
     </div>
   </div>
 </body>

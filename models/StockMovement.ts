@@ -26,7 +26,6 @@ const StockMovementSchema: Schema = new Schema(
       type: Schema.Types.ObjectId,
       ref: 'Product',
       required: [true, 'Product is required'],
-      index: true,
     },
     tenantId: {
       type: Schema.Types.ObjectId,
@@ -36,7 +35,6 @@ const StockMovementSchema: Schema = new Schema(
     branchId: {
       type: Schema.Types.ObjectId,
       ref: 'Branch',
-      index: true,
     },
     variation: {
       size: String,
@@ -87,7 +85,9 @@ const StockMovementSchema: Schema = new Schema(
 StockMovementSchema.index({ tenantId: 1, productId: 1, createdAt: -1 });
 StockMovementSchema.index({ tenantId: 1, branchId: 1, productId: 1, createdAt: -1 });
 StockMovementSchema.index({ tenantId: 1, type: 1, createdAt: -1 });
-StockMovementSchema.index({ transactionId: 1 });
+// Live inventory feed / movement history sorted by date (polled every few seconds by SSE clients)
+StockMovementSchema.index({ tenantId: 1, createdAt: -1 });
+StockMovementSchema.index({ tenantId: 1, branchId: 1, createdAt: -1 });
 
 const StockMovement: Model<IStockMovement> = mongoose.models.StockMovement || mongoose.model<IStockMovement>('StockMovement', StockMovementSchema);
 

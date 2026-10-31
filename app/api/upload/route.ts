@@ -3,7 +3,7 @@ import { requireAuth, getCurrentUser } from '@/lib/auth';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import connectDB from '@/lib/mongodb';
 import { logger } from '@/lib/logger';
-import { uploadToCloudinary, deleteFromCloudinary } from '@/lib/cloudinary';
+import { saveFile, deleteFile } from '@/lib/file-storage';
 import File from '@/models/File';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { createAuditLog } from '@/lib/audit';
@@ -69,19 +69,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Upload to Cloudinary with tenant isolation
+    // Save to local disk with tenant isolation
     const fileBuffer = Buffer.from(await file.arrayBuffer());
-    const cloudinaryResult = await uploadToCloudinary(fileBuffer, file.name, tenantId, file.type);
+    const stored = await saveFile(fileBuffer, file.name, tenantId);
 
     // Connect to database and save file record
     await connectDB();
     const fileDoc = await File.create({
       tenantId,
       name: file.name,
-      filename: cloudinaryResult.public_id,
+      filename: stored.key,
       size: file.size,
       type: file.type,
-      url: cloudinaryResult.secure_url,
+      url: stored.url,
       uploadedBy: user.userId,
     });
 
@@ -96,7 +96,7 @@ export async function POST(request: NextRequest) {
         fileName: file.name,
         fileSize: file.size,
         fileType: file.type,
-        cloudinaryPublicId: cloudinaryResult.public_id,
+        storageKey: stored.key,
       },
     });
 
@@ -104,8 +104,8 @@ export async function POST(request: NextRequest) {
       success: true,
       data: {
         id: fileDoc._id,
-        url: cloudinaryResult.secure_url,
-        filename: cloudinaryResult.public_id,
+        url: stored.url,
+        filename: stored.key,
         size: file.size,
         type: file.type,
         uploadedAt: fileDoc.uploadedAt,
@@ -206,31 +206,23 @@ export async function DELETE(request: NextRequest) {
 
     await connectDB();
 
-    // Fetch the file to get cloudinary public_id
-    const file = await File.findById(fileId);
+    // Fetch the file to get its storage key — scoped to the authenticated tenant
+    const file = await File.findOne({ _id: fileId, tenantId });
 
     if (!file) {
       return NextResponse.json({ success: false, error: t('validation.fileNotFound', 'File not found') }, { status: 404 });
     }
 
-    // Ensure file belongs to authenticated tenant (security check)
-    if (file.tenantId.toString() !== tenantId) {
-      return NextResponse.json(
-        { success: false, error: t('validation.fileNotYourTenant', 'Unauthorized: File does not belong to your tenant') },
-        { status: 403 }
-      );
-    }
-
-    // Delete from Cloudinary
+    // Delete from local disk
     try {
-      await deleteFromCloudinary(file.filename);
-    } catch (cloudinaryError) {
-      logger.error('Error deleting from Cloudinary:', cloudinaryError);
+      await deleteFile(file.filename);
+    } catch (storageError) {
+      logger.error('Error deleting file from storage:', storageError);
       // Continue anyway to clean up database record
     }
 
     // Delete from database
-    await File.deleteOne({ _id: fileId });
+    await File.deleteOne({ _id: fileId, tenantId });
 
     // Create audit log for file deletion
     await createAuditLog(request, {
@@ -243,7 +235,7 @@ export async function DELETE(request: NextRequest) {
         fileName: file.name,
         fileSize: file.size,
         fileType: file.type,
-        cloudinaryPublicId: file.filename,
+        storageKey: file.filename,
       },
     });
 

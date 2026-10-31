@@ -116,7 +116,10 @@ BillingEventSchema.index({ tenantId: 1, createdAt: -1 });
 // a dropped response) — only enforced when transactionId is actually set.
 BillingEventSchema.index(
   { tenantId: 1, transactionId: 1 },
-  { unique: true, partialFilterExpression: { transactionId: { $type: 'string' } } }
+  // `$gt: ''` alone already only matches non-empty strings (type bracketing),
+  // and the query planner can prove an equality lookup on a non-empty string
+  // satisfies it — so findOne({ tenantId, transactionId }) uses this index.
+  { unique: true, partialFilterExpression: { transactionId: { $gt: '' } } }
 );
 
 const BillingEvent: Model<IBillingEvent> =

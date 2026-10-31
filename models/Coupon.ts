@@ -84,8 +84,8 @@ const CouponSchema: Schema = new Schema(
   { timestamps: true }
 );
 
-CouponSchema.index({ code: 1 });
-CouponSchema.index({ isActive: 1, validFrom: 1, validUntil: 1 });
+// Only `code` (unique) is indexed: lookups are by code (lib/coupons.ts) or _id,
+// and the super-admin list is a small collection filtered by isActive.
 
 const Coupon: Model<ICoupon> =
   mongoose.models.Coupon || mongoose.model<ICoupon>('Coupon', CouponSchema);

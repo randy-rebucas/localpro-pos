@@ -24,7 +24,8 @@ export async function GET(request: NextRequest) {
     }
 
     // Get the current subscription for this tenant
-    const subscription = await Subscription.findOne({ tenantId })
+    // billingHistory is served separately by /api/subscriptions/billing-history
+    const subscription = await Subscription.findOne({ tenantId }, '-billingHistory')
       .populate('planId', 'name tier price features birCompliance isCustom')
       .lean();
 

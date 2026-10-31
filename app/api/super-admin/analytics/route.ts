@@ -6,6 +6,11 @@ import Transaction from '@/models/Transaction';
 import Tenant from '@/models/Tenant';
 import { requireRole } from '@/lib/auth';
 import { handleApiError } from '@/lib/error-handler';
+import { getTenantDayBoundaries, getTenantLocalParts, DEFAULT_TENANT_TIMEZONE } from '@/lib/timezone';
+
+// Cross-tenant dashboard: calendar days/months are platform-timezone (Asia/Manila),
+// not the server's UTC clock.
+const PLATFORM_TZ = DEFAULT_TENANT_TIMEZONE;
 
 export async function GET(request: NextRequest) {
   try {
@@ -16,12 +21,13 @@ export async function GET(request: NextRequest) {
     const format = searchParams.get('format') || 'json';
 
     const now = new Date();
-    // Support custom date range for revenue/transaction windows
+    // Support custom date range for revenue/transaction windows.
+    // 'YYYY-MM-DD' params are inclusive platform-timezone calendar days.
     const rangeStart = searchParams.get('rangeStart')
-      ? new Date(searchParams.get('rangeStart')!)
+      ? getTenantDayBoundaries(searchParams.get('rangeStart')!, PLATFORM_TZ).start
       : new Date(now.getTime() - 30 * 86_400_000);
     const rangeEnd = searchParams.get('rangeEnd')
-      ? new Date(searchParams.get('rangeEnd')!)
+      ? getTenantDayBoundaries(searchParams.get('rangeEnd')!, PLATFORM_TZ).end
       : now;
 
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 86_400_000);
@@ -33,9 +39,10 @@ export async function GET(request: NextRequest) {
     const prevEnd = new Date(rangeStart.getTime());
 
     // ── MRR: sum of active/trial subscriptions × plan monthly price ────────
+    // Only planId is needed — skip the unbounded billingHistory array.
     const activeSubscriptions = await Subscription.find({
       status: { $in: ['active', 'trial'] },
-    }).populate<{ planId: { price: { monthly: number } } | null }>('planId', 'price').lean();
+    }, 'planId').populate<{ planId: { price: { monthly: number } } | null }>('planId', 'price').lean();
 
     const mrr = activeSubscriptions.reduce((sum, sub) => {
       const plan = sub.planId as { price: { monthly: number } } | null;
@@ -79,18 +86,19 @@ export async function GET(request: NextRequest) {
       : null;
 
     // ── Tenant growth (last 12 months) ────────────────────────────────────
-    const twelveMonthsAgo = new Date(now);
-    twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 11);
-    twelveMonthsAgo.setDate(1);
-    twelveMonthsAgo.setHours(0, 0, 0, 0);
+    // First day of the month 11 months back, at platform-timezone midnight.
+    const { year: nowYear, month: nowMonth } = getTenantLocalParts(now, PLATFORM_TZ);
+    const growthMonthIndex = nowYear * 12 + (nowMonth - 1) - 11;
+    const growthYmd = `${Math.floor(growthMonthIndex / 12)}-${String((growthMonthIndex % 12) + 1).padStart(2, '0')}-01`;
+    const twelveMonthsAgo = getTenantDayBoundaries(growthYmd, PLATFORM_TZ).start;
 
     const tenantGrowth = await Tenant.aggregate([
       { $match: { createdAt: { $gte: twelveMonthsAgo } } },
       {
         $group: {
           _id: {
-            year: { $year: '$createdAt' },
-            month: { $month: '$createdAt' },
+            year: { $year: { date: '$createdAt', timezone: PLATFORM_TZ } },
+            month: { $month: { date: '$createdAt', timezone: PLATFORM_TZ } },
           },
           count: { $sum: 1 },
         },

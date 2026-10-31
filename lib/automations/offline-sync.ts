@@ -6,9 +6,10 @@
 import connectDB from '@/lib/mongodb';
 import OfflineTransaction from '@/models/OfflineTransaction';
 import Transaction from '@/models/Transaction';
-import Tenant from '@/models/Tenant';
 import { generateReceiptNumber } from '@/lib/receipt';
+import { getAutomationTenants } from './tenants';
 import { AutomationResult } from './types';
+import mongoose from 'mongoose';
 
 export interface OfflineSyncOptions {
   tenantId?: string;
@@ -37,18 +38,12 @@ export async function syncOfflineTransactions(
 
   try {
     // Get tenants to process
-    let tenantIds: string[];
-    if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).select('_id').lean();
-      if (!tenant) {
-        results.message = `Tenant ${options.tenantId} not found`;
-        return results;
-      }
-      tenantIds = [options.tenantId];
-    } else {
-      const tenants = await Tenant.find({ status: 'active' }).select('_id').lean();
-      tenantIds = tenants.map(t => t._id.toString());
+    const tenants = await getAutomationTenants({ tenantId: options.tenantId, select: '_id' });
+    if (options.tenantId && tenants.length === 0) {
+      results.message = `Tenant ${options.tenantId} not found`;
+      return results;
     }
+    const tenantIds = tenants.map(t => t._id.toString());
 
     for (const tenantId of tenantIds) {
       // Find pending offline transactions, ordered oldest-first
@@ -62,13 +57,21 @@ export async function syncOfflineTransactions(
         .limit(100) // Process in batches of 100
         .lean();
 
+      if (pending.length === 0) {
+        continue;
+      }
+
+      // Mark the batch as processing to prevent duplicate processing (one write)
+      await OfflineTransaction.updateMany(
+        { tenantId, _id: { $in: pending.map(o => o._id) } },
+        { $set: { syncStatus: 'processing' } }
+      );
+
+      // Final status per offline transaction, written in one bulkWrite after the batch
+      const statusUpdates: mongoose.AnyBulkWriteOperation[] = [];
+
       for (const offline of pending) {
         const offlineId = offline._id.toString();
-
-        // Mark as processing to prevent duplicate processing
-        await OfflineTransaction.findByIdAndUpdate(offlineId, {
-          syncStatus: 'processing',
-        });
 
         try {
           // Generate a receipt number for the transaction
@@ -107,10 +110,14 @@ export async function syncOfflineTransactions(
           });
 
           // Mark offline transaction as synced
-          await OfflineTransaction.findByIdAndUpdate(offlineId, {
-            syncStatus: 'synced',
-            syncedTransactionId: transaction._id,
-            syncError: undefined,
+          statusUpdates.push({
+            updateOne: {
+              filter: { _id: offline._id, tenantId },
+              update: {
+                $set: { syncStatus: 'synced', syncedTransactionId: transaction._id, syncedAt: new Date() },
+                $unset: { syncError: 1 },
+              },
+            },
           });
 
           results.processed++;
@@ -119,16 +126,19 @@ export async function syncOfflineTransactions(
           const nextRetry = (offline.retryCount ?? 0) + 1;
           const nextStatus = nextRetry >= maxRetries ? 'failed' : 'pending';
 
-          await OfflineTransaction.findByIdAndUpdate(offlineId, {
-            syncStatus: nextStatus,
-            retryCount: nextRetry,
-            syncError: message,
+          statusUpdates.push({
+            updateOne: {
+              filter: { _id: offline._id, tenantId },
+              update: { $set: { syncStatus: nextStatus, retryCount: nextRetry, syncError: message } },
+            },
           });
 
           results.failed++;
           results.errors?.push(`OfflineTransaction ${offlineId}: ${message}`);
         }
       }
+
+      await OfflineTransaction.bulkWrite(statusUpdates, { ordered: false });
     }
 
     results.message = `Synced ${results.processed} offline transaction(s)${results.failed > 0 ? `, ${results.failed} failed` : ''}`;

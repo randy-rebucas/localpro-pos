@@ -385,7 +385,7 @@ export async function PUT(
         transactionId: body.transactionId,
       }).lean();
       if (alreadyRecorded) {
-        const current = await Subscription.findById(subscription._id).populate('planId', 'name tier price').lean();
+        const current = await Subscription.findById(subscription._id, '-billingHistory').populate('planId', 'name tier price').lean();
         return NextResponse.json({ success: true, data: current });
       }
     }
@@ -406,7 +406,7 @@ export async function PUT(
       // pre-check above and this transaction's insert — the unique index
       // on {tenantId, transactionId} caught it. Treat as already-applied.
       if (action === 'record-payment' && body.transactionId && e instanceof Error && (e as { code?: number }).code === 11000) {
-        const current = await Subscription.findById(subscription._id).populate('planId', 'name tier price').lean();
+        const current = await Subscription.findById(subscription._id, '-billingHistory').populate('planId', 'name tier price').lean();
         return NextResponse.json({ success: true, data: current });
       }
       throw e;
@@ -434,7 +434,7 @@ export async function PUT(
       userAgent: request.headers.get('user-agent') || '',
     });
 
-    const updated = await Subscription.findById(subscription._id)
+    const updated = await Subscription.findById(subscription._id, '-billingHistory')
       .populate('planId', 'name tier price')
       .lean();
 

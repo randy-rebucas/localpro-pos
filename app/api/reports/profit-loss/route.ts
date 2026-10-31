@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
       tenantDoc?.settings?.timezone || DEFAULT_TENANT_TIMEZONE
     );
 
-    const summary = await getProfitLossSummary(tenantId, startDate, endDate);
+    const summary = await getProfitLossSummary(tenantId, startDate, endDate, tenantDoc?.settings?.timezone || DEFAULT_TENANT_TIMEZONE);
 
     return NextResponse.json({ success: true, data: summary });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any

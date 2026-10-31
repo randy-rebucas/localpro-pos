@@ -314,7 +314,7 @@ export function initializeCronJobs() {
   const auditCleanupJob = cron.schedule('0 4 * * 0', async () => {
     logger.info('🧹 Running audit log cleanup automation...');
     try {
-      const result = await cleanupAuditLogs({ retentionYears: 2 });
+      const result = await cleanupAuditLogs();
       logger.info('✅ Audit log cleanup:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       logger.error('❌ Audit log cleanup error:' + error.message);
@@ -410,7 +410,7 @@ export function initializeCronJobs() {
   const dataArchiveJob = cron.schedule('0 3 * * 0', async () => {
     logger.info('📚 Running data archiving automation...');
     try {
-      const result = await archiveOldData({ archiveYears: 2 });
+      const result = await archiveOldData(); // default 10 years (BIR retention)
       logger.info('✅ Data archiving:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       logger.error('❌ Data archiving error:' + error.message);

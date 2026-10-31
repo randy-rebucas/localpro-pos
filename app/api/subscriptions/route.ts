@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
       query.status = status;
     }
 
-    const subscriptions = await Subscription.find(query)
+    const subscriptions = await Subscription.find(query, '-billingHistory')
       .populate('tenantId', 'slug name')
       .populate('planId', 'name tier price features birCompliance isCustom')
       .sort({ createdAt: -1 })
@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
     const existingSubscription = await Subscription.findOne({
       tenantId,
       status: { $in: ['active', 'trial'] }
-    });
+    }, '_id').lean();
 
     if (existingSubscription) {
       return NextResponse.json(
@@ -158,7 +158,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    const populatedSubscription = await Subscription.findById(subscription._id)
+    const populatedSubscription = await Subscription.findById(subscription._id, '-billingHistory')
       .populate('tenantId', 'slug name')
       .populate('planId', 'name tier price features birCompliance isCustom');
 

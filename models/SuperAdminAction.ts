@@ -23,11 +23,9 @@ const SuperAdminActionSchema: Schema = new Schema(
     action: {
       type: String,
       required: true,
-      index: true,
     },
     targetType: {
       type: String,
-      index: true,
     },
     targetId: {
       type: String,
@@ -54,9 +52,19 @@ const SuperAdminActionSchema: Schema = new Schema(
   }
 );
 
+// Admin log viewer (app/api/super-admin/admin-logs): optional adminUserId /
+// targetType equality, optional createdAt range, always sorted by createdAt desc.
+// `action` is filtered with an unanchored case-insensitive regex, which cannot
+// use an index efficiently, so it is not indexed.
 SuperAdminActionSchema.index({ adminUserId: 1, createdAt: -1 });
-SuperAdminActionSchema.index({ createdAt: -1 });
-SuperAdminActionSchema.index({ targetType: 1, targetId: 1 });
+SuperAdminActionSchema.index({ targetType: 1, createdAt: -1 });
+// Retention: kept 10 years (covers billing/plan changes made by admins, matching
+// the BIR record period). This single index also serves the createdAt sort.
+export const SUPER_ADMIN_ACTION_RETENTION_SECONDS = 10 * 366 * 24 * 60 * 60;
+SuperAdminActionSchema.index(
+  { createdAt: 1 },
+  { expireAfterSeconds: SUPER_ADMIN_ACTION_RETENTION_SECONDS }
+);
 
 const SuperAdminAction: Model<ISuperAdminAction> =
   mongoose.models.SuperAdminAction ||

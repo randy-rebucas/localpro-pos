@@ -24,15 +24,28 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'code query param is required' }, { status: 400 });
     }
 
-    const escapedCode = code.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const product = await Product.findOne({
+    const trimmedCode = code.trim();
+    // Exact match first: each $or branch is served by the partial unique
+    // {tenantId, barcode} / {tenantId, sku} indexes, so a hit reads one document.
+    let product = await Product.findOne({
       tenantId,
       isActive: { $ne: false },
-      $or: [
-        { barcode: { $regex: `^${escapedCode}$`, $options: 'i' } },
-        { sku: { $regex: `^${escapedCode}$`, $options: 'i' } },
-      ],
+      $or: [{ barcode: trimmedCode }, { sku: trimmedCode }],
     }).lean();
+
+    // Fallback for case differences (e.g. lowercase SKU typed vs uppercase stored).
+    // An anchored case-insensitive regex can't use the indexes, so only pay for it on a miss.
+    if (!product) {
+      const escapedCode = trimmedCode.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      product = await Product.findOne({
+        tenantId,
+        isActive: { $ne: false },
+        $or: [
+          { barcode: { $regex: `^${escapedCode}$`, $options: 'i' } },
+          { sku: { $regex: `^${escapedCode}$`, $options: 'i' } },
+        ],
+      }).lean();
+    }
 
     if (!product) {
       return NextResponse.json({ success: false, error: 'NOT_FOUND', data: null }, { status: 404 });

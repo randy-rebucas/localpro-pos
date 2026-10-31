@@ -73,10 +73,6 @@
       "schedule": "0 2 * * 0"
     },
     {
-      "path": "/api/automations/sessions/expire",
-      "schedule": "0 */6 * * *"
-    },
-    {
       "path": "/api/automations/stock/transfer",
       "schedule": "0 8 * * *"
     },
@@ -85,28 +81,16 @@
       "schedule": "0 9 * * 1"
     },
     {
-      "path": "/api/automations/pricing/dynamic",
-      "schedule": "*/30 * * * *"
-    },
-    {
       "path": "/api/automations/data/archive",
-      "schedule": "0 3 * * 0"
-    },
-    {
-      "path": "/api/automations/backups/create",
-      "schedule": "0 2 * * *"
+      "schedule": "0 3 1 * *"
     },
     {
       "path": "/api/automations/audit-logs/cleanup",
       "schedule": "0 4 * * 0"
     },
     {
-      "path": "/api/automations/sync/multi-branch",
-      "schedule": "0 */4 * * *"
-    },
-    {
       "path": "/api/automations/security/suspicious-activity",
-      "schedule": "*/15 * * * *"
+      "schedule": "5 * * * *"
     },
     {
       "path": "/api/automations/analytics/sales-trends?period=daily",
@@ -123,6 +107,22 @@
     {
       "path": "/api/automations/subscriptions/billing",
       "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/automations/subscriptions/expire",
+      "schedule": "0 1 * * *"
+    },
+    {
+      "path": "/api/automations/sales-summary-export?period=daily",
+      "schedule": "30 0 * * *"
+    },
+    {
+      "path": "/api/automations/sales-summary-export?period=monthly",
+      "schedule": "45 0 1 * *"
+    },
+    {
+      "path": "/api/automations/customers/data-retention",
+      "schedule": "0 5 2 * *"
     }
   ]
 }

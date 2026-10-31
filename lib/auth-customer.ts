@@ -68,11 +68,14 @@ export async function getCurrentCustomer(request: NextRequest): Promise<{
 
     // Verify customer still exists and is active
     await connectDB();
-    const customer = await Customer.findById(payload.customerId)
-      .select('isActive tenantId')
+    if (!payload.customerId || !payload.tenantId) {
+      return null;
+    }
+    const customer = await Customer.findOne({ _id: payload.customerId, tenantId: payload.tenantId })
+      .select('isActive')
       .lean();
-    
-    if (!customer || !customer.isActive || customer.tenantId.toString() !== payload.tenantId) {
+
+    if (!customer || !customer.isActive) {
       return null;
     }
 

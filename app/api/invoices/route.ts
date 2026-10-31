@@ -7,6 +7,7 @@ import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { generateInvoiceNumber } from '@/lib/receipt';
+import { INVOICE_CUSTOMER_SELECT, withInvoiceCustomerSummary } from '@/lib/invoice-customer';
 
 export async function GET(request: NextRequest) {
   try {
@@ -52,14 +53,14 @@ export async function GET(request: NextRequest) {
       .limit(limit)
       .skip(skip)
       .populate('transactionId', 'receiptNumber total')
-      .populate('customerId', 'name email phone')
+      .populate('customerId', INVOICE_CUSTOMER_SELECT)
       .lean();
 
     const total = await Invoice.countDocuments(query);
 
     return NextResponse.json({
       success: true,
-      data: invoices || [],
+      data: (invoices || []).map(withInvoiceCustomerSummary),
       pagination: {
         total,
         page,

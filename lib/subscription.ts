@@ -2,7 +2,10 @@ import connectDB from '@/lib/mongodb';
 import Subscription from '@/models/Subscription';
 import SubscriptionPlan from '@/models/SubscriptionPlan';
 import Tenant from '@/models/Tenant';
+import Transaction from '@/models/Transaction';
+import FeatureFlagOverride from '@/models/FeatureFlagOverride';
 import { logger } from '@/lib/logger';
+import { subscriptionCache } from '@/lib/db-cache';
 import mongoose from 'mongoose'; // eslint-disable-line @typescript-eslint/no-unused-vars
 
 export interface SubscriptionLimits {
@@ -65,15 +68,84 @@ export interface SubscriptionStatus {
   nextBillingDate?: Date;
 }
 
+/** Feature keys a super-admin FeatureFlagOverride may set, per status section. */
+export const FEATURE_OVERRIDE_KEYS = {
+  features: [
+    'enableInventory', 'enableCategories', 'enableDiscounts', 'enableLoyaltyProgram',
+    'enableCustomerManagement', 'enableBookingScheduling', 'enableTableManagement',
+    'enableReports', 'enableMultiBranch', 'enableHardwareIntegration', 'prioritySupport',
+    'customIntegrations', 'dedicatedAccountManager',
+  ] as (keyof SubscriptionFeatures)[],
+  birCompliance: [
+    'ptuAssistance', 'receiptFormatting', 'birDocumentation', 'casReporting',
+    'auditTrailSystem', 'monthlySupport',
+  ] as (keyof BirComplianceFeatures)[],
+  pharmacyCompliance: [
+    'enablePharmacyCompliance', 'prescriptionManagement', 'expiryTracking', 'pdeaReporting',
+  ] as (keyof PharmacyComplianceFeatures)[],
+};
+
+export function isOverridableFeature(feature: string): boolean {
+  return Object.values(FEATURE_OVERRIDE_KEYS).some((keys) => (keys as string[]).includes(feature));
+}
+
+type FeatureOverride = { feature: string; enabled: boolean };
+
+/** Unexpired super-admin overrides for a tenant. Failures fall back to the plan. */
+async function loadActiveFeatureOverrides(tenantId: string): Promise<FeatureOverride[]> {
+  try {
+    const now = new Date();
+    const rows = await FeatureFlagOverride.find({ tenantId })
+      .select('feature enabled expiresAt')
+      .lean();
+    return rows.filter((r) => !r.expiresAt || r.expiresAt > now);
+  } catch (error) {
+    logger.error('Error loading feature flag overrides:', error);
+    return [];
+  }
+}
+
+function applyFeatureOverrides(status: SubscriptionStatus, overrides: FeatureOverride[]): void {
+  for (const { feature, enabled } of overrides) {
+    for (const section of Object.keys(FEATURE_OVERRIDE_KEYS) as (keyof typeof FEATURE_OVERRIDE_KEYS)[]) {
+      if ((FEATURE_OVERRIDE_KEYS[section] as string[]).includes(feature)) {
+        (status[section] as unknown as Record<string, boolean>)[feature] = enabled;
+      }
+    }
+  }
+}
+
 export class SubscriptionService {
   /**
    * Get subscription status for a tenant
    */
   static async getSubscriptionStatus(tenantId: string): Promise<SubscriptionStatus | null> {
     try {
+      // Cached briefly (see lib/db-cache.ts) — feature/limit checks call this
+      // several times per request. Errors are not cached.
+      return (await subscriptionCache.getOrLoad(`status:${tenantId}`, () =>
+        this.loadSubscriptionStatus(tenantId)
+      )) as SubscriptionStatus | null;
+    } catch (error) {
+      logger.error('Error getting subscription status:', error);
+      return null;
+    }
+  }
+
+  private static async loadSubscriptionStatus(tenantId: string): Promise<SubscriptionStatus | null> {
+    const [status, overrides] = await Promise.all([
+      this.loadPlanStatus(tenantId),
+      loadActiveFeatureOverrides(tenantId),
+    ]);
+    if (status) applyFeatureOverrides(status, overrides);
+    return status;
+  }
+
+  private static async loadPlanStatus(tenantId: string): Promise<SubscriptionStatus | null> {
+    {
       await connectDB();
 
-      const subscription = await Subscription.findOne({ tenantId })
+      const subscription = await Subscription.findOne({ tenantId }, '-billingHistory')
         .populate('planId', 'name tier price features birCompliance pharmacyCompliance')
         .lean();
 
@@ -198,9 +270,6 @@ export class SubscriptionService {
       };
 
       return status;
-    } catch (error) {
-      logger.error('Error getting subscription status:', error);
-      return null;
     }
   }
 
@@ -360,6 +429,64 @@ export class SubscriptionService {
     } catch (error) {
       logger.error('Error updating subscription usage:', error);
     }
+  }
+
+  /**
+   * Transactions created this calendar month (server local time).
+   * Served from the running counter on the subscription document; falls back
+   * to a countDocuments (and re-seeds the counter) when the counter belongs to
+   * a previous month or was never initialised.
+   */
+  static async getMonthlyTransactionCount(tenantId: string): Promise<number> {
+    await connectDB();
+    const { start, end, period } = currentMonthRange();
+    const sub = await Subscription.findOne({ tenantId })
+      .select('usage.currentTransactions usage.transactionsPeriod')
+      .lean();
+    if (sub?.usage?.transactionsPeriod === period) {
+      return sub.usage.currentTransactions ?? 0;
+    }
+    const count = await Transaction.countDocuments({ tenantId, createdAt: { $gte: start, $lt: end } });
+    if (sub) {
+      await Subscription.updateOne(
+        { tenantId },
+        { $set: { 'usage.currentTransactions': count, 'usage.transactionsPeriod': period } }
+      );
+    }
+    return count;
+  }
+
+  /**
+   * Bump the monthly transaction counter after a sale is saved.
+   * One write instead of re-counting the month's transactions.
+   */
+  static async recordTransaction(tenantId: string): Promise<void> {
+    try {
+      await connectDB();
+      const { period } = currentMonthRange();
+      const result = await Subscription.updateOne(
+        { tenantId, 'usage.transactionsPeriod': period },
+        { $inc: { 'usage.currentTransactions': 1 } }
+      );
+      if (result.matchedCount === 0) {
+        // New month or uninitialised counter — re-seed from the real count,
+        // which already includes the transaction just saved.
+        await this.getMonthlyTransactionCount(tenantId);
+      }
+    } catch (error) {
+      logger.error('Error updating subscription usage:', error);
+    }
+  }
+
+  /**
+   * Enforce the plan's monthly transaction limit. Skips counting entirely
+   * when the plan is unlimited or there is no subscription.
+   */
+  static async assertTransactionLimit(tenantId: string): Promise<void> {
+    const status = await this.getSubscriptionStatus(tenantId);
+    const needsCount = !!status && status.limits.maxTransactions !== -1;
+    const count = needsCount ? await this.getMonthlyTransactionCount(tenantId) : 0;
+    await checkSubscriptionLimit(tenantId, 'maxTransactions', count);
   }
 
   /**
@@ -523,6 +650,17 @@ export class SubscriptionService {
       throw error;
     }
   }
+}
+
+function currentMonthRange(): { start: Date; end: Date; period: string } {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  return {
+    start: new Date(y, m, 1),
+    end: new Date(y, m + 1, 1),
+    period: `${y}-${String(m + 1).padStart(2, '0')}`,
+  };
 }
 
 /**

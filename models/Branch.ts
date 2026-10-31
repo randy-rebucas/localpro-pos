@@ -59,8 +59,11 @@ const BranchSchema: Schema = new Schema(
   }
 );
 
-// Compound index for tenant-scoped unique branch code
-BranchSchema.index({ tenantId: 1, code: 1 }, { unique: true, sparse: true });
+// Tenant-scoped unique branch code. `sparse` does not work on a compound index
+// whose first field (tenantId) is always present: branches without a code were
+// all indexed as (tenantId, null) and a second code-less branch hit E11000.
+// The partial filter only enforces uniqueness for non-empty codes.
+BranchSchema.index({ tenantId: 1, code: 1 }, { unique: true, partialFilterExpression: { code: { $gt: '' } } });
 BranchSchema.index({ tenantId: 1, isActive: 1 });
 
 const Branch: Model<IBranch> = mongoose.models.Branch || mongoose.model<IBranch>('Branch', BranchSchema);

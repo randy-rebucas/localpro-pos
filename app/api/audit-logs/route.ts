@@ -6,6 +6,8 @@ import { hasTenantPermission } from '@/lib/permissions-server';
 import User from '@/models/User'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
+import { getTenantSettingsById } from '@/lib/tenant';
+import { getTenantTimezone, getTenantDayBoundaries } from '@/lib/timezone';
 
 export async function GET(request: NextRequest) {
   try {
@@ -51,13 +53,17 @@ export async function GET(request: NextRequest) {
       query.userId = userId;
     }
 
+    // Bare 'YYYY-MM-DD' params are inclusive tenant-local calendar days (the server
+    // runs UTC); full ISO timestamps are used as-is.
     if (startDate || endDate) {
+      const tz = getTenantTimezone(await getTenantSettingsById(user.tenantId));
+      const isYmd = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v);
       query.createdAt = {};
       if (startDate) {
-        query.createdAt.$gte = new Date(startDate);
+        query.createdAt.$gte = isYmd(startDate) ? getTenantDayBoundaries(startDate, tz).start : new Date(startDate);
       }
       if (endDate) {
-        query.createdAt.$lte = new Date(endDate);
+        query.createdAt.$lte = isYmd(endDate) ? getTenantDayBoundaries(endDate, tz).end : new Date(endDate);
       }
     }
 

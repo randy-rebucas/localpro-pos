@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
-import Product from '@/models/Product';
+import Product, { PRODUCT_NAME_COLLATION } from '@/models/Product';
 import '@/models/Category'; // register schema for populate
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
@@ -165,12 +165,16 @@ export async function POST(request: NextRequest) {
     // a second product — this is how duplicate SKUs for the same item have crept in before.
     // Callers that intend to create anyway (confirmed by the user) pass confirmDuplicate: true.
     if (!body.confirmDuplicate) {
-      const escapedName = String(data.name).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      // Case-insensitive equality via collation (served by the {tenantId, name} collation
+      // index on Product) instead of an anchored /i regex, which scans every product name.
       const possibleDuplicate = await Product.findOne({
         tenantId,
         isActive: { $ne: false },
-        name: { $regex: `^${escapedName}$`, $options: 'i' },
-      }).select('_id name sku stock').lean();
+        name: String(data.name).trim(),
+      })
+        .collation(PRODUCT_NAME_COLLATION)
+        .select('_id name sku stock')
+        .lean();
 
       if (possibleDuplicate) {
         return NextResponse.json(

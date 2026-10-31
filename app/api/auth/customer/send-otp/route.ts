@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
-import CustomerOTP from '@/models/CustomerOTP';
+import CustomerOTP, { hashOtp } from '@/models/CustomerOTP';
 import Customer from '@/models/Customer'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { sendSMS } from '@/lib/notifications';
 import { getTenantIdFromRequest } from '@/lib/api-tenant'; // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -91,11 +91,11 @@ export async function POST(request: NextRequest) {
       { verified: true } // Mark as used
     );
 
-    // Create new OTP
+    // Create new OTP — only the SHA-256 hash is persisted
     await CustomerOTP.create({
       tenantId: tenant._id,
       phone: normalizedPhone,
-      otp,
+      otpHash: hashOtp(otp),
       expiresAt,
       verified: false,
       attempts: 0,

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
-import CustomerOTP from '@/models/CustomerOTP';
+import CustomerOTP, { MAX_OTP_ATTEMPTS, otpMatches } from '@/models/CustomerOTP';
 import Customer from '@/models/Customer';
 import { generateCustomerToken } from '@/lib/auth-customer';
 import { getTenantIdFromRequest } from '@/lib/api-tenant'; // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -54,55 +54,88 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Find valid OTP
-    const otpRecord = await CustomerOTP.findOne({
+    const invalidOtp = () => NextResponse.json(
+      { success: false, error: t('validation.invalidOtp', 'Invalid or expired OTP') },
+      { status: 401 }
+    );
+    const maxAttempts = () => NextResponse.json(
+      { success: false, error: t('validation.maxOtpAttempts', 'Maximum verification attempts exceeded') },
+      { status: 429 }
+    );
+
+    // Latest outstanding OTP for this tenant + phone (looked up WITHOUT the code,
+    // so the attempts limit applies to wrong guesses too).
+    const latest = await CustomerOTP.findOne({
       tenantId: tenant._id,
       phone: normalizedPhone,
-      otp,
       verified: false,
       expiresAt: { $gt: new Date() },
-    });
+    })
+      .sort({ createdAt: -1 })
+      .lean();
 
-    if (!otpRecord) {
-      // Increment attempts for rate limiting
-      await CustomerOTP.updateOne(
-        { tenantId: tenant._id, phone: normalizedPhone, verified: false },
-        { $inc: { attempts: 1 } }
-      );
-
-      return NextResponse.json(
-        { success: false, error: t('validation.invalidOtp', 'Invalid or expired OTP') },
-        { status: 401 }
-      );
+    if (!latest) {
+      return invalidOtp();
     }
 
-    // Check max attempts
-    if (otpRecord.attempts >= 5) {
-      return NextResponse.json(
-        { success: false, error: t('validation.maxOtpAttempts', 'Maximum verification attempts exceeded') },
-        { status: 429 }
-      );
+    if ((latest.attempts ?? 0) >= MAX_OTP_ATTEMPTS) {
+      await CustomerOTP.deleteOne({ _id: latest._id, tenantId: tenant._id });
+      return maxAttempts();
     }
 
-    // Mark OTP as verified
-    otpRecord.verified = true;
-    await otpRecord.save();
+    // Atomically consume one attempt BEFORE comparing, so concurrent guesses can
+    // never exceed MAX_OTP_ATTEMPTS comparisons. ($inc bypasses the schema `max`
+    // validator, hence the explicit $lt guard.)
+    const consumed = await CustomerOTP.findOneAndUpdate(
+      {
+        _id: latest._id,
+        tenantId: tenant._id,
+        verified: false,
+        attempts: { $lt: MAX_OTP_ATTEMPTS },
+      },
+      { $inc: { attempts: 1 } },
+      { new: true }
+    ).lean();
 
-    // Find or create customer
+    if (!consumed) {
+      await CustomerOTP.deleteOne({ _id: latest._id, tenantId: tenant._id });
+      return maxAttempts();
+    }
+
+    if (!otpMatches(String(otp), consumed.otpHash)) {
+      if (consumed.attempts >= MAX_OTP_ATTEMPTS) {
+        // Last attempt used up — invalidate so the code can't be guessed further.
+        await CustomerOTP.deleteOne({ _id: consumed._id, tenantId: tenant._id });
+      }
+      return invalidOtp();
+    }
+
     let customer = await Customer.findOne({
       tenantId: tenant._id,
       phone: normalizedPhone,
     });
 
-    if (!customer) {
-      // Create new customer if doesn't exist
-      if (!firstName || !lastName) {
-        return NextResponse.json(
-          { success: false, error: t('validation.nameRequired', 'First name and last name are required for new customers') },
-          { status: 400 }
-        );
-      }
+    // Ask a new customer for their name before claiming the OTP, so the same
+    // code can be resubmitted with the name instead of requesting a new one.
+    if (!customer && (!firstName || !lastName)) {
+      return NextResponse.json(
+        { success: false, error: t('validation.nameRequired', 'First name and last name are required for new customers') },
+        { status: 400 }
+      );
+    }
 
+    // Mark OTP as verified (single-use: guard against a concurrent successful verify)
+    const claimed = await CustomerOTP.findOneAndUpdate(
+      { _id: consumed._id, tenantId: tenant._id, verified: false },
+      { $set: { verified: true } },
+      { new: true }
+    ).lean();
+
+    if (!claimed) {
+      return invalidOtp();
+    }
+
+    if (!customer) {
       customer = await Customer.create({
         tenantId: tenant._id,
         firstName,

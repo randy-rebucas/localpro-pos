@@ -6,6 +6,8 @@ import { requireTenantAccess, TenantAccessViolationError, handleTenantAccessViol
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import mongoose from 'mongoose';
+import { getTenantSettingsById } from '@/lib/tenant';
+import { getTenantTimezone, getTenantDayBoundaries } from '@/lib/timezone';
 
 export async function GET(request: NextRequest) {
   try {
@@ -40,13 +42,16 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const period = searchParams.get('period') || 'today'; // today, week, month, all
 
+    // "Today" and hourly/daily chart buckets are in the tenant's timezone,
+    // not the server's (Vercel runs UTC).
+    const tz = getTenantTimezone(await getTenantSettingsById(tenantId));
+
     let startDate: Date;
     const endDate = new Date();
 
     switch (period) {
       case 'today':
-        startDate = new Date();
-        startDate.setHours(0, 0, 0, 0);
+        startDate = getTenantDayBoundaries(new Date(), tz).start;
         break;
       case 'week':
         startDate = new Date();
@@ -73,23 +78,23 @@ export async function GET(request: NextRequest) {
     if (period === 'today') {
       // Group by hour for today
       timeSeriesGroup = {
-        $hour: '$createdAt'
+        $hour: { date: '$createdAt', timezone: tz }
       };
       dateFormat = 'hour';
     } else if (period === 'week' || period === 'month') {
       // Group by day for week/month
       timeSeriesGroup = {
-        year: { $year: '$createdAt' },
-        month: { $month: '$createdAt' },
-        day: { $dayOfMonth: '$createdAt' }
+        year: { $year: { date: '$createdAt', timezone: tz } },
+        month: { $month: { date: '$createdAt', timezone: tz } },
+        day: { $dayOfMonth: { date: '$createdAt', timezone: tz } }
       };
       dateFormat = 'day';
     } else {
       // Group by day for all time
       timeSeriesGroup = {
-        year: { $year: '$createdAt' },
-        month: { $month: '$createdAt' },
-        day: { $dayOfMonth: '$createdAt' }
+        year: { $year: { date: '$createdAt', timezone: tz } },
+        month: { $month: { date: '$createdAt', timezone: tz } },
+        day: { $dayOfMonth: { date: '$createdAt', timezone: tz } }
       };
       dateFormat = 'day';
     }

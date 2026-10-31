@@ -6,6 +6,8 @@ import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
+import { getTenantSettingsById } from '@/lib/tenant';
+import { getTenantTimezone, getTenantDayBoundaries } from '@/lib/timezone';
 
 /**
  * GET - Get attendance records for current user or all users (if manager+)
@@ -37,15 +39,15 @@ export async function GET(request: NextRequest) {
     // Manager+ with no userId filter: show all tenant records (no userId constraint)
 
     // Date range filter
+    // 'YYYY-MM-DD' params are calendar days in the tenant's timezone, not the server's.
     if (startDate || endDate) {
+      const tz = getTenantTimezone(await getTenantSettingsById(user.tenantId));
       query.clockIn = {};
       if (startDate) {
-        query.clockIn.$gte = new Date(startDate);
+        query.clockIn.$gte = getTenantDayBoundaries(startDate, tz).start;
       }
       if (endDate) {
-        const endOfDay = new Date(endDate);
-        endOfDay.setHours(23, 59, 59, 999);
-        query.clockIn.$lte = endOfDay;
+        query.clockIn.$lte = getTenantDayBoundaries(endDate, tz).end;
       }
     }
 

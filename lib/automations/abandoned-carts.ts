@@ -6,10 +6,9 @@
 import connectDB from '@/lib/mongodb';
 import SavedCart from '@/models/SavedCart';
 import Transaction from '@/models/Transaction';
-import Tenant from '@/models/Tenant';
 import User from '@/models/User'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { sendEmail } from '@/lib/notifications';
-import { getTenantSettingsById } from '@/lib/tenant';
+import { getAutomationTenants } from './tenants';
 import { AutomationResult } from './types';
 
 export interface AbandonedCartOptions {
@@ -37,14 +36,11 @@ export async function sendAbandonedCartReminders(
     const hoursAgo = options.hoursAgo || 24;
     const cutoffTime = new Date(Date.now() - hoursAgo * 60 * 60 * 1000);
 
-    // Get tenants to process
-    let tenants;
-    if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).lean();
-      tenants = tenant ? [tenant] : [];
-    } else {
-      tenants = await Tenant.find({ status: 'active' }).lean();
-    }
+    // Get tenants to process (reminders are email-only)
+    const tenants = await getAutomationTenants({
+      tenantId: options.tenantId,
+      filter: { 'settings.emailNotifications': true },
+    });
 
     if (tenants.length === 0) {
       results.message = 'No tenants found to process';
@@ -56,24 +52,47 @@ export async function sendAbandonedCartReminders(
 
     for (const tenant of tenants) {
       try {
-        const tenantId = tenant._id.toString();
-        const tenantSettings = await getTenantSettingsById(tenantId);
+        const tenantId = tenant._id;
+        const tenantSettings = tenant.settings;
 
-        // Skip if email notifications disabled
+        // Skip if email notifications disabled (manual single-tenant runs skip the filter)
         if (!tenantSettings?.emailNotifications) {
           continue;
         }
 
-        // Find saved carts that haven't been converted to transactions
+        // Find saved carts that haven't been converted to transactions or reminded yet
         // Carts saved more than X hours ago
         const abandonedCarts = await SavedCart.find({
           tenantId,
           updatedAt: { $lte: cutoffTime },
+          reminderSentAt: { $exists: false },
         })
+          .select('items.name items.quantity items.price total userId updatedAt')
           .populate('userId', 'name email')
           .sort({ updatedAt: -1 })
           .limit(100) // Limit to prevent too many emails
           .lean();
+
+        if (abandonedCarts.length === 0) continue;
+
+        // Check if carts were already converted to transactions: one aggregate for the
+        // latest transaction per cart owner instead of one query per cart
+        // (This is a simple check - in production, you might want to track this better)
+        const userIds = abandonedCarts
+          .map((cart) => (cart.userId as any)?._id) // eslint-disable-line @typescript-eslint/no-explicit-any
+          .filter(Boolean);
+        const oldestCart = abandonedCarts[abandonedCarts.length - 1].updatedAt;
+        const latestTransactions: { _id: unknown; lastCreatedAt: Date }[] = userIds.length > 0
+          ? await Transaction.aggregate([
+            { $match: { tenantId, userId: { $in: userIds }, createdAt: { $gte: oldestCart } } },
+            { $group: { _id: '$userId', lastCreatedAt: { $max: '$createdAt' } } },
+          ])
+          : [];
+        const lastTransactionByUser = new Map(
+          latestTransactions.map((t) => [String(t._id), t.lastCreatedAt])
+        );
+
+        const remindedCartIds: typeof abandonedCarts[number]['_id'][] = [];
 
         for (const cart of abandonedCarts) {
           try {
@@ -82,15 +101,8 @@ export async function sendAbandonedCartReminders(
               continue; // Skip if no user or email
             }
 
-            // Check if cart was already converted to transaction
-            // (This is a simple check - in production, you might want to track this better)
-            const recentTransactions = await Transaction.find({
-              tenantId,
-              userId: user._id,
-              createdAt: { $gte: cart.updatedAt },
-            }).limit(1).lean();
-
-            if (recentTransactions.length > 0) {
+            const lastTransactionAt = lastTransactionByUser.get(String(user._id));
+            if (lastTransactionAt && lastTransactionAt >= cart.updatedAt) {
               continue; // Cart was likely completed
             }
 
@@ -154,18 +166,32 @@ export async function sendAbandonedCartReminders(
 </html>
             `.trim();
 
-            await sendEmail({
+            const sent = await sendEmail({
               to: user.email,
               subject: `Complete Your Purchase - ${companyName}`,
               message: reminderHtml,
               type: 'email',
             });
+            if (!sent) {
+              throw new Error('Failed to send reminder email'); // not marked, retried next run
+            }
 
+            remindedCartIds.push(cart._id);
             totalReminders++;
           } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
             totalFailed++;
             results.errors?.push(`Cart ${cart._id}: ${error.message}`);
           }
+        }
+
+        // Mark reminded carts so they aren't emailed again on the next run.
+        // timestamps: false keeps updatedAt (the "saved at" time) unchanged.
+        if (remindedCartIds.length > 0) {
+          await SavedCart.updateMany(
+            { tenantId, _id: { $in: remindedCartIds } },
+            { $set: { reminderSentAt: new Date() } },
+            { timestamps: false }
+          );
         }
       } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
         totalFailed++;

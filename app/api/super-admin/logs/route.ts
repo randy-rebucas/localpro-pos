@@ -5,6 +5,7 @@ import Tenant from '@/models/Tenant';
 import { requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { handleApiError } from '@/lib/error-handler';
+import { getTenantDayBoundaries, DEFAULT_TENANT_TIMEZONE } from '@/lib/timezone';
 
 export async function GET(request: NextRequest) {
   try {
@@ -42,13 +43,11 @@ export async function GET(request: NextRequest) {
     if (userId) query.userId = userId;
 
     if (startDate || endDate) {
+      // Cross-tenant view: 'YYYY-MM-DD' filters are platform-timezone (Asia/Manila) days,
+      // not the server's UTC clock.
       const dateFilter: Record<string, Date> = {};
-      if (startDate) dateFilter.$gte = new Date(startDate);
-      if (endDate) {
-        const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999);
-        dateFilter.$lte = end;
-      }
+      if (startDate) dateFilter.$gte = getTenantDayBoundaries(startDate, DEFAULT_TENANT_TIMEZONE).start;
+      if (endDate) dateFilter.$lte = getTenantDayBoundaries(endDate, DEFAULT_TENANT_TIMEZONE).end;
       query.createdAt = dateFilter;
     }
 

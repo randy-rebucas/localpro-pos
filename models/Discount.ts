@@ -15,6 +15,7 @@ export interface IDiscount extends Document {
   validUntil: Date;
   usageLimit?: number; // Total number of times it can be used
   usageCount: number; // Current usage count
+  usageAlertThreshold?: number; // Highest usage-alert % (80/90/100) already emailed by discount-management
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -100,6 +101,9 @@ const DiscountSchema: Schema = new Schema(
       type: Number,
       default: 0,
       min: 0,
+    },
+    usageAlertThreshold: {
+      type: Number,
     },
     isActive: {
       type: Boolean,

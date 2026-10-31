@@ -23,6 +23,7 @@ export * from './sales-summary-export';
 export * from './audit-log-cleanup';
 export * from './product-performance';
 export * from './customer-lifetime-value';
+export * from './customer-data-retention';
 export * from './session-expiration';
 export * from './stock-transfer';
 export * from './predictive-stock';

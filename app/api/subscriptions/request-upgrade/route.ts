@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get current subscription
-    const currentSubscription = await Subscription.findOne({ tenantId })
+    const currentSubscription = await Subscription.findOne({ tenantId }, 'planId')
       .populate('planId', 'name tier')
       .lean();
 
