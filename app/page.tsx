@@ -1,10 +1,10 @@
 import type { Metadata } from 'next';
-import MarketingPageClient from '@/components/MarketingPageClient';
+import MarketingPage from '@/components/marketing/MarketingPage';
 
 /* ── Page-level metadata (overrides root layout defaults) ─────────── */
 export const metadata: Metadata = {
   title: 'Enterprise POS System for Philippine Businesses',
-  // Hero copy: keep module count aligned with `FEATURE_MODULE_COUNT` in components/FeaturesGrid.tsx
+  // Hero copy: keep module count aligned with `FEATURE_MODULE_COUNT` in components/marketing/FeaturesGrid.tsx
   description:
     'Transform your business with 1pos — BIR-ready POS with 23 capability modules, real-time inventory, multi-branch support, and seven core automated workflows. Start your free 14-day trial today.',
   keywords: [
@@ -78,7 +78,7 @@ const jsonLd = {
   ],
 };
 
-export default function MarketingPage() {
+export default function HomePage() {
   return (
     <>
       {/* JSON-LD */}
@@ -86,7 +86,7 @@ export default function MarketingPage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <MarketingPageClient />
+      <MarketingPage />
     </>
   );
 }

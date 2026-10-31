@@ -1,12 +1,14 @@
+import { BUSINESS_TYPE_CONFIGS } from '@/lib/business-types';
+
 /**
  * Marketing copy aligned with the shipped product (not aspirational totals).
- * @see README.md (Automation), components/FeaturesGrid.tsx (feature cards), lib/business-types.ts (types)
+ * @see README.md (Automation), components/marketing/FeaturesGrid.tsx (feature cards), lib/business-types.ts (types)
  */
 
 /** Cron / background automation jobs shipped today (booking reminders, low stock, receipts, etc.). */
 export const CORE_AUTOMATION_WORKFLOWS = 7;
 
-export const BUSINESS_TYPE_COUNT = 5;
+export const BUSINESS_TYPE_COUNT = Object.keys(BUSINESS_TYPE_CONFIGS).length;
 
 /** UI locales in app dictionaries (en, es). */
 export const SUPPORTED_UI_LANGUAGES = 2;
