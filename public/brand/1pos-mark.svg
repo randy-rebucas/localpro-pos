@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="1POS"><title>1POS</title>
+<defs><linearGradient id="face" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4cb0b5"/><stop offset="1" stop-color="#2c8489"/></linearGradient></defs>
+<rect x="2" y="5" width="60" height="57" rx="14" fill="#1b5a5e"/>
+<rect x="2" y="2" width="60" height="55" rx="14" fill="url(#face)"/>
+<path d="M16 2h32a14 14 0 0 1 14 14v13.5H2V16A14 14 0 0 1 16 2z" fill="#fff" fill-opacity=".13"/>
+<path d="M30.5 14h9v32h-9V25.6l-6.2 4.2v-8.6z" fill="#fff"/>
+<circle cx="50" cy="14.5" r="3.2" fill="#8dffb8"/>
+</svg>

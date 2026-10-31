@@ -580,7 +580,18 @@
     "loginFailed": "Error al iniciar sesión. Por favor verifique sus credenciales.",
     "invalidPIN": "PIN inválido",
     "invalidQR": "Código QR inválido",
-    "enterBoth": "Por favor ingrese tanto el correo electrónico como la contraseña"
+    "enterBoth": "Por favor ingrese tanto el correo electrónico como la contraseña",
+    "badge": "Solo personal · cajeros, gerentes, dueño",
+    "heading": "Inicie sesión para abrir la caja.",
+    "desc": "Use el correo y la contraseña que le dio el dueño, o acerque su credencial QR a la cámara.",
+    "lcdStoreTime": "HORA TIENDA",
+    "timezoneNote": "El reloj sigue la zona horaria de la tienda ({tz}).",
+    "qrHeading": "Acerque su credencial a la cámara",
+    "qrDesc": "Su código QR de personal está en su página de Perfil. Imprímalo o guárdelo en su teléfono.",
+    "lockedOut": "¿Sin acceso? El dueño o un gerente puede asignarle una nueva contraseña en Admin → Usuarios.",
+    "languageLabel": "Idioma",
+    "lcdLoading": "CARGANDO",
+    "lcdOpening": "ABRIENDO CAJA"
   },
   "inventory": {
     "title": "Gestión de Inventario",

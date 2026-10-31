@@ -5,6 +5,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import ToastProvider from "@/components/ToastProvider";
 import ServiceWorkerRegistration from "@/components/ServiceWorkerRegistration";
 import ImpersonationBanner from "@/components/ImpersonationBanner";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -34,8 +35,11 @@ export const metadata: Metadata = {
     telephone: false,
   },
   icons: {
-    icon: "/icon-192x192.png",
-    apple: "/icon-192x192.png",
+    icon: [
+      { url: "/brand/1pos-mark.svg", type: "image/svg+xml" },
+      { url: "/icon-192x192.png", sizes: "192x192", type: "image/png" },
+    ],
+    apple: "/apple-touch-icon.png",
   },
   robots: {
     index: false,
@@ -68,7 +72,7 @@ export default function RootLayout({
           <ServiceWorkerRegistration />
           <ToastProvider />
           <ImpersonationBanner />
-          {children}
+          <TooltipProvider>{children}</TooltipProvider>
         </AuthProvider>
       </body>
     </html>

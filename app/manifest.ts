@@ -7,7 +7,7 @@ export default function manifest(): MetadataRoute.Manifest {
     description: 'A BIR-ready Point of Sale system for Philippine businesses',
     start_url: '/',
     display: 'standalone',
-    background_color: '#ffffff',
+    background_color: '#0a1620',
     theme_color: '#35979c',
     orientation: 'any',
     icons: [
@@ -22,7 +22,7 @@ export default function manifest(): MetadataRoute.Manifest {
         type: 'image/png',
       },
       {
-        src: '/icon-512x512.png',
+        src: '/icon-maskable-512x512.png',
         sizes: '512x512',
         type: 'image/png',
         purpose: 'maskable',

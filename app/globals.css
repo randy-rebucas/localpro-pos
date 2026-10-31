@@ -1,15 +1,50 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
 @plugin "@tailwindcss/typography";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
   /* 1Pos brand — see lib/brand-defaults.ts (BRAND_PRIMARY_HEX) */
   --primary-color: #35979c;
   --primary-color-light: #4aabae;
   --primary-color-dark: #2d868a;
   --brand-navy: #1e3a4c;
   --brand-navy-deep: #152a38;
+  /* shadcn/ui tokens (components/ui) — mapped to the 1pos brand */
+  --background: #ffffff;
+  --foreground: #171717;
+  --card: #ffffff;
+  --card-foreground: #171717;
+  --popover: #ffffff;
+  --popover-foreground: #171717;
+  --primary: #35979c;
+  --primary-foreground: #ffffff;
+  --secondary: #eef3f5;
+  --secondary-foreground: #152a38;
+  --muted: #eef3f5;
+  --muted-foreground: #5b6b75;
+  --accent: #e8f5f5;
+  --accent-foreground: #152a38;
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: #dbe4e7;
+  --input: #cdd8dc;
+  --ring: #35979c;
+  --chart-1: #35979c;
+  --chart-2: #1e3a4c;
+  --chart-3: #5fb3b7;
+  --chart-4: #f59e0b;
+  --chart-5: #94a3b8;
+  --radius: 0.5rem;
+  --sidebar: #f5f8f9;
+  --sidebar-foreground: #171717;
+  --sidebar-primary: #35979c;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #e8f5f5;
+  --sidebar-accent-foreground: #152a38;
+  --sidebar-border: #dbe4e7;
+  --sidebar-ring: #35979c;
 }
 
 @theme inline {
@@ -23,11 +58,46 @@
   --color-brand-soft: #e8f5f5;
   --color-brand-navy: #1e3a4c;
   --color-brand-navy-deep: #152a38;
+  --font-heading: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
   /* --tenant-font-family is set at runtime from Settings → Advanced Branding
      (see contexts/TenantSettingsContext.tsx); falls back to the app default. */
   font-family: var(--tenant-font-family, var(--font-geist-sans)), system-ui, -apple-system, sans-serif;
@@ -231,7 +301,7 @@ button, a {
   .actions-touch-visible {
     opacity: 0;
   }
-  
+
   .group:hover .actions-touch-visible {
     opacity: 1;
   }
@@ -391,10 +461,19 @@ button.mk-key:active, button.mk-key-brand:active, button.mk-key-light:active {
 
 /* The marketing site sizes its own controls: hand min-size and radius back to the
    Tailwind layers instead of the global 44px / square rules above. */
-.mk-root :is(a, button) {
+.mk-root :is(a, button, input, select, textarea) {
   min-height: revert-layer;
   min-width: revert-layer;
   border-radius: revert-layer;
+}
+
+/* shadcn/ui components (components/ui) carry data-slot: let their Tailwind classes win over
+   the legacy unlayered 44px / square-corner / transition-all rules above, anywhere in the app. */
+:is(a, button, input, select, textarea)[data-slot] {
+  min-height: revert-layer;
+  min-width: revert-layer;
+  border-radius: revert-layer;
+  transition: revert-layer;
 }
 
 /* Register demo: a key press flash and freshly rung-up ticket lines */
@@ -501,5 +580,55 @@ button.mk-key:active, button.mk-key-brand:active, button.mk-key-light:active {
 @media (prefers-reduced-motion: reduce) {
   .mk-sheen::after {
     display: none;
+  }
+}
+
+/* Dark tokens match the navy gloss sections; wrap shadcn components in `.dark` inside `mk-dark`. */
+.dark {
+  --background: #0a1620;
+  --foreground: #e6f0f2;
+  --card: #10222f;
+  --card-foreground: #e6f0f2;
+  --popover: #10222f;
+  --popover-foreground: #e6f0f2;
+  --primary: #35979c;
+  --primary-foreground: #ffffff;
+  --secondary: #1b2c3a;
+  --secondary-foreground: #e6f0f2;
+  --muted: #172735;
+  --muted-foreground: #8fa3ad;
+  --accent: #1d3b48;
+  --accent-foreground: #e6f0f2;
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: rgb(255 255 255 / 10%);
+  --input: rgb(255 255 255 / 15%);
+  --ring: #5fb3b7;
+  --chart-1: #5fb3b7;
+  --chart-2: #7ef0d6;
+  --chart-3: #35979c;
+  --chart-4: #f59e0b;
+  --chart-5: #94a3b8;
+  --sidebar: #10222f;
+  --sidebar-foreground: #e6f0f2;
+  --sidebar-primary: #35979c;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #1d3b48;
+  --sidebar-accent-foreground: #e6f0f2;
+  --sidebar-border: rgb(255 255 255 / 10%);
+  --sidebar-ring: #5fb3b7;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  button:not(:disabled), [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+  html {
+    @apply font-sans;
   }
 }

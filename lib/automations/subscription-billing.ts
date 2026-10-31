@@ -28,7 +28,7 @@ const DEACTIVATION_BUFFER_DAYS = 3; // deactivate 3 days after grace period ends
 const LATE_FEE_DAYS = 15;
 const LATE_FEE_PERCENT = 0.10;
 const REACTIVATION_FEE_DAYS = 30;
-const BILLING_ADMIN_EMAIL = process.env.BILLING_ADMIN_EMAIL || 'admin@localpro.asia';
+const BILLING_ADMIN_EMAIL = process.env.BILLING_ADMIN_EMAIL || 'support@devcomdigital.com';
 
 export interface SubscriptionBillingResult {
   success: boolean;

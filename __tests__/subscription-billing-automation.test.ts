@@ -1,7 +1,7 @@
 // Set env vars before any imports
 process.env.JWT_SECRET = 'test-secret-for-subscription-billing-tests-32chars!';
 process.env.NODE_ENV = 'test';
-process.env.BILLING_ADMIN_EMAIL = 'admin@localpro.asia';
+process.env.BILLING_ADMIN_EMAIL = 'support@devcomdigital.com';
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -215,7 +215,7 @@ describe('processSubscriptionBilling — overdue flagging', () => {
 
     const emailRecipients = vi.mocked(sendEmail).mock.calls.map((call) => call[0].to);
     expect(emailRecipients).toContain('billing@test-tenant.com');
-    expect(emailRecipients).toContain('admin@localpro.asia');
+    expect(emailRecipients).toContain('support@devcomdigital.com');
   });
 });
 
@@ -238,7 +238,7 @@ describe('processSubscriptionBilling — reminder window', () => {
     expect(sub.status).toBe('active'); // unchanged
     const emailRecipients = vi.mocked(sendEmail).mock.calls.map((call) => call[0].to);
     expect(emailRecipients).toContain('billing@test-tenant.com');
-    expect(emailRecipients).toContain('admin@localpro.asia');
+    expect(emailRecipients).toContain('support@devcomdigital.com');
   });
 });
 
@@ -266,7 +266,7 @@ describe('processSubscriptionBilling — deactivation', () => {
     );
     const emailRecipients = vi.mocked(sendEmail).mock.calls.map((call) => call[0].to);
     expect(emailRecipients).toContain('billing@test-tenant.com');
-    expect(emailRecipients).toContain('admin@localpro.asia');
+    expect(emailRecipients).toContain('support@devcomdigital.com');
   });
 });
 
@@ -296,7 +296,7 @@ describe('processSubscriptionBilling — late fee', () => {
     );
     // Late fee step only sends the internal admin alert, no tenant email
     const emailRecipients = vi.mocked(sendEmail).mock.calls.map((call) => call[0].to);
-    expect(emailRecipients).toEqual(['admin@localpro.asia']);
+    expect(emailRecipients).toEqual(['support@devcomdigital.com']);
   });
 });
 
@@ -323,7 +323,7 @@ describe('processSubscriptionBilling — reactivation fee', () => {
       expect.objectContaining({ type: 'reactivation_fee_applied', amount: 500 })
     );
     const emailRecipients = vi.mocked(sendEmail).mock.calls.map((call) => call[0].to);
-    expect(emailRecipients).toEqual(['admin@localpro.asia']);
+    expect(emailRecipients).toEqual(['support@devcomdigital.com']);
   });
 });
 

@@ -6,6 +6,7 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Check, CreditCard, Banknote, Smartphone, Wifi } from 'lucide-react';
+import { BrandMark } from '@/components/BrandLogo';
 
 const CATEGORIES = ['All', 'Apparel', 'Home', 'Grocery', 'Tech'];
 
@@ -107,8 +108,7 @@ export default function TerminalMockup() {
           {/* Status bar */}
           <div className="flex items-center justify-between px-3 h-8 bg-gradient-to-b from-white/[0.08] to-transparent border-b border-white/10 text-white/70">
             <div className="flex items-center gap-2 min-w-0">
-              {/* eslint-disable-next-line @next/next/no-img-element -- static decorative mockup */}
-              <img src="/brand/1pos-logo.png" alt="" width={16} height={16} className="w-4 h-4 object-contain" />
+              <BrandMark className="w-4 h-4" />
               <span className="font-semibold text-white truncate">Main Branch · Till 02</span>
             </div>
             <div className="flex items-center gap-3 font-mono text-[10px]">

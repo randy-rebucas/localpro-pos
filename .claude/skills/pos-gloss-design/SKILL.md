@@ -1,6 +1,6 @@
 ---
 name: pos-gloss-design
-description: Apply the 1pos "glossy, compressed, POS-aligned" design language (dark navy/teal glass, keycap buttons, LCD readouts, register mockups, scroll-driven motion, stock-photo parallax) to a public or tenant-facing page. Use when redesigning or building any page outside app/super-admin/ to match the public homepage — e.g. /login, /signup, /stores, /privacy, tenant storefronts, or tenant app screens.
+description: Apply the 1pos "glossy, compressed, POS-aligned" design language (dark navy/teal glass, keycap buttons, LCD readouts, register mockups, scroll-driven motion, stock-photo parallax) on top of the app's shadcn/ui components to a public or tenant-facing page. Use when redesigning or building any page or UI component outside app/super-admin/ — e.g. /login, /signup, /stores, /pricing, tenant storefronts, or tenant app screens — or when adding/styling shadcn components (components/ui).
 ---
 
 # 1pos glossy POS design system
@@ -39,9 +39,27 @@ React primitives in `components/marketing/ui.tsx`:
 - `FKey` — keycap label ("F1", "↵ ENTER", "APP"). Sections are numbered F1, F2… in page order.
 - `ArrowIcon` — lucide `ArrowRight` for CTAs.
 
-Data hooks in `components/marketing/useMarketing.ts`: `useHomeDict()` (en/es dictionary, follows `preferred_lang`), `usePlatformStats()`.
+Data hooks in `components/marketing/useMarketing.ts`: `useHomeDict()`, `useDictSection('stores' | 'pricing' | …)` (en/es dictionary, follows `preferred_lang`), `usePreferredLang()`, `usePlatformStats()`.
+
+Page shell: `components/marketing/MarketingShell.tsx` = `mk-root` + shared `SiteNav` + `SiteFooter`. Every public page except the homepage renders `<MarketingShell><main id="main-content">…</main></MarketingShell>`. Nav/footer work out `/#section` links and the active page from `usePathname()` — no props. A new top-level route must also be added to the root-page allowlist in `proxy.ts`, or it redirects to `/default/en/…`.
+
+## Components: shadcn/ui + gloss surfaces
+
+The app uses **shadcn/ui** (style `radix-nova`, Radix primitives, `components.json` at the repo root) as the component layer, and the `mk-*` classes as the skin. Use shadcn for anything interactive or structural; style it with gloss tokens instead of hand-rolling `<button>` / `<input>` / dialogs.
+
+- Components live in `components/ui/<name>.tsx` (lowercase; the PascalCase files there — `EmptyState`, `PasswordInput`, … — are older app components). Add new ones with `pnpm dlx shadcn@latest add <name>`, then check `git diff` — the CLI may touch `globals.css`.
+- `cn()` comes from the `cn` package (shadcn's clsx + tailwind-merge replacement); `@/lib/utils` re-exports it.
+- **Buttons:** `<Button variant="brand">` (primary CTA = `mk-key-brand`), `variant="key"` (secondary on dark = `mk-key`), `variant="light"` (on light sections = `mk-key-light`). The gloss variants include `mk-sheen`. Size `xl` = the `h-11 px-6` CTA size; `sm`/`icon-sm` for chips and clear buttons. Links that look like buttons: `<Button asChild variant="brand"><Link href="…">…</Link></Button>`.
+- **Forms:** `Input`, `Label`, `Select`, `Textarea`, `Checkbox`, `RadioGroup`, `Alert` (`variant="destructive"` for form errors). On gloss pages give inputs `h-11 bg-white placeholder:text-gray-400` plus the inset shadow (see `fieldCls` in `app/signup/page.tsx`). Choice cards that look like keycaps = `RadioGroup` + `Label htmlFor` styled `mk-key-brand` / `mk-key-light`, with the `RadioGroupItem` inside a `<span className="sr-only">` (putting `sr-only` on the item itself loses to its `relative` class and it still takes up space).
+- **Other:** `Card`, `Badge`, `Table`, `Tabs`, `Dialog`, `Sheet`, `DropdownMenu`, `Tooltip` (the root layout already has `TooltipProvider`), `Skeleton`, `Separator`.
+- **Theme tokens** (`--primary`, `--ring`, `--border`, `--radius`, …) in `app/globals.css` are mapped to the brand: primary/ring = teal `#35979c`, `--radius: 0.5rem`. `.dark` tokens match the navy sections — wrap shadcn components that sit on `mk-dark` in `className="dark"` so popovers, borders and inputs pick up navy/teal instead of white.
+- Keep using the gloss-only pieces where shadcn has no equivalent: `mk-lcd` readouts, `mk-print` receipts, `FKey`, `SectionHeader`, register mockups.
+- **Never in `app/super-admin/`.** It keeps the flat Metro system and its own markup.
 
 ## Rules
+
+**Logo**
+- Use `<BrandLogo />` / `<BrandMark />` from `components/BrandLogo.tsx` (inline SVG keycap "1" + "pos"); never an `<img>` of the logo. Rules, files and colours: `docs/brand.md`.
 
 **Tokens**
 - Brand teal `brand` `#35979c`, `brand-muted` `#5fb3b7`, `brand-soft`; navy base `#0a1620` / `#10222f`; light section bg `#eef3f5`.
@@ -72,21 +90,23 @@ Data hooks in `components/marketing/useMarketing.ts`: `useHomeDict()` (en/es dic
 **Copy (avoid the "obviously AI" look)**
 - No "Transform your business", "Streamline your operations", "Everything you need", "Ready to…?", unearned stats ("~70% less busywork"), or star ratings.
 - Be specific and true to the product: name the real feature, the real schedule (automation times come from `vercel.json`, shown in Manila time), the real receipt fields. Check `components/marketing/FeaturesGrid.tsx` and `lib/` before claiming a capability.
-- Every user-facing string goes through the dictionary (`app/[lang]/dictionaries/{en,es}.json`, `home` namespace for marketing) with an English fallback: `d?.key || 'English text'`. Add both en and es.
+- Every user-facing string goes through the dictionary (`app/[lang]/dictionaries/{en,es}.json` — `home` for the homepage/nav/footer, one namespace per public page: `stores`, `pricing`, `contact`, `signup`) with an English fallback: `d?.key || 'English text'`. Add both en and es.
 - Vary layouts: a featured item + supporting items beats three identical cards.
 
 ## Workflow for a new page
 
-1. Read `components/marketing/MarketingPage.tsx` and the 1–2 sections closest to what you need.
-2. Wrap the page in `mk-root`; pick section order and alternate dark/light.
-3. Build sections from `SectionHeader` + `mk-*` surfaces; extract anything reusable into `components/marketing/` (or a shared `components/ui-gloss/` if it is used outside marketing).
+1. Read `components/marketing/MarketingPage.tsx` and the 1–2 sections closest to what you need (`app/signup/page.tsx` for forms, `app/stores/page.tsx` for search + lists, `components/marketing/PricingPage.tsx` for tables).
+2. Wrap the page in `MarketingShell` (public) or `mk-root` (tenant screens); pick section order and alternate dark/light.
+3. Build sections from `SectionHeader` + `mk-*` surfaces, with shadcn components for controls (`Button` gloss variants, `Input`, `Select`, `Dialog`, …). Extract anything reusable into `components/marketing/` (or a shared `components/ui-gloss/` if it is used outside marketing); don't fork `components/ui/*` for a one-off — pass `className`.
 4. Add copy to both dictionaries.
 5. Run `npx eslint <files>` and `npx tsc --noEmit -p .` (filter output to your files).
 6. Look at it: screenshot desktop (1440) and mobile (≥500 — headless Chrome/Edge won't go narrower) with headless Edge, and for animations capture real-time frames over CDP (`--remote-debugging-port`); `--virtual-time-budget` screenshots mis-render CSS animations.
 
 ## Gotchas
 
-- `globals.css` button rule (`min-height: 44px; border-radius: 0`) is unlayered, so Tailwind utilities can't override it — that's what `mk-root` fixes. Outside `mk-root`, rounded/small buttons silently won't apply.
+- `globals.css` button/input rules (`min-height: 44px; border-radius: 0; transition: all`) are unlayered, so Tailwind utilities can't override them. `mk-root` reverts them for its subtree, and any element with a `data-slot` attribute (every shadcn component) reverts them everywhere. A hand-written `<button>` outside `mk-root` still gets square corners and a 44px minimum — another reason to use `Button`.
+- `.mk-key*` set `position: relative` (unlayered), which beats Tailwind's `absolute`. To position a keycap-styled badge, put `absolute …` on a wrapper `<span>` and the `mk-key-*` class on an inner one.
+- shadcn's default placeholder colour (`text-muted-foreground`) reads like a filled-in value on white gloss panels — add `placeholder:text-gray-400`.
 - The dev server sometimes misses edits to `app/globals.css` made by scripts; if new `mk-*` rules don't show up, make a manual edit to the file or restart `pnpm dev`. Verify by grepping the served CSS chunk.
 - `public/sw.js` caches images cache-first — hard-reload when swapping a photo with the same filename (or rename it).
 - Don't name Python helper scripts after stdlib modules (`copy.py`, `json.py`) in the scratchpad — PIL imports break.

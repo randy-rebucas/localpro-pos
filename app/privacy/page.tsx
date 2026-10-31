@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
+import MarketingShell from '@/components/marketing/MarketingShell';
+import { FKey } from '@/components/marketing/ui';
 
 export const metadata: Metadata = {
   title: 'Privacy Policy — 1pos',
@@ -12,27 +13,15 @@ export default function PrivacyPage() {
   const lastUpdated = 'June 14, 2026';
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-brand-soft via-white to-slate-100">
-      {/* Header */}
-      <header className="border-b border-gray-200 bg-white/80 backdrop-blur-sm sticky top-0 z-10">
-        <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
-          <Link href="/" className="text-xl font-bold text-brand hover:text-brand-hover transition-colors">
-            1pos
-          </Link>
-          <Link
-            href="/"
-            className="text-sm text-gray-600 hover:text-gray-900 transition-colors"
-          >
-            ← Back to Home
-          </Link>
-        </div>
-      </header>
-
-      {/* Content */}
-      <main className="max-w-4xl mx-auto px-4 py-12">
-        <div className="bg-white border border-gray-200 p-8 sm:p-12">
-          <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-2">Privacy Policy</h1>
-          <p className="text-sm text-gray-500 mb-10">Last updated: {lastUpdated}</p>
+    <MarketingShell>
+      <main id="main-content" className="bg-[#eef3f5] px-4 sm:px-6 py-12 md:py-16">
+        <div className="max-w-4xl mx-auto mk-panel rounded-lg p-6 sm:p-10">
+          <div className="flex items-center gap-2 mb-3">
+            <FKey>F1</FKey>
+            <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-brand">Legal</span>
+          </div>
+          <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-gray-900 mb-2">Privacy Policy</h1>
+          <p className="text-xs font-mono text-gray-500 mb-10">Last updated: {lastUpdated}</p>
 
           <div className="prose prose-gray max-w-none space-y-8 text-gray-700">
 
@@ -198,16 +187,6 @@ export default function PrivacyPage() {
           </div>
         </div>
       </main>
-
-      {/* Footer */}
-      <footer className="max-w-4xl mx-auto px-4 py-8 text-center text-sm text-gray-500">
-        <p>
-          &copy; 2026 1pos. All rights reserved.{' '}
-          <Link href="/" className="text-brand hover:text-brand-hover">
-            Home
-          </Link>
-        </p>
-      </footer>
-    </div>
+    </MarketingShell>
   );
 }

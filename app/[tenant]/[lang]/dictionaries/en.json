@@ -580,7 +580,18 @@
     "loginFailed": "Login failed. Please check your credentials.",
     "invalidPIN": "Invalid PIN",
     "invalidQR": "Invalid QR code",
-    "enterBoth": "Please enter both email and password"
+    "enterBoth": "Please enter both email and password",
+    "badge": "Staff only · cashiers, managers, owner",
+    "heading": "Sign in to open the till.",
+    "desc": "Use the email and password your owner set up for you, or hold your staff QR badge up to the camera.",
+    "lcdStoreTime": "STORE TIME",
+    "timezoneNote": "Clock follows the store timezone ({tz}).",
+    "qrHeading": "Hold your badge to the camera",
+    "qrDesc": "Your staff QR code is on your Profile page. Print it or keep it on your phone.",
+    "lockedOut": "Locked out? Your owner or a manager can set a new password under Admin → Users.",
+    "languageLabel": "Language",
+    "lcdLoading": "LOADING",
+    "lcdOpening": "OPENING TILL"
   },
   "inventory": {
     "title": "Inventory Management",

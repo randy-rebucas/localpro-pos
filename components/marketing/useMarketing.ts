@@ -31,15 +31,24 @@ function readLang(): Lang {
 }
 
 /** Follows the `preferred_lang` localStorage key (and same-tab `preferred_lang_change` events). */
-export function useHomeDict(): HomeDict {
-  const lang = useSyncExternalStore(subscribeLang, readLang, () => 'en' as Lang);
+export function usePreferredLang(): Lang {
+  return useSyncExternalStore(subscribeLang, readLang, () => 'en' as Lang);
+}
+
+/** One namespace of the app dictionary (e.g. `home`, `stores`) in the preferred language. */
+export function useDictSection(section: string): HomeDict {
+  const lang = usePreferredLang();
   const [dict, setDict] = useState<HomeDict>(undefined);
 
   useEffect(() => {
-    getDictionaryClient(lang).then((all) => setDict((all as { home?: Record<string, string> }).home));
-  }, [lang]);
+    getDictionaryClient(lang).then((all) => setDict((all as unknown as Record<string, Record<string, string> | undefined>)[section]));
+  }, [lang, section]);
 
   return dict;
+}
+
+export function useHomeDict(): HomeDict {
+  return useDictSection('home');
 }
 
 export type PlatformStats = { activeTenants: number; completedTransactions: number } | 'loading' | 'failed';

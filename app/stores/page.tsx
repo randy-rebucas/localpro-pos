@@ -1,393 +1,365 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, useEffect, useRef } from 'react';
-import Image from 'next/image';
-import { normalizeImageUrl } from '@/lib/image-utils';
-import LanguageSwitcher from '@/components/LanguageSwitcher';
-import { getDictionaryClient } from '@/app/[lang]/dictionaries-client';
+import { useRouter } from 'next/navigation';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { RotateCw, Search, SearchX, Store, Users, X } from 'lucide-react';
+import MarketingShell from '@/components/marketing/MarketingShell';
+import StoreTile, { TYPE_ICONS, tenantDisplayName, tenantType, typeLabel, type DirectoryTenant } from '@/components/marketing/StoreTile';
+import { ArrowIcon, FKey, SectionHeader } from '@/components/marketing/ui';
+import { useDictSection, usePreferredLang } from '@/components/marketing/useMarketing';
+import { Button } from '@/components/ui/button';
 
-interface Tenant {
-  slug: string;
-  name: string;
-  settings?: {
-    companyName?: string;
-    logo?: string;
-    businessType?: string;
-    primaryColor?: string;
-    secondaryColor?: string;
-    currency?: string;
-    language?: string;
-    address?: {
-      city?: string;
-      state?: string;
-      country?: string;
-    };
-  };
-}
+type LoadState = 'loading' | 'ready' | 'failed';
 
-const BUSINESS_TYPE_META: Record<string, { icon: string; label: string; gradient: string }> = {
-  Retail: { icon: '🏪', label: 'Retail', gradient: 'from-brand to-brand-navy' },
-  General: { icon: '🔧', label: 'General', gradient: 'from-gray-500 to-slate-600' },
-};
+const fill = (s: string, vars: Record<string, string | number>) =>
+  Object.entries(vars).reduce((out, [k, v]) => out.replace(`{${k}}`, String(v)), s);
 
-const DEFAULT_META = { icon: '🏬', label: 'Store', gradient: 'from-brand to-brand-navy' };
-
-function StoreCard({ tenant, preferredLang, dict }: { tenant: Tenant; preferredLang: string; dict: any }) { // eslint-disable-line @typescript-eslint/no-explicit-any
-  const displayName = tenant.settings?.companyName || tenant.name;
-  const businessType = tenant.settings?.businessType || 'General';
-  const meta = BUSINESS_TYPE_META[businessType] ?? DEFAULT_META;
-  const city = tenant.settings?.address?.city;
-  const country = tenant.settings?.address?.country;
-  const location = [city, country].filter(Boolean).join(', ');
-  const currency = tenant.settings?.currency;
-  const primaryColor = tenant.settings?.primaryColor;
-  const logo = tenant.settings?.logo;
-
-  const initials = displayName
-    .split(' ')
-    .map((w) => w[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase();
-
-  return (
-    <Link
-      href={`/${tenant.slug}/${preferredLang}`}
-      className="group relative flex flex-col bg-white border border-gray-200 overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200 hover:border-brand"
-    >
-      {/* Top accent bar */}
-      <div
-        className={`h-1 w-full bg-gradient-to-r ${meta.gradient}`}
-        style={primaryColor ? { background: primaryColor } : {}}
-      />
-
-      {/* Card Header */}
-      <div
-        className={`relative flex items-center justify-between px-5 py-5 bg-gradient-to-br ${meta.gradient} text-white overflow-hidden`}
-        style={primaryColor ? { background: `linear-gradient(135deg, ${primaryColor}ee, ${primaryColor}99)` } : {}}
-      >
-        <div className="absolute -top-6 -right-6 w-24 h-24 bg-white/10" style={{ transform: 'rotate(15deg)' }} />
-        <div className="absolute -bottom-4 -left-4 w-16 h-16 bg-black/10" style={{ transform: 'rotate(15deg)' }} />
-
-        <div className="flex items-center gap-3 relative z-10">
-          {logo ? (
-            <Image
-              src={normalizeImageUrl(logo)}
-              alt={displayName}
-              width={48}
-              height={48}
-              className="object-contain bg-white/20 backdrop-blur-sm p-1 shadow"
-            />
-          ) : (
-            <div className="w-12 h-12 bg-white/25 backdrop-blur-sm flex items-center justify-center text-lg font-extrabold text-white shadow">
-              {initials}
-            </div>
-          )}
-          <div>
-            <h3 className="font-bold text-white text-base leading-tight line-clamp-2">
-              {displayName}
-            </h3>
-            <p className="text-white/70 text-xs mt-0.5">@{tenant.slug}</p>
-          </div>
-        </div>
-
-        <span className="relative z-10 flex items-center gap-1 bg-black/20 text-white text-xs font-semibold px-2 py-1 border border-white/20 flex-shrink-0">
-          <span>{meta.icon}</span>
-          <span className="hidden sm:inline">{meta.label}</span>
-        </span>
-      </div>
-
-      {/* Card Body */}
-      <div className="flex flex-col flex-1 px-5 py-4 gap-3">
-        <div className="space-y-2">
-          {location && (
-            <div className="flex items-center gap-2 text-sm text-gray-600">
-              <svg className="w-4 h-4 flex-shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-              <span className="truncate">{location}</span>
-            </div>
-          )}
-          {currency && (
-            <div className="flex items-center gap-2 text-sm text-gray-600">
-              <svg className="w-4 h-4 flex-shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <span>{currency}</span>
-            </div>
-          )}
-        </div>
-
-        <div className="mt-auto pt-3 border-t border-gray-100">
-          <div className="flex items-center justify-between text-sm font-semibold text-brand group-hover:text-brand-hover">
-            <span>{dict?.stores?.enterStore || 'Enter Store'}</span>
-            <svg className="w-4 h-4 transform group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </div>
-        </div>
-      </div>
-    </Link>
-  );
-}
-
-function SkeletonCard() {
-  return (
-    <div className="flex flex-col bg-white border border-gray-200 overflow-hidden animate-pulse">
-      <div className="h-1 bg-gray-200" />
-      <div className="h-24 bg-gray-200" />
-      <div className="p-5 space-y-3">
-        <div className="h-4 bg-gray-200 w-3/4" />
-        <div className="h-3 bg-gray-100 w-1/2" />
-        <div className="h-3 bg-gray-100 w-1/3 mt-4" />
-      </div>
-    </div>
-  );
-}
-
+/** Public store directory: look up a tenant and jump to its sign-in screen. */
 export default function StoresPage() {
-  const [tenants, setTenants] = useState<Tenant[]>([]);
-  const [filtered, setFiltered] = useState<Tenant[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [typeFilter, setTypeFilter] = useState<string>('All');
-  const [preferredLang, setPreferredLang] = useState<'en' | 'es'>('en');
-  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const d = useDictSection('stores');
+  const lang = usePreferredLang();
+  const router = useRouter();
   const searchRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    getDictionaryClient(preferredLang).then(setDict);
-  }, [preferredLang]);
+  const [tenants, setTenants] = useState<DirectoryTenant[]>([]);
+  const [state, setState] = useState<LoadState>('loading');
+  const [attempt, setAttempt] = useState(0);
+  const [search, setSearch] = useState('');
+  const [typeFilter, setTypeFilter] = useState('All');
 
-  // Read stored language preference so StoreCard links respect it
+  // Deep link: /stores?q=… (used by the homepage's SearchAction structured data)
   useEffect(() => {
-    const stored = localStorage.getItem('preferred_lang');
-    if (stored === 'en' || stored === 'es') setPreferredLang(stored as 'en' | 'es');
-    // Re-sync whenever LanguageSwitcher updates localStorage
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === 'preferred_lang' && (e.newValue === 'en' || e.newValue === 'es')) {
-        setPreferredLang(e.newValue);
-      }
-    };
-    const onCustom = (e: Event) => {
-      const lang = (e as CustomEvent<string>).detail;
-      if (lang === 'en' || lang === 'es') setPreferredLang(lang);
-    };
-    window.addEventListener('storage', onStorage);
-    window.addEventListener('preferred_lang_change', onCustom);
-    return () => {
-      window.removeEventListener('storage', onStorage);
-      window.removeEventListener('preferred_lang_change', onCustom);
-    };
+    const q = new URLSearchParams(window.location.search).get('q');
+    if (q) setSearch(q);
   }, []);
 
   useEffect(() => {
-    async function fetchTenants() {
+    let cancelled = false;
+    (async () => {
       try {
         const res = await fetch('/api/tenants');
-        const data = await res.json();
-        if (data.success && data.data) {
-          setTenants(data.data);
-          setFiltered(data.data);
-        }
+        const json = await res.json();
+        if (cancelled) return;
+        if (!json?.success || !Array.isArray(json.data)) throw new Error('bad response');
+        const list = (json.data as DirectoryTenant[]).sort((a, b) => tenantDisplayName(a).localeCompare(tenantDisplayName(b)));
+        setTenants(list);
+        setState('ready');
       } catch {
-        // silent
-      } finally {
-        setLoading(false);
+        if (!cancelled) setState('failed');
       }
-    }
-    fetchTenants();
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [attempt]);
+
+  // "/" focuses the lookup from anywhere on the page, like a register's search key
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== '/' || e.metaKey || e.ctrlKey || e.altKey) return;
+      const el = e.target as HTMLElement | null;
+      if (el && (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName))) return;
+      e.preventDefault();
+      searchRef.current?.focus();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  useEffect(() => {
-    let result = tenants;
-    if (typeFilter !== 'All') {
-      result = result.filter((t) => (t.settings?.businessType || 'General') === typeFilter);
-    }
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      result = result.filter(
-        (t) =>
-          (t.settings?.companyName || t.name).toLowerCase().includes(q) ||
-          t.slug.toLowerCase().includes(q) ||
-          (t.settings?.address?.city || '').toLowerCase().includes(q)
-      );
-    }
-    setFiltered(result);
-  }, [search, typeFilter, tenants]);
+  const types = useMemo(() => Array.from(new Set(tenants.map(tenantType))).sort(), [tenants]);
+  const cityCount = useMemo(
+    () => new Set(tenants.map((t) => t.settings?.address?.city?.trim().toLowerCase()).filter(Boolean)).size,
+    [tenants]
+  );
 
-  const availableTypes = [
-    'All',
-    ...Array.from(new Set(tenants.map((t) => t.settings?.businessType || 'General'))),
+  const query = search.trim().toLowerCase();
+  const filtered = useMemo(
+    () =>
+      tenants.filter((t) => {
+        if (typeFilter !== 'All' && tenantType(t) !== typeFilter) return false;
+        if (!query) return true;
+        const handle = query.startsWith('@') ? query.slice(1) : query;
+        return (
+          tenantDisplayName(t).toLowerCase().includes(query) ||
+          t.slug.toLowerCase().includes(handle) ||
+          (t.settings?.address?.city || '').toLowerCase().includes(query)
+        );
+      }),
+    [tenants, typeFilter, query]
+  );
+
+  const hrefFor = (t: DirectoryTenant) => `/${t.slug}/${lang}`;
+  const topMatch = query && filtered.length > 0 ? filtered[0] : null;
+  const isFiltered = query !== '' || typeFilter !== 'All';
+  const clear = () => {
+    setSearch('');
+    setTypeFilter('All');
+  };
+
+  const readouts = [
+    { label: d?.lcdStores || 'Stores', value: state === 'ready' ? tenants.length : state === 'loading' ? '…' : '—' },
+    { label: d?.lcdMatch || 'Match', value: state === 'ready' ? filtered.length : state === 'loading' ? '…' : '—' },
+    { label: d?.lcdCities || 'Cities', value: state === 'ready' ? cityCount : state === 'loading' ? '…' : '—' },
   ];
 
+  const countLine =
+    state !== 'ready'
+      ? ''
+      : isFiltered
+        ? fill(d?.countFiltered || '{filtered} of {total} stores', { filtered: filtered.length, total: tenants.length })
+        : fill(tenants.length === 1 ? d?.countOne || '{count} store' : d?.countAll || '{count} stores', { count: tenants.length });
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
-          <Link href="/" className="flex items-center gap-2 font-bold text-lg text-gray-900 hover:opacity-90 transition-opacity">
-            <img
-              src="/brand/1pos-logo.png"
-              alt="1Pos"
-              width={36}
-              height={36}
-              className="h-9 w-9 object-contain"
-              decoding="async"
-              fetchPriority="high"
-            />
-          </Link>
-          <div className="flex items-center gap-3">
-            <LanguageSwitcher />
-            <Link href="/signup" className="inline-flex items-center bg-brand text-white px-4 py-1.5 text-sm font-semibold hover:bg-brand-hover transition-colors">
-              {dict?.stores?.createStore || 'Create Store'}
-            </Link>
+    <MarketingShell>
+      <main id="main-content">
+        {/* Hero + lookup console */}
+        <section aria-labelledby="stores-heading" className="relative mk-dark text-white overflow-hidden">
+          <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/images/marketing/sari-sari-cebu.webp" alt="" fetchPriority="high" className="mk-parallax-hero opacity-35 saturate-[0.8] absolute inset-0 w-full h-full object-cover" />
+            <div className="absolute inset-0 bg-gradient-to-r from-[#0a1620] via-[#0a1620]/85 to-[#0a1620]/40" />
           </div>
-        </div>
-      </header>
+          <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#0a1620] to-transparent pointer-events-none" aria-hidden="true" />
 
-      {/* Hero */}
-      <section className="relative bg-gradient-to-br from-brand via-brand-navy to-brand-navy-deep text-white py-14 px-4 overflow-hidden">
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute top-10 left-10 w-64 h-64 bg-brand-muted/25 blur-3xl animate-pulse" style={{ animationDuration: '4s' }} />
-          <div className="absolute bottom-0 right-0 w-80 h-80 bg-brand-navy/45 blur-3xl animate-pulse" style={{ animationDelay: '2s', animationDuration: '5s' }} />
-        </div>
-        <div className="relative max-w-7xl mx-auto text-center z-10">
-          <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-md border border-white/30 px-4 py-1.5 text-sm font-semibold mb-4">
-            🏪 {dict?.stores?.storeDirectory || 'Store Directory'}
-          </div>
-          <h1 className="text-4xl md:text-5xl font-bold mb-3">{dict?.stores?.selectYourStore || 'Select Your Store'}</h1>
-          <p className="text-white/80 text-lg max-w-xl mx-auto">
-            {dict?.stores?.storeDirectoryDesc || 'Choose from our network of stores to sign in and manage your business'}
-          </p>
-          <div className="flex justify-center gap-10 mt-8">
-            <div className="text-center">
-              <div className="text-3xl font-bold tabular-nums">{loading ? '—' : tenants.length}</div>
-              <div className="text-white/70 text-sm mt-0.5">{dict?.stores?.activeStores || 'Active Stores'}</div>
+          <div className="relative max-w-7xl mx-auto px-4 sm:px-6 pt-10 md:pt-14 pb-10 md:pb-12 grid lg:grid-cols-12 gap-8 items-center">
+            <div className="lg:col-span-5 mk-hero-in">
+              <div className="flex items-center gap-2 mb-4">
+                <FKey dark>F1</FKey>
+                <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-brand-muted">{d?.eyebrow || 'Store lookup'}</span>
+              </div>
+              <h1 id="stores-heading" className="text-4xl sm:text-5xl lg:text-[3.25rem] font-black tracking-tight leading-[1.04] mb-4">
+                {d?.title || 'Find your store. Sign in at the till.'}
+              </h1>
+              <p className="text-[15px] text-white/70 leading-relaxed max-w-lg">
+                {d?.desc ||
+                  'Every active 1pos store is listed here. Pick yours to open its sign-in screen — owners, managers and cashiers all come in through the same door.'}
+              </p>
             </div>
-            <div className="w-px bg-white/20" />
-            <div className="text-center">
-              <div className="text-3xl font-bold tabular-nums">{availableTypes.length > 1 ? availableTypes.length - 1 : '—'}</div>
-              <div className="text-white/70 text-sm mt-0.5">{dict?.stores?.businessTypes || 'Business Types'}</div>
-            </div>
-          </div>
-        </div>
-      </section>
 
-      {/* Search + Filters */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-8 pb-4">
-        <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
-          <div className="relative flex-1">
-            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <input
-              ref={searchRef}
-              type="text"
-              placeholder={dict?.stores?.searchPlaceholder || 'Search by store name, slug, or city'}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-8 py-2.5 border border-gray-300 text-sm text-gray-900 placeholder-gray-400 focus:border-brand focus:outline-none transition-colors bg-white"
+            <div className="lg:col-span-7 mk-hero-in [animation-delay:150ms]">
+              <div className="mk-glass backdrop-blur-md rounded-xl p-3 sm:p-4">
+                <div className="flex items-center justify-between gap-2 mb-2.5">
+                  <label htmlFor="store-search" className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/50">
+                    {d?.searchLabel || 'Look up a store'}
+                  </label>
+                  <span className="hidden sm:flex items-center gap-1.5 text-[10px] text-white/40 font-mono">
+                    <FKey dark>/</FKey> {d?.hintSearch || 'search'}
+                    <FKey dark>↵</FKey> {d?.hintOpen || 'open top match'}
+                    <FKey dark>ESC</FKey> {d?.hintClear || 'clear'}
+                  </span>
+                </div>
+
+                <div className="mk-lcd rounded-md flex items-center gap-2 px-3 h-12">
+                  <Search className="w-4 h-4 flex-shrink-0 opacity-70" strokeWidth={2.5} aria-hidden="true" />
+                  <input
+                    id="store-search"
+                    ref={searchRef}
+                    type="search"
+                    autoComplete="off"
+                    spellCheck={false}
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && topMatch) router.push(hrefFor(topMatch));
+                      if (e.key === 'Escape') setSearch('');
+                    }}
+                    placeholder={d?.searchPlaceholder || 'Store name, @handle or city'}
+                    className="flex-1 min-w-0 bg-transparent text-base font-mono text-[#7ef0d6] placeholder:text-[#7ef0d6]/40 outline-none [&::-webkit-search-cancel-button]:hidden"
+                  />
+                  {search && (
+                    <Button type="button" variant="key" size="icon-sm" onClick={() => setSearch('')} aria-label={d?.clearSearch || 'Clear search'}>
+                      <X className="w-3.5 h-3.5" strokeWidth={2.5} aria-hidden="true" />
+                    </Button>
+                  )}
+                </div>
+
+                <div className="mt-2.5 flex flex-col sm:flex-row sm:items-center gap-2.5">
+                  {types.length > 1 && (
+                    <div className="flex flex-wrap gap-1.5 flex-1" role="group" aria-label={d?.filterLabel || 'Business type'}>
+                      {['All', ...types].map((type) => {
+                        const Icon = type === 'All' ? null : TYPE_ICONS[type] ?? Store;
+                        const active = typeFilter === type;
+                        return (
+                          <Button
+                            key={type}
+                            type="button"
+                            variant={active ? 'brand' : 'key'}
+                            aria-pressed={active}
+                            onClick={() => setTypeFilter(type)}
+                            className="h-8 px-3 text-xs"
+                          >
+                            {Icon && <Icon className="w-3.5 h-3.5" strokeWidth={2.25} aria-hidden="true" />}
+                            {type === 'All' ? d?.allTypes || 'All' : typeLabel(type, d)}
+                          </Button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <dl className="grid grid-cols-3 gap-1.5 sm:ml-auto sm:w-64">
+                    {readouts.map((r) => (
+                      <div key={r.label} className="mk-lcd rounded-md px-2 py-1.5 text-center flex flex-col-reverse">
+                        <dt className="text-[9px] uppercase tracking-wider mt-1 opacity-75 truncate">{r.label}</dt>
+                        <dd key={String(r.value)} className="mk-lcd-on text-lg font-bold leading-none tabular-nums">{r.value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Directory */}
+        <section aria-labelledby="directory-heading" className="bg-[#eef3f5] px-4 sm:px-6 py-12 md:py-16">
+          <div className="max-w-7xl mx-auto">
+            <SectionHeader
+              id="directory-heading"
+              fkey="F2"
+              eyebrow={d?.directoryEyebrow || 'Directory'}
+              title={d?.directoryTitle || 'Active stores, A–Z'}
+              desc={d?.directoryDesc || "The @handle is the store's address — it's what you'll see in the link after you sign in."}
+              aside={
+                countLine && (
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs font-mono tabular-nums text-gray-500" aria-live="polite">{countLine}</p>
+                    {isFiltered && (
+                      <Button type="button" variant="light" size="sm" onClick={clear} className="text-xs">
+                        <X className="w-3 h-3" strokeWidth={2.5} aria-hidden="true" />
+                        {d?.clearFilters || 'Clear'}
+                      </Button>
+                    )}
+                  </div>
+                )
+              }
             />
-            {search && (
-              <button
-                onClick={() => setSearch('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-sm"
-                aria-label="Clear search"
+
+            {state === 'loading' ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2" aria-busy="true">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <div key={i} className="mk-panel rounded-lg p-3.5 h-[164px] motion-safe:animate-pulse">
+                    <div className="flex gap-3">
+                      <div className="w-11 h-11 rounded-md bg-gray-200" />
+                      <div className="flex-1 space-y-2 pt-1">
+                        <div className="h-3.5 bg-gray-200 rounded w-3/4" />
+                        <div className="h-2.5 bg-gray-100 rounded w-1/3" />
+                      </div>
+                    </div>
+                    <div className="mt-4 space-y-2">
+                      <div className="h-2.5 bg-gray-100 rounded w-1/2" />
+                      <div className="h-2.5 bg-gray-100 rounded w-1/4" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : state === 'failed' ? (
+              <EmptyPanel
+                icon={<RotateCw className="w-5 h-5" strokeWidth={2.25} aria-hidden="true" />}
+                title={d?.errorTitle || "Couldn't load the directory"}
+                body={d?.errorDesc || "The store list didn't come back. Check your connection and try again."}
               >
-                ×
-              </button>
+                <Button
+                  type="button"
+                  variant="brand"
+                  onClick={() => {
+                    setState('loading');
+                    setAttempt((n) => n + 1);
+                  }}
+                  className="h-10 px-5"
+                >
+                  {d?.retry || 'Try again'}
+                </Button>
+              </EmptyPanel>
+            ) : filtered.length > 0 ? (
+              <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                {filtered.map((t, i) => (
+                  <li key={t.slug} className="flex [&>a]:flex-1">
+                    <StoreTile tenant={t} href={hrefFor(t)} index={i} topMatch={topMatch?.slug === t.slug} d={d} />
+                  </li>
+                ))}
+              </ul>
+            ) : tenants.length === 0 ? (
+              <EmptyPanel
+                icon={<Store className="w-5 h-5" strokeWidth={2.25} aria-hidden="true" />}
+                title={d?.noStoresTitle || 'No stores yet'}
+                body={d?.noStoresDesc || 'Nobody has opened a store on this platform yet. Yours can be the first.'}
+              >
+                <Link href="/signup" className="mk-key-brand mk-sheen inline-flex items-center gap-2 h-10 px-5 rounded-md text-sm font-bold">
+                  {d?.createStore || 'Create a store'}
+                  <ArrowIcon />
+                </Link>
+              </EmptyPanel>
+            ) : (
+              <EmptyPanel
+                icon={<SearchX className="w-5 h-5" strokeWidth={2.25} aria-hidden="true" />}
+                title={d?.noMatchTitle || 'No store matches that'}
+                body={d?.noMatchDesc || 'Check the spelling, or try the city or the @handle instead.'}
+              >
+                <Button type="button" variant="light" onClick={clear} className="h-10 px-5">
+                  {d?.clearFilters || 'Clear'}
+                </Button>
+              </EmptyPanel>
             )}
           </div>
-          {availableTypes.length > 2 && (
-            <div className="flex gap-1.5 flex-wrap">
-              {availableTypes.map((type) => (
-                <button
-                  key={type}
-                  onClick={() => setTypeFilter(type)}
-                  className={`px-3 py-2 text-xs font-semibold border transition-all ${
-                    typeFilter === type
-                      ? 'bg-brand border-brand text-white'
-                      : 'bg-white border-gray-300 text-gray-600 hover:border-brand hover:text-brand'
-                  }`}
-                >
-                  {type === 'All' ? (dict?.stores?.allTypes || 'All Types') : `${BUSINESS_TYPE_META[type]?.icon ?? ''} ${type}`}
-                </button>
-              ))}
+        </section>
+
+        {/* Closing band */}
+        <section aria-labelledby="stores-cta-heading" className="relative mk-dark text-white px-4 sm:px-6 py-12 md:py-16 overflow-hidden">
+          <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/images/marketing/card-reader.webp" alt="" loading="lazy" className="mk-parallax opacity-30 absolute inset-0 w-full h-full object-cover" />
+            <div className="absolute inset-0 bg-gradient-to-r from-[#0a1620] via-[#0a1620]/85 to-[#0a1620]/55" />
+          </div>
+          <div className="relative max-w-7xl mx-auto grid lg:grid-cols-5 gap-2">
+            <div className="mk-reveal lg:col-span-3 mk-glass backdrop-blur-md rounded-xl p-6 md:p-8">
+              <div className="flex items-center gap-2 mb-3">
+                <FKey dark>↵ ENTER</FKey>
+                <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-brand-muted">{d?.ctaEyebrow || 'Open a till'}</span>
+              </div>
+              <h2 id="stores-cta-heading" className="text-2xl md:text-3xl font-bold tracking-tight mb-2">
+                {d?.ctaTitle || "Don't see your store?"}
+              </h2>
+              <p className="text-sm md:text-[15px] text-white/65 leading-relaxed max-w-xl mb-5">
+                {d?.ctaDesc || 'Owners can open one in a few minutes: add products, print a test receipt, ring up a real sale. Free for 14 days, no card needed.'}
+              </p>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <Link href="/signup" className="mk-key-brand mk-sheen inline-flex items-center justify-center gap-2 h-11 px-6 rounded-md font-bold text-sm">
+                  {d?.createStore || 'Create a store'}
+                  <ArrowIcon className="w-4 h-4" />
+                </Link>
+                <Link href="/" className="mk-key mk-sheen inline-flex items-center justify-center h-11 px-6 rounded-md font-semibold text-sm">
+                  {d?.seeHowItWorks || 'See how 1pos works'}
+                </Link>
+              </div>
             </div>
-          )}
-        </div>
-      </div>
 
-      {/* Results count */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 pb-3">
-        {!loading && (
-          <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">
-            {filtered.length === tenants.length
-              ? (tenants.length !== 1
-                  ? (dict?.stores?.storesAvailablePlural || '{count} stores available').replace('{count}', String(tenants.length))
-                  : (dict?.stores?.storesAvailable || '{count} store available').replace('{count}', String(tenants.length)))
-              : (dict?.stores?.storesFiltered || '{filtered} of {total} stores').replace('{filtered}', String(filtered.length)).replace('{total}', String(tenants.length))}
-          </p>
-        )}
-      </div>
-
-      {/* Grid */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 pb-16">
-        {loading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {Array.from({ length: 8 }).map((_, i) => <SkeletonCard key={i} />)}
-          </div>
-        ) : filtered.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {filtered.map((tenant) => (
-              <StoreCard key={tenant.slug} tenant={tenant} preferredLang={preferredLang} dict={dict} />
-            ))}
-          </div>
-        ) : (
-          <div className="flex flex-col items-center justify-center py-24 text-center">
-            <div className="text-5xl mb-4">🔍</div>
-            <h3 className="text-lg font-bold text-gray-900 mb-2">{dict?.stores?.noStoresFound || 'No stores found'}</h3>
-            <p className="text-gray-500 text-sm mb-6 max-w-sm">
-              {tenants.length === 0
-                ? (dict?.stores?.noStoresYet || 'No stores are available yet. Be the first to create one!')
-                : (dict?.stores?.tryAdjusting || 'Try adjusting your search or filter.')}
-            </p>
-            <div className="flex gap-2">
-              {(search || typeFilter !== 'All') && (
-                <button
-                  onClick={() => { setSearch(''); setTypeFilter('All'); }}
-                  className="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-semibold hover:border-brand transition-colors"
-                >
-                  {dict?.stores?.clearFilters || 'Clear filters'}
-                </button>
-              )}
-              <Link href="/signup" className="px-4 py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover transition-colors">
-                {dict?.stores?.createAStore || 'Create a Store'}
-              </Link>
+            <div style={{ ['--i' as string]: 1 }} className="mk-reveal lg:col-span-2 mk-glass backdrop-blur-md rounded-xl p-6 flex flex-col">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="mk-key-brand w-9 h-9 rounded-md flex items-center justify-center">
+                  <Users className="w-4 h-4" strokeWidth={2.25} aria-hidden="true" />
+                </span>
+                <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-brand-muted">{d?.staffEyebrow || 'Staff'}</span>
+              </div>
+              <h2 className="text-xl font-bold tracking-tight mb-2">{d?.staffTitle || 'Working the counter already?'}</h2>
+              <p className="text-xs text-white/60 leading-relaxed">
+                {d?.staffDesc ||
+                  "Ask your owner or manager for the store's @handle and look it up above. Cashier and manager logins are added by them from inside the store — you don't sign up here."}
+              </p>
             </div>
           </div>
-        )}
-      </div>
+        </section>
+      </main>
+    </MarketingShell>
+  );
+}
 
-      {/* Footer CTA */}
-      {!loading && tenants.length > 0 && (
-        <div className="border-t border-gray-200 bg-white py-10 px-4">
-          <div className="max-w-xl mx-auto text-center">
-            <h3 className="text-base font-bold text-gray-900 mb-1">{dict?.stores?.dontSeeYourStore || "Don't see your store?"}</h3>
-            <p className="text-gray-500 text-sm mb-5">{dict?.stores?.getStartedDesc || 'Get started and create your own store in minutes.'}</p>
-            <Link
-              href="/signup"
-              className="inline-flex items-center gap-2 bg-brand text-white px-7 py-2.5 text-sm font-bold hover:bg-brand-hover transition-colors"
-            >
-              <span>{dict?.stores?.createYourStore || 'Create Your Store'}</span>
-              <span>→</span>
-            </Link>
-          </div>
-        </div>
-      )}
+function EmptyPanel({ icon, title, body, children }: { icon: ReactNode; title: string; body: string; children: ReactNode }) {
+  return (
+    <div className="mk-panel rounded-lg px-6 py-12 flex flex-col items-center text-center">
+      <span className="mk-key-light w-11 h-11 rounded-md flex items-center justify-center text-brand mb-3">{icon}</span>
+      <h3 className="text-base font-bold text-gray-900 mb-1">{title}</h3>
+      <p className="text-sm text-gray-500 max-w-sm mb-5">{body}</p>
+      {children}
     </div>
   );
 }

@@ -15,6 +15,7 @@ import SubscriptionPlansSkeleton from '@/components/subscription/SubscriptionPla
 import { useSubscriptionPlans } from '@/hooks/useSubscriptionPlans';
 import { usePermissions } from '@/hooks/usePermissions';
 import type { TranslationDict } from '@/types/dictionary';
+import { SUPPORT_EMAIL } from '@/lib/marketing-constants';
 import {
   Users,
   Building,
@@ -629,7 +630,7 @@ export default function SubscriptionPage() {
                   type="button"
                   onClick={() => {
                     window.location.href =
-                      'mailto:admin@localpro.asia?subject=Enterprise%20Plan%20Inquiry';
+                      `mailto:${SUPPORT_EMAIL}?subject=Enterprise%20Plan%20Inquiry`;
                   }}
                   className="w-full px-4 py-2 border border-white text-white text-sm font-medium hover:bg-white hover:text-gray-900 transition-colors"
                 >

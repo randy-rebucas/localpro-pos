@@ -360,6 +360,8 @@ export function proxy(request: NextRequest) {
     pathname === '/signup' ||
     pathname === '/stores' ||
     pathname === '/privacy' ||
+    pathname === '/pricing' ||
+    pathname === '/contact' ||
     pathname.startsWith('/super-admin')
   ) {
     return pageNext(request);

@@ -15,3 +15,9 @@ export const SUPPORTED_UI_LANGUAGES = 2;
 
 /** Communicated availability target for managed production (not a live status page). */
 export const UPTIME_SLA_TARGET_PERCENT = '99.9%';
+
+/** Public contact / support inbox shown in the footer and on /contact. */
+export const SUPPORT_EMAIL = 'support@devcomdigital.com';
+
+/** Data-protection requests (matches app/privacy/page.tsx). */
+export const PRIVACY_EMAIL = 'privacy@1pos.app';
