@@ -118,9 +118,12 @@ export function SubscriptionProvider({ children }: SubscriptionProviderProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenantId, isAuthenticated]);
 
-  // Refresh subscription status every 5 minutes
+  // Refresh subscription status every 30 minutes while the tab is visible
+  // (plan changes are rare; each refresh is a database read)
   useEffect(() => {
-    const interval = setInterval(refreshSubscription, 5 * 60 * 1000);
+    const interval = setInterval(() => {
+      if (!document.hidden) refreshSubscription();
+    }, 30 * 60 * 1000);
     return () => clearInterval(interval);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

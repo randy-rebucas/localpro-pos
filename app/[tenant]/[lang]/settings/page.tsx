@@ -27,7 +27,7 @@ export default function SettingsPage() {
   const router = useRouter();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const { settings: tenantSettings } = useTenantSettings();
+  const { settings: tenantSettings, applySettings } = useTenantSettings();
   const primaryColor = (tenantSettings || getDefaultTenantSettings()).primaryColor || '#35979c';
   const { canAccess } = usePermissions();
   const canManageSettings = canAccess('settings.manage');
@@ -191,6 +191,8 @@ export default function SettingsPage() {
       if (data.success) {
         setMessage({ type: 'success', text: dict?.settings?.saved || 'Settings saved successfully!' });
         setSettings(data.data);
+        // Keep the shared context in sync so other pages don't see stale values
+        applySettings(data.data);
         // Clear message after 3 seconds
         setTimeout(() => setMessage(null), 3000);
       } else {
@@ -613,6 +615,7 @@ export default function SettingsPage() {
 
                             const data = await res.json();
                             if (data.success) {
+                              applySettings({ language: newLang });
                               // Redirect to new language
                               const currentPath = window.location.pathname.replace(`/${tenant}/${lang}`, '') || '/';
                               router.push(`/${tenant}/${newLang}${currentPath}`);

@@ -1,10 +1,13 @@
 import { afterEach, beforeAll, afterAll, vi } from 'vitest';
 import { cleanup } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
+import { cacheClear } from '@/lib/cache';
 
 // Cleanup after each test
 afterEach(() => {
   cleanup();
+  // lib/cache.ts is module-level state — don't let cached lookups leak between tests
+  cacheClear();
 });
 
 // Mock next/navigation

@@ -5,8 +5,9 @@
 
 import connectDB from '@/lib/mongodb';
 import Tenant from '@/models/Tenant';
+import type { ITenantSettings } from '@/models/Tenant';
 import { sendEmail } from '@/lib/notifications';
-import { getTenantSettingsById } from '@/lib/tenant';
+import { getActiveTenants, type ActiveTenant } from '@/lib/tenant-active-query';
 import { getSalesReport } from '@/lib/analytics';
 import { AutomationResult } from './types';
 
@@ -15,6 +16,8 @@ export interface ReportDeliveryOptions {
   reportType?: 'daily' | 'weekly' | 'monthly';
   period?: 'daily' | 'weekly' | 'monthly';
 }
+
+const TENANT_FIELDS = 'settings.emailNotifications settings.email settings.companyName';
 
 /**
  * Generate and send sales report
@@ -36,13 +39,15 @@ export async function sendSalesReport(
     const period = options.period || 'daily';
 
     // Get tenants to process
-    let tenants;
+    let tenants: ActiveTenant[];
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).lean();
+      const tenant = await Tenant.findById(options.tenantId)
+        .select(`_id slug name ${TENANT_FIELDS}`)
+        .lean<ActiveTenant>();
       tenants = tenant ? [tenant] : [];
     } else {
-      // Get all active tenants
-      tenants = await Tenant.find({ status: 'active' }).lean();
+      // Get all active tenants (projected — Tenant documents are large)
+      tenants = await getActiveTenants(TENANT_FIELDS);
     }
 
     if (tenants.length === 0) {
@@ -55,7 +60,7 @@ export async function sendSalesReport(
 
     for (const tenant of tenants) {
       try {
-        const tenantSettings = await getTenantSettingsById(tenant._id.toString());
+        const tenantSettings = (tenant.settings ?? null) as ITenantSettings | null;
 
         // Skip if email notifications disabled
         if (!tenantSettings?.emailNotifications) {

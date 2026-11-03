@@ -1,45 +1,29 @@
 import { useState, useCallback } from 'react';
 import { ITenantSettings } from '@/types/tenant';
+import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function useBrandingSettings(tenant: string) {
+  // Seeded from TenantSettingsContext (already loaded for the layout) instead of
+  // a separate GET /api/tenants/[slug]/settings.
+  const { ensureSettings } = useTenantSettings();
   const [settings, setSettings] = useState<ITenantSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchSettings = useCallback(async (onError?: (error: string) => void) => {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
-
-    try {
-      setLoading(true);
-      setError(null);
-
-      const res = await fetch(`/api/tenants/${tenant}/settings`, {
-        signal: controller.signal,
-        credentials: 'include',
-      });
-
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}: Failed to fetch settings`);
-      }
-
-      const data = await res.json();
-      if (data.success) {
-        setSettings(data.data);
-      } else {
-        const errorMsg = data.error || 'Failed to load settings';
-        setError(errorMsg);
-        onError?.(errorMsg);
-      }
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to load settings. Please check your connection.';
-      setError(errorMsg);
-      onError?.(errorMsg);
-    } finally {
-      clearTimeout(timeoutId);
-      setLoading(false);
+    setLoading(true);
+    setError(null);
+    const result = await ensureSettings();
+    if (result.error) {
+      setSettings(null);
+      setError(result.error);
+      onError?.(result.error);
+    } else {
+      setSettings(result.settings);
     }
-  }, [tenant]);
+    setLoading(false);
+  }, [ensureSettings]);
 
   const updateSetting = useCallback((path: string, value: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
     if (!settings) return;

@@ -21,7 +21,6 @@ const CustomerOTPSchema: Schema = new Schema(
       type: String,
       required: [true, 'Phone number is required'],
       trim: true,
-      index: true,
     },
     otp: {
       type: String,
@@ -48,8 +47,7 @@ const CustomerOTPSchema: Schema = new Schema(
   }
 );
 
-// Compound index for tenant + phone lookups
-CustomerOTPSchema.index({ tenantId: 1, phone: 1 });
+// Compound index for tenant + phone lookups (also serves { tenantId, phone } as a prefix)
 CustomerOTPSchema.index({ tenantId: 1, phone: 1, verified: 1 });
 
 // Auto-delete expired OTPs

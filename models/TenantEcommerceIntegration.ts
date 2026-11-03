@@ -1,5 +1,6 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
 import type { EcommerceProvider } from '@/lib/ecommerce/constants';
+import { invalidateTenantCache } from '@/lib/cache';
 
 export interface ITenantEcommerceIntegration extends Document {
   tenantId: mongoose.Types.ObjectId;
@@ -31,7 +32,6 @@ const TenantEcommerceIntegrationSchema = new Schema(
       type: Schema.Types.ObjectId,
       ref: 'Tenant',
       required: true,
-      index: true,
     },
     provider: {
       type: String,
@@ -55,6 +55,13 @@ const TenantEcommerceIntegrationSchema = new Schema(
 TenantEcommerceIntegrationSchema.index({ tenantId: 1, provider: 1 }, { unique: true });
 TenantEcommerceIntegrationSchema.index({ shopDomain: 1 }, { sparse: true });
 TenantEcommerceIntegrationSchema.index({ siteUrl: 1, tenantId: 1 }, { sparse: true });
+
+// The "tenant has integrations" flag used after every sale is cached (lib/cache.ts)
+TenantEcommerceIntegrationSchema.post('save', () => invalidateTenantCache());
+TenantEcommerceIntegrationSchema.post(
+  ['updateOne', 'updateMany', 'findOneAndUpdate', 'findOneAndDelete', 'deleteOne', 'deleteMany'],
+  () => invalidateTenantCache()
+);
 
 const TenantEcommerceIntegration: Model<ITenantEcommerceIntegration> =
   mongoose.models.TenantEcommerceIntegration ||

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import AuditLog from '@/models/AuditLog';
+import ArchivedAuditLog from '@/models/ArchivedAuditLog';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -53,10 +54,25 @@ export async function GET(request: NextRequest) {
       createdAt: { $gte: startDate, $lte: endDate },
     };
 
-    const logs = await AuditLog.find(query)
-      .populate('userId', 'name email')
-      .sort({ createdAt: 1 }) // chronological, matching an electronic journal's expected order
-      .lean();
+    // Logs older than 90 days are moved to ArchivedAuditLog by the daily archive
+    // job — read the archive too when the range reaches past that cutoff.
+    const archiveCutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+    const [liveLogs, archivedLogs] = await Promise.all([
+      AuditLog.find(query)
+        .populate('userId', 'name email')
+        .sort({ createdAt: 1 })
+        .lean(),
+      startDate < archiveCutoff
+        ? ArchivedAuditLog.find(query)
+          .populate('userId', 'name email')
+          .sort({ createdAt: 1 })
+          .lean()
+        : Promise.resolve([]),
+    ]);
+    // chronological, matching an electronic journal's expected order
+    const logs = [...archivedLogs, ...liveLogs].sort(
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    );
 
     const entries = logs.map((log) => {
       const actor = log.userId && typeof log.userId === 'object'

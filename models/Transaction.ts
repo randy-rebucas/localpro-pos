@@ -133,7 +133,6 @@ const TransactionSchema: Schema = new Schema(
     branchId: {
       type: Schema.Types.ObjectId,
       ref: 'Branch',
-      index: true,
     },
     items: {
       type: [TransactionItemSchema],
@@ -230,12 +229,10 @@ const TransactionSchema: Schema = new Schema(
     userId: {
       type: Schema.Types.ObjectId,
       ref: 'User',
-      index: true,
     },
     deviceId: {
       type: Schema.Types.ObjectId,
       ref: 'Device',
-      index: true,
     },
     terminalId: {
       type: String,
@@ -322,16 +319,25 @@ const TransactionSchema: Schema = new Schema(
 
 // Compound indexes
 TransactionSchema.index({ tenantId: 1, createdAt: -1 });
+// List endpoints filter isActive: { $ne: false } — with isActive in the index the
+// list's countDocuments is answered from index keys instead of fetching every doc
+TransactionSchema.index({ tenantId: 1, isActive: 1, createdAt: -1 });
 TransactionSchema.index({ tenantId: 1, branchId: 1, createdAt: -1 });
-TransactionSchema.index({ tenantId: 1, receiptNumber: 1 }, { unique: true, sparse: true });
+// sparse is a no-op on compound indexes (tenantId is always present), so use a
+// partial filter to keep receipt-less rows out of the unique index
+TransactionSchema.index(
+  { tenantId: 1, receiptNumber: 1 },
+  { unique: true, partialFilterExpression: { receiptNumber: { $type: 'string' } } }
+);
 // partialFilterExpression (not sparse) — sparse only excludes missing fields, not
 // explicit nulls, and legacy rows have idempotencyKey: null, which broke the unique build
 TransactionSchema.index(
   { tenantId: 1, idempotencyKey: 1 },
   { unique: true, partialFilterExpression: { idempotencyKey: { $type: 'string' } } }
 );
-TransactionSchema.index({ tenantId: 1, status: 1 });
-TransactionSchema.index({ tenantId: 1, isActive: 1, createdAt: -1 });
+TransactionSchema.index({ tenantId: 1, status: 1, createdAt: -1 });
+TransactionSchema.index({ tenantId: 1, customerId: 1, createdAt: -1 });
+TransactionSchema.index({ tenantId: 1, userId: 1, createdAt: -1 });
 TransactionSchema.index(
   { tenantId: 1, channelSyncKey: 1 },
   {

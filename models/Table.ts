@@ -22,7 +22,6 @@ const TableSchema: Schema = new Schema(
     branchId: {
       type: Schema.Types.ObjectId,
       ref: 'Branch',
-      index: true,
     },
     name: {
       type: String,

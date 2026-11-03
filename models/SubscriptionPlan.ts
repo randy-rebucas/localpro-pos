@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
+import { invalidateSubscriptionCache } from '@/lib/cache';
 
 export type SubscriptionTier = 'starter' | 'pro' | 'business' | 'enterprise';
 
@@ -282,6 +283,13 @@ SubscriptionPlanSchema.pre('deleteOne', { document: false, query: true }, async 
 
 // Create indexes
 SubscriptionPlanSchema.index({ isActive: 1 });
+
+// Plan features feed every cached subscription status
+SubscriptionPlanSchema.post('save', () => invalidateSubscriptionCache());
+SubscriptionPlanSchema.post(
+  ['updateOne', 'updateMany', 'findOneAndUpdate', 'findOneAndDelete', 'deleteOne', 'deleteMany'],
+  () => invalidateSubscriptionCache()
+);
 
 const SubscriptionPlan: Model<ISubscriptionPlan> = mongoose.models.SubscriptionPlan ||
   mongoose.model<ISubscriptionPlan>('SubscriptionPlan', SubscriptionPlanSchema);

@@ -3,13 +3,15 @@
  * Automatically close cash drawers at end of business day
  */
 
+import mongoose, { type AnyBulkWriteOperation } from 'mongoose';
 import connectDB from '@/lib/mongodb';
-import CashDrawerSession from '@/models/CashDrawerSession';
+import CashDrawerSession, { type ICashDrawerSession } from '@/models/CashDrawerSession';
 import Tenant from '@/models/Tenant';
+import type { ITenantSettings } from '@/models/Tenant';
 import Transaction from '@/models/Transaction';
 import Expense from '@/models/Expense';
 import { sendEmail } from '@/lib/notifications';
-import { getTenantSettingsById } from '@/lib/tenant';
+import { getActiveTenants, type ActiveTenant } from '@/lib/tenant-active-query';
 import { AutomationResult } from './types';
 
 export interface CashDrawerClosureOptions {
@@ -17,8 +19,36 @@ export interface CashDrawerClosureOptions {
   forceClose?: boolean; // Force close even if not end of day
 }
 
+const TENANT_FIELDS = 'settings.emailNotifications settings.email settings.companyName settings.timezone';
+
+const DEFAULT_END_HOUR = 22; // 10 PM tenant-local time
+
+/** Current hour (0-23) in the tenant's timezone */
+function tenantLocalHour(now: Date, timezone?: string): number {
+  try {
+    const hour = new Intl.DateTimeFormat('en-US', {
+      hour: 'numeric',
+      hourCycle: 'h23',
+      timeZone: timezone || 'Asia/Manila',
+    }).format(now);
+    return parseInt(hour, 10) % 24;
+  } catch {
+    return now.getUTCHours();
+  }
+}
+
+interface SalesTotals {
+  salesCents: number;
+  vatCents: number;
+  discountCents: number;
+}
+
 /**
  * Automatically close cash drawers at end of business day
+ *
+ * Expected amounts follow the manual close in app/api/cash-drawer/sessions:
+ * cash sales are those rung up by the drawer's own cashier (userId) since the
+ * drawer opened; cash expenses are tenant-wide since the drawer opened.
  */
 export async function autoCloseCashDrawers(
   options: CashDrawerClosureOptions = {}
@@ -34,14 +64,22 @@ export async function autoCloseCashDrawers(
   };
 
   try {
+    // End of day is 10 PM in each tenant's own timezone. The job runs hourly
+    // (vercel.json) and only touches tenants whose local hour is the closing
+    // hour, so each tenant's drawers are closed once per day.
+    // You can extend this to use tenant business hours configuration.
+    const now = new Date();
+
     // Get tenants to process
-    let tenants;
+    let tenants: ActiveTenant[];
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).lean();
+      const tenant = await Tenant.findById(options.tenantId)
+        .select(`_id slug name ${TENANT_FIELDS}`)
+        .lean<ActiveTenant>();
       tenants = tenant ? [tenant] : [];
     } else {
       // Get all active tenants
-      tenants = await Tenant.find({ status: 'active' }).lean();
+      tenants = await getActiveTenants(TENANT_FIELDS);
     }
 
     if (tenants.length === 0) {
@@ -49,61 +87,122 @@ export async function autoCloseCashDrawers(
       return results;
     }
 
-    const now = new Date();
-    const currentHour = now.getHours();
     let totalProcessed = 0;
     let totalFailed = 0;
 
     for (const tenant of tenants) {
       try {
-        const tenantId = tenant._id.toString();
-        const tenantSettings = await getTenantSettingsById(tenantId);
-
-        // Get business hours (if configured)
-        // For now, we'll use a default end time (e.g., 10 PM) or check if it's past business hours
-        // You can extend this to use tenant business hours configuration
-        const defaultEndHour = 22; // 10 PM
-        const isEndOfDay = currentHour >= defaultEndHour || options.forceClose;
-
-        if (!isEndOfDay && !options.forceClose) {
-          continue; // Not end of day yet
+        const tenantSettings = (tenant.settings ?? null) as ITenantSettings | null;
+        if (!options.forceClose && tenantLocalHour(now, tenantSettings?.timezone) !== DEFAULT_END_HOUR) {
+          continue;
         }
+        const tenantObjectId = new mongoose.Types.ObjectId(String(tenant._id));
 
         // Find all open cash drawer sessions
         const openSessions = await CashDrawerSession.find({
-          tenantId,
+          tenantId: tenantObjectId,
           status: 'open',
         })
+          .select('userId openingTime openingAmount notes')
           .populate('userId', 'name email')
           .lean();
 
-        for (const session of openSessions) {
+        if (openSessions.length === 0) continue;
+
+        const sessionEnd = now;
+        const userIdOf = (s: (typeof openSessions)[number]): mongoose.Types.ObjectId | null => {
+          const u = s.userId as unknown as { _id?: unknown } | null;
+          if (!u) return null;
+          const id = u._id ?? u; // populated doc or raw ObjectId (user deleted)
+          return new mongoose.Types.ObjectId(String(id));
+        };
+        const earliestOpening = openSessions.reduce(
+          (min, s) => (new Date(s.openingTime) < min ? new Date(s.openingTime) : min),
+          new Date(openSessions[0].openingTime)
+        );
+
+        // Cash sales per session in ONE aggregate: the $or pre-filter uses the
+        // { tenantId, userId, createdAt } index, then a $facet branch per session
+        // sums that cashier's sales since that drawer opened (in cents).
+        const sessionBranches = openSessions
+          .map((s, i) => ({ key: `s${i}`, userId: userIdOf(s), opening: new Date(s.openingTime) }))
+          .filter((b): b is { key: string; userId: mongoose.Types.ObjectId; opening: Date } => !!b.userId);
+        const salesBySession = new Map<string, SalesTotals>();
+        if (sessionBranches.length > 0) {
+          const centsOf = (field: string) => ({
+            $sum: { $round: [{ $multiply: [{ $ifNull: [field, 0] }, 100] }, 0] },
+          });
+          const facet: Record<string, mongoose.PipelineStage.FacetPipelineStage[]> = {};
+          for (const b of sessionBranches) {
+            facet[b.key] = [
+              { $match: { userId: b.userId, createdAt: { $gte: b.opening } } },
+              {
+                $group: {
+                  _id: null,
+                  salesCents: centsOf('$total'),
+                  vatCents: centsOf('$taxAmount'),
+                  discountCents: centsOf('$discountAmount'),
+                },
+              },
+            ];
+          }
+          const [facetResult] = await Transaction.aggregate<Record<string, SalesTotals[]>>([
+            {
+              $match: {
+                tenantId: tenantObjectId,
+                paymentMethod: 'cash',
+                status: 'completed',
+                createdAt: { $lte: sessionEnd },
+                $or: sessionBranches.map((b) => ({ userId: b.userId, createdAt: { $gte: b.opening } })),
+              },
+            },
+            { $facet: facet },
+          ]);
+          for (const b of sessionBranches) {
+            const row = facetResult?.[b.key]?.[0];
+            salesBySession.set(b.key, {
+              salesCents: row?.salesCents ?? 0,
+              vatCents: row?.vatCents ?? 0,
+              discountCents: row?.discountCents ?? 0,
+            });
+          }
+        }
+
+        // Cash expenses since the earliest opening, fetched once and split per session in memory
+        const cashExpenseRows = await Expense.find({
+          tenantId: tenantObjectId,
+          paymentMethod: 'cash',
+          date: { $gte: earliestOpening, $lte: sessionEnd },
+        })
+          .select('amount date')
+          .lean();
+
+        const ops: AnyBulkWriteOperation<ICashDrawerSession>[] = [];
+        const closed: Array<{
+          session: (typeof openSessions)[number];
+          cashSales: number;
+          cashExpensesTotal: number;
+          expectedAmount: number;
+          closingAmount: number;
+          shortage: number;
+          overage: number;
+        }> = [];
+
+        for (const [i, session] of openSessions.entries()) {
           try {
             // Calculate expected amount
             const sessionStart = new Date(session.openingTime);
-            const sessionEnd = now;
+            const totals = salesBySession.get(`s${i}`) ?? { salesCents: 0, vatCents: 0, discountCents: 0 };
+            const cashExpensesCents = cashExpenseRows
+              .filter((e) => new Date(e.date) >= sessionStart)
+              .reduce((sum, e) => sum + Math.round((e.amount || 0) * 100), 0);
 
-            // Get cash transactions for this session
-            const cashTransactions = await Transaction.find({
-              tenantId,
-              paymentMethod: 'cash',
-              createdAt: { $gte: sessionStart, $lte: sessionEnd },
-              status: 'completed',
-            }).lean();
+            const cashSales = totals.salesCents / 100;
+            const cashExpensesTotal = cashExpensesCents / 100;
 
-            const cashSales = cashTransactions.reduce((sum, t) => sum + t.total, 0);
-
-            // Get cash expenses for this session
-            const cashExpenses = await Expense.find({
-              tenantId,
-              paymentMethod: 'cash',
-              date: { $gte: sessionStart, $lte: sessionEnd },
-            }).lean();
-
-            const cashExpensesTotal = cashExpenses.reduce((sum, e) => sum + e.amount, 0);
-
-            // Calculate expected amount
-            const expectedAmount = session.openingAmount + cashSales - cashExpensesTotal;
+            // Calculate expected amount (integer cents, like the manual close)
+            const expectedAmount =
+              (Math.round((session.openingAmount || 0) * 100) + totals.salesCents - cashExpensesCents) / 100;
 
             // For auto-closure, we'll set closing amount to expected (no physical count)
             // In production, you might want to flag these for review
@@ -114,19 +213,41 @@ export async function autoCloseCashDrawers(
             const shortage = actualDifference < 0 ? Math.abs(actualDifference) : 0;
             const overage = actualDifference > 0 ? actualDifference : 0;
 
-            // Update session
-            await CashDrawerSession.findByIdAndUpdate(session._id, {
+            const set: Record<string, unknown> = {
               status: 'closed',
               closingTime: sessionEnd,
               closingAmount,
               expectedAmount,
-              shortage: shortage > 0 ? shortage : undefined,
-              overage: overage > 0 ? overage : undefined,
+              totalVAT: totals.vatCents / 100,
+              totalDiscounts: totals.discountCents / 100,
               notes: (session.notes || '') + (session.notes ? '\n' : '') + '[AUTO] Automatically closed at end of business day.',
-            });
+            };
+            if (shortage > 0) set.shortage = shortage;
+            if (overage > 0) set.overage = overage;
 
-            totalProcessed++;
+            // Per-session computed values -> one bulkWrite per tenant. The
+            // status guard avoids clobbering a drawer closed manually meanwhile.
+            ops.push({
+              updateOne: {
+                filter: { _id: session._id, tenantId: tenantObjectId, status: 'open' },
+                update: { $set: set },
+              },
+            } as AnyBulkWriteOperation<ICashDrawerSession>);
+            closed.push({ session, cashSales, cashExpensesTotal, expectedAmount, closingAmount, shortage, overage });
+          } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+            totalFailed++;
+            results.errors?.push(`Session ${session._id}: ${error.message}`);
+          }
+        }
 
+        if (ops.length === 0) continue;
+
+        // Update sessions
+        await CashDrawerSession.bulkWrite(ops, { ordered: false });
+        totalProcessed += closed.length;
+
+        for (const { session, cashSales, cashExpensesTotal, expectedAmount, closingAmount, shortage, overage } of closed) {
+          try {
             // Check for discrepancies (#13 - Cash Drawer Discrepancy Alerts)
             const discrepancyThreshold = {
               shortage: 10, // $10
@@ -247,8 +368,7 @@ This is an automated security alert from your POS system.`,
               }
             }
           } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-            totalFailed++;
-            results.errors?.push(`Session ${session._id}: ${error.message}`);
+            results.errors?.push(`Session ${session._id} notification: ${error.message}`);
           }
         }
       } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any

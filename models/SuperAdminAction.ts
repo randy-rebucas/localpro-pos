@@ -27,7 +27,6 @@ const SuperAdminActionSchema: Schema = new Schema(
     },
     targetType: {
       type: String,
-      index: true,
     },
     targetId: {
       type: String,

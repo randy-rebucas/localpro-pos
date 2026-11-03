@@ -1,12 +1,13 @@
 ﻿'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { ShieldCheck, AlertTriangle, XCircle, CheckCircle, ChevronRight, Clock, Minus } from 'lucide-react';
 import { getDictionaryClient } from '../../dictionaries-client';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 
 type ComplianceStatus = 'compliant' | 'warning' | 'expired' | 'missing' | 'not_applicable';
 
@@ -100,14 +101,21 @@ export default function CompliancePage() {
   const [loading, setLoading] = useState(true);
   const { canAccess } = usePermissions();
   const canView = canAccess('compliance.view');
+  const { ensureSettings } = useTenantSettings();
+  // dict is only needed for the error toast — read it via a ref so the
+  // dictionary loading doesn't re-run (and re-fetch) the whole dashboard.
+  const dictRef = useRef(dict);
+  useEffect(() => { dictRef.current = dict; }, [dict]);
 
   const buildDashboard = useCallback(async () => {
     try {
       // Fetch all compliance data in parallel
-      const [birRes, permitsRes, settingsRes, restaurantRes, retailRes, laundryRes, serviceRes, pharmacyRes] = await Promise.all([
+      // businessType comes from TenantSettingsContext (already loaded by the
+      // layout) rather than another GET /api/tenants/[slug]/settings.
+      const { settings: tenantSettings } = await ensureSettings();
+      const [birRes, permitsRes, restaurantRes, retailRes, laundryRes, serviceRes, pharmacyRes] = await Promise.all([
         fetch(`/api/tenants/${tenant}/bir-settings`),
         fetch(`/api/tenants/${tenant}/business-permits`),
-        fetch(`/api/tenants/${tenant}/settings`),
         fetch(`/api/tenants/${tenant}/restaurant-compliance`),
         fetch(`/api/tenants/${tenant}/retail-compliance`),
         fetch(`/api/tenants/${tenant}/laundry-compliance`),
@@ -115,22 +123,21 @@ export default function CompliancePage() {
         fetch(`/api/tenants/${tenant}/pharmacy-settings`),
       ]);
 
-      const [birJson, permitsJson, settingsJson, restaurantJson, retailJson, laundryJson, serviceJson, pharmacyJson] = await Promise.all([
-        birRes.json(), permitsRes.json(), settingsRes.json(),
+      const [birJson, permitsJson, restaurantJson, retailJson, laundryJson, serviceJson, pharmacyJson] = await Promise.all([
+        birRes.json(), permitsRes.json(),
         restaurantRes.json(), retailRes.json(), laundryRes.json(),
         serviceRes.json(), pharmacyRes.json(),
       ]);
 
       const bir = birJson.success ? birJson.data : {};
       const permits = permitsJson.success ? permitsJson.data : {};
-      const tenantSettings = settingsJson.success ? settingsJson.data : {};
       const restaurant = restaurantJson.success ? restaurantJson.data : {};
       const retail = retailJson.success ? retailJson.data : {};
       const laundry = laundryJson.success ? laundryJson.data : {};
       const service = serviceJson.success ? serviceJson.data : {};
       const pharmacy = pharmacyJson.success ? pharmacyJson.data : {};
 
-      const bType = (tenantSettings.businessType as string) ?? '';
+      const bType = (tenantSettings?.businessType as string) ?? '';
       setBusinessType(bType);
 
       const base = () => `/${tenant}/${lang}/admin`;
@@ -424,11 +431,11 @@ export default function CompliancePage() {
       setOverallStatus(hasCritical ? 'critical' : hasWarning ? 'action_required' : 'compliant');
       setSections(allSections);
     } catch {
-      toast.error(dict?.admin?.failedToLoadComplianceData || 'Failed to load compliance data');
+      toast.error(dictRef.current?.admin?.failedToLoadComplianceData || 'Failed to load compliance data');
     } finally {
       setLoading(false);
     }
-  }, [tenant, lang, dict]);
+  }, [tenant, lang, ensureSettings]);
 
   useEffect(() => { buildDashboard(); }, [buildDashboard]);
 

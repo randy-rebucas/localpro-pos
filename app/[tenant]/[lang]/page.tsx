@@ -505,9 +505,11 @@ export default function Dashboard() {
     [sessionId, cart, appliedDiscount, tenant, settings]
   );
 
-  // Sync cart whenever it changes
+  // Sync cart whenever it changes — debounced so rapid scans / quantity taps
+  // collapse into one session write instead of one per change
   useEffect(() => {
-    syncToCustomerDisplay();
+    const timeoutId = setTimeout(() => syncToCustomerDisplay(), 400);
+    return () => clearTimeout(timeoutId);
   }, [cart, syncToCustomerDisplay]);
 
   // Cleanup abort controller on unmount

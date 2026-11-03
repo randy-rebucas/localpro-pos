@@ -85,9 +85,17 @@ function authAs(tenantId: string, role: string = 'owner', userId: string = 'user
   mockGetCurrentUser.mockResolvedValue({ userId, tenantId, email: 'test@example.com', role });
 }
 
-/** PUT reads the existing tenant via `Tenant.findOne({ slug }).lean()`. */
+/** findOne(...) chain supporting both `.lean()` and `.select(...).lean()`. */
+function findOneChain(value: Record<string, unknown> | null) {
+  return {
+    select: vi.fn().mockReturnValue({ lean: vi.fn().mockResolvedValue(value) }),
+    lean: vi.fn().mockResolvedValue(value),
+  };
+}
+
+/** PUT reads the existing tenant via `Tenant.findOne({ slug }).select(...).lean()`. */
 function mockExistingTenant(tenant: Record<string, unknown> | null) {
-  mockTenantFindOne.mockReturnValue({ lean: vi.fn().mockResolvedValue(tenant) });
+  mockTenantFindOne.mockReturnValue(findOneChain(tenant));
 }
 
 beforeEach(() => {
@@ -101,9 +109,7 @@ beforeEach(() => {
 
 describe('GET /api/tenants/:slug/settings', () => {
   it('returns settings for an existing active tenant', async () => {
-    mockTenantFindOne.mockReturnValue({
-      lean: vi.fn().mockResolvedValue({ _id: TENANT_A_ID, slug: SLUG, settings: { companyName: 'Acme' } }),
-    });
+    mockTenantFindOne.mockReturnValue(findOneChain({ _id: TENANT_A_ID, slug: SLUG, settings: { companyName: 'Acme' } }));
 
     const res = await GET(createRequest(`/api/tenants/${SLUG}/settings`), { params: Promise.resolve({ slug: SLUG }) });
     const { status, body } = await parseResponse(res);
@@ -114,7 +120,7 @@ describe('GET /api/tenants/:slug/settings', () => {
   });
 
   it('404s for a tenant that does not exist or is inactive', async () => {
-    mockTenantFindOne.mockReturnValue({ lean: vi.fn().mockResolvedValue(null) });
+    mockTenantFindOne.mockReturnValue(findOneChain(null));
 
     const res = await GET(createRequest(`/api/tenants/unknown/settings`), { params: Promise.resolve({ slug: 'unknown' }) });
     const { status } = await parseResponse(res);
@@ -188,6 +194,25 @@ describe('PUT /api/tenants/:slug/settings', () => {
       { $set: { 'settings.primaryColor': '#222222' } },
       { new: true, runValidators: true }
     );
+  });
+
+  it('skips the write when every submitted value is unchanged', async () => {
+    authAs(TENANT_A_ID, 'owner');
+    mockExistingTenant({
+      _id: { toString: () => TENANT_A_ID },
+      slug: SLUG,
+      settings: { companyName: 'Same', primaryColor: '#111111' },
+    });
+
+    const res = await PUT(
+      createRequest(`/api/tenants/${SLUG}/settings`, 'PUT', { companyName: 'Same', primaryColor: '#111111' }),
+      { params: Promise.resolve({ slug: SLUG }) }
+    );
+    const { status, body } = await parseResponse(res);
+
+    expect(status).toBe(200);
+    expect(body.data).toEqual({ companyName: 'Same', primaryColor: '#111111' });
+    expect(mockTenantFindOneAndUpdate).not.toHaveBeenCalled();
   });
 
   it('rejects an invalid hex color', async () => {

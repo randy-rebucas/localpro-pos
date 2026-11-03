@@ -1,6 +1,7 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
+import { invalidateUserCache } from '@/lib/cache';
 
 export interface IUser extends Document {
   email: string;
@@ -26,7 +27,6 @@ const UserSchema: Schema = new Schema(
       lowercase: true,
       trim: true,
       match: [/^\S+@\S+\.\S+$/, 'Please provide a valid email'],
-      index: true,
     },
     password: {
       type: String,
@@ -49,7 +49,6 @@ const UserSchema: Schema = new Schema(
       type: String,
       unique: true,
       sparse: true, // Allow null values but enforce uniqueness when present
-      index: true,
     },
     tenantId: {
       type: Schema.Types.ObjectId,
@@ -59,7 +58,6 @@ const UserSchema: Schema = new Schema(
     branchId: {
       type: Schema.Types.ObjectId,
       ref: 'Branch',
-      index: true,
     },
     isActive: {
       type: Boolean,
@@ -109,6 +107,16 @@ UserSchema.index({ tenantId: 1, email: 1 }, { unique: true });
 UserSchema.index({ tenantId: 1, role: 1, isActive: 1 });
 // Index for branch assignment queries
 UserSchema.index({ tenantId: 1, branchId: 1, isActive: 1 });
+
+// getCurrentUser caches each user's active flag/tenant (lib/cache.ts) — drop it
+// on any write so deactivation and tenant moves apply immediately on this instance.
+UserSchema.post('save', function (doc: IUser) {
+  invalidateUserCache(String(doc._id));
+});
+UserSchema.post(
+  ['updateOne', 'updateMany', 'findOneAndUpdate', 'findOneAndDelete', 'deleteOne', 'deleteMany'],
+  () => invalidateUserCache()
+);
 
 const User: Model<IUser> = mongoose.models.User || mongoose.model<IUser>('User', UserSchema);
 

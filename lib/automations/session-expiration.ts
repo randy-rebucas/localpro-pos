@@ -3,10 +3,12 @@
  * Enhanced session management with activity tracking
  */
 
+import mongoose from 'mongoose';
 import connectDB from '@/lib/mongodb';
 import AuditLog from '@/models/AuditLog';
 import User from '@/models/User';
 import Tenant from '@/models/Tenant';
+import { getActiveTenants, type ActiveTenant } from '@/lib/tenant-active-query';
 import { AutomationResult } from './types';
 
 export interface SessionExpirationOptions {
@@ -18,6 +20,10 @@ export interface SessionExpirationOptions {
  * Check for expired sessions based on inactivity
  * Note: This is a simplified implementation using audit logs
  * In production, you might want a dedicated session tracking system
+ *
+ * Read-only: it counts inactive users but cannot revoke JWTs, so it writes nothing.
+ * Per tenant it now runs at most 3 queries (users, recent activity, any-activity
+ * for the inactive remainder) instead of 1 + one AuditLog.findOne per user.
  */
 export async function expireInactiveSessions(
   options: SessionExpirationOptions = {}
@@ -36,13 +42,15 @@ export async function expireInactiveSessions(
     const inactivityHours = options.inactivityHours || 24;
     const cutoffTime = new Date(Date.now() - inactivityHours * 60 * 60 * 1000);
 
-    // Get tenants to process
-    let tenants;
+    // Get tenants to process (no tenant settings are needed)
+    let tenants: ActiveTenant[];
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).lean();
+      const tenant = await Tenant.findById(options.tenantId)
+        .select('_id slug name')
+        .lean<ActiveTenant>();
       tenants = tenant ? [tenant] : [];
     } else {
-      tenants = await Tenant.find({ status: 'active' }).lean();
+      tenants = await getActiveTenants();
     }
 
     if (tenants.length === 0) {
@@ -55,38 +63,56 @@ export async function expireInactiveSessions(
 
     for (const tenant of tenants) {
       try {
-        const tenantId = tenant._id.toString();
+        const tenantObjectId = new mongoose.Types.ObjectId(String(tenant._id));
 
         // Get all active users
-        const users = await User.find({ tenantId, isActive: true }).lean();
+        const users = await User.find({ tenantId: tenantObjectId, isActive: true })
+          .select('_id lastLogin')
+          .lean();
+        if (users.length === 0) continue;
 
-        for (const user of users) {
-          try {
-            // Get last activity from audit logs
-            const lastActivity = await AuditLog.findOne({
-              tenantId,
-              userId: user._id,
+        const userIds = users.map((u) => u._id);
+
+        // Users with any audit activity since the cutoff — they are not expired.
+        // Bounded to the inactivity window, served by { tenantId, userId, createdAt }.
+        const recentlyActive = new Set(
+          (
+            await AuditLog.distinct('userId', {
+              tenantId: tenantObjectId,
+              userId: { $in: userIds },
+              createdAt: { $gte: cutoffTime },
             })
-              .sort({ createdAt: -1 })
-              .lean();
+          ).map((id) => String(id))
+        );
 
-            if (!lastActivity) {
-              // No activity logged, check lastLogin
-              if (user.lastLogin && new Date(user.lastLogin) < cutoffTime) {
-                // User has been inactive, but we can't invalidate JWT tokens
-                // This would require a token blacklist or session store
-                // For now, we'll just log it
-                totalExpired++;
-              }
-              continue;
-            }
+        const inactive = users.filter((u) => !recentlyActive.has(u._id.toString()));
+        if (inactive.length === 0) continue;
 
-            // Check if last activity is before cutoff
-            if (new Date(lastActivity.createdAt) < cutoffTime) {
-              // Session expired due to inactivity
-              // Note: JWT tokens can't be invalidated server-side without a blacklist
-              // This automation would work better with a session store or token blacklist
-              // For now, we'll track it in results
+        // Previously: a user whose last audit entry is older than the cutoff is
+        // expired; a user with no audit entry at all falls back to lastLogin.
+        // Only users that lack a stale lastLogin need the "any activity ever" check.
+        const needsHistoryCheck = inactive.filter(
+          (u) => !(u.lastLogin && new Date(u.lastLogin) < cutoffTime)
+        );
+        const hasAnyActivity = needsHistoryCheck.length
+          ? new Set(
+              (
+                await AuditLog.distinct('userId', {
+                  tenantId: tenantObjectId,
+                  userId: { $in: needsHistoryCheck.map((u) => u._id) },
+                })
+              ).map((id) => String(id))
+            )
+          : new Set<string>();
+
+        for (const user of inactive) {
+          try {
+            const staleLogin = !!user.lastLogin && new Date(user.lastLogin) < cutoffTime;
+            // Session expired due to inactivity
+            // Note: JWT tokens can't be invalidated server-side without a blacklist
+            // This automation would work better with a session store or token blacklist
+            // For now, we'll track it in results
+            if (staleLogin || hasAnyActivity.has(user._id.toString())) {
               totalExpired++;
             }
           } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any

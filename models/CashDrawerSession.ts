@@ -29,7 +29,6 @@ const CashDrawerSessionSchema: Schema = new Schema(
       type: Schema.Types.ObjectId,
       ref: 'User',
       required: [true, 'User ID is required'],
-      index: true,
     },
     openingAmount: {
       type: Number,
@@ -56,7 +55,6 @@ const CashDrawerSessionSchema: Schema = new Schema(
       type: Date,
       required: true,
       default: Date.now,
-      index: true,
     },
     closingTime: {
       type: Date,
@@ -88,6 +86,7 @@ const CashDrawerSessionSchema: Schema = new Schema(
 
 // Indexes for efficient queries
 CashDrawerSessionSchema.index({ tenantId: 1, openingTime: -1 });
+CashDrawerSessionSchema.index({ tenantId: 1, userId: 1, status: 1 });
 // Enforce only one open session per tenant; this partial unique index also serves as the
 // general { tenantId, status } query index — no separate plain index needed.
 CashDrawerSessionSchema.index(

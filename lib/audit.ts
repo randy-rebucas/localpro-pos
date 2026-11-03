@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import connectDB from './mongodb';
 import AuditLog from '@/models/AuditLog';
 import { getCurrentUser, verifyToken } from './auth';
+import { getTenantId } from './tenant';
 import { logger } from '@/lib/logger';
 
 export interface AuditLogData {
@@ -70,10 +71,9 @@ export async function createAuditLog(
       // Skip API routes - they don't have tenant slugs in the path
       if (pathname.startsWith('/api/')) {
         // For API routes without tenant info, try to find default tenant
-        const Tenant = (await import('@/models/Tenant')).default;
-        const defaultTenant = await Tenant.findOne({ slug: 'default' }).lean();
-        if (defaultTenant) {
-          tenantId = defaultTenant._id;
+        const defaultTenantId = await getTenantId('default');
+        if (defaultTenantId) {
+          tenantId = defaultTenantId;
         } else {
           // Can't create audit log without tenant
           console.warn('Cannot create audit log: no tenant available for API route:', pathname);
@@ -85,10 +85,9 @@ export async function createAuditLog(
         const tenantSlug = tenantMatch ? tenantMatch[1] : 'default';
         
         // Convert slug to ObjectId
-        const Tenant = (await import('@/models/Tenant')).default;
-        const tenant = await Tenant.findOne({ slug: tenantSlug }).lean();
-        if (tenant) {
-          tenantId = tenant._id;
+        const slugTenantId = await getTenantId(tenantSlug);
+        if (slugTenantId) {
+          tenantId = slugTenantId;
         } else {
           console.warn('Cannot create audit log: tenant not found for slug:', tenantSlug);
           return;
@@ -103,10 +102,9 @@ export async function createAuditLog(
         tenantId = new mongoose.Types.ObjectId(tenantId);
       } else {
         // It's a slug, need to look up the tenant
-        const Tenant = (await import('@/models/Tenant')).default;
-        const tenant = await Tenant.findOne({ slug: tenantId }).lean();
-        if (tenant) {
-          tenantId = tenant._id;
+        const slugTenantId = await getTenantId(tenantId);
+        if (slugTenantId) {
+          tenantId = new mongoose.Types.ObjectId(slugTenantId);
         } else {
           console.warn('Cannot create audit log: tenant not found for slug:', tenantId);
           return;

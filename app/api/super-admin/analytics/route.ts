@@ -53,27 +53,38 @@ export async function GET(request: NextRequest) {
     ]);
 
     // ── Transaction stats ─────────────────────────────────────────────────
-    const [txLast30, txLast90, txTotal, txInRange, txPrevRange] = await Promise.all([
-      Transaction.countDocuments({ status: 'completed', createdAt: { $gte: thirtyDaysAgo } }),
-      Transaction.countDocuments({ status: 'completed', createdAt: { $gte: ninetyDaysAgo } }),
-      Transaction.countDocuments({ status: 'completed' }),
-      Transaction.countDocuments({ status: 'completed', createdAt: { $gte: rangeStart, $lte: rangeEnd } }),
-      Transaction.countDocuments({ status: 'completed', createdAt: { $gte: prevStart, $lte: prevEnd } }),
-    ]);
-
     // ── Revenue in custom range + previous period for MoM ────────────────
-    const [revenueAgg, revenuePrevAgg] = await Promise.all([
-      Transaction.aggregate([
-        { $match: { status: 'completed', createdAt: { $gte: rangeStart, $lte: rangeEnd } } },
-        { $group: { _id: null, total: { $sum: '$total' } } },
-      ]),
-      Transaction.aggregate([
-        { $match: { status: 'completed', createdAt: { $gte: prevStart, $lte: prevEnd } } },
-        { $group: { _id: null, total: { $sum: '$total' } } },
-      ]),
+    // These span every tenant, so no tenant-prefixed index applies — compute all
+    // counts and revenue sums in one pass over completed transactions instead of
+    // seven separate scans.
+    const inRange = (from: Date, to?: Date) => ({
+      $cond: [{ $and: [{ $gte: ['$createdAt', from] }, ...(to ? [{ $lte: ['$createdAt', to] }] : [])] }, 1, 0],
+    });
+    const [txStats] = await Transaction.aggregate<{
+      txLast30: number; txLast90: number; txTotal: number; txInRange: number; txPrevRange: number;
+      revenueInRange: number; revenuePrevRange: number;
+    }>([
+      { $match: { status: 'completed' } },
+      {
+        $group: {
+          _id: null,
+          txLast30: { $sum: inRange(thirtyDaysAgo) },
+          txLast90: { $sum: inRange(ninetyDaysAgo) },
+          txTotal: { $sum: 1 },
+          txInRange: { $sum: inRange(rangeStart, rangeEnd) },
+          txPrevRange: { $sum: inRange(prevStart, prevEnd) },
+          revenueInRange: { $sum: { $multiply: [inRange(rangeStart, rangeEnd), '$total'] } },
+          revenuePrevRange: { $sum: { $multiply: [inRange(prevStart, prevEnd), '$total'] } },
+        },
+      },
     ]);
-    const revenueLastMonth = revenueAgg[0]?.total || 0;
-    const revenuePrevPeriod = revenuePrevAgg[0]?.total || 0;
+    const txLast30 = txStats?.txLast30 ?? 0;
+    const txLast90 = txStats?.txLast90 ?? 0;
+    const txTotal = txStats?.txTotal ?? 0;
+    const txInRange = txStats?.txInRange ?? 0;
+    const txPrevRange = txStats?.txPrevRange ?? 0;
+    const revenueLastMonth = txStats?.revenueInRange || 0;
+    const revenuePrevPeriod = txStats?.revenuePrevRange || 0;
     const revenueChange = revenuePrevPeriod > 0
       ? ((revenueLastMonth - revenuePrevPeriod) / revenuePrevPeriod) * 100
       : null;

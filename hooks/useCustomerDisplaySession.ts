@@ -36,9 +36,9 @@ export interface SessionError {
 }
 
 const POLLING_CONFIG = {
-  BASE_INTERVAL_MS: 1000,
+  BASE_INTERVAL_MS: 2000, // each poll is a DB read — 2s keeps the display responsive at half the cost
   BACKOFF_INCREMENT_MS: 100,
-  MAX_INTERVAL_MS: 5000,
+  MAX_INTERVAL_MS: 10000,
   RETRY_LIMIT: 10,
 } as const;
 

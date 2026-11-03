@@ -2,9 +2,10 @@ import { NextRequest } from 'next/server';
 import jwt from 'jsonwebtoken';
 import connectDB from './mongodb';
 import User from '@/models/User';
-import Tenant from '@/models/Tenant';
 import { isTokenRevoked, isTokenIssuedBeforeRevocation } from '@/lib/token-blacklist';
 import { logger } from '@/lib/logger';
+import { cacheWrap, CacheKeys, TTL } from '@/lib/cache';
+import { getTenantAuthInfo } from '@/lib/tenant';
 
 export interface JWTPayload {
   userId: string;
@@ -47,16 +48,42 @@ export function verifyToken(token: string): JWTPayload | null {
   }
 }
 
-/**
- * Get user from request (from JWT token or session)
- */
-export async function getCurrentUser(request: NextRequest): Promise<{
+type CurrentUser = {
   userId: string;
   tenantId: string;
   email: string;
   role: string;
   impersonatedBy?: string;
-} | null> {
+};
+
+// Many routes resolve the user more than once per request (requireAuth, then
+// getTenantIdFromRequest / createAuditLog). Memoize per request object so the
+// checks below run once.
+const requestUserMemo = new WeakMap<object, Promise<CurrentUser | null>>();
+
+/**
+ * Get user from request (from JWT token or session)
+ */
+export function getCurrentUser(request: NextRequest): Promise<CurrentUser | null> {
+  const memo = requestUserMemo.get(request);
+  if (memo) return memo;
+  const promise = resolveCurrentUser(request);
+  requestUserMemo.set(request, promise);
+  return promise;
+}
+
+type UserAuthInfo = { isActive: boolean; tenantId: string | null };
+
+function getUserAuthInfo(userId: string): Promise<UserAuthInfo | null> {
+  return cacheWrap(CacheKeys.userAuth(userId), TTL.DEFAULT, async () => {
+    await connectDB();
+    const user = await User.findById(userId).select('isActive tenantId').lean();
+    if (!user) return null;
+    return { isActive: !!user.isActive, tenantId: user.tenantId ? user.tenantId.toString() : null };
+  });
+}
+
+async function resolveCurrentUser(request: NextRequest): Promise<CurrentUser | null> {
   try {
     // An active impersonation session takes priority over the admin's own
     // session cookie — see proxy.ts for why they're kept as separate cookies.
@@ -84,9 +111,8 @@ export async function getCurrentUser(request: NextRequest): Promise<{
       return null;
     }
 
-    // Verify user still exists and is active
-    await connectDB();
-    const user = await User.findById(payload.userId).select('isActive tenantId').lean();
+    // Verify user still exists and is active (cached 60s, invalidated on user writes)
+    const user = await getUserAuthInfo(payload.userId);
 
     if (!user || !user.isActive) {
       return null;
@@ -94,14 +120,14 @@ export async function getCurrentUser(request: NextRequest): Promise<{
 
     // Guard against missing tenantId before string comparison
     // super_admin users have no tenantId — skip this check
-    if (payload.role !== 'super_admin' && user.tenantId && user.tenantId.toString() !== payload.tenantId) {
+    if (payload.role !== 'super_admin' && user.tenantId && user.tenantId !== payload.tenantId) {
       return null;
     }
 
     // Deactivated tenants (e.g. suspended for non-payment) lose access even with a
     // still-valid token — login blocks new sessions, this blocks existing ones.
     if (payload.role !== 'super_admin' && user.tenantId) {
-      const tenant = await Tenant.findById(user.tenantId).select('isActive').lean();
+      const tenant = await getTenantAuthInfo(user.tenantId);
       if (!tenant || !tenant.isActive) {
         return null;
       }

@@ -8,13 +8,25 @@ import Attendance from '@/models/Attendance';
 import Tenant from '@/models/Tenant';
 import User from '@/models/User'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { sendEmail } from '@/lib/notifications';
-import { getTenantSettingsById } from '@/lib/tenant';
+import type { ITenantSettings } from '@/models/Tenant';
+import { getActiveTenants, type ActiveTenant } from '@/lib/tenant-active-query';
+import { getTenantDayBoundaries, DEFAULT_TENANT_TIMEZONE } from '@/lib/timezone';
 import { AutomationResult } from './types';
 
 export interface AttendanceViolationOptions {
   tenantId?: string;
   lateThresholdMinutes?: number; // Minutes late to trigger alert (default: 15)
+  /**
+   * Look-back window for clock-ins, in hours (default: 24, matching the daily
+   * `0 9 * * *` schedule in vercel.json). Attendance has no "alert sent" flag,
+   * so each clock-in is only examined by the one daily run whose window
+   * contains it — at most one alert per late arrival.
+   */
+  windowHours?: number;
 }
+
+const TENANT_FIELDS =
+  'settings.attendanceNotifications settings.emailNotifications settings.email settings.companyName settings.timezone';
 
 /**
  * Detect and alert on attendance violations
@@ -34,16 +46,19 @@ export async function detectAttendanceViolations(
 
   try {
     const lateThresholdMinutes = options.lateThresholdMinutes || 15;
+    const windowHours = options.windowHours || 24;
     const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const windowStart = new Date(now.getTime() - windowHours * 60 * 60 * 1000);
 
     // Get tenants to process
-    let tenants;
+    let tenants: ActiveTenant[];
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).lean();
+      const tenant = await Tenant.findById(options.tenantId)
+        .select(`_id slug name ${TENANT_FIELDS}`)
+        .lean<ActiveTenant>();
       tenants = tenant ? [tenant] : [];
     } else {
-      tenants = await Tenant.find({ status: 'active' }).lean();
+      tenants = await getActiveTenants(TENANT_FIELDS);
     }
 
     if (tenants.length === 0) {
@@ -56,8 +71,8 @@ export async function detectAttendanceViolations(
 
     for (const tenant of tenants) {
       try {
-        const tenantId = tenant._id.toString();
-        const tenantSettings = await getTenantSettingsById(tenantId);
+        const tenantSettings = (tenant.settings ?? null) as ITenantSettings | null;
+        const timezone = tenantSettings?.timezone || DEFAULT_TENANT_TIMEZONE;
 
         // Skip if attendance notifications disabled
         if (!tenantSettings?.attendanceNotifications?.enabled) {
@@ -71,17 +86,21 @@ export async function detectAttendanceViolations(
         }
 
         const [expectedHour, expectedMinute] = expectedStartTime.split(':').map(Number);
-        const expectedStart = new Date(today);
-        expectedStart.setHours(expectedHour, expectedMinute || 0, 0, 0);
+        const expectedOffsetMs = ((expectedHour || 0) * 60 + (expectedMinute || 0)) * 60 * 1000;
+        // Expected start on the clock-in's calendar day, in the tenant's timezone
+        const expectedStartFor = (clockIn: Date) =>
+          new Date(getTenantDayBoundaries(clockIn, timezone).start.getTime() + expectedOffsetMs);
+        const fmtTime = (d: Date) => d.toLocaleTimeString('en-US', { timeZone: timezone });
 
-        // Find attendance records for today
+        // Find attendance records clocked in during this run's window
         const todayAttendance = await Attendance.find({
-          tenantId,
+          tenantId: tenant._id,
           clockIn: {
-            $gte: today,
-            $lt: new Date(today.getTime() + 24 * 60 * 60 * 1000),
+            $gte: windowStart,
+            $lt: now,
           },
         })
+          .select('userId clockIn')
           .populate('userId', 'name email')
           .lean();
 
@@ -89,6 +108,7 @@ export async function detectAttendanceViolations(
         for (const attendance of todayAttendance) {
           try {
             const clockInTime = new Date(attendance.clockIn);
+            const expectedStart = expectedStartFor(clockInTime);
             const minutesLate = (clockInTime.getTime() - expectedStart.getTime()) / (1000 * 60);
 
             if (minutesLate > lateThresholdMinutes) {
@@ -106,8 +126,8 @@ export async function detectAttendanceViolations(
 
 Employee: ${user.name || 'Unknown'}
 Email: ${user.email || 'N/A'}
-Expected Start Time: ${expectedStart.toLocaleTimeString()}
-Actual Clock-In Time: ${clockInTime.toLocaleTimeString()}
+Expected Start Time: ${fmtTime(expectedStart)}
+Actual Clock-In Time: ${fmtTime(clockInTime)}
 Minutes Late: ${Math.round(minutesLate)}
 
 Please review this attendance record.

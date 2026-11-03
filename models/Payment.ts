@@ -55,7 +55,6 @@ const PaymentSchema: Schema = new Schema(
       type: Schema.Types.ObjectId,
       ref: 'Transaction',
       required: [true, 'Transaction ID is required'],
-      index: true,
     },
     method: {
       type: String,
@@ -78,7 +77,6 @@ const PaymentSchema: Schema = new Schema(
     processedBy: {
       type: Schema.Types.ObjectId,
       ref: 'User',
-      index: true,
     },
     processedAt: {
       type: Date,
@@ -101,13 +99,12 @@ const PaymentSchema: Schema = new Schema(
 );
 
 // Compound indexes for efficient queries
+PaymentSchema.index({ tenantId: 1, createdAt: -1 });
 PaymentSchema.index({ tenantId: 1, transactionId: 1 });
 PaymentSchema.index({ tenantId: 1, status: 1, createdAt: -1 });
 PaymentSchema.index({ tenantId: 1, method: 1, createdAt: -1 });
 // Supports GET /api/payments when both status and method filters are applied together
 PaymentSchema.index({ tenantId: 1, status: 1, method: 1, createdAt: -1 });
-PaymentSchema.index({ processedBy: 1, createdAt: -1 });
-PaymentSchema.index({ tenantId: 1, isActive: 1 });
 
 const Payment: Model<IPayment> = mongoose.models.Payment || mongoose.model<IPayment>('Payment', PaymentSchema);
 

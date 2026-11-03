@@ -8,7 +8,8 @@ import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth, getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
-import { updateStock } from '@/lib/stock';
+import { updateStock, insertStockMovements, STOCK_SNAPSHOT_FIELDS, StockMovementInput, StockProductSnapshot } from '@/lib/stock';
+import { SubscriptionService } from '@/lib/subscription';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
@@ -156,10 +157,20 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         );
         refundTransaction = createdRefund;
 
-        // Restore stock for refunded items (only if product tracks inventory)
+        // Restore stock for refunded items (only if product tracks inventory).
+        // One batched product read (reused as updateStock snapshots) and one
+        // movement insert, instead of two reads + an insert per item.
+        const refundProductsQuery = Product.find({
+          _id: { $in: refundItems.map((i: { productId: string }) => i.productId) },
+          tenantId,
+        })
+          .select(STOCK_SNAPSHOT_FIELDS)
+          .lean<Array<StockProductSnapshot & { _id: { toString(): string } }>>();
+        if (session) refundProductsQuery.session(session);
+        const refundProducts = new Map((await refundProductsQuery).map((p) => [p._id.toString(), p]));
+        const refundMovements: StockMovementInput[] = [];
         for (const refundItem of refundItems) {
-          const productQuery = Product.findOne({ _id: refundItem.productId, tenantId });
-          const product = session ? await productQuery.session(session) : await productQuery;
+          const product = refundProducts.get(String(refundItem.productId));
           if (product && product.trackInventory !== false) {
             await updateStock(
               refundItem.productId,
@@ -170,11 +181,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 transactionId: refundTransaction._id.toString(),
                 reason: reason || 'Transaction refund',
                 notes: notes,
+                product,
+                movements: refundMovements,
               },
               session
             );
           }
         }
+        await insertStockMovements(refundMovements, session);
 
         // Create Payment refund record if original payment exists
         const originalPaymentQuery = Payment.findOne({
@@ -292,6 +306,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         );
       }
     }
+
+    // Refunds are Transaction documents and count toward the monthly limit, as before
+    await SubscriptionService.trackTransactionCreated(String(tenantId));
 
     await createAuditLog(request, {
       tenantId,

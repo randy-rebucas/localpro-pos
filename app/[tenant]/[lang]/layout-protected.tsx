@@ -6,53 +6,47 @@ import { TenantSettingsProvider } from '@/contexts/TenantSettingsContext';
 import { SubscriptionProvider } from '@/contexts/SubscriptionContext';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import TenantAccessGuard from '@/components/TenantAccessGuard';
+import type { ITenantSettings } from '@/types/tenant';
 
 /**
  * This component protects all routes except login
  * For settings page, we also check for admin/manager role
  * Also includes tenant access guard to prevent cross-tenant access
+ *
+ * The provider tree is kept structurally identical across pathnames
+ * (ErrorBoundary > TenantSettingsProvider > ...) so client-side navigation
+ * between login, /settings and other pages doesn't remount the providers and
+ * refetch their data.
  */
-export default function ProtectedLayout({ children }: { children: React.ReactNode }) {
+export default function ProtectedLayout({
+  children,
+  initialSettings,
+}: {
+  children: React.ReactNode;
+  initialSettings?: Partial<ITenantSettings> | null;
+}) {
   const pathname = usePathname();
   const isLoginPage = pathname?.includes('/login');
   const isForbiddenPage = pathname?.includes('/forbidden');
   const isSettingsPage = pathname?.includes('/settings');
 
-  // Don't protect the login or forbidden pages
-  if (isLoginPage || isForbiddenPage) {
-    return (
-      <ErrorBoundary>
-        <TenantSettingsProvider>{children}</TenantSettingsProvider>
-      </ErrorBoundary>
-    );
-  }
-
-  // Settings page requires admin/manager role
-  if (isSettingsPage) {
-    return (
-      <ErrorBoundary>
-        <SubscriptionProvider>
-          <TenantSettingsProvider>
-            <TenantAccessGuard>
-              <ProtectedRoute requiredRoles={['admin', 'manager']}>{children}</ProtectedRoute>
-            </TenantAccessGuard>
-          </TenantSettingsProvider>
-        </SubscriptionProvider>
-      </ErrorBoundary>
-    );
-  }
-
-  // Protect all other routes (require authentication + tenant access check)
   return (
     <ErrorBoundary>
-      <SubscriptionProvider>
-        <TenantSettingsProvider>
-          <TenantAccessGuard>
-            <ProtectedRoute>{children}</ProtectedRoute>
-          </TenantAccessGuard>
-        </TenantSettingsProvider>
-      </SubscriptionProvider>
+      <TenantSettingsProvider initialSettings={initialSettings}>
+        {isLoginPage || isForbiddenPage ? (
+          // Don't protect the login or forbidden pages
+          children
+        ) : (
+          <SubscriptionProvider>
+            <TenantAccessGuard>
+              {/* Settings page requires admin/manager role */}
+              <ProtectedRoute requiredRoles={isSettingsPage ? ['admin', 'manager'] : undefined}>
+                {children}
+              </ProtectedRoute>
+            </TenantAccessGuard>
+          </SubscriptionProvider>
+        )}
+      </TenantSettingsProvider>
     </ErrorBoundary>
   );
 }
-

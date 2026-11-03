@@ -4,7 +4,7 @@ import connectDB from '@/lib/mongodb';
 import Product from '@/models/Product';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
-import { updateStock } from '@/lib/stock';
+import { updateStock, insertStockMovements, STOCK_SNAPSHOT_FIELDS, StockMovementInput, StockProductSnapshot } from '@/lib/stock';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
@@ -93,21 +93,36 @@ export async function POST(request: NextRequest) {
     const results: Array<{ productId: string; newStock: number }> = [];
     const failed: Array<{ productId: string; error: string }> = [...validationErrors];
 
+    // One batched read for all products, one conditional $inc each, and one
+    // insert for all stock movements (new stock is taken from the movement).
+    const snapshots = await Product.find({ _id: { $in: validItems.map((i) => i.productId) }, tenantId })
+      .select(STOCK_SNAPSHOT_FIELDS)
+      .lean<Array<StockProductSnapshot & { _id: mongoose.Types.ObjectId }>>();
+    const snapshotById = new Map(snapshots.map((p) => [String(p._id), p]));
+    const movements: StockMovementInput[] = [];
+
     for (const item of validItems) {
       try {
+        const product = snapshotById.get(item.productId);
+        if (!product) throw new Error('Product not found');
+        const before = movements.length;
         await updateStock(item.productId, tenantId, item.quantity, 'purchase', {
           userId,
           reason: reason || 'Bulk restock',
           notes,
+          product,
+          movements,
         });
-        const product = await Product.findOne({ _id: item.productId, tenantId }).select('stock').lean();
-        results.push({ productId: item.productId, newStock: product?.stock ?? 0 });
+        // No movement means the product doesn't track inventory — stock unchanged
+        const newStock = movements.length > before ? movements[movements.length - 1].newStock : product.stock ?? 0;
+        results.push({ productId: item.productId, newStock });
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'Failed to restock';
         failed.push({ productId: item.productId, error: message });
         logger.error(`Bulk restock failed for product ${item.productId}:`, err);
       }
     }
+    await insertStockMovements(movements);
 
     if (results.length > 0) {
       await createAuditLog(request, {

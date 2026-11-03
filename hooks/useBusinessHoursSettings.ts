@@ -1,40 +1,21 @@
 import { useCallback, useState } from 'react';
 import type { ITenantSettings } from '@/types/tenant';
+import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 
 export function useBusinessHoursSettings(tenantId: string) {
-  const [settings, setSettings] = useState<ITenantSettings | null>(null);
+  // Read from TenantSettingsContext (already loaded by the layout) instead of a
+  // separate GET; saves still PUT and then merge into the shared context.
+  const { settings, ensureSettings, applySettings } = useTenantSettings();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchSettings = useCallback(async () => {
     setLoading(true);
     setError(null);
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 20000);
-
-    try {
-      const res = await globalThis.fetch(`/api/tenants/${tenantId}/settings`, {
-        credentials: 'include',
-        signal: controller.signal,
-      });
-
-      const data = await res.json();
-
-      if (data.success) {
-        setSettings(data.data || null);
-      } else {
-        const errorMsg = data.error || 'Failed to fetch settings';
-        setError(errorMsg);
-      }
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to fetch settings';
-      setError(errorMsg);
-    } finally {
-      clearTimeout(timeout);
-      setLoading(false);
-    }
-  }, [tenantId]);
+    const result = await ensureSettings();
+    if (result.error) setError(result.error);
+    setLoading(false);
+  }, [ensureSettings]);
 
   const updateSettings = useCallback(
     async (updates: Partial<ITenantSettings>, onSuccess?: () => void, onError?: (error: string) => void) => {
@@ -55,7 +36,7 @@ export function useBusinessHoursSettings(tenantId: string) {
         const data = await res.json();
 
         if (data.success) {
-          setSettings((prev) => (prev ? { ...prev, ...updates } : null));
+          applySettings({ ...updates, ...(data.data || {}) });
           onSuccess?.();
         } else {
           const errorMsg = data.error || 'Failed to update settings';
@@ -70,8 +51,8 @@ export function useBusinessHoursSettings(tenantId: string) {
         clearTimeout(timeout);
       }
     },
-    [tenantId]
+    [tenantId, applySettings]
   );
 
-  return { settings, loading, error, fetchSettings, updateSettings };
+  return { settings: loading ? null : settings, loading, error, fetchSettings, updateSettings };
 }

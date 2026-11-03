@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
     await requireRole(request, ['super_admin']);
 
     const [totalTenants, activeTenants, totalUsers] = await Promise.all([
-      Tenant.countDocuments(),
+      Tenant.estimatedDocumentCount(), // metadata only — no collection scan
       Tenant.countDocuments({ isActive: true }),
       User.countDocuments({ role: { $ne: 'super_admin' } }),
     ]);

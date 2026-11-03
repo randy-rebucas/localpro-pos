@@ -63,13 +63,17 @@ export async function GET(request: NextRequest) {
       return { ...p, daysUntilExpiry, status };
     };
 
-    await createAuditLog(request, {
-      tenantId: user.tenantId,
-      userId: user.userId,
-      action: AuditActions.EXPIRY_REPORT_VIEW,
-      entityType: 'expiry_report',
-      metadata: { alertDays },
-    });
+    // The admin dashboard widget loads this on every visit — only log views of
+    // the report itself, not the widget's background fetch
+    if (request.nextUrl.searchParams.get('source') !== 'dashboard') {
+      await createAuditLog(request, {
+        tenantId: user.tenantId,
+        userId: user.userId,
+        action: AuditActions.EXPIRY_REPORT_VIEW,
+        entityType: 'expiry_report',
+        metadata: { alertDays },
+      });
+    }
 
     return NextResponse.json({
       success: true,

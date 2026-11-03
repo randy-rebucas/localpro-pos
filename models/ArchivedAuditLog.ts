@@ -32,12 +32,10 @@ const ArchivedAuditLogSchema: Schema = new Schema(
     action: {
       type: String,
       required: [true, 'Action is required'],
-      index: true,
     },
     entityType: {
       type: String,
       required: [true, 'Entity type is required'],
-      index: true,
     },
     entityId: {
       type: String,
@@ -58,7 +56,6 @@ const ArchivedAuditLogSchema: Schema = new Schema(
       type: Date,
       required: true,
       default: Date.now,
-      index: true,
     },
     // Preserve original createdAt from AuditLog (not auto-generated)
     createdAt: {
@@ -72,9 +69,8 @@ const ArchivedAuditLogSchema: Schema = new Schema(
   }
 );
 
+// Write-mostly cold storage: keep a single index to minimise insert cost
 ArchivedAuditLogSchema.index({ tenantId: 1, createdAt: -1 });
-ArchivedAuditLogSchema.index({ tenantId: 1, entityType: 1, entityId: 1 });
-ArchivedAuditLogSchema.index({ tenantId: 1, archivedAt: -1 });
 
 const ArchivedAuditLog: Model<IArchivedAuditLog> =
   mongoose.models.ArchivedAuditLog ||

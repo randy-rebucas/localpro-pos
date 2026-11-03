@@ -64,12 +64,20 @@ export default async function RootLayout({
   
   // Ensure lang is always valid
   const validLang = (tenantLang === 'en' || tenantLang === 'es') ? tenantLang : 'en';
+
+  // Seed the client TenantSettingsProvider with the settings we already have
+  // (same cached lookup GET /api/tenants/[slug]/settings serves), so it doesn't
+  // refetch them on mount. JSON round-trip strips ObjectIds/Dates so the value
+  // can cross the server/client boundary — matching what the API would return.
+  const initialSettings = tenant?.settings
+    ? JSON.parse(JSON.stringify(tenant.settings))
+    : null;
   
   // Use a client component to set the lang attribute to avoid hydration mismatch
   return (
     <>
       <LangSetter lang={validLang} />
-      <ProtectedLayout>
+      <ProtectedLayout initialSettings={initialSettings}>
         {children}
       </ProtectedLayout>
     </>

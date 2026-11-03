@@ -1,7 +1,9 @@
 import { useState, useCallback } from 'react';
 import { ITenantSettings } from '@/types/tenant';
+import { pickChangedSettings, useTenantSettings } from '@/contexts/TenantSettingsContext';
 
 export function useBrandingSave(tenant: string) {
+  const { settings: contextSettings, applySettings } = useTenantSettings();
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -25,7 +27,8 @@ export function useBrandingSave(tenant: string) {
         },
         credentials: 'include',
         signal: controller.signal,
-        body: JSON.stringify({ settings }),
+        // Only the keys this page changed (the route merges server-side)
+        body: JSON.stringify({ settings: pickChangedSettings(settings, contextSettings) }),
       });
 
       if (!res.ok) {
@@ -40,6 +43,8 @@ export function useBrandingSave(tenant: string) {
 
       const data = await res.json();
       if (data.success) {
+        // Keep the shared context (and the branding it applies) in sync
+        applySettings(data.data);
         const successMsg = 'Advanced branding settings saved successfully!';
         setMessage({ type: 'success', text: successMsg });
         onSuccess?.();
@@ -60,7 +65,7 @@ export function useBrandingSave(tenant: string) {
       clearTimeout(timeoutId);
       setSaving(false);
     }
-  }, [tenant]);
+  }, [tenant, contextSettings, applySettings]);
 
   return {
     saving,

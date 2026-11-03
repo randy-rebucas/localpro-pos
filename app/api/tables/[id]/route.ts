@@ -101,7 +101,7 @@ export async function PATCH(
       }
     }
 
-    const oldData = table.toObject();
+    const oldData = table.toObject() as unknown as Record<string, unknown>;
 
     if (name !== undefined) table.name = name;
     if (capacity !== undefined) table.capacity = capacity;
@@ -109,14 +109,26 @@ export async function PATCH(
     if (isActive !== undefined) table.isActive = isActive;
     if (currentOrderId !== undefined) table.currentOrderId = currentOrderId || undefined;
 
+    // The POS re-sends status on every table select — skip the write and the
+    // audit log when nothing actually changed
+    const changedPaths = table.modifiedPaths();
+    if (changedPaths.length === 0) {
+      return NextResponse.json({ success: true, data: table });
+    }
+
     await table.save();
 
+    const newData = table.toObject() as unknown as Record<string, unknown>;
     await createAuditLog(request, {
       tenantId,
       action: AuditActions.UPDATE,
       entityType: 'table',
       entityId: table._id.toString(),
-      changes: { before: oldData, after: table.toObject() },
+      // Only the changed fields, not both full documents
+      changes: {
+        before: Object.fromEntries(changedPaths.map((p) => [p, oldData[p]])),
+        after: Object.fromEntries(changedPaths.map((p) => [p, newData[p]])),
+      },
     });
 
     return NextResponse.json({ success: true, data: table });

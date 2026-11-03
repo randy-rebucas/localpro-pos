@@ -9,7 +9,7 @@ import { hasTenantPermission } from '@/lib/permissions-server';
 import { handleApiError } from '@/lib/error-handler';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
-import { updateStock } from '@/lib/stock';
+import { updateStock, insertStockMovements, STOCK_SNAPSHOT_FIELDS, StockMovementInput, StockProductSnapshot } from '@/lib/stock';
 
 export async function POST(
   request: NextRequest,
@@ -76,13 +76,24 @@ export async function POST(
     }
 
     // Load tenant to check PDEA license for dangerous drugs
-    const tenant = await Tenant.findOne({ _id: user.tenantId }).lean();
+    const tenant = await Tenant.findOne({ _id: user.tenantId }).select('settings.pharmacyCompliance.pdeaLicense').lean();
+
+    // One batched product read — reused for validation and as updateStock snapshots
+    const dispenseProductIds = itemIndexes
+      .map((idx) => prescription.items[idx].productId)
+      .filter(Boolean);
+    const dispenseProducts = new Map(
+      (await Product.find({ _id: { $in: dispenseProductIds }, tenantId: user.tenantId })
+        .select(`drugSchedule ${STOCK_SNAPSHOT_FIELDS}`)
+        .lean())
+        .map((p) => [String(p._id), p])
+    );
 
     // Validate per-item requirements
     for (const idx of itemIndexes) {
       const item = prescription.items[idx];
       if (item.productId) {
-        const product = await Product.findOne({ _id: item.productId, tenantId: user.tenantId }).lean();
+        const product = dispenseProducts.get(String(item.productId));
         if (!product) {
           return NextResponse.json(
             { success: false, error: `Product not found for item: ${item.drugName}` },
@@ -98,7 +109,7 @@ export async function POST(
             );
           }
         }
-        if (product.trackInventory && !product.allowOutOfStockSales && product.stock < item.quantity) {
+        if (product.trackInventory && !product.allowOutOfStockSales && (product.stock ?? 0) < item.quantity) {
           return NextResponse.json(
             { success: false, error: `Insufficient stock for ${item.drugName}` },
             { status: 409 }
@@ -111,6 +122,7 @@ export async function POST(
     const session = await mongoose.startSession();
     await session.withTransaction(async () => {
       const now = new Date();
+      const movements: StockMovementInput[] = [];
       for (const idx of itemIndexes) {
         const item = prescription.items[idx];
         if (item.productId) {
@@ -123,6 +135,8 @@ export async function POST(
               userId: user.userId,
               reason: 'Prescription dispense',
               notes: `Prescription ${id}, item: ${item.drugName}`,
+              product: dispenseProducts.get(String(item.productId)) as StockProductSnapshot | undefined,
+              movements,
             },
             session
           );
@@ -131,6 +145,8 @@ export async function POST(
         prescription.items[idx].dispensedAt = now;
         prescription.items[idx].dispensedBy = new mongoose.Types.ObjectId(user.userId);
       }
+
+      await insertStockMovements(movements, session);
 
       const allDispensed = prescription.items.every(i => i.dispensed);
       prescription.status = allDispensed ? 'dispensed' : 'partially_dispensed';

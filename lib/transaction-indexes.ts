@@ -8,14 +8,37 @@ const LEGACY_RECEIPT_INDEX = 'receiptNumber_1';
 const CHANNEL_SYNC_INDEX = 'tenantId_1_channelSyncKey_1';
 const IDEMPOTENCY_INDEX = 'tenantId_1_idempotencyKey_1';
 
+const MIGRATION_ID = 'transaction-indexes-v2';
+
 /**
  * Reconcile transaction indexes:
  * - Drop legacy global unique receiptNumber_1
  * - Replace sparse channelSyncKey index (null dupes) with partial-filter unique
  * - syncIndexes() for current schema definitions
+ *
+ * Not run at connect time (the cleanup scans the whole collection) — called from
+ * scripts/sync-indexes.ts and scripts/fix-transaction-receipt-index.ts.
  */
 export async function ensureTransactionIndexes(): Promise<void> {
   if (indexesEnsured || mongoose.connection.readyState !== 1) {
+    return;
+  }
+
+  await reconcileLegacyTransactionIndexes();
+  await Transaction.syncIndexes();
+  indexesEnsured = true;
+}
+
+/**
+ * One-time cleanup of legacy transaction data/indexes. Recorded in the
+ * `app_migrations` collection so the full-collection updateMany scans run once.
+ * Pass `force` to run it again regardless of the marker.
+ */
+export async function reconcileLegacyTransactionIndexes(force = false): Promise<void> {
+  const db = mongoose.connection.db;
+  if (!db) return;
+  const migrations = db.collection<{ _id: string; appliedAt: Date }>('app_migrations');
+  if (!force && await migrations.findOne({ _id: MIGRATION_ID })) {
     return;
   }
 
@@ -69,8 +92,11 @@ export async function ensureTransactionIndexes(): Promise<void> {
     );
   }
 
-  await Transaction.syncIndexes();
-  indexesEnsured = true;
+  await migrations.updateOne(
+    { _id: MIGRATION_ID },
+    { $set: { appliedAt: new Date() } },
+    { upsert: true }
+  );
 }
 
 /** @deprecated Use ensureTransactionIndexes */

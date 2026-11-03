@@ -55,7 +55,6 @@ const BookingSchema: Schema = new Schema(
     startTime: {
       type: Date,
       required: [true, 'Start time is required'],
-      index: true,
     },
     endTime: {
       type: Date,
@@ -74,7 +73,6 @@ const BookingSchema: Schema = new Schema(
     staffId: {
       type: Schema.Types.ObjectId,
       ref: 'User',
-      index: true,
     },
     staffName: {
       type: String,
@@ -105,9 +103,11 @@ const BookingSchema: Schema = new Schema(
 // Compound indexes for efficient queries
 BookingSchema.index({ tenantId: 1, startTime: 1 });
 BookingSchema.index({ tenantId: 1, staffId: 1, startTime: 1 });
-BookingSchema.index({ startTime: 1, endTime: 1 }); // For conflict detection
-// Covers both status filtering and date-sorted queries; replaces the simpler { tenantId, status } index
-BookingSchema.index({ tenantId: 1, status: 1, createdAt: -1 });
+// Status-filtered schedule queries (conflict detection, reminders, no-show detection)
+BookingSchema.index({ tenantId: 1, status: 1, startTime: 1 });
+// Customer booking history (email lookup sorted by most recent; phone for $or matches)
+BookingSchema.index({ tenantId: 1, customerEmail: 1, startTime: -1 });
+BookingSchema.index({ tenantId: 1, customerPhone: 1 });
 
 // Virtual to check if booking is in the past
 BookingSchema.virtual('isPast').get(function(this: IBooking) {

@@ -22,13 +22,11 @@ const ProductChannelListingSchema = new Schema(
       type: Schema.Types.ObjectId,
       ref: 'Tenant',
       required: true,
-      index: true,
     },
     productId: {
       type: Schema.Types.ObjectId,
       ref: 'Product',
       required: true,
-      index: true,
     },
     provider: {
       type: String,

@@ -68,7 +68,13 @@ async function connectDB(): Promise<typeof mongoose> {
       connectTimeoutMS: 10000,
       socketTimeoutMS: 45000,
       maxPoolSize: 10,
-      minPoolSize: 2,
+      // Serverless instances come and go — don't hold idle sockets open
+      minPoolSize: 0,
+      // Building indexes on every cold start re-sends ~150 createIndex commands.
+      // Indexes are built by `pnpm db:sync-indexes`. Auto-indexing is opt-in
+      // (local `next dev`, or MONGOOSE_AUTO_INDEX=true) so scripts and tests that
+      // run without NODE_ENV never build indexes on whatever DB they point at.
+      autoIndex: process.env.NODE_ENV === 'development' || process.env.MONGOOSE_AUTO_INDEX === 'true',
     };
 
     registerConnectionEvents();
@@ -79,12 +85,9 @@ async function connectDB(): Promise<typeof mongoose> {
         try {
           const conn = await mongoose.connect(MONGODB_URI, opts);
           logger.info('MongoDB connected');
-          try {
-            const { ensureTransactionIndexes } = await import('@/lib/transaction-indexes');
-            await ensureTransactionIndexes();
-          } catch (indexErr) {
-            logger.warn('Transaction index reconciliation skipped or failed', indexErr as Record<string, unknown>);
-          }
+          // Index reconciliation (incl. the transaction-index cleanup) is not run
+          // here — it scanned the transactions collection on every cold start.
+          // See scripts/sync-indexes.ts.
           return conn;
         } catch (e) {
           lastError = e;

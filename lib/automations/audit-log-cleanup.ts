@@ -1,38 +1,44 @@
 /**
- * Automatic Audit Log Cleanup
- * Archive expired audit logs to ArchivedAuditLog, then delete from the live collection.
+ * Automatic Audit Log Archiving
+ * Moves audit logs older than the retention window (default 90 days) from the
+ * live AuditLog collection to ArchivedAuditLog. AuditLog has no TTL index —
+ * this job is what keeps the live collection small, so it runs daily.
  * When archive=false, logs are deleted directly without archiving.
  */
 
 import connectDB from '@/lib/mongodb';
 import AuditLog from '@/models/AuditLog';
 import ArchivedAuditLog from '@/models/ArchivedAuditLog';
-import Tenant from '@/models/Tenant';
 import { AutomationResult } from './types';
 
 export interface AuditLogCleanupOptions {
   tenantId?: string;
-  retentionYears?: number; // Years to keep logs in the live collection (default: 2)
+  retentionDays?: number; // Days to keep logs in the live collection (default: 90)
+  /** @deprecated use retentionDays */
+  retentionYears?: number;
   archive?: boolean; // Copy to ArchivedAuditLog before deleting (default: true)
-  batchSize?: number; // Documents to process per tenant per run (default: 500)
+  batchSize?: number; // Documents moved per batch (default: 1000)
+  maxBatches?: number; // Batches per run, bounds a single invocation (default: 50)
 }
 
 /**
- * Clean up old audit logs based on retention policy.
- * When archive=true (default), expired logs are copied to the archived_audit_logs
- * collection before being removed from the live audit_logs collection.
+ * Archive (or delete) audit logs older than the retention window.
+ * Runs globally across tenants — one indexed range scan on createdAt instead of
+ * a query per tenant. Each batch reads only `_id`s; the documents are copied
+ * server-side with $merge, so they never travel to the app.
  */
 export async function cleanupAuditLogs(
   options: AuditLogCleanupOptions = {}
 ): Promise<AutomationResult> {
   await connectDB();
 
-  const retentionYears = options.retentionYears ?? 2;
+  const retentionDays = options.retentionDays
+    ?? (options.retentionYears != null ? options.retentionYears * 365 : 90);
   const archive = options.archive ?? true;
-  const batchSize = options.batchSize ?? 500;
+  const batchSize = options.batchSize ?? 1000;
+  const maxBatches = options.maxBatches ?? 50;
 
-  const cutoffDate = new Date();
-  cutoffDate.setFullYear(cutoffDate.getFullYear() - retentionYears);
+  const cutoffDate = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
 
   const results: AutomationResult = {
     success: true,
@@ -42,66 +48,44 @@ export async function cleanupAuditLogs(
     errors: [],
   };
 
+  const match: Record<string, unknown> = { createdAt: { $lt: cutoffDate } };
+  if (options.tenantId) match.tenantId = options.tenantId;
+
   try {
-    // Get tenants to process
-    let tenants: { _id: { toString(): string }; name?: string }[];
-    if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).select('_id name').lean();
-      tenants = tenant ? [tenant] : [];
-    } else {
-      tenants = await Tenant.find({ status: 'active' }).select('_id name').lean();
-    }
+    for (let batch = 0; batch < maxBatches; batch++) {
+      const ids = (await AuditLog.find(match).select('_id').sort({ createdAt: 1 }).limit(batchSize).lean())
+        .map((l) => l._id);
+      if (ids.length === 0) break;
 
-    for (const tenant of tenants) {
-      const tenantId = tenant._id.toString();
-
-      try {
-        const expiredLogs = await AuditLog.find({
-          tenantId,
-          createdAt: { $lt: cutoffDate },
-        })
-          .limit(batchSize)
-          .lean();
-
-        if (expiredLogs.length === 0) continue;
-
-        if (archive) {
-          // Build archive documents, preserving the original createdAt
-          const archiveDocs = expiredLogs.map(log => ({
-            tenantId: log.tenantId,
-            userId: log.userId,
-            action: log.action,
-            entityType: log.entityType,
-            entityId: log.entityId,
-            changes: log.changes,
-            ipAddress: log.ipAddress,
-            userAgent: log.userAgent,
-            metadata: log.metadata,
-            createdAt: log.createdAt,
-            archivedAt: new Date(),
-          }));
-
-          // Insert archive batch (ordered:false continues on partial failures)
-          await ArchivedAuditLog.insertMany(archiveDocs, { ordered: false });
-        }
-
-        // Delete the expired logs from the live collection
-        const ids = expiredLogs.map(l => l._id);
-        const deleteResult = await AuditLog.deleteMany({ _id: { $in: ids } });
-        results.processed += deleteResult.deletedCount ?? 0;
-      } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : String(error);
-        results.failed++;
-        results.errors?.push(`Tenant ${tenant.name ?? tenantId}: ${message}`);
+      if (archive) {
+        // Keeps the original _id, so a retried batch doesn't duplicate archive rows
+        await AuditLog.aggregate([
+          { $match: { _id: { $in: ids } } },
+          { $set: { archivedAt: '$$NOW' } },
+          {
+            $merge: {
+              into: ArchivedAuditLog.collection.collectionName,
+              on: '_id',
+              whenMatched: 'keepExisting',
+              whenNotMatched: 'insert',
+            },
+          },
+        ]);
       }
+
+      const deleteResult = await AuditLog.deleteMany({ _id: { $in: ids } });
+      results.processed += deleteResult.deletedCount ?? 0;
+
+      if (ids.length < batchSize) break;
     }
 
-    const action = archive ? 'Archived and deleted' : 'Deleted';
-    results.message = `${action} ${results.processed} audit log(s)${results.failed > 0 ? `, ${results.failed} tenant(s) failed` : ''}`;
+    const action = archive ? 'Archived' : 'Deleted';
+    results.message = `${action} ${results.processed} audit log(s) older than ${retentionDays} days`;
     return results;
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     results.success = false;
+    results.failed++;
     results.message = `Error cleaning up audit logs: ${message}`;
     results.errors?.push(message);
     return results;

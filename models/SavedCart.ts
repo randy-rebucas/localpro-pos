@@ -89,7 +89,6 @@ const SavedCartSchema: Schema = new Schema(
       type: Schema.Types.ObjectId,
       ref: 'User',
       required: true,
-      index: true,
     },
     isActive: {
       type: Boolean,
@@ -103,7 +102,12 @@ const SavedCartSchema: Schema = new Schema(
 
 // Indexes for efficient queries
 SavedCartSchema.index({ tenantId: 1, userId: 1, createdAt: -1 });
-SavedCartSchema.index({ tenantId: 1, name: 1 });
+// Purge soft-deleted (isActive: false) carts 90 days after their last update.
+// Active carts are never touched by this TTL.
+SavedCartSchema.index(
+  { updatedAt: 1 },
+  { expireAfterSeconds: 7776000, partialFilterExpression: { isActive: false } }
+);
 
 const SavedCart: Model<ISavedCart> = mongoose.models.SavedCart || mongoose.model<ISavedCart>('SavedCart', SavedCartSchema);
 

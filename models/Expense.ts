@@ -41,7 +41,6 @@ const ExpenseSchema: Schema = new Schema(
       type: Date,
       required: [true, 'Date is required'],
       default: Date.now,
-      index: true,
     },
     paymentMethod: {
       type: String,
@@ -60,7 +59,6 @@ const ExpenseSchema: Schema = new Schema(
       type: Schema.Types.ObjectId,
       ref: 'User',
       required: true,
-      index: true,
     },
     isActive: {
       type: Boolean,
@@ -75,7 +73,6 @@ const ExpenseSchema: Schema = new Schema(
 // Indexes for efficient queries
 ExpenseSchema.index({ tenantId: 1, date: -1 });
 ExpenseSchema.index({ tenantId: 1, name: 1 });
-ExpenseSchema.index({ tenantId: 1, isActive: 1 });
 
 const Expense: Model<IExpense> = mongoose.models.Expense || mongoose.model<IExpense>('Expense', ExpenseSchema);
 

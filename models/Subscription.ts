@@ -1,4 +1,5 @@
-import mongoose, { Schema, Document, Model } from 'mongoose';
+import mongoose, { Schema, Document, Model, Query } from 'mongoose';
+import { invalidateSubscriptionCache } from '@/lib/cache';
 
 export type SubscriptionStatus = 'active' | 'inactive' | 'cancelled' | 'suspended' | 'trial' | 'paused';
 export type BillingCycle = 'monthly' | 'yearly';
@@ -67,7 +68,6 @@ const SubscriptionSchema: Schema = new Schema(
       type: Schema.Types.ObjectId,
       ref: 'SubscriptionPlan',
       required: [true, 'Plan ID is required'],
-      index: true,
     },
     status: {
       type: String,
@@ -235,9 +235,10 @@ SubscriptionSchema.index({ tenantId: 1 }, { unique: true }); // One subscription
 SubscriptionSchema.index({ status: 1 }); // super-admin cross-tenant analytics (active/trial MRR)
 // Compound index for plan usage reporting
 SubscriptionSchema.index({ planId: 1, status: 1 });
-// Compound index for expiry automation (finding subscriptions due for billing)
-SubscriptionSchema.index({ tenantId: 1, status: 1, nextBillingDate: 1 });
-SubscriptionSchema.index({ tenantId: 1, isActive: 1 });
+// Cross-tenant billing/expiry automation (finding subscriptions due for billing).
+// A tenantId prefix is pointless here: { tenantId } is unique, so it already
+// pins a single document.
+SubscriptionSchema.index({ status: 1, nextBillingDate: 1 });
 
 // Virtual for checking if subscription is expired
 SubscriptionSchema.virtual('isExpired').get(function() {
@@ -292,6 +293,30 @@ SubscriptionSchema.methods.checkLimits = function(usage: {
 
   return { exceeded: true, limits: ['subscription_inactive'] };
 };
+
+// SubscriptionService.getSubscriptionStatus is cached (lib/cache.ts) — drop it on
+// writes. Usage-counter updates (one per sale) are skipped: a usage figure up to
+// 60s stale is fine for limit checks, and flushing on every sale would defeat the cache.
+function touchesOnlyUsage(update: unknown): boolean {
+  if (!update || typeof update !== 'object') return false;
+  const keys: string[] = [];
+  for (const [k, v] of Object.entries(update as Record<string, unknown>)) {
+    if (k.startsWith('$') && v && typeof v === 'object') keys.push(...Object.keys(v));
+    else keys.push(k);
+  }
+  // timestamps: true adds $set.updatedAt to every update — not a real change
+  const real = keys.filter((k) => k !== 'updatedAt' && k !== 'createdAt');
+  return real.length > 0 && real.every((k) => k.startsWith('usage.'));
+}
+
+SubscriptionSchema.post('save', (doc: ISubscription) => invalidateSubscriptionCache(String(doc.tenantId)));
+SubscriptionSchema.post(
+  ['updateOne', 'updateMany', 'findOneAndUpdate', 'findOneAndDelete', 'deleteOne', 'deleteMany'],
+  function (this: Query<unknown, ISubscription>) {
+    if (touchesOnlyUsage(this.getUpdate?.())) return;
+    invalidateSubscriptionCache();
+  }
+);
 
 const Subscription: Model<ISubscription> = mongoose.models.Subscription ||
   mongoose.model<ISubscription>('Subscription', SubscriptionSchema);

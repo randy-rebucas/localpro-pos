@@ -168,12 +168,12 @@ export async function POST(request: NextRequest) {
           paymentMethod: 'cash',
           createdAt: { $gte: openSession.openingTime, $lte: sessionEnd },
           status: 'completed',
-        }).lean(),
+        }).select('total taxAmount discountAmount').lean(),
         Expense.find({
           tenantId,
           paymentMethod: 'cash',
           date: { $gte: openSession.openingTime, $lte: sessionEnd },
-        }).lean(),
+        }).select('amount').lean(),
       ]);
 
       // Use integer math (cents) to avoid floating point errors

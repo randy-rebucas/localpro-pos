@@ -7,6 +7,7 @@ import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkFeatureAccess } from '@/lib/subscription';
 import { ensureLegalDiscounts } from '@/lib/discount-seeds';
+import { cacheWrap, CacheKeys, TTL } from '@/lib/cache';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
 
@@ -21,8 +22,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
     }
 
-    // Auto-seed legal discounts (SC20, PWD20) for this tenant
-    await ensureLegalDiscounts(tenantId);
+    // Auto-seed legal discounts (SC20, PWD20) for this tenant — the upserts run at
+    // most once per hour per instance instead of on every GET (POS refetches often)
+    await cacheWrap(CacheKeys.tenantLegalDiscounts(String(tenantId)), TTL.LONG * 12, async () => {
+      await ensureLegalDiscounts(tenantId);
+      return true;
+    });
 
     const searchParams = request.nextUrl.searchParams;
     const code = searchParams.get('code');
@@ -40,7 +45,7 @@ export async function GET(request: NextRequest) {
       query.validUntil = { $gte: new Date() };
     }
 
-    const discounts = await Discount.find(query).sort({ createdAt: -1 });
+    const discounts = await Discount.find(query).sort({ createdAt: -1 }).lean();
 
     return NextResponse.json({ success: true, data: discounts });
   } catch (error) {

@@ -149,7 +149,6 @@ const OfflineTransactionSchema: Schema = new Schema(
       type: String,
       enum: ['pending', 'processing', 'synced', 'failed'],
       default: 'pending',
-      index: true,
     },
     syncedTransactionId: {
       type: Schema.Types.ObjectId,
@@ -176,6 +175,12 @@ const OfflineTransactionSchema: Schema = new Schema(
 OfflineTransactionSchema.index({ tenantId: 1, syncStatus: 1 });
 OfflineTransactionSchema.index({ tenantId: 1, deviceId: 1, offlineCreatedAt: -1 });
 OfflineTransactionSchema.index({ tenantId: 1, createdAt: -1 });
+// Purge successfully synced offline records 30 days after sync (updatedAt is
+// bumped when syncStatus flips to 'synced'). Pending/failed rows are kept.
+OfflineTransactionSchema.index(
+  { updatedAt: 1 },
+  { expireAfterSeconds: 2592000, partialFilterExpression: { syncStatus: 'synced' } }
+);
 
 const OfflineTransaction: Model<IOfflineTransaction> =
   mongoose.models.OfflineTransaction ||

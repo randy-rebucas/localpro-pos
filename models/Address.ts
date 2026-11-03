@@ -21,7 +21,6 @@ const AddressSchema: Schema = new Schema(
       type: Schema.Types.ObjectId,
       ref: 'User',
       required: [true, 'User is required'],
-      index: true,
     },
     tenantId: {
       type: Schema.Types.ObjectId,

@@ -17,30 +17,58 @@ export interface StockUpdateOptions {
     color?: string;
     type?: string;
   };
+  /** Product already loaded by the caller (lean, incl. STOCK_SNAPSHOT_FIELDS) — skips a read. */
+  product?: StockProductSnapshot;
+  /** When provided, movements are pushed here instead of inserted; call insertStockMovements(). */
+  movements?: StockMovementInput[];
+}
+
+export interface StockMovementInput {
+  productId: string;
+  tenantId: string;
+  branchId?: string;
+  variation?: { size?: string; color?: string; type?: string };
+  type: 'sale' | 'purchase' | 'adjustment' | 'return' | 'damage' | 'transfer';
+  quantity: number;
+  previousStock: number;
+  newStock: number;
+  reason?: string;
+  transactionId?: string;
+  userId?: string;
+  notes?: string;
+}
+
+/** Fields stock logic needs from a Product */
+export const STOCK_SNAPSHOT_FIELDS =
+  'trackInventory allowOutOfStockSales hasVariations stock variations branchStock';
+
+export interface StockProductSnapshot {
+  _id?: unknown;
+  trackInventory?: boolean;
+  allowOutOfStockSales?: boolean;
+  hasVariations?: boolean;
+  stock?: number;
+  variations?: Array<{ _id?: unknown; size?: string; color?: string; type?: string; stock?: number }>;
+  branchStock?: Array<{ branchId: { toString(): string }; stock: number }>;
+}
+
+type VariationOption = { size?: string; color?: string; type?: string };
+
+function matchesVariation(v: VariationOption, option: VariationOption): boolean {
+  const matchSize = !option.size || v.size === option.size;
+  const matchColor = !option.color || v.color === option.color;
+  const matchType = !option.type || v.type === option.type;
+  return matchSize && matchColor && matchType;
 }
 
 /**
- * Get current stock for a product, considering branch and variation
+ * Current stock of an already-loaded product, considering branch and variation.
+ * Pure — use this when the product is in hand instead of getProductStock().
  */
-export async function getProductStock(
-  productId: string,
-  tenantId: string,
-  options: {
-    branchId?: string;
-    variation?: {
-      size?: string;
-      color?: string;
-      type?: string;
-    };
-  } = {}
-): Promise<number> {
-  await connectDB();
-
-  const product = await Product.findOne({ _id: productId, tenantId });
-  if (!product) {
-    throw new Error('Product not found');
-  }
-
+export function computeProductStock(
+  product: StockProductSnapshot,
+  options: { branchId?: string; variation?: VariationOption } = {}
+): number {
   // If product doesn't track inventory, return a high number
   if (!product.trackInventory) {
     return 999999;
@@ -48,21 +76,9 @@ export async function getProductStock(
 
   // If product has variations, check variation stock
   if (product.hasVariations && options.variation && product.variations) {
-    const variationOption = options.variation;
-    const variation = product.variations.find((v) => {
-      const matchSize = !variationOption.size || v.size === variationOption.size;
-      const matchColor = !variationOption.color || v.color === variationOption.color;
-      const matchType = !variationOption.type || v.type === variationOption.type;
-      return matchSize && matchColor && matchType;
-    });
-
+    const variation = product.variations.find((v) => matchesVariation(v, options.variation!));
     if (variation && variation.stock !== undefined) {
-      // If branch-specific stock is requested
-      if (options.branchId && product.branchStock) {
-        // For variations with branches, we'd need to extend the model
-        // For now, return variation stock
-        return variation.stock;
-      }
+      // Variation stock is not tracked per branch
       return variation.stock;
     }
     return 0;
@@ -84,6 +100,29 @@ export async function getProductStock(
 }
 
 /**
+ * Get current stock for a product, considering branch and variation
+ */
+export async function getProductStock(
+  productId: string,
+  tenantId: string,
+  options: {
+    branchId?: string;
+    variation?: VariationOption;
+  } = {}
+): Promise<number> {
+  await connectDB();
+
+  const product = await Product.findOne({ _id: productId, tenantId })
+    .select(STOCK_SNAPSHOT_FIELDS)
+    .lean<StockProductSnapshot>();
+  if (!product) {
+    throw new Error('Product not found');
+  }
+
+  return computeProductStock(product, options);
+}
+
+/**
  * Update product stock and create stock movement record
  * Supports variations, branches, and bundles
  */
@@ -97,9 +136,17 @@ export async function updateStock(
 ): Promise<void> {
   await connectDB();
 
-  const query = Product.findOne({ _id: productId, tenantId });
-  if (session) query.session(session);
-  const product = await query;
+  // The snapshot only decides *which* stock field to change (master / variation /
+  // branch) — the change itself is an atomic conditional $inc, so a snapshot read
+  // earlier in the request (e.g. checkout's product batch) is safe to reuse.
+  let product = options.product;
+  if (!product) {
+    const query = Product.findOne({ _id: productId, tenantId })
+      .select(STOCK_SNAPSHOT_FIELDS)
+      .lean<StockProductSnapshot>();
+    if (session) query.session(session);
+    product = (await query) ?? undefined;
+  }
   if (!product) {
     throw new Error('Product not found');
   }
@@ -110,104 +157,101 @@ export async function updateStock(
     return;
   }
 
-  let previousStock: number;
-  let newStock: number;
-  let updateField: string = 'stock';
+  // Refuse to go negative unless the product allows out-of-stock sales
+  // (same rule the Product pre-validate hook enforces on save)
+  const stockGuard = quantity < 0 && product.allowOutOfStockSales !== true ? { $gte: -quantity } : undefined;
+
+  let filter: Record<string, unknown>;
+  let update: Record<string, unknown>;
+  let readNewStock: (doc: StockProductSnapshot) => number;
+  // True when the filter depends on the snapshot's shape (branch entry absent),
+  // so a miss may mean "stale snapshot" rather than "insufficient stock"
+  let usedSnapshotSensitiveFilter = false;
+  let insufficientMessage: (available: number) => string;
 
   // Handle variations
   if (product.hasVariations && options.variation && product.variations) {
-    const variationIndex = product.variations.findIndex((v) => {
-      const matchSize = !options.variation?.size || v.size === options.variation.size;
-      const matchColor = !options.variation?.color || v.color === options.variation.color;
-      const matchType = !options.variation?.type || v.type === options.variation.type;
-      return matchSize && matchColor && matchType;
-    });
-
-    if (variationIndex === -1) {
+    const variation = product.variations.find((v) => matchesVariation(v, options.variation!));
+    if (!variation) {
       throw new Error('Product variation not found');
     }
-
-    previousStock = product.variations[variationIndex].stock || 0;
-    newStock = previousStock + quantity;
-
-    // Only check for negative stock if product doesn't allow out-of-stock sales
-    if (newStock < 0 && !product.allowOutOfStockSales) {
-      throw new Error(
-        `Insufficient stock for variation. Available: ${previousStock}, Requested: ${Math.abs(quantity)}`
-      );
-    }
-
-    product.variations[variationIndex].stock = newStock;
-    updateField = `variations.${variationIndex}.stock`;
+    const variationId = String(variation._id);
+    filter = {
+      _id: productId,
+      tenantId,
+      variations: { $elemMatch: { _id: variation._id, ...(stockGuard ? { stock: stockGuard } : {}) } },
+    };
+    update = { $inc: { 'variations.$.stock': quantity } };
+    readNewStock = (doc) => doc.variations?.find((v) => String(v._id) === variationId)?.stock ?? 0;
+    insufficientMessage = (available) =>
+      `Insufficient stock for variation. Available: ${available}, Requested: ${Math.abs(quantity)}`;
   }
   // Handle branch-specific stock
   else if (options.branchId && product.branchStock) {
-    const branchStockIndex = product.branchStock.findIndex(
-      (bs) => bs.branchId.toString() === options.branchId
-    );
+    const branchId = options.branchId;
+    const hasBranchEntry = product.branchStock.some((bs) => bs.branchId.toString() === branchId);
 
-    if (branchStockIndex === -1) {
-      // Create new branch stock entry
-      product.branchStock.push({
-        branchId: options.branchId as any, // eslint-disable-line @typescript-eslint/no-explicit-any
-        stock: quantity,
-      });
-      previousStock = 0;
-      newStock = quantity;
-    } else {
-      previousStock = product.branchStock[branchStockIndex].stock;
-      newStock = previousStock + quantity;
-
-      // Only check for negative stock if product doesn't allow out-of-stock sales
-      if (newStock < 0 && !product.allowOutOfStockSales) {
-        throw new Error(
-          `Insufficient stock at branch. Available: ${previousStock}, Requested: ${Math.abs(quantity)}`
-        );
+    if (!hasBranchEntry) {
+      // A new entry would start below zero — the pre-validate hook used to reject this on save
+      if (stockGuard) {
+        throw new Error(`Insufficient stock at branch. Available: 0, Requested: ${Math.abs(quantity)}`);
       }
-
-      product.branchStock[branchStockIndex].stock = newStock;
+      // Create new branch stock entry (filter fails if another request created it meanwhile)
+      usedSnapshotSensitiveFilter = true;
+      filter = { _id: productId, tenantId, 'branchStock.branchId': { $ne: branchId } };
+      update = { $push: { branchStock: { branchId, stock: quantity } } };
+    } else {
+      filter = {
+        _id: productId,
+        tenantId,
+        branchStock: { $elemMatch: { branchId, ...(stockGuard ? { stock: stockGuard } : {}) } },
+      };
+      update = { $inc: { 'branchStock.$.stock': quantity } };
     }
-    updateField = `branchStock.${branchStockIndex}.stock`; // eslint-disable-line @typescript-eslint/no-unused-vars
+    readNewStock = (doc) => doc.branchStock?.find((bs) => bs.branchId.toString() === branchId)?.stock ?? 0;
+    insufficientMessage = (available) =>
+      `Insufficient stock at branch. Available: ${available}, Requested: ${Math.abs(quantity)}`;
   }
   // Handle master stock
   else {
-    previousStock = product.stock || 0;
-    newStock = previousStock + quantity;
+    filter = { _id: productId, tenantId, ...(stockGuard ? { stock: stockGuard } : {}) };
+    update = { $inc: { stock: quantity } };
+    readNewStock = (doc) => doc.stock || 0;
+    insufficientMessage = (available) =>
+      `Insufficient stock. Available: ${available}, Requested: ${Math.abs(quantity)}`;
+  }
 
-    // Only check for negative stock if product doesn't allow out-of-stock sales
-    if (newStock < 0 && !product.allowOutOfStockSales) {
-      throw new Error(
-        `Insufficient stock. Available: ${previousStock}, Requested: ${Math.abs(quantity)}`
-      );
+  const updated = await Product.findOneAndUpdate(filter, update, {
+    new: true,
+    projection: { stock: 1, 'variations._id': 1, 'variations.stock': 1, branchStock: 1 },
+    ...(session ? { session } : {}),
+  }).lean<StockProductSnapshot>();
+
+  if (!updated) {
+    // The stock guard (or the branch-entry check) didn't match — re-read to explain why
+    const freshQuery = Product.findOne({ _id: productId, tenantId })
+      .select(STOCK_SNAPSHOT_FIELDS)
+      .lean<StockProductSnapshot>();
+    if (session) freshQuery.session(session);
+    const fresh = await freshQuery;
+    if (!fresh) {
+      throw new Error('Product not found');
     }
-
-    product.stock = newStock;
-  }
-
-  // Mark nested arrays as modified if needed
-  if (product.isModified('variations')) {
-    product.markModified('variations');
-  }
-  if (product.isModified('branchStock')) {
-    product.markModified('branchStock');
-  }
-
-  try {
-    await product.save(session ? { session } : {});
-  } catch (err: unknown) {
-    if (err instanceof Error && err.name === 'VersionError') {
-      throw new Error(
-        `Stock for product ${productId} was updated by another request at the same time. Please retry.`
-      );
+    if (usedSnapshotSensitiveFilter) {
+      // The branch entry was created meanwhile — retry once with the fresh product
+      return updateStock(productId, tenantId, quantity, type, { ...options, product: fresh }, session);
     }
-    throw err;
+    throw new Error(insufficientMessage(computeProductStock(fresh, options)));
   }
+
+  const newStock = readNewStock(updated);
+  const previousStock = newStock - quantity;
 
   // Log the update for debugging
   logger.info(`Stock updated: Product ${productId}, ${previousStock} -> ${newStock} (${quantity > 0 ? '+' : ''}${quantity})`);
 
   // Create stock movement record
-  const movementData = {
+  const movementData: StockMovementInput = {
     productId,
     tenantId,
     branchId: options.branchId,
@@ -221,11 +265,25 @@ export async function updateStock(
     userId: options.userId,
     notes: options.notes,
   };
-  if (session) {
+  if (options.movements) {
+    // Caller batches the inserts (see insertStockMovements)
+    options.movements.push(movementData);
+  } else if (session) {
     await StockMovement.create([movementData], { session });
   } else {
     await StockMovement.create(movementData);
   }
+}
+
+/**
+ * Insert stock movements collected via `options.movements` in a single write.
+ */
+export async function insertStockMovements(
+  movements: StockMovementInput[],
+  session?: mongoose.ClientSession
+): Promise<void> {
+  if (movements.length === 0) return;
+  await StockMovement.insertMany(movements, session ? { session } : {});
 }
 
 /**
@@ -237,13 +295,27 @@ export async function updateBundleStock(
   quantity: number,
   type: 'sale' | 'purchase' | 'adjustment' | 'return' | 'damage' | 'transfer',
   options: StockUpdateOptions = {},
-  session?: mongoose.ClientSession
+  session?: mongoose.ClientSession,
+  /** Bundle and its products already loaded by the caller — skips the reads */
+  preloaded?: {
+    bundle?: {
+      name: string;
+      trackInventory?: boolean;
+      items: Array<{ productId: { toString(): string }; quantity: number; variation?: VariationOption }>;
+    };
+    products?: Map<string, StockProductSnapshot>;
+  }
 ): Promise<void> {
   await connectDB();
 
-  const bundleQuery = ProductBundle.findOne({ _id: bundleId, tenantId });
-  if (session) bundleQuery.session(session);
-  const bundle = await bundleQuery;
+  let bundle = preloaded?.bundle;
+  if (!bundle) {
+    const bundleQuery = ProductBundle.findOne({ _id: bundleId, tenantId })
+      .select('name trackInventory items')
+      .lean();
+    if (session) bundleQuery.session(session);
+    bundle = (await bundleQuery) ?? undefined;
+  }
   if (!bundle) {
     throw new Error('Bundle not found');
   }
@@ -262,6 +334,7 @@ export async function updateBundleStock(
       type,
       {
         ...options,
+        product: preloaded?.products?.get(item.productId.toString()),
         variation: item.variation,
         reason: options.reason || `Bundle ${type}: ${bundle.name}`,
         notes: options.notes || `Part of bundle: ${bundle.name}`,
@@ -347,11 +420,29 @@ export async function getLowStockProducts(
 ): Promise<any[]> { // eslint-disable-line @typescript-eslint/no-explicit-any
   await connectDB();
 
+  // Pre-filter in the database so only candidates are read (this runs on an
+  // inventory-page poll and in cron jobs). The filter is a superset of the exact
+  // per-product check below, which still decides the final result.
+  const thresholdExpr = threshold
+    ? threshold
+    : { $cond: [{ $gt: [{ $ifNull: ['$lowStockThreshold', 0] }, 0] }, '$lowStockThreshold', 10] };
+  const candidates: Record<string, unknown>[] = [
+    // Variation products: checked per variation below
+    { hasVariations: true },
+    { $expr: { $lte: [{ $ifNull: ['$stock', 0] }, thresholdExpr] } },
+  ];
+  if (branchId) {
+    candidates.push({ 'branchStock.branchId': branchId });
+  }
+
   const products = await Product.find({
     tenantId,
     trackInventory: true,
     isActive: { $ne: false },
-  }).lean();
+    $or: candidates,
+  })
+    .select('name sku price reorderQuantity stock lowStockThreshold hasVariations variations.stock branchStock')
+    .lean();
 
   const lowStockProducts = [];
 

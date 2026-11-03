@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     const threshold = searchParams.get('threshold') ? parseInt(searchParams.get('threshold')!) : undefined;
 
     // Get tenant settings for default threshold
-    const tenant = await Tenant.findById(tenantId);
+    const tenant = await Tenant.findById(tenantId).select('settings.lowStockThreshold').lean();
     const defaultThreshold = tenant?.settings?.lowStockThreshold || 10;
     const finalThreshold = threshold || defaultThreshold;
 

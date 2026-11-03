@@ -44,7 +44,9 @@ const FeatureFlagOverrideSchema: Schema = new Schema(
 );
 
 FeatureFlagOverrideSchema.index({ tenantId: 1, feature: 1 }, { unique: true });
-FeatureFlagOverrideSchema.index({ expiresAt: 1 });
+// TTL: expired overrides are removed automatically. Overrides without
+// expiresAt (permanent) are never matched by a TTL index.
+FeatureFlagOverrideSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 const FeatureFlagOverride: Model<IFeatureFlagOverride> =
   mongoose.models.FeatureFlagOverride ||

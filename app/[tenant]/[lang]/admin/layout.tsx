@@ -3,7 +3,6 @@
 import { ReactNode } from 'react';
 import { useParams } from 'next/navigation';
 import ProtectedRoute from '@/components/ProtectedRoute';
-import { TenantSettingsProvider } from '@/contexts/TenantSettingsContext';
 import { SubscriptionGuard } from '@/components/SubscriptionGuard';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { AdminLayoutProvider, useAdminLayout } from '@/contexts/AdminLayoutContext';
@@ -100,19 +99,19 @@ function AdminShell({ children }: { children: ReactNode }) {
 }
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
+  // TenantSettingsProvider comes from the parent [lang] layout (layout-protected),
+  // seeded with server-loaded settings — no nested provider / second fetch here.
   return (
-    <TenantSettingsProvider>
-      <ProtectedRoute requiredRoles={['owner', 'admin', 'manager']}>
-        <SubscriptionGuard>
-          <ErrorBoundary>
-            <AdminLayoutProvider>
-              <AdminShell>
-                {children}
-              </AdminShell>
-            </AdminLayoutProvider>
-          </ErrorBoundary>
-        </SubscriptionGuard>
-      </ProtectedRoute>
-    </TenantSettingsProvider>
+    <ProtectedRoute requiredRoles={['owner', 'admin', 'manager']}>
+      <SubscriptionGuard>
+        <ErrorBoundary>
+          <AdminLayoutProvider>
+            <AdminShell>
+              {children}
+            </AdminShell>
+          </AdminLayoutProvider>
+        </ErrorBoundary>
+      </SubscriptionGuard>
+    </ProtectedRoute>
   );
 }

@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
+import { invalidateTaxRulesCache } from '@/lib/cache';
 
 export interface ITaxRule extends Document {
   tenantId: mongoose.Types.ObjectId;
@@ -82,6 +83,13 @@ const TaxRuleSchema: Schema = new Schema(
 TaxRuleSchema.index({ tenantId: 1, isActive: 1, priority: -1 });
 // Index for efficient tax rule lookup
 TaxRuleSchema.index({ tenantId: 1, appliesTo: 1, isActive: 1 });
+
+// lib/tax-calculation.ts caches each tenant's active rules
+TaxRuleSchema.post('save', (doc: ITaxRule) => invalidateTaxRulesCache(String(doc.tenantId)));
+TaxRuleSchema.post(
+  ['updateOne', 'updateMany', 'findOneAndUpdate', 'findOneAndDelete', 'deleteOne', 'deleteMany'],
+  () => invalidateTaxRulesCache()
+);
 
 const TaxRule: Model<ITaxRule> = mongoose.models.TaxRule || mongoose.model<ITaxRule>('TaxRule', TaxRuleSchema);
 

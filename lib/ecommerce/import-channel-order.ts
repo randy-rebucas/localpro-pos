@@ -3,10 +3,16 @@ import connectDB from '@/lib/mongodb';
 import Transaction from '@/models/Transaction';
 import Payment from '@/models/Payment';
 import Customer from '@/models/Customer';
+import Product from '@/models/Product';
 import ProductChannelListing from '@/models/ProductChannelListing';
-import StockMovement from '@/models/StockMovement';
 import { generateReceiptNumber } from '@/lib/receipt';
-import { updateStock } from '@/lib/stock';
+import {
+  updateStock,
+  insertStockMovements,
+  STOCK_SNAPSHOT_FIELDS,
+  type StockMovementInput,
+  type StockProductSnapshot,
+} from '@/lib/stock';
 import type { NormalizedPaidOrder } from '@/lib/ecommerce/types';
 import { STOCK_REASON_CHANNEL_SALE } from '@/lib/ecommerce/constants';
 import { SubscriptionService } from '@/lib/subscription';
@@ -95,10 +101,23 @@ export async function importPaidChannelOrder(
     session.startTransaction();
 
     const syncNote = `channelSyncKey:${key}`;
+    // Pre-generated so stock movements carry the transaction id at insert time
+    // (no follow-up updateMany over the tenant's movements to back-fill it).
+    const txnId = new mongoose.Types.ObjectId();
 
+    // One snapshot read for all lines instead of one per updateStock call
+    const productIds = [...new Set(items.map((i) => i.productId.toString()))];
+    const snapshots = await Product.find({ _id: { $in: productIds }, tenantId })
+      .select(STOCK_SNAPSHOT_FIELDS)
+      .session(session)
+      .lean<(StockProductSnapshot & { _id: mongoose.Types.ObjectId })[]>();
+    const snapshotById = new Map(snapshots.map((p) => [p._id.toString(), p]));
+
+    const movements: StockMovementInput[] = [];
     for (const item of items) {
+      const productId = item.productId.toString();
       await updateStock(
-        item.productId.toString(),
+        productId,
         tenantId,
         -item.quantity,
         'sale',
@@ -106,10 +125,14 @@ export async function importPaidChannelOrder(
           reason: STOCK_REASON_CHANNEL_SALE,
           notes: syncNote,
           variation: item.variation,
+          transactionId: txnId.toString(),
+          product: snapshotById.get(productId),
+          movements,
         },
         session
       );
     }
+    await insertStockMovements(movements, session);
 
     const receiptNumber = await generateReceiptNumber(tenantId);
     const subtotal = items.reduce((s, i) => s + i.subtotal, 0);
@@ -119,6 +142,7 @@ export async function importPaidChannelOrder(
     const [txn] = await Transaction.create(
       [
         {
+          _id: txnId,
           tenantId,
           items: items.map((i) => ({
             product: i.productId,
@@ -146,16 +170,6 @@ export async function importPaidChannelOrder(
       { session }
     );
     transactionId = txn._id.toString();
-
-    await StockMovement.updateMany(
-      {
-        tenantId,
-        notes: syncNote,
-        transactionId: { $exists: false },
-      },
-      { $set: { transactionId: txn._id } },
-      { session }
-    );
 
     await Payment.create(
       [
@@ -190,14 +204,15 @@ export async function importPaidChannelOrder(
   }
 
   try {
-    const count = await Transaction.countDocuments({
-      tenantId,
-      createdAt: {
-        $gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
-        $lt: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1),
-      },
-    });
-    await SubscriptionService.updateUsage(tenantId, { transactions: count });
+    await SubscriptionService.recordTransaction(tenantId, () =>
+      Transaction.countDocuments({
+        tenantId,
+        createdAt: {
+          $gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+          $lt: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1),
+        },
+      })
+    );
   } catch (e) {
     logger.warn('subscription usage update skipped', { error: e instanceof Error ? e.message : String(e) });
   }
