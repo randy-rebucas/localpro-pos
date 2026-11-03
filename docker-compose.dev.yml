@@ -1,0 +1,58 @@
+# Local PostgreSQL + PgBouncer for the Mongo → Postgres migration (docs/postgres-migration.md).
+#
+#   docker compose -f docker-compose.dev.yml up -d
+#   pnpm pg:health
+#
+# App (through PgBouncer, transaction mode — same as production):
+#   DATABASE_URL=postgres://pos:pos@localhost:6432/localpro_pos
+# Migrations / ETL (direct):
+#   DATABASE_URL_DIRECT=postgres://pos:pos@localhost:5433/localpro_pos
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: pos
+      POSTGRES_PASSWORD: pos
+      POSTGRES_DB: localpro_pos
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - max_connections=100
+      - -c
+      - timezone=UTC
+    ports:
+      - "${PG_PORT:-5433}:5432"
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+      - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pos -d localpro_pos"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  pgbouncer:
+    image: edoburu/pgbouncer:v1.24.1-p1
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_USER: pos
+      DB_PASSWORD: pos
+      DB_NAME: localpro_pos
+      AUTH_TYPE: scram-sha-256
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: 500
+      DEFAULT_POOL_SIZE: 20
+      MAX_PREPARED_STATEMENTS: 200
+    ports:
+      - "${PGBOUNCER_PORT:-6432}:5432"
+
+volumes:
+  pg-data:

@@ -8,7 +8,8 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     include: ['__tests__/**/*.test.ts', '__tests__/**/*.test.tsx', 'components/**/*.test.tsx'],
-    exclude: ['node_modules', '.next', 'dist'],
+    // Integration tests need a real Postgres: pnpm test:integration (vitest.integration.config.ts)
+    exclude: ['node_modules', '.next', 'dist', '__tests__/integration/**'],
     setupFiles: ['__tests__/setup.ts'],
     coverage: {
       provider: 'v8',

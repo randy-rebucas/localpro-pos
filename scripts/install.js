@@ -224,6 +224,12 @@ async function install() {
         envContent = `# MongoDB Connection String
 MONGODB_URI=mongodb://localhost:27017/pos-system
 
+# PostgreSQL (migration in progress, see docs/postgres-migration.md)
+# Local: pnpm pg:up starts Postgres on 5433 and PgBouncer on 6432
+# DB_DRIVER=mongo
+# DATABASE_URL=postgres://pos:pos@localhost:6432/localpro_pos
+# DATABASE_URL_DIRECT=postgres://pos:pos@localhost:5433/localpro_pos
+
 # JWT Authentication Secret (CHANGE THIS IN PRODUCTION!)
 JWT_SECRET=${generateJWTSecret()}
 

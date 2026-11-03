@@ -26,6 +26,10 @@
 
 # database backups — never commit
 /backups/
+/db-size-report.json
+
+# VPS provisioning secrets (infra/postgres/provision.env.example is the template)
+/infra/postgres/provision.env
 
 # uploaded files — stored at runtime
 /public/uploads/

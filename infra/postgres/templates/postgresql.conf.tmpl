@@ -1,0 +1,45 @@
+# 1POS overrides — installed by provision.sh to /etc/postgresql/17/main/conf.d/1pos.conf
+# Memory values are computed from the VPS RAM at provision time.
+
+# Only PgBouncer (same host) and SSH tunnels reach Postgres directly
+listen_addresses = 'localhost'
+port = 5432
+max_connections = 100
+password_encryption = scram-sha-256
+timezone = 'UTC'
+log_timezone = 'UTC'
+
+# Memory
+shared_buffers = ${PG_SHARED_BUFFERS}
+effective_cache_size = ${PG_EFFECTIVE_CACHE_SIZE}
+maintenance_work_mem = ${PG_MAINTENANCE_WORK_MEM}
+work_mem = 16MB
+
+# SSD storage
+random_page_cost = 1.1
+effective_io_concurrency = 200
+
+# WAL / checkpoints
+wal_level = replica
+max_wal_size = 2GB
+min_wal_size = 512MB
+checkpoint_completion_target = 0.9
+wal_compression = zstd
+
+# Continuous archiving for point-in-time recovery (pgBackRest → S3)
+archive_mode = on
+archive_command = 'pgbackrest --stanza=1pos archive-push %p'
+archive_timeout = 60
+
+# Observability
+shared_preload_libraries = 'pg_stat_statements'
+pg_stat_statements.track = all
+log_min_duration_statement = 500
+log_lock_waits = on
+log_temp_files = 0
+log_checkpoints = on
+log_autovacuum_min_duration = 1000
+
+# Autovacuum — transactions / stock_movements / audit_logs are append-heavy
+autovacuum_vacuum_scale_factor = 0.05
+autovacuum_analyze_scale_factor = 0.02

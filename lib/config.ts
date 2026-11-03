@@ -4,8 +4,17 @@
 
 export const config = {
   // Database
+  // DB_DRIVER selects the data layer during the Postgres migration
+  // (docs/postgres-migration.md). Defaults to mongo until cutover.
+  dbDriver: (process.env.DB_DRIVER === 'postgres' ? 'postgres' : 'mongo') as 'mongo' | 'postgres',
   mongodb: {
     uri: process.env.MONGODB_URI || 'mongodb://localhost:27017/pos-system',
+  },
+  postgres: {
+    // Pooled connection through PgBouncer (transaction mode) — used by the app
+    url: process.env.DATABASE_URL || '',
+    // Direct connection — used only by migrations and the ETL scripts
+    directUrl: process.env.DATABASE_URL_DIRECT || '',
   },
 
   // JWT
@@ -57,7 +66,7 @@ export function validateConfig(): void {
     return;
   }
 
-  const required = ['MONGODB_URI'];
+  const required = [process.env.DB_DRIVER === 'postgres' ? 'DATABASE_URL' : 'MONGODB_URI'];
   if (process.env.NODE_ENV === 'production') {
     required.push('JWT_SECRET', 'ALLOWED_ORIGINS');
   }
