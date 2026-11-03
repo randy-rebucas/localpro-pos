@@ -14,11 +14,9 @@ import { useDiscount, type Discount } from '@/hooks/useDiscount';
 import { usePayment } from '@/hooks/usePayment';
 import { useRefund } from '@/hooks/useRefund';
 import { useCashDrawer } from '@/hooks/useCashDrawer';
-import { getOfflineStorage } from '@/lib/offline-storage';
 import { TranslationDict } from '@/types/dictionary';
 import dynamic from 'next/dynamic';
 import PageLoading from '@/components/ui/PageLoading';
-import EmptyState from '@/components/ui/EmptyState';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 
 const BarcodeScanner = dynamic(() => import('@/components/BarcodeScanner'), {
@@ -67,6 +65,15 @@ const PosBranchLookupModal = dynamic(() => import('@/components/pos/modals/PosBr
   ssr: false,
   loading: () => null,
 });
+import {
+  AlertTriangle, CirclePause, FolderOpen, LayoutGrid, List, Loader2, LogOut, QrCode, Radio,
+  ScanBarcode, Search, ShoppingBasket, ShoppingCart, Smartphone, Split, Undo2, Wallet, X,
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { hardwareService } from '@/lib/hardware';
 import { getAssignedDeviceId } from '@/lib/device-identity';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
@@ -75,7 +82,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { showToast } from '@/lib/toast';
 import { useConfirm } from '@/lib/confirm';
 import { getDefaultTenantSettings } from '@/lib/currency';
-import { formatDateTime, formatTime } from '@/lib/formatting';
+import { formatDate, formatDateTime, formatTime } from '@/lib/formatting';
 import { useDeviceType } from '@/hooks/useDeviceType';
 import type { CustomerSummary } from '@/types/customer';
 import CartLineItem from '@/components/pos/CartLineItem';
@@ -91,6 +98,9 @@ import type { SplitGuestPayment } from '@/components/pos/modals/PosSplitCheckMod
 import type { RefundTransaction as PosRefundTransaction } from '@/components/pos/modals/PosRefundModal';
 
 type Product = PosProduct;
+
+// Inset field shadow shared with the gloss forms (see fieldCls in app/signup/page.tsx).
+const fieldShadow = 'shadow-[inset_0_1px_2px_rgba(16,42,56,0.06)]';
 
 interface CartItem {
   productId: string;
@@ -205,6 +215,7 @@ export default function Dashboard() {
     loadingMore: productsLoadingMore,
     loadMore: loadMoreProducts,
     refetch: refetchProducts,
+    findByCode: findProductByCode,
   } = usePosProducts({
     tenant,
     debouncedSearch,
@@ -295,9 +306,10 @@ export default function Dashboard() {
 
   // Create AbortController for session/cart sync that runs on every change
 
-  // Debounce search input (300ms)
+  // Debounce search input. Search runs against the on-device catalog (usePosProducts), so a short
+  // delay is enough — it only smooths re-renders and costs no database reads.
   useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(search), 300);
+    const timer = setTimeout(() => setDebouncedSearch(search), 150);
     return () => clearTimeout(timer);
   }, [search]);
 
@@ -517,12 +529,10 @@ export default function Dashboard() {
 
     setSearch('');
 
-    // Fast path: check in-memory products first
-    let product = products.find(
-      p => p.barcode === code || p.sku === code || p._id === code
-    );
+    // Fast path: the on-device catalog (no database read)
+    let product = findProductByCode(code);
 
-    // Fallback: API lookup for when products aren't loaded in memory yet
+    // Fallback: indexed API lookup for products the catalog hasn't synced yet
     if (!product) {
       try {
         const res = await fetch(`/api/products/by-barcode?code=${encodeURIComponent(code)}&tenant=${tenant}`);
@@ -544,18 +554,18 @@ export default function Dashboard() {
         showToast.error(dict.pos.productNotFound || 'Product not found');
       }
     }
-  }, [products, tenant, dict, addToCart]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [findProductByCode, tenant, dict, addToCart]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Handle QR code scan
   const handleQRScan = useCallback((data: string) => {
     // QR codes might contain product IDs, URLs, or other data
     // Try to parse as product ID first
-    const product = products.find(p => p._id === data);
+    const product = findProductByCode(data);
     if (product && (product.stock > 0 || product.allowOutOfStockSales)) {
       handleAddToCart(product);
       setShowQRScanner(false);
     }
-  }, [products, addToCart]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [findProductByCode, addToCart]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Check for active cash drawer session on mount
   useEffect(() => {
@@ -856,19 +866,7 @@ export default function Dashboard() {
         credentials: 'include',
       });
       const data = await res.json();
-      if (data.success) {
-        // Update cache with the new data - convert to CachedProduct format
-        const storage = await getOfflineStorage();
-        const cached = await storage.getCachedProducts(tenant);
-        const updatedCache = cached.map((p: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-          if (p._id === productId) {
-            return { ...p, pinned: newPinnedStatus };
-          }
-          return p;
-        });
-        // cacheProducts will add tenant and lastUpdated automatically
-        await storage.cacheProducts(updatedCache, tenant);
-      } else {
+      if (!data.success) {
         // Revert optimistic update on error
         setProducts(prev => prev.map(p =>
           p._id === productId ? { ...p, pinned: currentPinned } : p
@@ -977,6 +975,40 @@ export default function Dashboard() {
       showToast.error(dictValue('pos.printFailed', 'Receipt could not be printed. Check printer settings.'));
     }
   };
+
+  // Register function keys (F2 search … F9 charge). Re-bound every render so handlers see fresh state;
+  // ignored while a modal or the start-shift overlay is up.
+  const anyModalOpen =
+    showPaymentModal || showRefundModal || showSavedCartsModal || showSaveCartModal || showQRScanner ||
+    showAgeVerificationModal || showSplitCheckModal || showVariantModal || !!showCashDrawerModal ||
+    !!branchLookupProduct || showRoamingCart;
+  const shiftBlocked = isCashier && !cashDrawerSession;
+  useEffect(() => {
+    if (anyModalOpen || shiftBlocked) return;
+    const actions: Record<string, (() => void) | undefined> = {
+      F2: () => searchInputRef.current?.focus(),
+      F3: isCashier ? undefined : () => {
+        if (cart.length === 0) return showToast.error(dictValue('pos.cartEmptyAlert', 'Cart is empty'));
+        setSplitStep('guests');
+        setGuestPayments([]);
+        setShowSplitCheckModal(true);
+      },
+      F4: isCashier ? undefined : () =>
+        cart.length > 0 ? setShowSaveCartModal(true) : showToast.error(dictValue('pos.cartEmptyAlert', 'Cart is empty')),
+      F6: isCashier ? undefined : () => { setShowSavedCartsModal(true); loadSavedCarts(); },
+      F7: canRefund ? () => setShowRefundModal(true) : undefined,
+      F8: () => setShowQRScanner(true),
+      F9: handleCheckout,
+    };
+    const onKey = (e: KeyboardEvent) => {
+      const action = actions[e.key];
+      if (!action || e.altKey || e.ctrlKey || e.metaKey) return;
+      e.preventDefault();
+      action();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  });
 
   if (!dict) {
     return <PageLoading label="Loading..." />;
@@ -1112,8 +1144,49 @@ export default function Dashboard() {
     }
   };
 
+  const settingsOrDefault = settings || getDefaultTenantSettings();
+  const cartItemCount = cart.reduce((s, i) => s + i.quantity, 0);
+  const emptyCartToast = () => showToast.error(dictValue('pos.cartEmptyAlert', 'Cart is empty'));
+  const fnKeys: Array<{ key: string; label: string; title: string; icon: typeof Split; onClick: () => void; danger?: boolean }> = [
+    ...(!isCashier
+      ? [
+          {
+            key: 'F3',
+            label: dictValue('pos.splitCheck', 'Split Check'),
+            title: dictValue('pos.titleSplitBill', 'Split bill equally between guests'),
+            icon: Split,
+            onClick: () => { if (cart.length > 0) { setSplitStep('guests'); setGuestPayments([]); setShowSplitCheckModal(true); } else emptyCartToast(); },
+          },
+          {
+            key: 'F4',
+            label: dictValue('pos.holdOrder', 'Hold Order'),
+            title: dictValue('pos.titleHoldOrder', 'Hold current order'),
+            icon: CirclePause,
+            onClick: () => (cart.length > 0 ? setShowSaveCartModal(true) : emptyCartToast()),
+          },
+          {
+            key: 'F6',
+            label: dictValue('pos.savedOrders', 'Saved Orders'),
+            title: dictValue('pos.titleSavedOrders', 'Load a saved order'),
+            icon: FolderOpen,
+            onClick: () => { setShowSavedCartsModal(true); loadSavedCarts(); },
+          },
+        ]
+      : []),
+    ...(canRefund
+      ? [{
+          key: 'F7',
+          label: dictValue('pos.refund', 'Refund'),
+          title: dictValue('pos.titleProcessRefund', 'Process a refund'),
+          icon: Undo2,
+          onClick: () => setShowRefundModal(true),
+          danger: true,
+        }]
+      : []),
+  ];
+
   return (
-    <div className="flex h-dvh min-h-0 flex-col">
+    <div className="mk-root flex h-dvh min-h-0 flex-col bg-[#eef3f5]">
       <OfflineIndicator />
       <BarcodeScanner onScan={handleBarcodeScan} enabled={true} />
       {showQRScanner && (
@@ -1129,187 +1202,223 @@ export default function Dashboard() {
 
       {/* Hardware status banner */}
       {hwStatusMsg && (
-        <div className="bg-amber-50 border-b border-amber-300 px-4 py-2 flex items-center justify-between text-sm">
-          <div className="flex items-center gap-2 text-amber-800">
-            <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-            <span className="font-medium">{hwStatusMsg}</span>
+        <div className="shrink-0 bg-amber-50 border-b border-amber-300 px-4 py-1.5 flex items-center justify-between gap-3 text-sm">
+          <div className="flex items-center gap-2 text-amber-900 min-w-0">
+            <AlertTriangle className="size-4 flex-shrink-0" strokeWidth={2.25} aria-hidden />
+            <span className="font-medium truncate">{hwStatusMsg}</span>
           </div>
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon-sm"
             onClick={() => setHwStatusMsg(null)}
-            className="p-1 text-amber-600 hover:text-amber-800 transition-colors"
+            className="text-amber-700 hover:text-amber-900 hover:bg-amber-100"
+            aria-label={dictValue('common.close', 'Close')}
           >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+            <X aria-hidden />
+          </Button>
         </div>
       )}
 
-      {/* Cash Drawer Shift Bar */}
+      {/* Cash drawer shift strip */}
       {cashDrawerSession && (
-        <div className="bg-green-50 border-b border-green-200 px-3 sm:px-4 py-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-sm">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-green-800 min-w-0">
-            <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span className="font-medium">{dict.pos?.shiftActive || 'Shift Active'}</span>
-            <span className="text-green-600 text-xs sm:text-sm truncate">
-              <span className="hidden sm:inline">| Opened: {formatTime(cashDrawerSession.openingTime, settings || getDefaultTenantSettings())}</span>
-              <span className="sm:ml-1">| Opening: <Currency amount={cashDrawerSession.openingAmount} /></span>
+        <div className="mk-dark shrink-0 border-b border-black/40 px-3 sm:px-4 py-1.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-white">
+          <div className="flex flex-wrap items-center gap-1.5 min-w-0 text-xs">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-400/15 px-2 py-0.5 font-bold uppercase tracking-wider text-emerald-300">
+              <span className="size-1.5 rounded-full bg-emerald-400" aria-hidden />
+              {dict.pos?.shiftActive || 'Shift Active'}
+            </span>
+            <span className="mk-lcd rounded px-2 py-0.5 font-bold tabular-nums hidden sm:inline-block">
+              {dictValue('pos.opened', 'Opened')} {formatTime(cashDrawerSession.openingTime, settingsOrDefault)}
+            </span>
+            <span className="mk-lcd rounded px-2 py-0.5 font-bold tabular-nums">
+              {dictValue('pos.float', 'Float')} <Currency amount={cashDrawerSession.openingAmount} />
             </span>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1.5 text-xs">
-              <span className={`w-2 h-2 ${stockSyncConnected ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
-              <span className={stockSyncConnected ? 'text-green-700' : 'text-gray-500'}>
-                {stockSyncConnected ? 'Stock Live' : 'Stock Offline'}
-              </span>
-            </div>
-            <button
+          <div className="flex items-center gap-2.5">
+            <span className="flex items-center gap-1.5 text-[11px] font-medium text-white/70">
+              <Radio
+                className={stockSyncConnected ? 'size-3.5 text-emerald-300' : 'size-3.5 text-white/35'}
+                strokeWidth={2.25}
+                aria-hidden
+              />
+              {stockSyncConnected ? dictValue('pos.stockLive', 'Stock live') : dictValue('pos.stockOffline', 'Stock offline')}
+            </span>
+            <Button
+              type="button"
+              variant="key"
+              size="sm"
+              className="h-7 text-red-300"
               onClick={async () => {
-                const ok = await confirm('End Shift', 'Are you sure you want to end your shift? You will need to count the cash in the drawer.');
+                const ok = await confirm(
+                  dictValue('pos.endShift', 'End shift'),
+                  dictValue('pos.endShiftConfirm', 'End your shift? You will count the cash in the drawer next.')
+                );
                 if (!ok) return;
                 setDrawerAmount('');
                 setDrawerNotes('');
                 setClosingSummary(null);
                 setShowCashDrawerModal('close');
               }}
-              className="px-3 py-1 bg-red-100 text-red-700 hover:bg-red-200 text-xs font-medium transition-colors"
             >
-              End Shift
-            </button>
+              <LogOut strokeWidth={2.25} aria-hidden />
+              {dictValue('pos.endShift', 'End shift')}
+            </Button>
           </div>
         </div>
       )}
 
       {/* Start Shift Overlay - only blocks cashier role when no cash drawer session */}
       {isCashier && !cashDrawerSession && !cashDrawerLoading && productsStatus !== 'loading' && (
-        <div className="fixed inset-0 z-50 bg-gray-900/60 flex items-center justify-center" style={{ top: '64px' }}>
-          <div className="bg-white border border-gray-300 p-8 max-w-md w-full mx-4 text-center">
-            <div className="w-16 h-16 mx-auto mb-4 bg-brand-soft border border-teal-300 flex items-center justify-center">
-              <svg className="w-8 h-8 text-brand" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
-              </svg>
-            </div>
-            <h2 className="text-xl font-bold text-gray-900 mb-2">{dictValue('pos.startYourShift', 'Start Your Shift')}</h2>
-            <p className="text-gray-600 mb-6">{dictValue('pos.startShiftDescription', 'Open the cash drawer to begin processing transactions.')}</p>
-            <button
+        <div className="fixed inset-0 z-50 bg-[#0a1620]/70 backdrop-blur-sm flex items-center justify-center" style={{ top: '64px' }}>
+          <div className="mk-dark mk-glass mk-hero-in rounded-xl p-6 sm:p-8 max-w-md w-full mx-4 text-center text-white">
+            <span className="mk-key-brand mx-auto mb-4 flex size-14 items-center justify-center rounded-md">
+              <Wallet className="size-7" strokeWidth={2.25} aria-hidden />
+            </span>
+            <h2 className="text-2xl font-bold mb-1.5">{dictValue('pos.startYourShift', 'Start Your Shift')}</h2>
+            <p className="text-sm text-white/70 mb-6">{dictValue('pos.startShiftDescription', 'Open the cash drawer to begin processing transactions.')}</p>
+            <Button
+              type="button"
+              variant="brand"
+              size="xl"
+              className="w-full mb-2"
               onClick={() => {
                 setDrawerAmount('');
                 setDrawerNotes('');
                 setShowCashDrawerModal('open');
               }}
-              className="w-full py-3 text-white font-semibold transition-colors mb-3"
-              style={{ backgroundColor: primaryColor }}
             >
+              <Wallet strokeWidth={2.25} aria-hidden />
               {dictValue('pos.openCashDrawer', 'Open Cash Drawer')}
-            </button>
-            <button
+            </Button>
+            <Button
+              type="button"
+              variant="key"
+              size="xl"
+              className="w-full"
               onClick={async () => {
                 await logout();
                 window.location.href = `/${tenant}/${lang}/login`;
               }}
-              className="w-full py-2.5 text-gray-600 font-medium border border-gray-300 hover:bg-gray-50 transition-colors text-sm"
             >
+              <LogOut strokeWidth={2.25} aria-hidden />
               {dictValue('common.logout', 'Logout')}
-            </button>
+            </Button>
           </div>
         </div>
       )}
 
       {/* Cash Drawer Open/Close Modal */}
       {showCashDrawerModal && (
-        <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center">
-          <div className="bg-white border border-gray-300 p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-bold text-gray-900 mb-4">
-              {showCashDrawerModal === 'open' ? dictValue('pos.openCashDrawer', 'Open Cash Drawer') : dictValue('pos.closeCashDrawer', 'Close Cash Drawer')}
-            </h3>
+        <div className="fixed inset-0 z-[60] bg-[#0a1620]/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="mk-panel mk-hero-in rounded-xl p-5 sm:p-6 max-w-md w-full text-gray-900">
+            <div className="flex items-center gap-3 mb-4">
+              <span className={`${showCashDrawerModal === 'open' ? 'mk-key-brand' : 'mk-key'} flex size-10 items-center justify-center rounded-md`}>
+                <Wallet className="size-5" strokeWidth={2.25} aria-hidden />
+              </span>
+              <h3 className="text-lg font-bold">
+                {showCashDrawerModal === 'open' ? dictValue('pos.openCashDrawer', 'Open Cash Drawer') : dictValue('pos.closeCashDrawer', 'Close Cash Drawer')}
+              </h3>
+            </div>
 
             {closingSummary ? (
-              <div className="space-y-3 mb-6">
-                <h4 className="font-semibold text-gray-800">{dictValue('pos.shiftSummary', 'Shift Summary')}</h4>
-                <div className="bg-gray-50 border border-gray-200 p-4 space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">{dictValue('admin.expectedAmount', 'Expected Amount')}:</span>
-                    <span className="font-medium"><Currency amount={closingSummary.expectedAmount || 0} /></span>
+              <div className="space-y-3">
+                <h4 className="text-xs font-bold uppercase tracking-[0.14em] text-gray-500">{dictValue('pos.shiftSummary', 'Shift Summary')}</h4>
+                <dl className="mk-lcd rounded-md p-3 space-y-1.5 text-sm tabular-nums">
+                  <div className="flex justify-between gap-3">
+                    <dt className="opacity-80">{dictValue('admin.expectedAmount', 'Expected Amount')}</dt>
+                    <dd className="font-bold"><Currency amount={closingSummary.expectedAmount || 0} /></dd>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">{dictValue('pos.actualClosing', 'Actual Closing')}:</span>
-                    <span className="font-medium"><Currency amount={closingSummary.closingAmount || 0} /></span>
+                  <div className="flex justify-between gap-3">
+                    <dt className="opacity-80">{dictValue('pos.actualClosing', 'Actual Closing')}</dt>
+                    <dd className="font-bold"><Currency amount={closingSummary.closingAmount || 0} /></dd>
                   </div>
-                  <div className="border-t pt-2 flex justify-between font-semibold">
-                    <span>{dictValue('pos.difference', 'Difference')}:</span>
-                    <span className={
-                      (closingSummary.shortage || 0) > 0 ? 'text-red-600' :
-                        (closingSummary.overage || 0) > 0 ? 'text-green-600' : 'text-gray-900'
+                  <div className="border-t border-[#7ef0d6]/25 pt-1.5 flex justify-between gap-3 font-bold">
+                    <dt>{dictValue('pos.difference', 'Difference')}</dt>
+                    <dd className={
+                      (closingSummary.shortage || 0) > 0 ? 'text-red-300' :
+                        (closingSummary.overage || 0) > 0 ? 'text-amber-200' : ''
                     }>
-                      {(closingSummary.shortage || 0) > 0 && <>{dictValue('pos.short', 'Short')}: <Currency amount={closingSummary.shortage || 0} /></>}
-                      {(closingSummary.overage || 0) > 0 && <>{dictValue('pos.over', 'Over')}: <Currency amount={closingSummary.overage || 0} /></>}
+                      {(closingSummary.shortage || 0) > 0 && <>{dictValue('pos.short', 'Short')} <Currency amount={closingSummary.shortage || 0} /></>}
+                      {(closingSummary.overage || 0) > 0 && <>{dictValue('pos.over', 'Over')} <Currency amount={closingSummary.overage || 0} /></>}
                       {!(closingSummary.shortage || 0) && !(closingSummary.overage || 0) && dictValue('pos.balanced', 'Balanced')}
-                    </span>
+                    </dd>
                   </div>
-                </div>
-                <button
+                </dl>
+                <Button
+                  type="button"
+                  variant="brand"
+                  size="xl"
+                  className="w-full"
                   onClick={() => {
                     setClosingSummary(null);
                     setShowCashDrawerModal(null);
                   }}
-                  className="w-full py-2 bg-gray-900 text-white font-medium hover:bg-gray-800 transition-colors"
                 >
                   {dictValue('common.done', 'Done')}
-                </button>
+                </Button>
               </div>
             ) : (
               <>
-                <div className="space-y-4 mb-6">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                <div className="space-y-3 mb-5">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="drawer-amount">
                       {showCashDrawerModal === 'open' ? dictValue('admin.openingAmount', 'Opening Amount') : dictValue('pos.actualClosingAmount', 'Actual Closing Amount')}
-                    </label>
-                    <input
+                    </Label>
+                    <Input
+                      id="drawer-amount"
                       type="number"
+                      inputMode="decimal"
                       step="0.01"
                       min="0"
                       value={drawerAmount}
                       onChange={(e) => setDrawerAmount(e.target.value)}
                       placeholder="0.00"
-                      className="w-full px-4 py-3 border border-gray-300 text-lg focus:ring-2 focus:ring-brand focus:border-brand"
+                      className={`h-12 bg-white font-mono text-lg tabular-nums placeholder:text-gray-400 ${fieldShadow}`}
                       autoFocus
                     />
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{dictValue('pos.notesOptional', 'Notes (optional)')}</label>
-                    <input
+                  <div className="space-y-1.5">
+                    <Label htmlFor="drawer-notes">{dictValue('pos.notesOptional', 'Notes (optional)')}</Label>
+                    <Input
+                      id="drawer-notes"
                       type="text"
                       value={drawerNotes}
                       onChange={(e) => setDrawerNotes(e.target.value)}
                       placeholder={dictValue('pos.morningShiftPlaceholder', 'e.g. Morning shift')}
-                      className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand"
+                      className={`h-11 bg-white placeholder:text-gray-400 ${fieldShadow}`}
                     />
                   </div>
                 </div>
-                <div className="flex gap-3">
-                  <button
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="light"
+                    size="xl"
+                    className="flex-1"
                     onClick={() => {
                       setShowCashDrawerModal(null);
                       setDrawerAmount('');
                       setDrawerNotes('');
                     }}
-                    className="flex-1 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
                   >
-                    Cancel
-                  </button>
-                  <button
+                    {dictValue('common.cancel', 'Cancel')}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={showCashDrawerModal === 'open' ? 'brand' : 'key'}
+                    size="xl"
+                    className="flex-1"
                     onClick={showCashDrawerModal === 'open' ? handleOpenDrawer : handleCloseDrawer}
                     disabled={cashDrawerLoading || !drawerAmount}
-                    className="flex-1 py-2 text-white font-medium transition-colors disabled:opacity-50"
-                    style={{ backgroundColor: showCashDrawerModal === 'open' ? primaryColor : '#dc2626' }}
                   >
-                    {cashDrawerLoading ? 'Processing...' : showCashDrawerModal === 'open' ? 'Open Drawer' : 'Close Drawer'}
-                  </button>
+                    {cashDrawerLoading && <Loader2 className="animate-spin" aria-hidden />}
+                    {cashDrawerLoading
+                      ? dictValue('pos.processing', 'Processing...')
+                      : showCashDrawerModal === 'open'
+                        ? dictValue('pos.openDrawer', 'Open Drawer')
+                        : dictValue('pos.closeDrawer', 'Close Drawer')}
+                  </Button>
                 </div>
               </>
             )}
@@ -1317,72 +1426,83 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Mobile: stacked cart + products. Tablet/laptop (md+): side-by-side with compact cart */}
+      {/* Mobile: stacked cart + products. Tablet/laptop (md+): products left, register column right */}
       <div
-        className={`flex flex-col flex-1 min-h-0 overflow-hidden gap-3 sm:gap-4 md:gap-0 ${roamingMode ? '' : 'md:flex-row'}`}
+        className={`flex flex-col flex-1 min-h-0 overflow-hidden ${roamingMode ? '' : 'md:flex-row'}`}
       >
-        {/* Cart Section - hidden in roaming mode (replaced by FAB + bottom sheet) */}
+        {/* Register column - hidden in roaming mode (replaced by FAB + bottom sheet) */}
         <div
-          className={`order-1 flex flex-col min-h-0 flex-1 max-h-[min(50vh,440px)] sm:max-h-[min(55vh,480px)] md:max-h-none md:h-full md:min-h-0 md:flex-none md:order-2 md:shrink-0 md:w-[min(100%,280px)] lg:w-[300px] xl:w-[360px] 2xl:w-[420px] md:border-l md:border-gray-300 ${roamingMode ? 'hidden' : ''}`}
+          className={`order-1 flex flex-col min-h-0 flex-1 max-h-[min(50vh,440px)] sm:max-h-[min(55vh,480px)] md:max-h-none md:h-full md:min-h-0 md:flex-none md:order-2 md:shrink-0 md:w-[min(100%,300px)] lg:w-[320px] xl:w-[380px] 2xl:w-[420px] ${roamingMode ? 'hidden' : ''}`}
         >
-            <div className="bg-white border border-gray-300 p-3 sm:p-4 md:p-4 lg:p-5 flex h-full min-h-0 flex-col flex-1 overflow-hidden md:min-h-0">
-              <CartActionBar
-                cartLength={cart.length}
-                itemCount={cart.reduce((s, i) => s + i.quantity, 0)}
-                primaryColor={primaryColor}
-                dict={dict}
-                isCashier={isCashier}
-                customerDisplayUrl={customerDisplayUrl}
-                compact
-                onSaveCart={() => setShowSaveCartModal(true)}
-                onClearCart={clearCart}
-                onLoadSavedCarts={() => {
-                  setShowSavedCartsModal(true);
-                  loadSavedCarts();
-                }}
-              />
+          <div className="mk-dark text-white flex h-full min-h-0 flex-1 flex-col overflow-hidden p-2.5 sm:p-3 md:border-l md:border-black/40">
+            <CartActionBar
+              cartLength={cart.length}
+              itemCount={cartItemCount}
+              dict={dict}
+              isCashier={isCashier}
+              customerDisplayUrl={customerDisplayUrl}
+              compact
+              tone="dark"
+              onSaveCart={() => setShowSaveCartModal(true)}
+              onClearCart={clearCart}
+              onLoadSavedCarts={() => {
+                setShowSavedCartsModal(true);
+                loadSavedCarts();
+              }}
+            />
 
-              {/* Customer panel (retail) */}
-              {businessType === 'retail' && (
-                <div className="shrink-0 mb-3 min-w-0">
-                  <DynamicCustomerSidePanel
-                    tenant={tenant}
-                    selectedCustomer={selectedCustomer}
-                    onSelectCustomer={setSelectedCustomer}
-                  />
-                </div>
-              )}
+            {/* Customer panel (retail) */}
+            {businessType === 'retail' && (
+              <div className="shrink-0 mb-2 min-w-0 rounded-lg bg-white p-1.5 text-gray-900">
+                <DynamicCustomerSidePanel
+                  tenant={tenant}
+                  selectedCustomer={selectedCustomer}
+                  onSelectCustomer={setSelectedCustomer}
+                />
+              </div>
+            )}
 
+            {/* Receipt paper: ticket lines, upsell, discounts */}
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md bg-white text-gray-900 shadow-[0_10px_24px_-12px_rgba(0,0,0,0.7)]">
+              <div className="flex shrink-0 items-center justify-between border-b border-dashed border-gray-300 px-2.5 py-1.5 font-mono text-[10px] font-bold uppercase tracking-widest text-gray-400">
+                <span>{dictValue('pos.ticket', 'Ticket')}</span>
+                <span className="tabular-nums">{formatDate(new Date(), settingsOrDefault)}</span>
+              </div>
               {cart.length === 0 ? (
-                <EmptyState icon="cart" title={dictValue('pos.cartEmpty', 'Cart is empty')} compact className="flex-1" />
+                <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 py-8 text-center">
+                  <span className="mk-key-light flex size-11 items-center justify-center rounded-md text-gray-400">
+                    <ScanBarcode className="size-5" strokeWidth={2.25} aria-hidden />
+                  </span>
+                  <p className="text-sm font-semibold text-gray-700">{dictValue('pos.ticketEmpty', 'Nothing rung up yet')}</p>
+                  <p className="text-xs text-gray-500">{dictValue('pos.ticketEmptyHint', 'Scan a barcode or tap a product to add it here.')}</p>
+                </div>
               ) : (
-                <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                  <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1 -mr-1 [scrollbar-gutter:stable]">
-                    <div className="divide-y divide-gray-200 border border-gray-200 bg-white">
-                    {cart.map((item) => {
-                      const product = products.find((p) => p._id === item.productId);
-                      return (
-                        <CartLineItem
-                          key={item.cartItemId}
-                          item={item}
-                          dict={dict}
-                          businessType={businessType}
-                          product={product}
-                          onRemove={removeFromCart}
-                          onUpdateQuantity={updateQuantity}
-                          onQuantityError={(msg) => showToast.error(msg)}
-                          onBranchLookup={
-                            businessType === 'retail' && product
-                              ? () => handleBranchLookup(product)
-                              : undefined
-                          }
-                        />
-                      );
-                    })}
+                <>
+                  <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain [scrollbar-gutter:stable]">
+                    <div className="divide-y divide-dashed divide-gray-200">
+                      {cart.map((item) => {
+                        const product = products.find((p) => p._id === item.productId);
+                        return (
+                          <CartLineItem
+                            key={item.cartItemId}
+                            item={item}
+                            dict={dict}
+                            businessType={businessType}
+                            product={product}
+                            onRemove={removeFromCart}
+                            onUpdateQuantity={updateQuantity}
+                            onQuantityError={(msg) => showToast.error(msg)}
+                            onBranchLookup={
+                              businessType === 'retail' && product
+                                ? () => handleBranchLookup(product)
+                                : undefined
+                            }
+                          />
+                        );
+                      })}
                     </div>
                     <CartUpsellSuggestions
                       suggestions={upsellSuggestions}
-                      primaryColor={primaryColor}
                       dict={dict}
                       onAdd={(productId) => {
                         const product = products.find((p) => p._id === productId);
@@ -1391,226 +1511,156 @@ export default function Dashboard() {
                     />
                   </div>
 
-                  <CartDiscountSection
-                    dict={dict}
-                    primaryColor={primaryColor}
-                    tenant={tenant}
-                    cartLength={cart.length}
-                    promoCode={promoCode}
-                    setPromoCode={setPromoCode}
-                    appliedDiscount={appliedDiscount}
-                    applyingDiscount={applyingDiscount}
-                    scPwdName={scPwdName}
-                    setScPwdName={setScPwdName}
-                    scPwdId={scPwdId}
-                    setScPwdId={setScPwdId}
-                    showDiscountSection={showDiscountSection}
-                    setShowDiscountSection={setShowDiscountSection}
-                    getSubtotal={getSubtotal}
-                    sessionId={sessionId}
-                    settings={settings ?? undefined}
-                    fetchWithTimeout={fetchWithTimeout}
-                    applyDiscount={applyDiscount}
-                    setAppliedDiscount={setAppliedDiscount}
-                    removeDiscount={removeDiscount}
-                    onDiscountApplied={(msg) => showToast.success(msg)}
-                    onDiscountError={(msg) => showToast.error(msg)}
-                  />
-
-                  <CartSummaryFooter
-                    dict={dict}
-                    primaryColor={primaryColor}
-                    subtotal={getSubtotal()}
-                    total={getTotal()}
-                    taxAmount={getTaxAmount(
-                      { taxEnabled: settings?.taxEnabled, taxRate: settings?.taxRate },
-                      Math.max(0, getSubtotal() - (appliedDiscount?.amount || 0))
-                    )}
-                    appliedDiscount={appliedDiscount}
-                    taxEnabled={settings?.taxEnabled}
-                    taxLabel={settings?.taxLabel}
-                    taxRate={settings?.taxRate}
-                    processing={processing}
-                    processingLabel={dictValue('pos.processing', 'Processing...')}
-                    onCheckout={handleCheckout}
-                  />
-                </div>
+                  <div className="shrink-0 px-2.5">
+                    <CartDiscountSection
+                      dict={dict}
+                      primaryColor={primaryColor}
+                      tenant={tenant}
+                      cartLength={cart.length}
+                      promoCode={promoCode}
+                      setPromoCode={setPromoCode}
+                      appliedDiscount={appliedDiscount}
+                      applyingDiscount={applyingDiscount}
+                      scPwdName={scPwdName}
+                      setScPwdName={setScPwdName}
+                      scPwdId={scPwdId}
+                      setScPwdId={setScPwdId}
+                      showDiscountSection={showDiscountSection}
+                      setShowDiscountSection={setShowDiscountSection}
+                      getSubtotal={getSubtotal}
+                      sessionId={sessionId}
+                      settings={settings ?? undefined}
+                      fetchWithTimeout={fetchWithTimeout}
+                      applyDiscount={applyDiscount}
+                      setAppliedDiscount={setAppliedDiscount}
+                      removeDiscount={removeDiscount}
+                      onDiscountApplied={(msg) => showToast.success(msg)}
+                      onDiscountError={(msg) => showToast.error(msg)}
+                    />
+                  </div>
+                </>
               )}
             </div>
+
+            <CartSummaryFooter
+              dict={dict}
+              primaryColor={primaryColor}
+              subtotal={getSubtotal()}
+              total={getTotal()}
+              taxAmount={getTaxAmount(
+                { taxEnabled: settings?.taxEnabled, taxRate: settings?.taxRate },
+                Math.max(0, getSubtotal() - (appliedDiscount?.amount || 0))
+              )}
+              appliedDiscount={appliedDiscount}
+              taxEnabled={settings?.taxEnabled}
+              taxLabel={settings?.taxLabel}
+              taxRate={settings?.taxRate}
+              processing={processing}
+              processingLabel={dictValue('pos.processing', 'Processing...')}
+              onCheckout={handleCheckout}
+            />
           </div>
+        </div>
 
         {/* Products column: nav width matches this column only */}
         <div className={`order-2 flex flex-col min-h-0 flex-1 min-w-0 md:order-1 ${roamingMode ? 'w-full' : ''}`}>
           <Navbar />
           <div
             ref={productsScrollRef}
-            className="flex-1 overflow-y-auto min-h-0 mx-auto w-full px-3 sm:px-4 md:px-4 lg:px-5 py-3 sm:py-4 md:py-3 lg:py-4"
+            className="flex-1 overflow-y-auto min-h-0 w-full px-3 sm:px-4 lg:px-5 py-3"
           >
-            <div className="mb-4 md:mb-5">
-              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-3 md:mb-4">
-                <h1 className="text-xl sm:text-2xl md:text-xl lg:text-2xl xl:text-3xl font-bold text-gray-900">{dict.pos.title}</h1>
-                <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap sm:justify-end">
-                  {/* Quick Actions Row */}
-                  {!isCashier && (
-                    <div className={`${roamingMode ? 'grid grid-cols-2 sm:grid-cols-4 gap-2 w-full sm:w-auto' : 'flex flex-wrap sm:flex-nowrap gap-2 max-w-full'}`}>
+            <div className="mb-3 space-y-2">
+              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="mk-key-brand flex size-9 flex-shrink-0 items-center justify-center rounded-md">
+                    <ShoppingBasket className="size-[18px]" strokeWidth={2.25} aria-hidden />
+                  </span>
+                  <h1 className="text-xl lg:text-2xl font-black tracking-tight text-[#10222f] truncate">{dict.pos.title}</h1>
+                </div>
 
-                      {/* Split Check */}
-                      <button
-                        type="button"
-                        onClick={() => { if (cart.length > 0) { setSplitStep('guests'); setGuestPayments([]); setShowSplitCheckModal(true); } else showToast.error(dictValue('pos.cartEmptyAlert', 'Cart is empty')); }}
-                        className={`flex items-center gap-2 min-h-[52px] md:min-h-[56px] bg-white border-2 border-gray-200 hover:border-gray-400 hover:bg-gray-50 transition-all text-gray-700 font-medium text-xs ${roamingMode ? 'w-full px-3 py-2' : 'flex-shrink-0 px-5 py-3'}`}
-                        title={dictValue('pos.titleSplitBill', 'Split bill equally between guests')}
-                      >
-                        <svg className="w-5 h-5 text-gray-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                        </svg>
-                        <span>{dictValue('pos.splitCheck', 'Split Check')}</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => cart.length > 0 ? setShowSaveCartModal(true) : showToast.error(dictValue('pos.cartEmptyAlert', 'Cart is empty'))}
-                        className={`flex items-center gap-2 min-h-[52px] md:min-h-[56px] bg-white border-2 border-gray-200 hover:border-gray-400 hover:bg-gray-50 transition-all text-gray-700 font-medium text-xs ${roamingMode ? 'w-full px-3 py-2' : 'flex-shrink-0 px-5 py-3'}`}
-                        title={dictValue('pos.titleHoldOrder', 'Hold current order')}
-                      >
-                        <svg className="w-5 h-5 text-gray-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <span>{dictValue('pos.holdOrder', 'Hold Order')}</span>
-                      </button>
-                      {canRefund && (
-                      <button
-                        type="button"
-                        onClick={() => setShowRefundModal(true)}
-                        className={`flex items-center gap-2 min-h-[52px] md:min-h-[56px] bg-white border-2 border-gray-200 hover:border-red-200 hover:bg-red-50 transition-all text-gray-700 font-medium text-xs ${roamingMode ? 'w-full px-3 py-2' : 'flex-shrink-0 px-5 py-3'}`}
-                        title={dictValue('pos.titleProcessRefund', 'Process a refund')}
-                      >
-                        <svg className="w-5 h-5 text-red-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-                        </svg>
-                        <span>{dictValue('pos.refund', 'Refund')}</span>
-                      </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => { setShowSavedCartsModal(true); loadSavedCarts(); }}
-                        className={`flex items-center gap-2 min-h-[52px] md:min-h-[56px] bg-white border-2 border-gray-200 hover:border-gray-400 hover:bg-gray-50 transition-all text-gray-700 font-medium text-xs ${roamingMode ? 'w-full px-3 py-2' : 'flex-shrink-0 px-5 py-3'}`}
-                        title={dictValue('pos.titleSavedOrders', 'Load a saved order')}
-                      >
-                        <svg className="w-5 h-5 text-gray-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                        </svg>
-                        <span>{dictValue('pos.savedOrders', 'Saved Orders')}</span>
-                      </button>
-                    </div>
-                  )}
-
-                  <div className="w-px min-h-[52px] md:min-h-[56px] bg-gray-200" />
-
-                  <button
+                {/* Function-key row */}
+                <div className={roamingMode ? 'grid grid-cols-2 sm:grid-cols-3 lg:flex gap-1.5' : 'flex flex-wrap gap-1.5'}>
+                  {fnKeys.map(({ key, label, title, icon: Icon, onClick, danger }) => (
+                    <Button
+                      key={key}
+                      type="button"
+                      variant="light"
+                      className="h-10 gap-2 px-3 text-xs"
+                      onClick={onClick}
+                      title={`${title} (${key})`}
+                    >
+                      <Icon className={danger ? 'size-4 text-red-600' : 'size-4 text-brand'} strokeWidth={2.25} aria-hidden />
+                      <span>{label}</span>
+                      <kbd className="rounded border border-[#cdd8dc] bg-[#eef3f5] px-1 font-mono text-[10px] font-bold text-gray-500">{key}</kbd>
+                    </Button>
+                  ))}
+                  <Button
                     type="button"
+                    variant={roamingMode ? 'brand' : 'light'}
+                    className="h-10 gap-2 px-3 text-xs"
                     onClick={() => { setRoamingMode((v) => !v); setShowRoamingCart(false); }}
-                    className={`flex items-center gap-2 px-3 py-2 text-sm font-medium border transition-colors flex-shrink-0 ${roamingMode
-                      ? 'text-white border-transparent'
-                      : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'
-                      }`}
-                    style={roamingMode ? { backgroundColor: primaryColor, borderColor: primaryColor } : {}}
+                    aria-pressed={roamingMode}
                     title={roamingMode ? dictValue('pos.exitRoamingMode', 'Exit roaming mode') : dictValue('pos.enableRoamingMode', 'Enable roaming mode (line-busting)')}
                     aria-label={roamingMode ? dictValue('pos.exitRoamingMode', 'Exit roaming mode') : dictValue('pos.enableRoamingMode', 'Enable roaming mode')}
                   >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 18h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                    </svg>
-                    <span className="hidden sm:inline">{roamingMode ? dictValue('pos.roamingMode', 'Roaming') : dictValue('pos.roamMode', 'Roam')}</span>
-                    {roamingMode && (
-                      <span className="w-2 h-2 bg-white/80 animate-pulse" />
-                    )}
-                  </button>
+                    <Smartphone className={roamingMode ? 'size-4' : 'size-4 text-brand'} strokeWidth={2.25} aria-hidden />
+                    <span>{roamingMode ? dictValue('pos.roamingMode', 'Roaming') : dictValue('pos.roamMode', 'Roam')}</span>
+                  </Button>
                 </div>
               </div>
-              <div className="flex gap-2 mt-3 md:mt-4">
+
+              {/* Search / scan row */}
+              <div className="flex gap-1.5">
                 <div className="relative flex-1 min-w-0">
-                  <input
+                  <Search className="pointer-events-none absolute left-3 top-1/2 size-[18px] -translate-y-1/2 text-gray-400" strokeWidth={2.25} aria-hidden />
+                  <Input
                     ref={searchInputRef}
-                    type="text"
+                    type="search"
                     placeholder={dict.pos.searchPlaceholder}
+                    aria-label={dict.pos.searchPlaceholder}
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     autoFocus={!device.isTouch}
-                    className="w-full px-3 sm:px-4 py-2.5 sm:py-3 pl-10 sm:pl-11 text-sm sm:text-base border-2 border-gray-300 bg-white transition-all"
-                    onFocus={(e) => {
-                      e.currentTarget.style.borderColor = primaryColor;
-                      e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
-                    }}
-                    onBlur={(e) => {
-                      e.currentTarget.style.borderColor = '#d1d5db';
-                      e.currentTarget.style.boxShadow = 'none';
-                    }}
+                    className={`h-11 bg-white pl-10 pr-12 text-[15px] placeholder:text-gray-400 ${fieldShadow}`}
                   />
-                  <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
+                  <kbd className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 rounded border border-[#cdd8dc] bg-[#eef3f5] px-1 font-mono text-[10px] font-bold text-gray-500">F2</kbd>
                 </div>
-                <button
+                <Button
+                  type="button"
+                  variant="brand"
+                  className="size-11 p-0"
                   onClick={() => setShowQRScanner(true)}
-                  className="px-2.5 py-2.5 sm:px-3 sm:py-3 min-h-[44px] min-w-[44px] text-white transition-colors border flex-shrink-0"
-                  style={{ backgroundColor: primaryColor, borderColor: primaryColor }}
-                  onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = `${primaryColor}dd`; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = primaryColor; }}
-                  title={dictValue('pos.scanQRCode', 'Scan QR Code')}
+                  title={`${dictValue('pos.scanQRCode', 'Scan QR Code')} (F8)`}
+                  aria-label={dictValue('pos.scanQRCode', 'Scan QR Code')}
                 >
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
-                  </svg>
-                </button>
-                {canRefund && (
-                <button
-                  onClick={() => setShowRefundModal(true)}
-                  className="px-2.5 py-2.5 sm:px-3 sm:py-3 min-h-[44px] min-w-[44px] bg-red-600 text-white hover:bg-red-700 transition-colors border border-red-700 flex-shrink-0"
-                  title={dict.pos.refunds}
-                >
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-                  </svg>
-                </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setDisplayMode('grid')}
-                  className="px-2.5 py-2.5 sm:px-3 sm:py-3 min-h-[44px] min-w-[44px] bg-white transition-all flex-shrink-0 border-2"
-                  style={
-                    displayMode === 'grid'
-                      ? { borderColor: primaryColor, backgroundColor: `${primaryColor}10`, color: primaryColor }
-                      : { borderColor: '#d1d5db', color: '#374151' }
-                  }
-                  title={dictValue('common.gridView', 'Grid View')}
-                  aria-label={dictValue('common.gridView', 'Grid View')}
-                  aria-pressed={displayMode === 'grid'}
-                >
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-                  </svg>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDisplayMode('list')}
-                  className="px-2.5 py-2.5 sm:px-3 sm:py-3 min-h-[44px] min-w-[44px] bg-white transition-all flex-shrink-0 border-2"
-                  style={
-                    displayMode === 'list'
-                      ? { borderColor: primaryColor, backgroundColor: `${primaryColor}10`, color: primaryColor }
-                      : { borderColor: '#d1d5db', color: '#374151' }
-                  }
-                  title={dictValue('common.listView', 'List View')}
-                  aria-label={dictValue('common.listView', 'List View')}
-                  aria-pressed={displayMode === 'list'}
-                >
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-                  </svg>
-                </button>
+                  <QrCode className="size-5" strokeWidth={2.25} aria-hidden />
+                </Button>
+                <div className="flex rounded-md" role="group" aria-label={dictValue('pos.viewMode', 'View')}>
+                  <Button
+                    type="button"
+                    variant={displayMode === 'grid' ? 'brand' : 'light'}
+                    className="size-11 rounded-r-none p-0"
+                    onClick={() => setDisplayMode('grid')}
+                    title={dictValue('common.gridView', 'Grid View')}
+                    aria-label={dictValue('common.gridView', 'Grid View')}
+                    aria-pressed={displayMode === 'grid'}
+                  >
+                    <LayoutGrid className="size-[18px]" strokeWidth={2.25} aria-hidden />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={displayMode === 'list' ? 'brand' : 'light'}
+                    className="size-11 rounded-l-none border-l-0 p-0"
+                    onClick={() => setDisplayMode('list')}
+                    title={dictValue('common.listView', 'List View')}
+                    aria-label={dictValue('common.listView', 'List View')}
+                    aria-pressed={displayMode === 'list'}
+                  >
+                    <List className="size-[18px]" strokeWidth={2.25} aria-hidden />
+                  </Button>
+                </div>
               </div>
             </div>
-
 
             {debouncedSearch.trim() ? (
               <ProductGrid
@@ -1637,11 +1687,26 @@ export default function Dashboard() {
                 scrollRootRef={productsScrollRef}
               />
             ) : (
-              <div className="flex flex-col items-center justify-center py-24 gap-4 text-center select-none">
-                <svg className="w-16 h-16 opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
-                </svg>
-                <p className="text-lg font-medium opacity-40">{dict.pos?.searchPrompt || 'Search for a product to begin'}</p>
+              <div className="mk-panel rounded-xl flex flex-col items-center justify-center gap-3 px-6 py-14 sm:py-20 text-center select-none">
+                <span className="mk-key-brand flex size-14 items-center justify-center rounded-md">
+                  <ScanBarcode className="size-7" strokeWidth={2.25} aria-hidden />
+                </span>
+                <div>
+                  <p className="text-lg font-bold text-[#10222f]">{dict.pos?.searchPrompt || 'Search for a product to begin'}</p>
+                  <p className="mt-1 text-sm text-gray-500">{dictValue('pos.searchHint', 'Scan a barcode, or type a product name or SKU.')}</p>
+                </div>
+                <div className="mt-2 flex flex-wrap justify-center gap-1.5 text-xs text-gray-600">
+                  {[
+                    ['F2', dictValue('pos.keySearch', 'Search')],
+                    ['F8', dictValue('pos.keyScanQr', 'Scan QR')],
+                    ['F9', dictValue('pos.keyCharge', 'Charge')],
+                  ].map(([k, label]) => (
+                    <span key={k} className="mk-key-light inline-flex items-center gap-1.5 rounded-md px-2 py-1">
+                      <kbd className="font-mono text-[10px] font-bold text-brand">{k}</kbd>
+                      {label}
+                    </span>
+                  ))}
+                </div>
               </div>
             )}
           </div>
@@ -1650,30 +1715,28 @@ export default function Dashboard() {
 
       {/* Roaming Mode — Floating Cart Button */}
       {roamingMode && (
-        <button
-          type="button"
-          onClick={() => setShowRoamingCart(true)}
-          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-6 py-4 min-h-[44px] text-white font-bold border-2 border-white/20 transition-all hover:brightness-110"
-          style={{ backgroundColor: primaryColor }}
-          aria-label={`${dict.pos.cart}, ${cart.reduce((s, i) => s + i.quantity, 0)} ${dict.pos?.items || 'items'}, ${dict.pos?.total || dict.common?.total || 'Total'} ${getTotal()}`}
-        >
-          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
-          </svg>
-          <span>{dict.pos.cart}</span>
-          {cart.length > 0 ? (
-            <>
-              <span className="bg-white/20 px-2.5 py-0.5 text-sm font-bold">
-                {cart.reduce((s, i) => s + i.quantity, 0)} {dict.pos.items || 'items'}
-              </span>
-              <span className="text-white/90 text-base font-bold">
-                <Currency amount={getTotal()} />
-              </span>
-            </>
-          ) : (
-            <span className="text-white/70 text-sm">{dict.pos.cartEmpty}</span>
-          )}
-        </button>
+        <span className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
+          <button
+            type="button"
+            onClick={() => setShowRoamingCart(true)}
+            className="mk-key mk-sheen flex items-center gap-3 rounded-lg py-2 pl-2 pr-2 font-bold text-white shadow-[0_14px_30px_-10px_rgba(0,0,0,0.6)]"
+            aria-label={`${dict.pos.cart}, ${cartItemCount} ${dict.pos?.items || 'items'}, ${dict.pos?.total || dict.common?.total || 'Total'} ${getTotal()}`}
+          >
+            <span className="mk-key-brand flex size-10 items-center justify-center rounded-md">
+              <ShoppingCart className="size-5" strokeWidth={2.25} aria-hidden />
+            </span>
+            {cart.length > 0 ? (
+              <>
+                <span className="text-sm whitespace-nowrap">{cartItemCount} {dict.pos.items || 'items'}</span>
+                <span key={getTotal()} className="mk-lcd mk-lcd-on rounded-md px-2.5 py-1.5 text-base tabular-nums whitespace-nowrap">
+                  <Currency amount={getTotal()} />
+                </span>
+              </>
+            ) : (
+              <span className="pr-2 text-sm text-white/70 whitespace-nowrap">{dict.pos.cartEmpty}</span>
+            )}
+          </button>
+        </span>
       )}
 
       {/* Roaming Mode — Bottom Sheet Cart */}
@@ -1784,85 +1847,69 @@ export default function Dashboard() {
         />
       )}
 
-      {/* Save Cart Modal */}
-      {showSaveCartModal && (
-        <div
-          className="fixed inset-0 bg-gray-900/30 backdrop-blur-md z-50"
-          onClick={() => {
-            setShowSaveCartModal(false);
-            setCartName('');
-          }}
-        >
-          <div
-            className="absolute inset-y-0 right-0 w-full max-w-md bg-white border-l border-gray-300 flex flex-col animate-slide-in-right"
-            onClick={(e) => e.stopPropagation()}
+      {/* Save Cart Sheet */}
+      <Sheet
+        open={showSaveCartModal}
+        onOpenChange={(open) => {
+          setShowSaveCartModal(open);
+          if (!open) setCartName('');
+        }}
+      >
+        <SheetContent side="right" className="w-full sm:max-w-md gap-0 bg-[#eef3f5] p-0 [&>[data-slot=sheet-close]]:text-white/70 [&>[data-slot=sheet-close]]:hover:bg-white/10 [&>[data-slot=sheet-close]]:hover:text-white">
+          <SheetHeader className="mk-dark border-b border-black/40 p-5 text-white">
+            <SheetTitle className="flex items-center gap-2.5 text-xl font-bold text-white">
+              <span className="mk-key-brand flex size-9 items-center justify-center rounded-md">
+                <CirclePause className="size-[18px]" strokeWidth={2.25} aria-hidden />
+              </span>
+              {dict.pos?.saveCart || 'Save Cart'}
+            </SheetTitle>
+            <SheetDescription className="text-white/70">
+              {dict.pos?.cartNameHint || 'This cart will be saved for later processing'}
+            </SheetDescription>
+          </SheetHeader>
+          <form
+            className="mk-root flex-1 overflow-y-auto p-5 space-y-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              saveCart();
+            }}
           >
-            <div className="flex items-center justify-between p-5 sm:p-6 border-b border-gray-200">
-              <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
-                {dict.pos?.saveCart || 'Save Cart'}
-              </h2>
-              <button
+            <div className="mk-panel rounded-lg p-3 flex items-center justify-between gap-3">
+              <span className="text-xs font-semibold text-gray-500">{cartItemCount} {dict.pos?.items || 'items'}</span>
+              <span className="mk-lcd rounded px-2 py-1 text-sm font-bold tabular-nums"><Currency amount={getTotal()} /></span>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="save-cart-name">{dict.pos?.cartName || 'Cart Name'}</Label>
+              <Input
+                id="save-cart-name"
+                type="text"
+                value={cartName}
+                onChange={(e) => setCartName(e.target.value)}
+                className={`h-11 bg-white placeholder:text-gray-400 ${fieldShadow}`}
+                placeholder={dict.pos?.cartNamePlaceholder || 'Enter a name for this cart'}
+                autoFocus
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="light"
+                size="xl"
                 onClick={() => {
                   setShowSaveCartModal(false);
                   setCartName('');
                 }}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
               >
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+                {dict.common.cancel}
+              </Button>
+              <Button type="submit" variant="brand" size="xl" disabled={savingCart || !cartName.trim()}>
+                {savingCart && <Loader2 className="animate-spin" aria-hidden />}
+                {savingCart ? (dict.common.saving || 'Saving...') : (dict.common.save || 'Save')}
+              </Button>
             </div>
-            <div className="flex-1 overflow-y-auto p-5 sm:p-6">
-              <div className="mb-5">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  {dict.pos?.cartName || 'Cart Name'}
-                </label>
-                <input
-                  type="text"
-                  value={cartName}
-                  onChange={(e) => setCartName(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && saveCart()}
-                  className="w-full px-4 py-3 text-base border-2 border-gray-300 transition-all"
-                  placeholder={dict.pos?.cartNamePlaceholder || 'Enter a name for this cart'}
-                  autoFocus
-                  onFocus={(e) => {
-                    e.currentTarget.style.borderColor = primaryColor;
-                    e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
-                  }}
-                  onBlur={(e) => {
-                    e.currentTarget.style.borderColor = '#d1d5db';
-                    e.currentTarget.style.boxShadow = 'none';
-                  }}
-                />
-                <p className="text-sm text-gray-500 mt-2">
-                  {dict.pos?.cartNameHint || 'This cart will be saved for later processing'}
-                </p>
-              </div>
-              <div className="flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowSaveCartModal(false);
-                    setCartName('');
-                  }}
-                  className="px-4 py-2.5 border-2 border-gray-300 text-gray-700 hover:bg-gray-100 font-medium transition-colors bg-white"
-                >
-                  {dict.common.cancel}
-                </button>
-                <button
-                  type="button"
-                  onClick={saveCart}
-                  disabled={savingCart || !cartName.trim()}
-                  className="px-4 py-2.5 bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors border border-green-700"
-                >
-                  {savingCart ? (dict.common.saving || 'Saving...') : (dict.common.save || 'Save')}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+          </form>
+        </SheetContent>
+      </Sheet>
 
       {/* Load Saved Carts Modal */}
       {showSavedCartsModal && (
@@ -1925,25 +1972,22 @@ export default function Dashboard() {
       {confirmDialog}
 
       {/* Variant Selector Modal */}
-      {showVariantModal && pendingVariantProduct && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-md border border-gray-300">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
-              <div>
-                <h2 className="font-bold text-gray-900 text-lg">{pendingVariantProduct.name}</h2>
-                <p className="text-sm text-gray-500">{dictValue('pos.selectAVariant', 'Select a variant')}</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => { setShowVariantModal(false); setPendingVariantProduct(null); }}
-                className="p-2 text-gray-400 hover:text-gray-600"
-              >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <div className="p-5 grid grid-cols-2 gap-3 max-h-80 overflow-y-auto">
+      <Dialog
+        open={showVariantModal && !!pendingVariantProduct}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowVariantModal(false);
+            setPendingVariantProduct(null);
+          }
+        }}
+      >
+        {pendingVariantProduct && (
+          <DialogContent className="mk-root sm:max-w-md bg-[#eef3f5] p-0 gap-0 overflow-hidden [&>[data-slot=dialog-close]]:top-3 [&>[data-slot=dialog-close]]:text-white/70 [&>[data-slot=dialog-close]]:hover:bg-white/10 [&>[data-slot=dialog-close]]:hover:text-white">
+            <DialogHeader className="mk-dark px-5 py-4 text-white">
+              <DialogTitle className="text-lg font-bold text-white">{pendingVariantProduct.name}</DialogTitle>
+              <DialogDescription className="text-white/70">{dictValue('pos.selectAVariant', 'Select a variant')}</DialogDescription>
+            </DialogHeader>
+            <div className="p-3 grid grid-cols-2 gap-1.5 max-h-80 overflow-y-auto">
               {(pendingVariantProduct.variations || []).map((v, idx) => {
                 const label = [v.size, v.color, v.type].filter(Boolean).join(' / ') || v.sku || `Variant ${idx + 1}`;
                 const effectivePrice = v.price ?? pendingVariantProduct.price;
@@ -1966,25 +2010,22 @@ export default function Dashboard() {
                       setShowVariantModal(false);
                       setPendingVariantProduct(null);
                     }}
-                    className={`flex flex-col items-start p-3 border-2 transition-all text-left ${outOfStock
-                      ? 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed'
-                      : 'border-gray-300 hover:border-brand hover:bg-brand-soft cursor-pointer'
-                      }`}
+                    className={`mk-key-light mk-sheen flex flex-col items-start rounded-md p-2.5 text-left ${outOfStock ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                   >
                     <span className="font-semibold text-sm text-gray-900">{label}</span>
-                    <span className="text-sm text-gray-600 mt-0.5">
+                    <span className="font-mono text-sm font-bold tabular-nums text-brand mt-0.5">
                       <Currency amount={effectivePrice} />
                     </span>
-                    <span className={`text-[11px] mt-1 font-medium ${outOfStock ? 'text-red-500' : effectiveStock <= 5 ? 'text-yellow-600' : 'text-green-600'}`}>
-                      {outOfStock ? 'Out of stock' : `${effectiveStock} in stock`}
+                    <span className={`font-mono text-[10px] mt-1 font-bold uppercase ${outOfStock ? 'text-red-600' : effectiveStock <= 5 ? 'text-amber-700' : 'text-emerald-700'}`}>
+                      {outOfStock ? dictValue('pos.outOfStockShort', 'Out of stock') : `${effectiveStock} ${dictValue('pos.inStock', 'in stock')}`}
                     </span>
                   </button>
                 );
               })}
             </div>
-          </div>
-        </div>
-      )}
+          </DialogContent>
+        )}
+      </Dialog>
 
       {/* Cross-Branch Inventory Lookup Modal */}
       {branchLookupProduct && (

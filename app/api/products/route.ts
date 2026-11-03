@@ -12,6 +12,10 @@ import { logger } from '@/lib/logger';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
 
+/** Fields the POS register reads (see PosProduct in hooks/usePosProducts.ts). */
+const POS_FIELDS =
+  'name description price stock sku barcode category image pinned trackInventory allowOutOfStockSales hasVariations variations isActive createdAt updatedAt';
+
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
@@ -32,8 +36,22 @@ export async function GET(request: NextRequest) {
     const isActiveParam = searchParams.get('isActive');
     const filterParam = searchParams.get('filter'); // 'missing-barcode' | 'missing-image' | null
 
+    // POS catalog sync: `view=pos` returns only the fields the register uses (no populate), and
+    // `updatedSince` returns just the products changed after that instant — including deactivated
+    // ones, so the device can drop them from its local catalog.
+    const posView = searchParams.get('view') === 'pos';
+    const updatedSinceParam = searchParams.get('updatedSince');
+    const updatedSince = updatedSinceParam ? new Date(updatedSinceParam) : null;
+    if (updatedSince && isNaN(updatedSince.getTime())) {
+      return NextResponse.json({ success: false, error: 'Invalid updatedSince' }, { status: 400 });
+    }
+    // Captured before querying so a write that lands mid-request is picked up by the next sync.
+    const syncedAt = new Date().toISOString();
+
     const query: any = { tenantId }; // eslint-disable-line @typescript-eslint/no-explicit-any
-    if (isActiveParam === 'true') {
+    if (updatedSince) {
+      query.updatedAt = { $gt: updatedSince };
+    } else if (isActiveParam === 'true') {
       query.isActive = { $ne: false };
     } else if (isActiveParam === 'false') {
       query.isActive = false;
@@ -84,6 +102,27 @@ export async function GET(request: NextRequest) {
     const page = usePagination ? Math.max(1, rawPage) : 1;
     const limit = usePagination ? Math.min(Math.max(1, rawLimit), 100) : 0;
     const sort = { pinned: -1 as const, createdAt: -1 as const };
+    // `count=0` skips countDocuments (a second scan of every match) and reports hasMore instead.
+    const skipCount = searchParams.get('count') === '0';
+
+    if (usePagination && skipCount) {
+      const rows = await Product.find(query)
+        .select(posView ? POS_FIELDS : {})
+        .sort(sort)
+        .skip((page - 1) * limit)
+        .limit(limit + 1)
+        .lean();
+      return NextResponse.json({
+        success: true,
+        data: rows.slice(0, limit),
+        pagination: { page, limit, hasMore: rows.length > limit },
+      });
+    }
+
+    if (posView) {
+      const products = await Product.find(query).select(POS_FIELDS).sort(sort).lean();
+      return NextResponse.json({ success: true, data: products, syncedAt });
+    }
 
     if (usePagination) {
       const skip = (page - 1) * limit;

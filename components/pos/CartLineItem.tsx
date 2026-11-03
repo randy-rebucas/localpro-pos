@@ -1,6 +1,8 @@
 'use client';
 
+import { MapPin, Minus, Plus, Trash2 } from 'lucide-react';
 import Currency from '@/components/Currency';
+import { Button } from '@/components/ui/button';
 import type { CartItem } from '@/hooks/useCart';
 import type { TranslationDict } from '@/types/dictionary';
 
@@ -94,67 +96,69 @@ export default function CartLineItem({
     );
   }
 
+  // Compact: a ticket line on the register's receipt paper.
   return (
-    <div className="px-2 py-2 sm:px-2.5 hover:bg-gray-50/80 transition-colors">
-      <div className="flex items-start gap-1.5 mb-1.5">
+    <div className="mk-line-in px-2.5 py-2 hover:bg-[#f3f7f8] transition-colors">
+      <div className="flex items-start gap-2">
         <div className="flex-1 min-w-0">
-          <div className="font-medium text-gray-900 text-sm leading-snug line-clamp-2">{item.name}</div>
-          <div className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
+          <div className="font-semibold text-gray-900 text-[13px] leading-snug line-clamp-2">{item.name}</div>
+          <div className="font-mono text-[11px] text-gray-500 tabular-nums flex items-center gap-1 mt-0.5">
+            <span>{item.quantity}</span>
+            <span className="text-gray-400">@</span>
             <Currency amount={item.price} />
-            <span className="text-gray-400">×{item.quantity}</span>
             {businessType === 'retail' && onBranchLookup && (
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="icon-xs"
                 onClick={onBranchLookup}
-                className="text-gray-400 hover:text-brand transition-colors p-0.5 min-h-[44px] min-w-[44px] flex items-center justify-center -my-2"
+                className="ml-0.5 text-gray-400 hover:text-brand"
                 aria-label={dict.pos?.titleCheckStock || 'Check stock at other locations'}
+                title={dict.pos?.titleCheckStock || 'Check stock at other locations'}
               >
-                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-              </button>
+                <MapPin strokeWidth={2.25} aria-hidden />
+              </Button>
             )}
           </div>
         </div>
-        <div className="text-sm font-bold text-gray-900 tabular-nums flex-shrink-0 pt-0.5">
+        <div className="font-mono text-[13px] font-bold text-gray-900 tabular-nums flex-shrink-0 pt-px">
           <Currency amount={item.price * item.quantity} />
         </div>
-        <button
-          type="button"
-          onClick={() => onRemove(item.cartItemId)}
-          className="p-1 min-h-[44px] min-w-[44px] text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors flex-shrink-0 rounded flex items-center justify-center"
-          aria-label={dict.pos?.removeItem || 'Remove item'}
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
       </div>
-      <div className="flex items-center justify-between gap-2 pl-0.5">
-        <span className="text-[10px] uppercase tracking-wide text-gray-400 font-medium">{dict.pos?.each || 'each'}</span>
-        <div className="flex items-center border border-gray-300 overflow-hidden bg-white rounded-sm">
-          <button
-            type="button"
-            onClick={() => onUpdateQuantity(item.cartItemId, item.quantity - 1, onQuantityError)}
-            className={qtyBtnClass}
-            aria-label={dict.pos?.decreaseQuantity || 'Decrease quantity'}
-          >
-            −
-          </button>
-          <span className="px-2 py-1 min-w-[2rem] text-center font-semibold text-sm bg-white tabular-nums border-x border-gray-300">
-            {item.quantity}
-          </span>
-          <button
-            type="button"
-            onClick={() => onUpdateQuantity(item.cartItemId, item.quantity + 1, onQuantityError)}
-            className={qtyBtnClass}
-            disabled={increaseDisabled}
-            aria-label={dict.pos?.increaseQuantity || 'Increase quantity'}
-          >
-            +
-          </button>
-        </div>
+      <div className="mt-1.5 flex items-center justify-end gap-1">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-lg"
+          onClick={() => onRemove(item.cartItemId)}
+          className="mr-auto -ml-1 text-gray-400 hover:text-red-600 hover:bg-red-50"
+          aria-label={dict.pos?.removeItem || 'Remove item'}
+          title={dict.pos?.removeItem || 'Remove item'}
+        >
+          <Trash2 strokeWidth={2.25} aria-hidden />
+        </Button>
+        <Button
+          type="button"
+          variant="light"
+          size="icon-lg"
+          onClick={() => onUpdateQuantity(item.cartItemId, item.quantity - 1, onQuantityError)}
+          aria-label={dict.pos?.decreaseQuantity || 'Decrease quantity'}
+        >
+          <Minus strokeWidth={2.5} aria-hidden />
+        </Button>
+        <span key={item.quantity} className="mk-lcd mk-lcd-on rounded min-w-[2.5rem] px-1.5 py-2 text-center text-xs font-bold tabular-nums">
+          {item.quantity}
+        </span>
+        <Button
+          type="button"
+          variant="light"
+          size="icon-lg"
+          onClick={() => onUpdateQuantity(item.cartItemId, item.quantity + 1, onQuantityError)}
+          disabled={increaseDisabled}
+          aria-label={dict.pos?.increaseQuantity || 'Increase quantity'}
+        >
+          <Plus strokeWidth={2.5} aria-hidden />
+        </Button>
       </div>
     </div>
   );

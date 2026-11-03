@@ -78,7 +78,7 @@ export default function ProductGrid({
 
   if (status === 'error') {
     return (
-      <div className="bg-white border border-gray-300">
+      <div className="mk-panel rounded-lg">
         <ErrorState
           title={dict.pos?.failedToLoadProducts || 'Failed to load products'}
           description={error || undefined}
@@ -99,7 +99,7 @@ export default function ProductGrid({
       )}
 
       {products.length === 0 ? (
-        <div className="bg-white border border-gray-300">
+        <div className="mk-panel rounded-lg">
           <EmptyState
             icon={search.trim() ? 'search' : 'products'}
             title={

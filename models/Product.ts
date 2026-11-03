@@ -283,6 +283,8 @@ ProductSchema.index({ tenantId: 1, hasVariations: 1 });
 ProductSchema.index({ tenantId: 1, pinned: -1, createdAt: -1 });
 // Category-filtered product list (same sort as the pinned index above)
 ProductSchema.index({ tenantId: 1, categoryId: 1, pinned: -1, createdAt: -1 });
+// POS catalog delta sync (GET /api/products?updatedSince=…): reads only the products changed since the device last synced
+ProductSchema.index({ tenantId: 1, updatedAt: 1 });
 // Inventory-tracked product scans (low-stock alerts, stock automations)
 ProductSchema.index({ tenantId: 1, trackInventory: 1 });
 // Case-insensitive exact name lookups (duplicate-name check on create). Queries must pass
