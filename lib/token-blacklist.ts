@@ -58,8 +58,7 @@ const UserRevocationSchema = new Schema<IUserRevocation>({
   userId: {
     type: String,
     required: true,
-    unique: true,
-    index: true,
+    unique: true, // unique implies index
   },
   revokedBefore: {
     type: Date,
@@ -84,6 +83,14 @@ interface BlacklistEntry {
 const memoryStore = new Map<string, BlacklistEntry>();
 const userRevokeTimestamps = new Map<string, number>();
 
+// Negative caches: "checked the DB, not revoked" — avoids two MongoDB reads on
+// every authenticated request. A revocation made on another instance becomes
+// visible here within NEGATIVE_CACHE_TTL_MS; revocations made on this instance
+// clear the entry immediately.
+const NEGATIVE_CACHE_TTL_MS = 60 * 1000;
+const notRevokedTokens = new Map<string, number>(); // tokenKey -> checkedUntil
+const userRevocationChecked = new Map<string, number>(); // userId -> checkedUntil
+
 // Cleanup expired in-memory entries every 10 minutes
 setInterval(() => {
   const now = Date.now();
@@ -91,6 +98,12 @@ setInterval(() => {
     if (entry.expiresAt <= now) {
       memoryStore.delete(key);
     }
+  }
+  for (const [key, until] of notRevokedTokens.entries()) {
+    if (until <= now) notRevokedTokens.delete(key);
+  }
+  for (const [key, until] of userRevocationChecked.entries()) {
+    if (until <= now) userRevocationChecked.delete(key);
   }
 }, 10 * 60 * 1000).unref?.();
 
@@ -125,6 +138,7 @@ export async function revokeToken(
 
   // Always write to in-memory as immediate cache
   memoryStore.set(key, { expiresAt: expiresAt.getTime(), reason });
+  notRevokedTokens.delete(key);
 
   // Persist to MongoDB for cross-instance consistency
   if (isMongoConnected()) {
@@ -158,11 +172,16 @@ export async function isTokenRevoked(token: string): Promise<boolean> {
     return true;
   }
 
+  const checkedUntil = notRevokedTokens.get(key);
+  if (checkedUntil && checkedUntil > now) {
+    return false;
+  }
+
   // Check MongoDB (cross-instance)
   if (isMongoConnected()) {
     try {
       const RevokedToken = getRevokedTokenModel();
-      const found = await RevokedToken.findOne({ tokenHash: key }).lean();
+      const found = await RevokedToken.findOne({ tokenHash: key }).select('expiresAt reason').lean();
       if (found) {
         // Cache in memory for subsequent checks in this instance
         memoryStore.set(key, {
@@ -171,6 +190,7 @@ export async function isTokenRevoked(token: string): Promise<boolean> {
         });
         return true;
       }
+      notRevokedTokens.set(key, now + NEGATIVE_CACHE_TTL_MS);
     } catch {
       // Fall through to false if DB is unavailable
     }
@@ -188,6 +208,7 @@ export async function revokeAllUserTokens(userId: string): Promise<void> {
 
   // In-memory cache
   userRevokeTimestamps.set(userId, now);
+  userRevocationChecked.set(userId, now + NEGATIVE_CACHE_TTL_MS);
 
   // Persist to MongoDB
   if (isMongoConnected()) {
@@ -219,11 +240,19 @@ export async function isTokenIssuedBeforeRevocation(
     return true;
   }
 
+  // The DB record was read recently — the in-memory timestamp (if any) is current
+  const now = Date.now();
+  const checkedUntil = userRevocationChecked.get(userId);
+  if (checkedUntil && checkedUntil > now) {
+    return false;
+  }
+
   // Check MongoDB
   if (isMongoConnected()) {
     try {
       const UserRevocation = getUserRevocationModel();
-      const record = await UserRevocation.findOne({ userId }).lean();
+      const record = await UserRevocation.findOne({ userId }).select('revokedBefore').lean();
+      userRevocationChecked.set(userId, now + NEGATIVE_CACHE_TTL_MS);
       if (record) {
         const revokedBefore = new Date(record.revokedBefore).getTime();
         // Cache for future checks

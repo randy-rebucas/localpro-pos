@@ -18,13 +18,11 @@ const CustomerBalancePaymentSchema: Schema = new Schema(
       type: Schema.Types.ObjectId,
       ref: 'Tenant',
       required: [true, 'Tenant ID is required'],
-      index: true,
     },
     customerId: {
       type: Schema.Types.ObjectId,
       ref: 'Customer',
       required: [true, 'Customer ID is required'],
-      index: true,
     },
     amount: {
       type: Number,
@@ -43,7 +41,6 @@ const CustomerBalancePaymentSchema: Schema = new Schema(
     recordedBy: {
       type: Schema.Types.ObjectId,
       ref: 'User',
-      index: true,
     },
     idempotencyKey: {
       type: String,

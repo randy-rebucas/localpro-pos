@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 
 interface User {
@@ -29,12 +29,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
 
-  // Check if user is authenticated on mount and route changes
+  // Check if user is authenticated on mount and on route changes. While signed
+  // out (login/signup flows set the cookie, then navigate) every navigation
+  // re-checks; once signed in, at most once a minute (on navigation or window
+  // focus) so expired/revoked sessions and impersonation switches are picked up
+  // without a DB round trip on every page view.
+  const lastCheckRef = useRef(0);
+  const AUTH_RECHECK_MS = 60 * 1000;
+
   useEffect(() => {
-    checkAuth();
+    if (!user || Date.now() - lastCheckRef.current >= AUTH_RECHECK_MS) checkAuth();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname]);
 
+  useEffect(() => {
+    const onFocus = () => {
+      if (Date.now() - lastCheckRef.current < AUTH_RECHECK_MS) return;
+      checkAuth();
+    };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const checkAuth = async () => {
+    lastCheckRef.current = Date.now();
     try {
       // Check if we have a token in cookies
       const res = await fetch('/api/auth/me', { credentials: 'include' });

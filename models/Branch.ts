@@ -60,7 +60,12 @@ const BranchSchema: Schema = new Schema(
 );
 
 // Compound index for tenant-scoped unique branch code
-BranchSchema.index({ tenantId: 1, code: 1 }, { unique: true, sparse: true });
+// partialFilterExpression instead of sparse: sparse has no effect on compound
+// indexes because tenantId is always present.
+BranchSchema.index(
+  { tenantId: 1, code: 1 },
+  { unique: true, partialFilterExpression: { code: { $type: 'string' } } }
+);
 BranchSchema.index({ tenantId: 1, isActive: 1 });
 
 const Branch: Model<IBranch> = mongoose.models.Branch || mongoose.model<IBranch>('Branch', BranchSchema);

@@ -3,19 +3,30 @@
  * Remind customers about saved/abandoned carts
  */
 
+import mongoose from 'mongoose';
 import connectDB from '@/lib/mongodb';
 import SavedCart from '@/models/SavedCart';
 import Transaction from '@/models/Transaction';
 import Tenant from '@/models/Tenant';
+import type { ITenantSettings } from '@/models/Tenant';
 import User from '@/models/User'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { sendEmail } from '@/lib/notifications';
-import { getTenantSettingsById } from '@/lib/tenant';
+import { getActiveTenants, type ActiveTenant } from '@/lib/tenant-active-query';
 import { AutomationResult } from './types';
 
 export interface AbandonedCartOptions {
   tenantId?: string;
   hoursAgo?: number; // Hours since cart was saved to consider abandoned (default: 24)
+  /**
+   * Width of the "became abandoned" window in hours (default: 12, matching the
+   * `0 *\/12 * * *` schedule in vercel.json). SavedCart has no reminder flag, so a
+   * cart is only picked up by the one run whose window contains
+   * `updatedAt + hoursAgo` — i.e. each cart is reminded at most once.
+   */
+  windowHours?: number;
 }
+
+const TENANT_FIELDS = 'settings.emailNotifications settings.companyName settings.website';
 
 /**
  * Send reminders for abandoned carts
@@ -35,15 +46,19 @@ export async function sendAbandonedCartReminders(
 
   try {
     const hoursAgo = options.hoursAgo || 24;
+    const windowHours = options.windowHours || 12;
     const cutoffTime = new Date(Date.now() - hoursAgo * 60 * 60 * 1000);
+    const windowStart = new Date(cutoffTime.getTime() - windowHours * 60 * 60 * 1000);
 
     // Get tenants to process
-    let tenants;
+    let tenants: ActiveTenant[];
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).lean();
+      const tenant = await Tenant.findById(options.tenantId)
+        .select(`_id slug name ${TENANT_FIELDS}`)
+        .lean<ActiveTenant>();
       tenants = tenant ? [tenant] : [];
     } else {
-      tenants = await Tenant.find({ status: 'active' }).lean();
+      tenants = await getActiveTenants(TENANT_FIELDS);
     }
 
     if (tenants.length === 0) {
@@ -56,24 +71,50 @@ export async function sendAbandonedCartReminders(
 
     for (const tenant of tenants) {
       try {
-        const tenantId = tenant._id.toString();
-        const tenantSettings = await getTenantSettingsById(tenantId);
+        const tenantSettings = (tenant.settings ?? null) as ITenantSettings | null;
 
         // Skip if email notifications disabled
         if (!tenantSettings?.emailNotifications) {
           continue;
         }
 
-        // Find saved carts that haven't been converted to transactions
-        // Carts saved more than X hours ago
+        const tenantObjectId = new mongoose.Types.ObjectId(String(tenant._id));
+
+        // Find saved carts that became "abandoned" during this run's window
         const abandonedCarts = await SavedCart.find({
-          tenantId,
-          updatedAt: { $lte: cutoffTime },
+          tenantId: tenantObjectId,
+          isActive: { $ne: false }, // skip soft-deleted carts
+          updatedAt: { $gt: windowStart, $lte: cutoffTime },
         })
+          .select('userId items total updatedAt')
           .populate('userId', 'name email')
           .sort({ updatedAt: -1 })
           .limit(100) // Limit to prevent too many emails
           .lean();
+
+        if (abandonedCarts.length === 0) continue;
+
+        // Last transaction per cart owner, in one query instead of one per cart
+        const userIds = abandonedCarts
+          .map((c) => (c.userId as unknown as { _id?: mongoose.Types.ObjectId } | null)?._id)
+          .filter((id): id is mongoose.Types.ObjectId => !!id);
+        const oldestCart = abandonedCarts.reduce(
+          (min, c) => (c.updatedAt < min ? c.updatedAt : min),
+          abandonedCarts[0].updatedAt
+        );
+        const lastTxRows = userIds.length
+          ? await Transaction.aggregate<{ _id: mongoose.Types.ObjectId; last: Date }>([
+              {
+                $match: {
+                  tenantId: tenantObjectId,
+                  userId: { $in: userIds },
+                  createdAt: { $gte: oldestCart },
+                },
+              },
+              { $group: { _id: '$userId', last: { $max: '$createdAt' } } },
+            ])
+          : [];
+        const lastTxByUser = new Map(lastTxRows.map((r) => [r._id.toString(), new Date(r.last)]));
 
         for (const cart of abandonedCarts) {
           try {
@@ -84,13 +125,8 @@ export async function sendAbandonedCartReminders(
 
             // Check if cart was already converted to transaction
             // (This is a simple check - in production, you might want to track this better)
-            const recentTransactions = await Transaction.find({
-              tenantId,
-              userId: user._id,
-              createdAt: { $gte: cart.updatedAt },
-            }).limit(1).lean();
-
-            if (recentTransactions.length > 0) {
+            const lastTx = lastTxByUser.get(user._id.toString());
+            if (lastTx && lastTx >= cart.updatedAt) {
               continue; // Cart was likely completed
             }
 

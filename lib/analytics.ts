@@ -116,49 +116,60 @@ export async function getSalesReport(
     }
   }
 
-  const transactions = await Transaction.find({
-    tenantId,
-    createdAt: { $gte: start, $lte: end },
-    status: 'completed',
-    isActive: { $ne: false },
-  }).lean();
+  const tenantObjectId = toObjectId(tenantId);
+  const digitalLike = ['digital', 'tap_to_pay', 'wallet', 'qr_code', 'bnpl'];
 
-  const totalSales = transactions.reduce((sum, t) => sum + t.total, 0);
-  const totalTransactions = transactions.length;
+  // Totals are computed in the database — only the grouped rows come back
+  const [result] = await Transaction.aggregate<{
+    byMethod: Array<{ _id: string | null; sales: number; count: number }>;
+    byDay: Array<{ _id: string; sales: number; transactions: number }>;
+  }>([
+    { $match: completedSalesMatch(tenantObjectId, start, end) },
+    {
+      $facet: {
+        byMethod: [
+          { $group: { _id: '$paymentMethod', sales: { $sum: '$total' }, count: { $sum: 1 } } },
+        ],
+        // Sales by day only for detailed (daily/weekly) reports
+        ...(period === 'daily' || period === 'weekly'
+          ? {
+            byDay: [
+              {
+                $group: {
+                  _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
+                  sales: { $sum: '$total' },
+                  transactions: { $sum: 1 },
+                },
+              },
+              { $sort: { _id: 1 } },
+            ],
+          }
+          : {}),
+      },
+    },
+  ]);
+
+  const byMethod = result?.byMethod ?? [];
+  const sumFor = (methods: string[]) =>
+    byMethod.filter((m) => m._id && methods.includes(m._id)).reduce((sum, m) => sum + m.sales, 0);
+
+  const totalSales = byMethod.reduce((sum, m) => sum + m.sales, 0);
+  const totalTransactions = byMethod.reduce((sum, m) => sum + m.count, 0);
   const averageTransaction = totalTransactions > 0 ? totalSales / totalTransactions : 0;
 
-  const digitalLike = ['digital', 'tap_to_pay', 'wallet', 'qr_code', 'bnpl'] as const;
   const salesByPaymentMethod = {
-    cash: transactions.filter((t) => t.paymentMethod === 'cash').reduce((sum, t) => sum + t.total, 0),
-    card: transactions.filter((t) => t.paymentMethod === 'card').reduce((sum, t) => sum + t.total, 0),
-    digital: transactions
-      .filter((t) => digitalLike.includes(t.paymentMethod as (typeof digitalLike)[number]))
-      .reduce((sum, t) => sum + t.total, 0),
-    on_account: transactions
-      .filter((t) => t.paymentMethod === 'on_account')
-      .reduce((sum, t) => sum + t.total, 0),
+    cash: sumFor(['cash']),
+    card: sumFor(['card']),
+    digital: sumFor(digitalLike),
+    on_account: sumFor(['on_account']),
   };
 
   // Sales by day for detailed reports
-  const salesByDay: Array<{ date: string; sales: number; transactions: number }> = [];
-  if (period === 'daily' || period === 'weekly') {
-    const dayMap = new Map<string, { sales: number; transactions: number }>();
-    
-    transactions.forEach(t => {
-      const dateStr = new Date(t.createdAt).toISOString().split('T')[0];
-      const existing = dayMap.get(dateStr) || { sales: 0, transactions: 0 };
-      dayMap.set(dateStr, {
-        sales: existing.sales + t.total,
-        transactions: existing.transactions + 1,
-      });
-    });
-
-    dayMap.forEach((value, date) => {
-      salesByDay.push({ date, ...value });
-    });
-
-    salesByDay.sort((a, b) => a.date.localeCompare(b.date));
-  }
+  const salesByDay = (result?.byDay ?? []).map((d) => ({
+    date: d._id,
+    sales: d.sales,
+    transactions: d.transactions,
+  }));
 
   return {
     period,
@@ -178,66 +189,43 @@ export async function getProductPerformance(
   endDate: Date,
   limit: number = 10
 ): Promise<ProductPerformance[]> {
-  // Ensure Product model is registered before using populate
-  // This is necessary in Next.js serverless functions where models might not be registered yet
-  // Accessing the model ensures its registration code has executed
-  if (!mongoose.models.Product) {
-    // The Product model should be registered when imported, but if it's not,
-    // we need to ensure it's registered. Accessing Product.modelName forces evaluation.
-    const _ = Product.modelName;
-  }
-  
-  const transactions = await Transaction.find({
-    tenantId,
-    createdAt: { $gte: startDate, $lte: endDate },
-    status: 'completed',
-    isActive: { $ne: false },
-  }).populate('items.product', 'name').lean();
-
-  const productMap = new Map<string, {
-    productId: string;
-    productName: string;
+  // Group line items in the database, then look up current names for the top
+  // `limit` products only (previously every product of every sale was populated)
+  const rows = await Transaction.aggregate<{
+    _id: mongoose.Types.ObjectId | null;
+    itemName: string | null;
     totalRevenue: number;
     quantitySold: number;
-    transactions: number;
-  }>();
+  }>([
+    { $match: completedSalesMatch(toObjectId(tenantId), startDate, endDate) },
+    { $unwind: '$items' },
+    {
+      $group: {
+        _id: '$items.product',
+        itemName: { $first: '$items.name' },
+        totalRevenue: { $sum: '$items.subtotal' },
+        quantitySold: { $sum: '$items.quantity' },
+      },
+    },
+    { $sort: { totalRevenue: -1 } },
+    { $limit: limit },
+  ]);
 
-  transactions.forEach(transaction => {
-    transaction.items.forEach((item: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-      const productId = item.product?._id?.toString() || item.product?.toString();
-      const productName = item.product?.name || item.name || 'Unknown';
-      
-      const existing = productMap.get(productId) || {
-        productId,
-        productName,
-        totalRevenue: 0,
-        quantitySold: 0,
-        transactions: 0,
-      };
+  const productIds = rows.map((r) => r._id).filter(Boolean);
+  const products = productIds.length
+    ? await Product.find({ _id: { $in: productIds }, tenantId }).select('name').lean()
+    : [];
+  const nameById = new Map(products.map((p) => [String(p._id), p.name]));
 
-      existing.totalRevenue += item.subtotal;
-      existing.quantitySold += item.quantity;
-      existing.transactions += 1;
-
-      productMap.set(productId, existing);
-    });
-  });
-
-  const performances: ProductPerformance[] = Array.from(productMap.values())
-    .map(p => ({
-      productId: p.productId,
-      productName: p.productName,
-      totalSold: p.quantitySold,
-      totalRevenue: p.totalRevenue,
-      averagePrice: p.quantitySold > 0 ? p.totalRevenue / p.quantitySold : 0,
-      quantitySold: p.quantitySold,
-      rank: 0, // Will be set after sorting
-    }))
-    .sort((a, b) => b.totalRevenue - a.totalRevenue)
-    .slice(0, limit)
-    .map((p, index) => ({ ...p, rank: index + 1 }));
-
-  return performances;
+  return rows.map((r, index) => ({
+    productId: r._id ? String(r._id) : '',
+    productName: (r._id && nameById.get(String(r._id))) || r.itemName || 'Unknown',
+    totalSold: r.quantitySold,
+    totalRevenue: r.totalRevenue,
+    averagePrice: r.quantitySold > 0 ? r.totalRevenue / r.quantitySold : 0,
+    quantitySold: r.quantitySold,
+    rank: index + 1,
+  }));
 }
 
 export async function getVATReport(
@@ -246,29 +234,22 @@ export async function getVATReport(
   endDate: Date,
   settings: ITenantSettings
 ): Promise<VATReport> {
-  const transactions = await Transaction.find({
-    tenantId,
-    createdAt: { $gte: startDate, $lte: endDate },
-    status: 'completed',
-    isActive: { $ne: false },
-  }).lean();
+  const [totals] = await Transaction.aggregate<{ totalSales: number }>([
+    { $match: completedSalesMatch(toObjectId(tenantId), startDate, endDate) },
+    { $group: { _id: null, totalSales: { $sum: '$total' } } },
+  ]);
 
   const vatRate = settings.taxEnabled && settings.taxRate ? settings.taxRate / 100 : 0;
-  
+
   // For simplicity, we'll assume all sales are VAT sales if tax is enabled
   // In a real system, you'd have a flag on products/transactions
-  const totalSales = transactions.reduce((sum, t) => sum + t.total, 0);
-  
-  let vatSales = 0;
-  const nonVatSales = 0; // eslint-disable-line @typescript-eslint/no-unused-vars
-  
+  const totalSales = totals?.totalSales ?? 0;
+
   if (vatRate > 0) {
-    // Calculate VAT sales (total includes VAT)
-    vatSales = totalSales; // eslint-disable-line @typescript-eslint/no-unused-vars
-    // Calculate base amount (without VAT)
+    // Calculate base amount (without VAT) — total includes VAT
     const baseAmount = totalSales / (1 + vatRate);
     const vatAmount = totalSales - baseAmount;
-    
+
     return {
       vatSales: baseAmount,
       nonVatSales: 0,
@@ -292,35 +273,35 @@ export async function getProfitLossSummary(
   startDate: Date,
   endDate: Date
 ): Promise<ProfitLossSummary> {
-  const transactions = await Transaction.find({
-    tenantId,
-    createdAt: { $gte: startDate, $lte: endDate },
-    status: 'completed',
-    isActive: { $ne: false },
-  }).lean();
+  const tenantObjectId = toObjectId(tenantId);
 
-  const expenses = await Expense.find({
-    tenantId,
-    date: { $gte: startDate, $lte: endDate },
-    isActive: { $ne: false },
-  }).lean();
+  const [byMethod, expenseByName] = await Promise.all([
+    Transaction.aggregate<{ _id: string | null; sales: number }>([
+      { $match: completedSalesMatch(tenantObjectId, startDate, endDate) },
+      { $group: { _id: '$paymentMethod', sales: { $sum: '$total' } } },
+    ]),
+    // Use expense name as category since Expense model doesn't have a category field
+    Expense.aggregate<{ _id: string | null; amount: number }>([
+      { $match: { tenantId: tenantObjectId, date: { $gte: startDate, $lte: endDate }, isActive: { $ne: false } } },
+      { $group: { _id: '$name', amount: { $sum: '$amount' } } },
+    ]),
+  ]);
 
+  const sumFor = (method: string) => byMethod.find((m) => m._id === method)?.sales ?? 0;
   const revenue = {
-    total: transactions.reduce((sum, t) => sum + t.total, 0),
-    cash: transactions.filter(t => t.paymentMethod === 'cash').reduce((sum, t) => sum + t.total, 0),
-    card: transactions.filter(t => t.paymentMethod === 'card').reduce((sum, t) => sum + t.total, 0),
-    digital: transactions.filter(t => t.paymentMethod === 'digital').reduce((sum, t) => sum + t.total, 0),
+    total: byMethod.reduce((sum, m) => sum + m.sales, 0),
+    cash: sumFor('cash'),
+    card: sumFor('card'),
+    digital: sumFor('digital'),
   };
 
-  const expenseTotal = expenses.reduce((sum, e) => sum + e.amount, 0);
-  
+  // Merge null/empty names into "Other" as before
   const expenseByCategory = new Map<string, number>();
-  expenses.forEach(expense => {
-    // Use expense name as category since Expense model doesn't have a category field
-    const category = expense.name || 'Other';
-    const existing = expenseByCategory.get(category) || 0;
-    expenseByCategory.set(category, existing + expense.amount);
-  });
+  for (const row of expenseByName) {
+    const category = row._id || 'Other';
+    expenseByCategory.set(category, (expenseByCategory.get(category) || 0) + row.amount);
+  }
+  const expenseTotal = expenseByName.reduce((sum, e) => sum + e.amount, 0);
 
   const expensesData = {
     total: expenseTotal,
@@ -359,36 +340,51 @@ export async function getCashDrawerReports(
     .sort({ openingTime: -1 })
     .lean();
 
-  const reports: CashDrawerReport[] = [];
+  if (sessions.length === 0) return [];
 
-  for (const session of sessions) {
-    // Get cash sales for this session period
-    const sessionEnd = session.closingTime || new Date();
-    const cashTransactions = await Transaction.find({
+  // Load cash sales and cash expenses for the whole span once (only the fields
+  // needed), instead of two queries per session over overlapping ranges
+  const now = new Date();
+  const spanStart = new Date(Math.min(...sessions.map((s) => new Date(s.openingTime).getTime())));
+  const spanEnd = new Date(Math.max(...sessions.map((s) => new Date(s.closingTime || now).getTime())));
+
+  const [cashTransactions, cashExpenses] = await Promise.all([
+    Transaction.find({
       tenantId,
       paymentMethod: 'cash',
-      createdAt: { $gte: session.openingTime, $lte: sessionEnd },
+      createdAt: { $gte: spanStart, $lte: spanEnd },
       status: 'completed',
       isActive: { $ne: false },
-    }).lean();
-
-    const cashSales = cashTransactions.reduce((sum, t) => sum + t.total, 0);
-
-    // Get cash expenses for this session period
-    const cashExpenses = await Expense.find({
+    }).select('total createdAt').lean(),
+    Expense.find({
       tenantId,
       paymentMethod: 'cash',
-      date: { $gte: session.openingTime, $lte: sessionEnd },
+      date: { $gte: spanStart, $lte: spanEnd },
       isActive: { $ne: false },
-    }).lean();
+    }).select('amount date').lean(),
+  ]);
 
-    const cashExpensesTotal = cashExpenses.reduce((sum, e) => sum + e.amount, 0);
+  return sessions.map((session) => {
+    const open = new Date(session.openingTime).getTime();
+    const close = new Date(session.closingTime || now).getTime();
+    const inSession = (d: Date) => {
+      const t = new Date(d).getTime();
+      return t >= open && t <= close;
+    };
+
+    const cashSales = cashTransactions
+      .filter((t) => inSession(t.createdAt))
+      .reduce((sum, t) => sum + t.total, 0);
+    const cashExpensesTotal = cashExpenses
+      .filter((e) => inSession(e.date))
+      .reduce((sum, e) => sum + e.amount, 0);
 
     const netCash = session.openingAmount + cashSales - cashExpensesTotal - (session.closingAmount || 0);
 
-    reports.push({
+    return {
       sessionId: session._id.toString(),
-      userId: session.userId.toString(),
+      // userId is populated (lean → plain object), so read its _id
+      userId: String((session.userId as any)?._id ?? session.userId), // eslint-disable-line @typescript-eslint/no-explicit-any
       userName: (session.userId as any)?.name || 'Unknown', // eslint-disable-line @typescript-eslint/no-explicit-any
       openingTime: session.openingTime,
       closingTime: session.closingTime,
@@ -401,9 +397,20 @@ export async function getCashDrawerReports(
       cashSales,
       cashExpenses: cashExpensesTotal,
       netCash,
-    });
-  }
-
-  return reports;
+    };
+  });
 }
 
+// aggregate() doesn't cast like find() does — match on ObjectId explicitly
+function toObjectId(id: string): mongoose.Types.ObjectId {
+  return new mongoose.Types.ObjectId(String(id));
+}
+
+function completedSalesMatch(tenantId: mongoose.Types.ObjectId, start: Date, end: Date) {
+  return {
+    tenantId,
+    createdAt: { $gte: start, $lte: end },
+    status: 'completed',
+    isActive: { $ne: false },
+  };
+}

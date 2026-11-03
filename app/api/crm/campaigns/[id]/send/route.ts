@@ -9,6 +9,7 @@ import { createAuditLog, AuditActions } from '@/lib/audit';
 import { handleApiError } from '@/lib/error-handler';
 import { sendEmail, sendSMS } from '@/lib/notifications';
 import mongoose from 'mongoose';
+import { cacheWrap, TTL } from '@/lib/cache';
 
 const SEND_BATCH_SIZE = 25;
 
@@ -92,10 +93,13 @@ export async function POST(
     // saw in that segment when composing it. (aggregate() requires an explicit
     // ObjectId cast — tenantId here is a string, unlike the auto-cast .find() above.)
     const tenantObjectId = new mongoose.Types.ObjectId(tenantId);
-    const orderStats = await Transaction.aggregate([
-      { $match: { tenantId: tenantObjectId, status: 'completed' } },
-      { $group: { _id: '$customerId', orderCount: { $sum: 1 } } },
-    ]);
+    // Same cached per-tenant stats as /api/crm/segments (customer sales only)
+    const orderStats = await cacheWrap(`crm:orderstats:${tenantId}`, TTL.LONG, () =>
+      Transaction.aggregate<{ _id: mongoose.Types.ObjectId | null; orderCount: number; totalSpent: number }>([
+        { $match: { tenantId: tenantObjectId, customerId: { $ne: null }, status: 'completed' } },
+        { $group: { _id: '$customerId', orderCount: { $sum: 1 }, totalSpent: { $sum: '$total' } } },
+      ])
+    );
     const orderCountMap = new Map<string, number>(
       orderStats.filter((s) => s._id != null).map((s) => [String(s._id), s.orderCount])
     );

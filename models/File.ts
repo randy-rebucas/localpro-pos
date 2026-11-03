@@ -6,7 +6,6 @@ const FileSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Tenant',
       required: true,
-      index: true,
     },
     name: {
       type: String,
@@ -36,7 +35,6 @@ const FileSchema = new mongoose.Schema(
     uploadedAt: {
       type: Date,
       default: Date.now,
-      index: true,
     },
   },
   {

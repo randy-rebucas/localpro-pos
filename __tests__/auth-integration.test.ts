@@ -27,6 +27,11 @@ vi.mock('@/lib/token-blacklist', () => ({
   isTokenIssuedBeforeRevocation: vi.fn().mockResolvedValue(false),
 }));
 
+// Mock the tenant active-flag lookup (tenant isActive check in getCurrentUser)
+vi.mock('@/lib/tenant', () => ({
+  getTenantAuthInfo: vi.fn().mockResolvedValue({ isActive: true }),
+}));
+
 // Mock the User model
 vi.mock('@/models/User', () => ({
   default: {

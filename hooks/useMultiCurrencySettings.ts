@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { ITenantSettings } from '@/types/tenant';
+import { pickChangedSettings, useTenantSettings } from '@/contexts/TenantSettingsContext';
 
 export interface MultiCurrencySettings {
   enabled: boolean;
@@ -13,55 +14,36 @@ export interface MultiCurrencySettings {
 }
 
 export const useMultiCurrencySettings = (tenant: string) => {
+  const { settings: contextSettings, ensureSettings, applySettings } = useTenantSettings();
   const [settings, setSettings] = useState<ITenantSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
+  // Seeded from TenantSettingsContext (already loaded by the layout) instead of
+  // a separate GET /api/tenants/[slug]/settings.
   const fetchSettings = useCallback(async () => {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 20000);
-      abortControllerRef.current = controller;
-
-      setLoading(true);
-      setMessage(null);
-
-      const res = await fetch(`/api/tenants/${tenant}/settings`, {
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-      const data = await res.json();
-
-      if (data.success) {
-        const defaultSettings = {
-          multiCurrency: {
-            enabled: false,
-            displayCurrencies: [],
-            exchangeRates: {},
-            exchangeRateSource: 'manual',
-            exchangeRateApiKey: '',
-          },
-          ...data.data,
-        };
-        setSettings(defaultSettings);
-      } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to load settings' });
-      }
-    } catch (error: unknown) {
-      if (error instanceof Error && error.name !== 'AbortError') {
-        console.error('Error fetching settings:', error);
-        setMessage({
-          type: 'error',
-          text: 'Failed to load settings. Please check your connection.',
-        });
-      }
-    } finally {
-      setLoading(false);
+    setLoading(true);
+    setMessage(null);
+    const result = await ensureSettings();
+    if (result.error) {
+      setMessage({ type: 'error', text: result.error });
+    } else {
+      const defaultSettings = {
+        multiCurrency: {
+          enabled: false,
+          displayCurrencies: [],
+          exchangeRates: {},
+          exchangeRateSource: 'manual',
+          exchangeRateApiKey: '',
+        },
+        ...(result.settings as ITenantSettings),
+      } as ITenantSettings;
+      setSettings(defaultSettings);
     }
-  }, [tenant]);
+    setLoading(false);
+  }, [ensureSettings]);
 
   const updateSetting = useCallback((path: string, value: unknown) => {
     setSettings((prevSettings) => {
@@ -97,7 +79,8 @@ export const useMultiCurrencySettings = (tenant: string) => {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
-          body: JSON.stringify({ settings: settingsToSave }),
+          // Only the keys this page changed (the route merges server-side)
+          body: JSON.stringify({ settings: pickChangedSettings(settingsToSave, contextSettings) }),
           signal: controller.signal,
         });
 
@@ -106,6 +89,7 @@ export const useMultiCurrencySettings = (tenant: string) => {
 
         if (data.success) {
           setSettings(data.data);
+          applySettings(data.data);
           return { success: true, data: data.data };
         } else {
           const errorMessage =
@@ -127,7 +111,7 @@ export const useMultiCurrencySettings = (tenant: string) => {
         setSaving(false);
       }
     },
-    [tenant]
+    [tenant, contextSettings, applySettings]
   );
 
   useEffect(() => {

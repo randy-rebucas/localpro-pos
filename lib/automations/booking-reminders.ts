@@ -6,14 +6,18 @@
 import connectDB from '@/lib/mongodb';
 import Booking from '@/models/Booking';
 import Tenant from '@/models/Tenant';
+import type { ITenantSettings } from '@/models/Tenant';
 import { sendBookingReminder } from '@/lib/notifications';
-import { getTenantSettingsById } from '@/lib/tenant';
+import { getActiveTenants, type ActiveTenant } from '@/lib/tenant-active-query';
 import { AutomationResult } from './types';
 
 export interface BookingReminderOptions {
   tenantId?: string;
   hoursBefore?: number;
 }
+
+// Notification helpers read many settings (company name, formats, timezone…).
+const TENANT_FIELDS = 'settings';
 
 /**
  * Send booking reminders for all tenants or a specific tenant
@@ -34,13 +38,14 @@ export async function sendBookingReminders(
 
   try {
     // Get tenants to process
-    let tenants;
+    let tenants: ActiveTenant[];
     if (tenantId) {
-      const tenant = await Tenant.findById(tenantId).lean();
+      const tenant = await Tenant.findById(tenantId)
+        .select(`_id slug name ${TENANT_FIELDS}`)
+        .lean<ActiveTenant>();
       tenants = tenant ? [tenant] : [];
     } else {
-      // Get all active tenants
-      tenants = await Tenant.find({ status: 'active' }).lean();
+      tenants = await getActiveTenants(TENANT_FIELDS);
     }
 
     if (tenants.length === 0) {
@@ -54,7 +59,7 @@ export async function sendBookingReminders(
     for (const tenant of tenants) {
       try {
         // Check if booking reminders are enabled for this tenant
-        const tenantSettings = await getTenantSettingsById(tenant._id.toString());
+        const tenantSettings = (tenant.settings ?? null) as ITenantSettings | null;
         if (!tenantSettings?.emailNotifications && !tenantSettings?.smsNotifications) {
           continue; // Skip if notifications disabled
         }
@@ -64,7 +69,7 @@ export async function sendBookingReminders(
         const reminderWindowStart = new Date(now.getTime() + hoursBefore * 60 * 60 * 1000);
         const reminderWindowEnd = new Date(reminderWindowStart.getTime() + 60 * 60 * 1000); // 1 hour window
 
-        // Find bookings that need reminders
+        // Find bookings that need reminders (reminderSent guarantees at-most-once)
         const bookingsToRemind = await Booking.find({
           tenantId: tenant._id,
           startTime: {
@@ -73,7 +78,11 @@ export async function sendBookingReminders(
           },
           status: { $in: ['pending', 'confirmed'] },
           reminderSent: { $ne: true },
-        }).lean();
+        })
+          .select('customerName customerEmail customerPhone serviceName startTime endTime staffName notes')
+          .lean();
+
+        const remindedIds: unknown[] = [];
 
         // Send reminders for each booking
         for (const booking of bookingsToRemind) {
@@ -93,13 +102,20 @@ export async function sendBookingReminders(
               tenantSettings || undefined
             );
 
-            // Mark reminder as sent
-            await Booking.findByIdAndUpdate(booking._id, { reminderSent: true });
+            remindedIds.push(booking._id);
             totalProcessed++;
           } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
             totalFailed++;
             results.errors?.push(`Booking ${booking._id}: ${error.message}`);
           }
+        }
+
+        // Mark all sent reminders in one write
+        if (remindedIds.length > 0) {
+          await Booking.updateMany(
+            { tenantId: tenant._id, _id: { $in: remindedIds } },
+            { $set: { reminderSent: true } }
+          );
         }
       } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
         totalFailed++;

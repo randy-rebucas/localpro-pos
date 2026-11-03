@@ -1,4 +1,5 @@
 import TaxRule from '@/models/TaxRule';
+import { cacheWrap, CacheKeys, TTL } from '@/lib/cache';
 import Tenant, { ITenantSettings } from '@/models/Tenant';
 import Product from '@/models/Product'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { ITenant } from '@/models/Tenant'; // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -132,11 +133,14 @@ export async function calculateTax(
     taxableAmount = Math.max(0, subtotalAfterDiscount - exemptAmount - zeroRatedAmount);
   }
 
-  // Try to get tax rules from TaxRule model first
-  const taxRules = await TaxRule.find({
-    tenantId,
-    isActive: true,
-  }).sort({ priority: -1 }).lean();
+  // Try to get tax rules from TaxRule model first (read on every sale — cached
+  // 60s, invalidated on TaxRule writes)
+  const taxRules = await cacheWrap(CacheKeys.taxRules(String(tenantId)), TTL.DEFAULT, () =>
+    TaxRule.find({
+      tenantId,
+      isActive: true,
+    }).sort({ priority: -1 }).lean()
+  );
 
   // Only calculate tax on the taxable portion (excludes VAT-exempt items)
   if (taxRules.length > 0) {

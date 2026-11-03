@@ -117,7 +117,7 @@ export default function AdminDashboard() {
       let expiringCount = 0;
       if (businessType === 'pharmacy') {
         try {
-          const expRes = await fetch(`/api/reports/expiry?days=30`);
+          const expRes = await fetch(`/api/reports/expiry?days=30&source=dashboard`);
           if (expRes.ok) {
             const j = await expRes.json();
             expiringCount = (j.data?.totalExpired ?? 0) + (j.data?.totalExpiring ?? 0);

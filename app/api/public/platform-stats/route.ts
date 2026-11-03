@@ -3,6 +3,7 @@ import connectDB from '@/lib/mongodb';
 import Tenant from '@/models/Tenant';
 import Transaction from '@/models/Transaction';
 import { TENANT_IS_ACTIVE_FILTER } from '@/lib/tenant-active-query';
+import { cacheWrap } from '@/lib/cache';
 
 /**
  * Public aggregate counts for marketing / trust strip (no PII).
@@ -10,11 +11,15 @@ import { TENANT_IS_ACTIVE_FILTER } from '@/lib/tenant-active-query';
  */
 export async function GET() {
   try {
-    await connectDB();
-    const [activeTenants, completedTransactions] = await Promise.all([
-      Tenant.countDocuments(TENANT_IS_ACTIVE_FILTER),
-      Transaction.countDocuments({ status: 'completed', isActive: true }),
-    ]);
+    // The transaction count scans the whole collection (no tenant prefix to use
+    // an index), so it's cached per instance on top of the CDN cache below.
+    const [activeTenants, completedTransactions] = await cacheWrap('public:platform-stats', 10 * 60 * 1000, async () => {
+      await connectDB();
+      return Promise.all([
+        Tenant.countDocuments(TENANT_IS_ACTIVE_FILTER),
+        Transaction.countDocuments({ status: 'completed', isActive: true }),
+      ]);
+    });
 
     return NextResponse.json(
       {

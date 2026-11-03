@@ -108,7 +108,8 @@ beforeEach(() => {
 describe('GET /api/discounts', () => {
   it('scopes the query to the authenticated tenant', async () => {
     authAs(TENANT_A);
-    const sortMock = vi.fn().mockResolvedValue([{ _id: 'd1', tenantId: TENANT_A }]);
+    const leanMock = vi.fn().mockResolvedValue([{ _id: 'd1', tenantId: TENANT_A }]);
+    const sortMock = vi.fn().mockReturnValue({ lean: leanMock });
     mockDiscountFind.mockReturnValue({ sort: sortMock });
 
     const res = await GET(createRequest('/api/discounts'));

@@ -1,10 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { Settings } from 'lucide-react';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import type { ITenantSettings } from '@/types/tenant';
 import { usePermissions } from '@/hooks/usePermissions';
 import { getDictionaryClient } from '../../dictionaries-client';
 
@@ -72,7 +73,7 @@ export default function AdminSettingsPage() {
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = params.lang as string;
-  const { refreshSettings } = useTenantSettings();
+  const { ensureSettings, applySettings } = useTenantSettings();
   const { canAccess } = usePermissions();
   const canManage = canAccess('settings.manage');
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -131,12 +132,17 @@ export default function AdminSettingsPage() {
     emailNotifications: false, smsNotifications: false,
   });
 
+  // Form is initialised from TenantSettingsContext (already loaded by the
+  // layout) instead of a separate GET /api/tenants/[slug]/settings.
+  const dictRef = useRef(dict);
+  useEffect(() => { dictRef.current = dict; }, [dict]);
+
   const fetchSettings = useCallback(async () => {
     try {
-      const res = await fetch(`/api/tenants/${tenant}/settings`);
-      const json = await res.json();
-      if (json.success && json.data) {
-        const s = json.data;
+      const result = await ensureSettings();
+      if (result.error) throw new Error(result.error);
+      if (result.settings) {
+        const s = result.settings;
         setForm(prev => ({
           ...prev,
           companyName: s.companyName ?? '',
@@ -187,11 +193,11 @@ export default function AdminSettingsPage() {
         }));
       }
     } catch {
-      toast.error(dict?.settings?.failedToLoad || 'Failed to load settings');
+      toast.error(dictRef.current?.settings?.failedToLoad || 'Failed to load settings');
     } finally {
       setLoading(false);
     }
-  }, [tenant, dict]);
+  }, [ensureSettings]);
 
   useEffect(() => { fetchSettings(); }, [fetchSettings]);
 
@@ -261,7 +267,8 @@ export default function AdminSettingsPage() {
       const json = await res.json();
       if (json.success) {
         toast.success(dict?.settings?.saved || 'Settings saved');
-        await refreshSettings();
+        // Merge the saved settings into context (no extra GET)
+        applySettings({ ...(payload as Partial<ITenantSettings>), ...(json.data || {}) });
       } else {
         toast.error(json.error || dict?.settings?.error || 'Failed to save settings');
       }

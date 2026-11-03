@@ -6,7 +6,9 @@
 import connectDB from '@/lib/mongodb';
 import OfflineTransaction from '@/models/OfflineTransaction';
 import Transaction from '@/models/Transaction';
+import { SubscriptionService } from '@/lib/subscription';
 import Tenant from '@/models/Tenant';
+import { getActiveTenants } from '@/lib/tenant-active-query';
 import { generateReceiptNumber } from '@/lib/receipt';
 import { AutomationResult } from './types';
 
@@ -46,7 +48,8 @@ export async function syncOfflineTransactions(
       }
       tenantIds = [options.tenantId];
     } else {
-      const tenants = await Tenant.find({ status: 'active' }).select('_id').lean();
+      // No tenant settings needed — only ids
+      const tenants = await getActiveTenants();
       tenantIds = tenants.map(t => t._id.toString());
     }
 
@@ -65,10 +68,15 @@ export async function syncOfflineTransactions(
       for (const offline of pending) {
         const offlineId = offline._id.toString();
 
-        // Mark as processing to prevent duplicate processing
-        await OfflineTransaction.findByIdAndUpdate(offlineId, {
-          syncStatus: 'processing',
-        });
+        // Atomically claim it (status guard) so overlapping runs can't both
+        // create a Transaction for the same offline record. Same single write
+        // as before, but race-safe; skip if another run already claimed it.
+        const claimed = await OfflineTransaction.findOneAndUpdate(
+          { _id: offline._id, tenantId: offline.tenantId, syncStatus: { $in: ['pending', 'failed'] } },
+          { $set: { syncStatus: 'processing' } },
+          { projection: { _id: 1 } }
+        ).lean();
+        if (!claimed) continue;
 
         try {
           // Generate a receipt number for the transaction
@@ -106,12 +114,16 @@ export async function syncOfflineTransactions(
             isActive: true,
           });
 
+          await SubscriptionService.trackTransactionCreated(String(offline.tenantId));
+
           // Mark offline transaction as synced
-          await OfflineTransaction.findByIdAndUpdate(offlineId, {
-            syncStatus: 'synced',
-            syncedTransactionId: transaction._id,
-            syncError: undefined,
-          });
+          await OfflineTransaction.updateOne(
+            { _id: offline._id, tenantId: offline.tenantId },
+            {
+              $set: { syncStatus: 'synced', syncedTransactionId: transaction._id },
+              $unset: { syncError: 1 },
+            }
+          );
 
           results.processed++;
         } catch (err: unknown) {
@@ -119,11 +131,10 @@ export async function syncOfflineTransactions(
           const nextRetry = (offline.retryCount ?? 0) + 1;
           const nextStatus = nextRetry >= maxRetries ? 'failed' : 'pending';
 
-          await OfflineTransaction.findByIdAndUpdate(offlineId, {
-            syncStatus: nextStatus,
-            retryCount: nextRetry,
-            syncError: message,
-          });
+          await OfflineTransaction.updateOne(
+            { _id: offline._id, tenantId: offline.tenantId },
+            { $set: { syncStatus: nextStatus, retryCount: nextRetry, syncError: message } }
+          );
 
           results.failed++;
           results.errors?.push(`OfflineTransaction ${offlineId}: ${message}`);

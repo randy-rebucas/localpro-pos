@@ -11,7 +11,7 @@ import { getValidationTranslatorFromRequest } from '@/lib/validation-translation
 import { checkRateLimit } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
 import { logger } from '@/lib/logger';
-import { updateStock } from '@/lib/stock';
+import { updateStock, insertStockMovements, STOCK_SNAPSHOT_FIELDS, StockMovementInput, StockProductSnapshot } from '@/lib/stock';
 
 const MAX_BULK_IDS = 100;
 
@@ -182,7 +182,12 @@ export async function PUT(request: NextRequest) {
       const { mode, value } = updates.stock;
       // Applied one product at a time through updateStock() so each change gets a
       // StockMovement record and the allowOutOfStockSales guard is honored consistently.
-      const productsForStock = await Product.find(filter).select('stock trackInventory').lean();
+      // The batch read doubles as each product's snapshot (no per-product re-read),
+      // and the movements are inserted together.
+      const productsForStock = await Product.find(filter)
+        .select(STOCK_SNAPSHOT_FIELDS)
+        .lean<Array<StockProductSnapshot & { _id: mongoose.Types.ObjectId }>>();
+      const movements: StockMovementInput[] = [];
       let stockModified = 0;
       for (const p of productsForStock) {
         if (p.trackInventory === false) continue;
@@ -193,12 +198,15 @@ export async function PUT(request: NextRequest) {
           await updateStock(p._id.toString(), tenantId, delta, 'adjustment', {
             userId,
             reason: 'Bulk stock update',
+            product: p,
+            movements,
           });
           stockModified += 1;
         } catch (err) {
           logger.error(`Bulk stock update failed for product ${p._id}:`, err);
         }
       }
+      await insertStockMovements(movements);
       modifiedCount = Math.max(modifiedCount, stockModified);
     }
 

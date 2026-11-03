@@ -9,18 +9,20 @@ import { getValidationTranslatorFromRequest } from '@/lib/validation-translation
 import { applyBusinessTypeDefaults } from '@/lib/business-types';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
+import { getTenantBySlug } from '@/lib/tenant';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ slug: string }> }
 ) {
   try {
-    await connectDB();
     // Settings are public per tenant (no sensitive data exposed)
     const { slug } = await params;
     const t = await getValidationTranslatorFromRequest(request);
-    
-    const tenant = await Tenant.findOne({ slug, isActive: true }).lean();
+
+    // Fetched by several providers/hooks per page — served from the cached slug
+    // lookup (60s, invalidated on tenant writes) instead of a full document read
+    const tenant = await getTenantBySlug(slug);
     if (!tenant) {
       return NextResponse.json(
         { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
@@ -79,7 +81,7 @@ export async function PUT(
     // (taxRules, businessHours, holidays, receiptTemplates, notificationTemplates,
     //  advancedBranding, hardwareConfig, birTin, etc.) are preserved when the
     // main settings page saves only its own tabs.
-    const existingTenant = await Tenant.findOne({ slug }).lean();
+    const existingTenant = await Tenant.findOne({ slug }).select('_id settings').lean();
     const existingSettings = existingTenant?.settings || {};
 
     // Three-way merge: defaults → existing → incoming (incoming wins on conflict)
@@ -134,7 +136,15 @@ export async function PUT(
     // any business-type-default keys it triggered) so a concurrent PUT touching
     // other keys (e.g. a different tab, or the page's language auto-save) can't
     // clobber this request's changes with its own stale read-merge snapshot.
-    const keysToSet = Array.from(new Set([...Object.keys(settings), ...businessTypeDefaultKeys]));
+    // Clients send the whole settings object, so keys whose value is unchanged are
+    // skipped — and the write (plus audit log) is skipped entirely if nothing changed.
+    const existingRecord = existingSettings as Record<string, unknown>;
+    const keysToSet = Array.from(new Set([...Object.keys(settings), ...businessTypeDefaultKeys])).filter(
+      (key) => JSON.stringify(updatedSettings[key]) !== JSON.stringify(existingRecord[key])
+    );
+    if (existingTenant && keysToSet.length === 0) {
+      return NextResponse.json({ success: true, data: existingTenant.settings });
+    }
     const setPayload: Record<string, unknown> = {};
     for (const key of keysToSet) {
       setPayload[`settings.${key}`] = updatedSettings[key];
@@ -159,7 +169,12 @@ export async function PUT(
       action: AuditActions.UPDATE,
       entityType: 'tenant',
       entityId: tenant._id.toString(),
-      changes: { settings: updatedSettings },
+      // Only the changed keys (before → after), not the whole settings tree
+      changes: {
+        settings: Object.fromEntries(
+          keysToSet.map((key) => [key, { from: existingRecord[key], to: updatedSettings[key] }])
+        ),
+      },
     });
 
     return NextResponse.json({ success: true, data: tenant.settings });

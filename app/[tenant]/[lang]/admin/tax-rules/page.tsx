@@ -5,7 +5,6 @@ import TaxRulesManager from '@/components/settings/TaxRulesManager';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
-import { ITenantSettings } from '@/types/tenant';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { getDefaultTenantSettings } from '@/lib/currency';
 
@@ -14,31 +13,15 @@ export default function TaxRulesAdminPage() {
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
-  const [loading, setLoading] = useState(true);
-  const [settings, setSettings] = useState<ITenantSettings | null>(null);
-  const { settings: tenantSettings } = useTenantSettings();
+  // Settings come from TenantSettingsContext (already loaded by the layout);
+  // TaxRulesManager loads its rules from /api/tax-rules, so no separate GET here.
+  const { settings: tenantSettings, loading, applySettings } = useTenantSettings();
+  const settings = tenantSettings;
   const primaryColor = (tenantSettings || getDefaultTenantSettings()).primaryColor || '#35979c';
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
-    fetchSettings();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lang, tenant]);
-
-  const fetchSettings = async () => {
-    try {
-      setLoading(true);
-      const res = await fetch(`/api/tenants/${tenant}/settings`);
-      const data = await res.json();
-      if (data.success) {
-        setSettings(data.data);
-      }
-    } catch (error) {
-      console.error('Error fetching settings:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [lang]);
 
   if (!dict || loading || !settings) {
     return (
@@ -70,7 +53,7 @@ export default function TaxRulesAdminPage() {
             primaryColor={primaryColor}
             dict={dict}
             onUpdate={(updates) => {
-              setSettings({ ...settings, ...updates });
+              applySettings(updates);
             }}
           />
         </div>

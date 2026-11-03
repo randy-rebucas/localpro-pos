@@ -7,6 +7,7 @@ import { hasTenantPermission } from '@/lib/permissions-server';
 import { generateReceiptNumber } from '@/lib/receipt';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { createAuditLog, AuditActions } from '@/lib/audit';
+import { SubscriptionService } from '@/lib/subscription';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 interface ManualItem {
@@ -133,6 +134,8 @@ export async function POST(request: NextRequest) {
       }
       throw createErr;
     }
+
+    await SubscriptionService.trackTransactionCreated(String(tenantId));
 
     await createAuditLog(request, {
       tenantId,

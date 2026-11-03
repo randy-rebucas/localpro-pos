@@ -3,6 +3,7 @@ import Subscription from '@/models/Subscription';
 import SubscriptionPlan from '@/models/SubscriptionPlan';
 import Tenant from '@/models/Tenant';
 import { logger } from '@/lib/logger';
+import { cacheWrap, CacheKeys, TTL } from '@/lib/cache';
 import mongoose from 'mongoose'; // eslint-disable-line @typescript-eslint/no-unused-vars
 
 export interface SubscriptionLimits {
@@ -65,12 +66,31 @@ export interface SubscriptionStatus {
   nextBillingDate?: Date;
 }
 
+function startOfMonth(): Date {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), 1);
+}
+
 export class SubscriptionService {
   /**
-   * Get subscription status for a tenant
+   * Get subscription status for a tenant.
+   * Every feature/limit check calls this, so the result is cached for 60s per
+   * instance and invalidated on Subscription/SubscriptionPlan writes (see models).
+   * The returned object is shared — treat it as read-only.
    */
   static async getSubscriptionStatus(tenantId: string): Promise<SubscriptionStatus | null> {
     try {
+      return await cacheWrap(CacheKeys.subscriptionStatus(String(tenantId)), TTL.DEFAULT, () =>
+        this.loadSubscriptionStatus(tenantId)
+      );
+    } catch (error) {
+      logger.error('Error getting subscription status:', error);
+      return null;
+    }
+  }
+
+  private static async loadSubscriptionStatus(tenantId: string): Promise<SubscriptionStatus | null> {
+    {
       await connectDB();
 
       const subscription = await Subscription.findOne({ tenantId })
@@ -198,9 +218,6 @@ export class SubscriptionService {
       };
 
       return status;
-    } catch (error) {
-      logger.error('Error getting subscription status:', error);
-      return null;
     }
   }
 
@@ -320,6 +337,66 @@ export class SubscriptionService {
     }
 
     return status.pharmacyCompliance[feature];
+  }
+
+  /**
+   * Transactions so far this calendar month, from the cached subscription
+   * status — replaces a countDocuments over the month's transactions on every
+   * sale. Returns null when the counter hasn't been seeded for this month yet.
+   */
+  static async getMonthlyTransactionCount(tenantId: string): Promise<number | null> {
+    await connectDB();
+    const sub = await cacheWrap(`${CacheKeys.subscriptionStatus(String(tenantId))}:usage`, TTL.SHORT, () =>
+      Subscription.findOne({ tenantId })
+        .select('usage.currentTransactions usage.lastResetDate')
+        .lean()
+    );
+    const lastReset = sub?.usage?.lastResetDate ? new Date(sub.usage.lastResetDate) : null;
+    if (!lastReset || lastReset < startOfMonth()) return null;
+    return sub!.usage.currentTransactions ?? 0;
+  }
+
+  /**
+   * Record one completed sale against the monthly transaction counter.
+   * One $inc write per sale; on the first sale of a new month the counter is
+   * re-seeded from a single countDocuments (also covers pre-existing data).
+   */
+  static async recordTransaction(tenantId: string, countThisMonth: () => Promise<number>): Promise<void> {
+    await connectDB();
+    const monthStart = startOfMonth();
+    const res = await Subscription.updateOne(
+      { tenantId, 'usage.lastResetDate': { $gte: monthStart } },
+      { $inc: { 'usage.currentTransactions': 1 } }
+    );
+    if (res.matchedCount === 0) {
+      await Subscription.updateOne(
+        { tenantId },
+        { $set: { 'usage.currentTransactions': await countThisMonth(), 'usage.lastResetDate': new Date() } }
+      );
+    }
+  }
+
+  /**
+   * recordTransaction() for any path that creates a Transaction document
+   * (manual entry, refunds, offline sync…). Never throws — usage tracking must
+   * not fail the request.
+   */
+  static async trackTransactionCreated(tenantId: string): Promise<void> {
+    try {
+      const { default: Transaction } = await import('@/models/Transaction');
+      await this.recordTransaction(String(tenantId), () => {
+        const now = new Date();
+        return Transaction.countDocuments({
+          tenantId,
+          createdAt: {
+            $gte: new Date(now.getFullYear(), now.getMonth(), 1),
+            $lt: new Date(now.getFullYear(), now.getMonth() + 1, 1),
+          },
+        });
+      });
+    } catch (error) {
+      logger.error('Failed to update subscription usage:', error);
+    }
   }
 
   /**

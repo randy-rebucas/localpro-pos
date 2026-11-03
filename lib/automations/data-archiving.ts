@@ -6,6 +6,7 @@
 import connectDB from '@/lib/mongodb';
 import Transaction from '@/models/Transaction'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import Tenant from '@/models/Tenant';
+import { getActiveTenants, type ActiveTenant } from '@/lib/tenant-active-query';
 import { AutomationResult } from './types';
 import mongoose from 'mongoose';
 
@@ -38,12 +39,15 @@ export async function archiveOldData(
     cutoffDate.setFullYear(cutoffDate.getFullYear() - archiveYears);
 
     // Get tenants to process
-    let tenants;
+    // Only _id/name are needed here — no settings
+    let tenants: ActiveTenant[];
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).lean();
+      const tenant = await Tenant.findById(options.tenantId)
+        .select('_id slug name')
+        .lean<ActiveTenant>();
       tenants = tenant ? [tenant] : [];
     } else {
-      tenants = await Tenant.find({ status: 'active' }).lean();
+      tenants = await getActiveTenants();
     }
 
     if (tenants.length === 0) {

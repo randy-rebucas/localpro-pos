@@ -117,12 +117,18 @@ const CustomerSchema: Schema = new Schema(
   }
 );
 
-// Compound indexes
-CustomerSchema.index({ tenantId: 1, email: 1 }, { unique: true, sparse: true });
-CustomerSchema.index({ tenantId: 1, phone: 1 }, { sparse: true });
-CustomerSchema.index({ tenantId: 1, isActive: 1 });
-CustomerSchema.index({ tenantId: 1, shopifyCustomerId: 1 }, { sparse: true });
-CustomerSchema.index({ tenantId: 1, tags: 1 });
+// Compound indexes. partialFilterExpression instead of sparse: sparse has no
+// effect on compound indexes because tenantId is always present.
+CustomerSchema.index(
+  { tenantId: 1, email: 1 },
+  { unique: true, partialFilterExpression: { email: { $type: 'string' } } }
+);
+CustomerSchema.index({ tenantId: 1, phone: 1 }, { partialFilterExpression: { phone: { $type: 'string' } } });
+CustomerSchema.index(
+  { tenantId: 1, shopifyCustomerId: 1 },
+  { partialFilterExpression: { shopifyCustomerId: { $type: 'string' } } }
+);
+CustomerSchema.index({ tenantId: 1, createdAt: -1 });
 
 // Virtual for full name
 CustomerSchema.virtual('fullName').get(function() {

@@ -27,7 +27,9 @@ interface LowStockAlertsProps {
 
 export default function LowStockAlerts({
   autoRefresh = true,
-  refreshInterval = 30000, // 30 seconds
+  // Stock changes already arrive through refreshTrigger (SSE), so the timer is
+  // only a fallback — every poll costs database reads.
+  refreshInterval = 5 * 60 * 1000, // 5 minutes
   branchId,
   refreshTrigger,
   onProductClick,
@@ -71,7 +73,10 @@ export default function LowStockAlerts({
     fetchAlerts();
 
     if (autoRefresh) {
-      const interval = setInterval(fetchAlerts, refreshInterval);
+      // Skip polls while the tab is in the background
+      const interval = setInterval(() => {
+        if (!document.hidden) fetchAlerts();
+      }, refreshInterval);
       return () => clearInterval(interval);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps

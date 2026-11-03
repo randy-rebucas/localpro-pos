@@ -37,14 +37,21 @@ const CategorySchema: Schema = new Schema(
 
 // Cascade delete protection: prevent deletion if products reference this category
 async function checkCategoryDependencies(filter: Record<string, unknown>) {
-  const doc = await mongoose.model('Category').findOne(filter);
+  const doc = await mongoose.model('Category').findOne(filter).select('_id name tenantId').lean<{
+    _id: mongoose.Types.ObjectId;
+    name: string;
+    tenantId: mongoose.Types.ObjectId;
+  }>();
   if (!doc) return;
 
+  // Tenant-scoped existence check (uses { tenantId, categoryId }) — stops at the first match
   const Product = mongoose.model('Product');
-  const productCount = await Product.countDocuments({ categoryId: doc._id });
-  if (productCount > 0) {
+  const hasProduct = await Product.findOne({ tenantId: doc.tenantId, categoryId: doc._id })
+    .select('_id')
+    .lean();
+  if (hasProduct) {
     throw new Error(
-      `Cannot delete category "${doc.name}": ${productCount} product(s) are assigned to this category. Reassign or remove them first.`
+      `Cannot delete category "${doc.name}": products are assigned to this category. Reassign or remove them first.`
     );
   }
 }

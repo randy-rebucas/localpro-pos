@@ -111,7 +111,6 @@ AttendanceSchema.index(
 );
 // Tenant-wide active session scan (automations: auto-clockout, break detection, cash-count reminders)
 AttendanceSchema.index({ tenantId: 1, clockOut: 1 }, { partialFilterExpression: { clockOut: null } });
-AttendanceSchema.index({ tenantId: 1, isActive: 1 });
 
 const Attendance: Model<IAttendance> = mongoose.models.Attendance || mongoose.model<IAttendance>('Attendance', AttendanceSchema);
 

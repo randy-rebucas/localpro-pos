@@ -126,7 +126,6 @@ const ProductSchema: Schema = new Schema(
     categoryId: {
       type: Schema.Types.ObjectId,
       ref: 'Category',
-      index: true,
     },
     image: {
       type: String,
@@ -192,7 +191,6 @@ const ProductSchema: Schema = new Schema(
     pinned: {
       type: Boolean,
       default: false,
-      index: true,
     },
     
     // Industry-specific fields
@@ -314,27 +312,39 @@ ProductSchema.pre('validate', function(next) {
 
 // Cascade delete protection: prevent deletion if product is referenced in transactions or saved carts
 async function checkProductDependencies(filter: Record<string, unknown>) {
-  const doc = await mongoose.model('Product').findOne(filter);
+  const doc = await mongoose.model('Product').findOne(filter).select('_id name tenantId').lean<{
+    _id: mongoose.Types.ObjectId;
+    name: string;
+    tenantId: mongoose.Types.ObjectId;
+  }>();
   if (!doc) return;
 
+  // Existence checks scoped by tenantId so they use tenant-prefixed indexes and
+  // stop at the first match instead of counting every referencing document
   const Transaction = mongoose.model('Transaction');
-  const activeTransactionCount = await Transaction.countDocuments({
+  const hasCompletedTransaction = await Transaction.findOne({
+    tenantId: doc.tenantId,
+    status: 'completed',
     'items.product': doc._id,
-    status: { $in: ['completed'] },
-  });
-  if (activeTransactionCount > 0) {
+  })
+    .select('_id')
+    .lean();
+  if (hasCompletedTransaction) {
     throw new Error(
-      `Cannot delete product "${doc.name}": ${activeTransactionCount} completed transaction(s) reference this product. Consider deactivating it instead.`
+      `Cannot delete product "${doc.name}": completed transactions reference this product. Consider deactivating it instead.`
     );
   }
 
   const SavedCart = mongoose.model('SavedCart');
-  const savedCartCount = await SavedCart.countDocuments({
+  const hasSavedCart = await SavedCart.findOne({
+    tenantId: doc.tenantId,
     'items.productId': doc._id,
-  });
-  if (savedCartCount > 0) {
+  })
+    .select('_id')
+    .lean();
+  if (hasSavedCart) {
     throw new Error(
-      `Cannot delete product "${doc.name}": ${savedCartCount} saved cart(s) reference this product. Remove the product from saved carts first.`
+      `Cannot delete product "${doc.name}": saved carts reference this product. Remove the product from saved carts first.`
     );
   }
 }
@@ -357,15 +367,27 @@ ProductSchema.pre('deleteOne', { document: false, query: true }, async function 
   }
 });
 
-// Compound index for tenant-scoped unique SKU
-ProductSchema.index({ tenantId: 1, sku: 1 }, { unique: true, sparse: true });
-// Compound index for tenant-scoped unique barcode
-ProductSchema.index({ tenantId: 1, barcode: 1 }, { unique: true, sparse: true });
+// Tenant-scoped unique SKU / barcode. partialFilterExpression instead of sparse:
+// sparse has no effect on compound indexes because tenantId is always present.
+ProductSchema.index(
+  { tenantId: 1, sku: 1 },
+  { unique: true, partialFilterExpression: { sku: { $type: 'string' } } }
+);
+ProductSchema.index(
+  { tenantId: 1, barcode: 1 },
+  { unique: true, partialFilterExpression: { barcode: { $type: 'string' } } }
+);
 // Index for product type and inventory tracking
 ProductSchema.index({ tenantId: 1, productType: 1, trackInventory: 1 });
-ProductSchema.index({ tenantId: 1, hasVariations: 1 });
-// Compound index for POS pinned product queries (pinned first, then newest)
-ProductSchema.index({ tenantId: 1, pinned: -1, createdAt: -1 });
+ProductSchema.index({ tenantId: 1, categoryId: 1 });
+// Variation SKU lookup (barcode/SKU scan at POS)
+ProductSchema.index(
+  { tenantId: 1, 'variations.sku': 1 },
+  { partialFilterExpression: { 'variations.sku': { $type: 'string' } } }
+);
+// Catalog list: filter isActive ($ne: false), sort pinned/createdAt — serves the sorted
+// page query and lets its countDocuments run on index keys only
+ProductSchema.index({ tenantId: 1, isActive: 1, pinned: -1, createdAt: -1 });
 // Pharmacy: near-expiry report and drug schedule lookup
 ProductSchema.index({ tenantId: 1, expiryDate: 1 });
 ProductSchema.index({ tenantId: 1, drugSchedule: 1 });

@@ -1,4 +1,5 @@
-import mongoose, { Schema, Document, Model } from 'mongoose';
+import mongoose, { Schema, Document, Model, Query } from 'mongoose';
+import { invalidateTenantCache } from '@/lib/cache';
 
 // ITenantSettings lives in types/tenant.ts (no mongoose dependency) so it can
 // be safely imported by client components. Re-export it here so all existing
@@ -575,7 +576,36 @@ const TenantSchema: Schema = new Schema(
   }
 );
 
-// No explicit indexes needed - unique: true on slug, subdomain, and domain automatically creates indexes
+// unique: true on slug, subdomain, and domain automatically creates indexes.
+// isActive is used by the cron automations' active-tenant scan.
+TenantSchema.index({ isActive: 1 });
+
+// Tenant lookups (slug→id, host→tenant, active flag, role overrides) are cached
+// in lib/cache.ts — drop them on any write so changes apply immediately on this
+// instance. The per-sale grand-total counters are skipped so checkout doesn't
+// flush the cache on every transaction.
+const COUNTER_ONLY_FIELDS = new Set(['grandTotalSales', 'grandTotalTransactionCount']);
+
+function touchesOnlyCounters(update: unknown): boolean {
+  if (!update || typeof update !== 'object') return false;
+  const keys: string[] = [];
+  for (const [k, v] of Object.entries(update as Record<string, unknown>)) {
+    if (k.startsWith('$') && v && typeof v === 'object') keys.push(...Object.keys(v));
+    else keys.push(k);
+  }
+  // timestamps: true adds $set.updatedAt to every update — not a real change
+  const real = keys.filter((k) => k !== 'updatedAt' && k !== 'createdAt');
+  return real.length > 0 && real.every((k) => COUNTER_ONLY_FIELDS.has(k));
+}
+
+TenantSchema.post('save', () => invalidateTenantCache());
+TenantSchema.post(
+  ['updateOne', 'updateMany', 'findOneAndUpdate', 'findOneAndDelete', 'deleteOne', 'deleteMany'],
+  function (this: Query<unknown, ITenant>) {
+    if (touchesOnlyCounters(this.getUpdate?.())) return;
+    invalidateTenantCache();
+  }
+);
 
 const Tenant: Model<ITenant> = mongoose.models.Tenant || mongoose.model<ITenant>('Tenant', TenantSchema);
 

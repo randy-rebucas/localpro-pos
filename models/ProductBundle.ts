@@ -104,7 +104,12 @@ const ProductBundleSchema: Schema = new Schema(
 );
 
 // Compound index for tenant-scoped unique SKU
-ProductBundleSchema.index({ tenantId: 1, sku: 1 }, { unique: true, sparse: true });
+// partialFilterExpression instead of sparse: sparse has no effect on compound
+// indexes because tenantId is always present.
+ProductBundleSchema.index(
+  { tenantId: 1, sku: 1 },
+  { unique: true, partialFilterExpression: { sku: { $type: 'string' } } }
+);
 ProductBundleSchema.index({ tenantId: 1, isActive: 1 });
 
 const ProductBundle: Model<IProductBundle> = mongoose.models.ProductBundle || mongoose.model<IProductBundle>('ProductBundle', ProductBundleSchema);

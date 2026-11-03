@@ -59,20 +59,21 @@ export default function ProductModal({ product, onClose, lang = 'en' }: ProductM
   }, [lang]);
 
   useEffect(() => {
-    // Fetch existing categories from products
+    // Category name suggestions from the tenant's category list (small) rather
+    // than downloading the whole product catalog to extract them.
     const fetchCategories = async () => {
       try {
-        const res = await fetch(`/api/products?tenant=${tenant}`);
+        const res = await fetch('/api/categories', { credentials: 'include' });
         const data = await res.json();
-        if (data.success && data.data) {
-          // Extract unique categories
+        if (data.success && Array.isArray(data.data)) {
           const uniqueCategories = Array.from(
             new Set(
-              data.data
-                .map((p: Product) => p.category)
-                .filter((cat: string | undefined) => cat && cat.trim() !== '')
+              (data.data as Array<{ name?: string; isActive?: boolean }>)
+                .filter((cat) => cat.isActive !== false)
+                .map((cat) => cat.name)
+                .filter((name): name is string => !!name && name.trim() !== '')
             )
-          ) as string[];
+          );
           setCategories(uniqueCategories.sort());
         }
       } catch (error) {

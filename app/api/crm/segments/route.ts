@@ -5,6 +5,7 @@ import Transaction from '@/models/Transaction';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { handleApiError } from '@/lib/error-handler';
 import mongoose from 'mongoose';
+import { cacheWrap, TTL } from '@/lib/cache';
 
 // RFM thresholds
 const VIP_SPEND_THRESHOLD = 5000;
@@ -32,16 +33,22 @@ export async function GET(request: NextRequest) {
     // is stored as ObjectId — aggregate() pipelines don't auto-cast like .find() does,
     // so this must be cast explicitly or the $match silently matches nothing.
     const tenantObjectId = new mongoose.Types.ObjectId(tenantId);
-    const orderStats = await Transaction.aggregate([
-      { $match: { tenantId: tenantObjectId, status: 'completed' } },
-      {
-        $group: {
-          _id: '$customerId',
-          orderCount: { $sum: 1 },
-          totalSpent: { $sum: '$total' },
+    // All-time stats per customer: only sales with a customer attached (most POS
+    // sales are anonymous) so the { tenantId, customerId, createdAt } index can
+    // narrow the scan, and cached 5 min per tenant since every segment tab and
+    // page change re-requests them.
+    const orderStats = await cacheWrap(`crm:orderstats:${tenantId}`, TTL.LONG, () =>
+      Transaction.aggregate<{ _id: mongoose.Types.ObjectId | null; orderCount: number; totalSpent: number }>([
+        { $match: { tenantId: tenantObjectId, customerId: { $ne: null }, status: 'completed' } },
+        {
+          $group: {
+            _id: '$customerId',
+            orderCount: { $sum: 1 },
+            totalSpent: { $sum: '$total' },
+          },
         },
-      },
-    ]);
+      ])
+    );
 
     const orderMap = new Map<string, { orderCount: number; totalSpent: number }>(
       orderStats

@@ -6,15 +6,25 @@
 import connectDB from '@/lib/mongodb';
 import Booking from '@/models/Booking';
 import Tenant from '@/models/Tenant';
+import type { ITenantSettings } from '@/models/Tenant';
 import { sendEmail, sendSMS } from '@/lib/notifications';
-import { getTenantSettingsById } from '@/lib/tenant';
+import { getActiveTenants, type ActiveTenant } from '@/lib/tenant-active-query';
 import { formatDate, formatTime } from '@/lib/formatting';
 import { AutomationResult } from './types';
 
 export interface NoShowDetectionOptions {
   tenantId?: string;
   gracePeriodMinutes?: number; // Minutes after start time to mark as no-show (default: 15)
+  /**
+   * Only bookings that started within this many hours are considered (default: 24).
+   * Prevents the first run from mass-marking and emailing months of stale
+   * pending/confirmed bookings that were never closed out by staff.
+   */
+  maxAgeHours?: number;
 }
+
+// formatDate/formatTime and the follow-up text need the full settings object.
+const TENANT_FIELDS = 'settings';
 
 /**
  * Automatically detect and handle no-shows
@@ -34,15 +44,18 @@ export async function detectNoShows(
 
   try {
     const gracePeriodMinutes = options.gracePeriodMinutes || 15;
+    const maxAgeHours = options.maxAgeHours || 24;
     const now = new Date();
 
     // Get tenants to process
-    let tenants;
+    let tenants: ActiveTenant[];
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).lean();
+      const tenant = await Tenant.findById(options.tenantId)
+        .select(`_id slug name ${TENANT_FIELDS}`)
+        .lean<ActiveTenant>();
       tenants = tenant ? [tenant] : [];
     } else {
-      tenants = await Tenant.find({ status: 'active' }).lean();
+      tenants = await getActiveTenants(TENANT_FIELDS);
     }
 
     if (tenants.length === 0) {
@@ -55,27 +68,37 @@ export async function detectNoShows(
 
     for (const tenant of tenants) {
       try {
-        const tenantId = tenant._id.toString();
-        const tenantSettings = await getTenantSettingsById(tenantId);
+        const tenantSettings = (tenant.settings ?? null) as ITenantSettings | null;
 
         // Find bookings that:
-        // 1. Are past start time + grace period
+        // 1. Are past start time + grace period (but not older than maxAgeHours)
         // 2. Are still pending or confirmed (not completed/cancelled/no-show)
         const gracePeriodEnd = new Date(now.getTime() - gracePeriodMinutes * 60 * 1000);
-        
+        const oldestStart = new Date(now.getTime() - maxAgeHours * 60 * 60 * 1000);
+
         const potentialNoShows = await Booking.find({
-          tenantId,
-          startTime: { $lte: gracePeriodEnd },
+          tenantId: tenant._id,
+          startTime: { $gte: oldestStart, $lte: gracePeriodEnd },
           status: { $in: ['pending', 'confirmed'] },
-        }).lean();
+        })
+          .select('customerEmail customerPhone serviceName startTime staffName')
+          .lean();
+
+        if (potentialNoShows.length === 0) continue;
+
+        // Mark all as no-show in one write. The status change is what makes the
+        // follow-up at-most-once: next run no longer matches these bookings.
+        await Booking.updateMany(
+          {
+            tenantId: tenant._id,
+            _id: { $in: potentialNoShows.map((b) => b._id) },
+            status: { $in: ['pending', 'confirmed'] },
+          },
+          { $set: { status: 'no-show' } }
+        );
 
         for (const booking of potentialNoShows) {
           try {
-            // Mark as no-show
-            await Booking.findByIdAndUpdate(booking._id, {
-              status: 'no-show',
-            });
-
             totalNoShows++;
 
             // Send follow-up email/SMS

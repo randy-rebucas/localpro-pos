@@ -12,9 +12,8 @@ import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { validateAndSanitize, validateTransaction } from '@/lib/validation';
 import { generateReceiptNumber, isDuplicateReceiptNumberError } from '@/lib/receipt';
-import { updateStock, updateBundleStock, getProductStock } from '@/lib/stock';
+import { updateStock, updateBundleStock, computeProductStock, insertStockMovements, StockMovementInput } from '@/lib/stock';
 import ProductBundle from '@/models/ProductBundle';
-import StockMovement from '@/models/StockMovement';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { getTenantSettingsById } from '@/lib/tenant';
 import { checkSubscriptionLimit, SubscriptionService, checkFeatureAccess } from '@/lib/subscription';
@@ -186,7 +185,8 @@ export async function GET(request: NextRequest) {
       .sort({ createdAt: -1 })
       .limit(limit)
       .skip(skip)
-      .populate('items.product', 'name')
+      // items[].name is stored on each line, so items.product isn't populated
+      // (clients expect it as an id string)
       .populate('customerId', 'firstName lastName')
       .populate('userId', 'name email')
       .lean();
@@ -278,14 +278,19 @@ export async function POST(request: NextRequest) {
     const splitCount = typeof body.splitCount === 'number' ? body.splitCount : undefined;
     const splitPayments = Array.isArray(body.splitPayments) ? body.splitPayments : undefined;
 
-    // Check subscription transaction limits
-    const currentTransactionCount = await Transaction.countDocuments({
+    // Check subscription transaction limits. The monthly count comes from the
+    // subscription's usage counter; counting the month's transactions is only
+    // the fallback when the counter hasn't been seeded for this month.
+    const countTransactionsThisMonth = () => Transaction.countDocuments({
       tenantId,
       createdAt: {
         $gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
         $lt: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1)
       }
     });
+    const currentTransactionCount =
+      (await SubscriptionService.getMonthlyTransactionCount(tenantId.toString())) ??
+      (await countTransactionsThisMonth());
     try {
       await checkSubscriptionLimit(tenantId.toString(), 'maxTransactions', currentTransactionCount);
     } catch (limitError: unknown) {
@@ -456,14 +461,11 @@ export async function POST(request: NextRequest) {
           const allowOutOfStockSales = bundleProduct.allowOutOfStockSales === true;
 
           if (trackInventory && !allowOutOfStockSales) {
-            const availableStock = await getProductStock(
-              bundleItem.productId.toString(),
-              tenantId,
-              {
-                branchId: typeof branchId === 'string' ? branchId : undefined,
-                variation: bundleItem.variation,
-              }
-            );
+            // From the batch-loaded product — no extra read per item
+            const availableStock = computeProductStock(bundleProduct, {
+              branchId: typeof branchId === 'string' ? branchId : undefined,
+              variation: bundleItem.variation,
+            });
 
             const requiredStock = bundleItem.quantity * quantity;
             if (availableStock < requiredStock) {
@@ -510,7 +512,8 @@ export async function POST(request: NextRequest) {
           if (!productId) {
             return NextResponse.json({ success: false, error: t('validation.productIdMissing', 'Product ID is missing') }, { status: 400 });
           }
-          const availableStock = await getProductStock(productId as string, tenantId, {
+          // From the batch-loaded product — no extra read per item
+          const availableStock = computeProductStock(product, {
             branchId: typeof branchId === 'string' ? branchId : undefined,
             variation,
           });
@@ -778,50 +781,66 @@ export async function POST(request: NextRequest) {
         balanceAfter: number;
       } | null = null;
 
+      // The transaction's _id is generated up front so stock movements are written
+      // with it directly (batched into one insert below).
+      const transactionObjectId = new mongoose.Types.ObjectId();
+      const stockMovements: StockMovementInput[] = [];
+
       // Update stock BEFORE creating transaction (critical - must succeed)
-      for (const item of items) {
-        const { productId, quantity, variation, bundleId } = item;
+      try {
+        for (const item of items) {
+          const { productId, quantity, variation, bundleId } = item;
 
-        if (!productId && !bundleId) {
-          logger.warn('Skipping stock update: missing productId and bundleId', item as unknown as Record<string, unknown>);
-          continue;
-        }
+          if (!productId && !bundleId) {
+            logger.warn('Skipping stock update: missing productId and bundleId', item as unknown as Record<string, unknown>);
+            continue;
+          }
 
-        if (bundleId) {
-          await updateBundleStock(
-            bundleId,
-            tenantId,
-            -quantity,
-            'sale',
-            {
-              userId: user.userId,
-              branchId: typeof branchId === 'string' ? branchId : undefined,
-              reason: 'Transaction sale - bundle',
-            },
-            session
-          );
-        } else if (productId) {
-          const product = await withOptionalSession(
-            Product.findOne({ _id: productId, tenantId }),
-            session
-          );
-          if (product && product.trackInventory !== false) {
-            await updateStock(
-              productId,
+          if (bundleId) {
+            await updateBundleStock(
+              bundleId,
               tenantId,
               -quantity,
               'sale',
               {
                 userId: user.userId,
                 branchId: typeof branchId === 'string' ? branchId : undefined,
-                variation,
-                reason: 'Transaction sale',
+                reason: 'Transaction sale - bundle',
+                transactionId: transactionObjectId.toString(),
+                movements: stockMovements,
               },
-              session
+              session,
+              { bundle: bundleMap.get(bundleId), products: productMap }
             );
+          } else if (productId) {
+            const product = productMap.get(productId as string);
+            if (product && product.trackInventory !== false) {
+              await updateStock(
+                productId,
+                tenantId,
+                -quantity,
+                'sale',
+                {
+                  userId: user.userId,
+                  branchId: typeof branchId === 'string' ? branchId : undefined,
+                  variation,
+                  reason: 'Transaction sale',
+                  transactionId: transactionObjectId.toString(),
+                  product,
+                  movements: stockMovements,
+                },
+                session
+              );
+            }
           }
         }
+      } catch (stockErr) {
+        // Without a MongoDB transaction (standalone fallback) the stock already
+        // decremented for earlier lines stays applied — keep their movement records
+        if (!session) await insertStockMovements(stockMovements);
+        throw stockErr;
       }
+      await insertStockMovements(stockMovements, session);
 
       let transaction;
       let receiptNumber = '';
@@ -861,7 +880,7 @@ export async function POST(request: NextRequest) {
         receiptNumber = await generateReceiptNumber(tenantId);
         try {
           const [txn] = await Transaction.create(
-            [{ ...txPayloadBase, receiptNumber }],
+            [{ ...txPayloadBase, _id: transactionObjectId, receiptNumber }],
             sessionOpts(session)
           );
           transaction = txn;
@@ -900,22 +919,6 @@ export async function POST(request: NextRequest) {
         { $inc: { grandTotalSales: total, grandTotalTransactionCount: 1 } },
         sessionOpts(session)
       );
-
-      for (const item of items) {
-        const { productId, bundleId } = item;
-        if (productId || bundleId) {
-          await StockMovement.updateOne(
-            {
-              productId: productId || undefined,
-              tenantId,
-              reason: productId ? 'Transaction sale' : 'Transaction sale - bundle',
-              transactionId: { $exists: false },
-            },
-            { $set: { transactionId: transaction._id } },
-            sessionOpts(session)
-          );
-        }
-      }
 
       if (loyaltyEnabled && loyaltyCustomer && loyaltyConfig) {
         const currentBalance = loyaltyCustomer.loyaltyPointsBalance ?? 0;
@@ -1134,18 +1137,9 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Update subscription usage
+    // Update subscription usage (one $inc instead of re-counting the month)
     try {
-      const currentTransactionCount = await Transaction.countDocuments({
-        tenantId,
-        createdAt: {
-          $gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1), // Start of current month
-          $lt: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1) // Start of next month
-        }
-      });
-      await SubscriptionService.updateUsage(tenantId.toString(), {
-        transactions: currentTransactionCount
-      });
+      await SubscriptionService.recordTransaction(tenantId.toString(), countTransactionsThisMonth);
     } catch (usageError) {
       logger.error('Failed to update subscription usage:', usageError);
       // Don't fail the request if usage update fails

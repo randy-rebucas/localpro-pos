@@ -1,6 +1,5 @@
 import { NextRequest } from 'next/server';
 import connectDB from '@/lib/mongodb';
-import Product from '@/models/Product';
 import StockMovement from '@/models/StockMovement';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
@@ -25,6 +24,13 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const productId = searchParams.get('productId');
     const branchId = searchParams.get('branchId');
+    // Resume point after a reconnect (e.g. the tab was hidden) — capped at 15 min
+    const sinceParam = searchParams.get('since');
+    const sinceDate = sinceParam ? new Date(sinceParam) : null;
+    const resumeFrom =
+      sinceDate && !isNaN(sinceDate.getTime()) && Date.now() - sinceDate.getTime() < 15 * 60 * 1000
+        ? sinceDate
+        : null;
 
     // Create a readable stream for SSE
     const stream = new ReadableStream({
@@ -41,9 +47,9 @@ export async function GET(request: NextRequest) {
         send({ type: 'connected', message: t('validation.realtimeStockConnected', 'Real-time stock tracking connected') });
 
         // Poll for stock movements (more reliable than change streams)
-        let lastCheck = new Date();
+        let lastCheck = resumeFrom ?? new Date();
         
-        const pollInterval = setInterval(async () => {
+        const poll = async () => {
           try {
             const query: any = { // eslint-disable-line @typescript-eslint/no-explicit-any
               tenantId,
@@ -58,33 +64,28 @@ export async function GET(request: NextRequest) {
               query.branchId = branchId;
             }
 
+            // Served by the { tenantId, createdAt } index. Movements are already
+            // tenant-scoped, so no extra Product lookup is needed per tick.
             const recentMovements = await StockMovement.find(query)
+              .select('productId branchId variation type quantity newStock previousStock createdAt')
               .sort({ createdAt: -1 })
-              .limit(50)
+              .limit(500)
               .lean();
 
             if (recentMovements.length > 0) {
-              // Batch-load all referenced products in one query
-              const productIds = [...new Set(recentMovements.map((m) => String(m.productId)))];
-              const products = await Product.find({ _id: { $in: productIds }, tenantId })
-                .select('_id')
-                .lean();
-              const productSet = new Set(products.map((p) => String(p._id)));
-
-              for (const movement of recentMovements) {
-                if (productSet.has(String(movement.productId))) {
-                  send({
-                    type: 'stock_update',
-                    productId: movement.productId,
-                    branchId: movement.branchId,
-                    variation: movement.variation,
-                    movementType: movement.type,
-                    quantity: movement.quantity,
-                    newStock: movement.newStock,
-                    previousStock: movement.previousStock,
-                    timestamp: movement.createdAt,
-                  });
-                }
+              // Oldest first, so the last update applied per product is the newest
+              for (const movement of [...recentMovements].reverse()) {
+                send({
+                  type: 'stock_update',
+                  productId: movement.productId,
+                  branchId: movement.branchId,
+                  variation: movement.variation,
+                  movementType: movement.type,
+                  quantity: movement.quantity,
+                  newStock: movement.newStock,
+                  previousStock: movement.previousStock,
+                  timestamp: movement.createdAt,
+                });
               }
 
               lastCheck = recentMovements[0].createdAt;
@@ -93,7 +94,11 @@ export async function GET(request: NextRequest) {
             logger.error('Error polling stock movements:', error);
             send({ type: 'error', message: t('validation.pollingError', 'Polling error') });
           }
-        }, 5000); // Poll every 5 seconds
+        };
+        // Catch up immediately when resuming, then poll every 30 seconds —
+        // one query per tick per open client
+        if (resumeFrom) await poll();
+        const pollInterval = setInterval(poll, 30000);
 
         // Keep connection alive with heartbeat
         const heartbeat = setInterval(() => {
