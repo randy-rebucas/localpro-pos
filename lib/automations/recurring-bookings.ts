@@ -4,10 +4,7 @@
  * for each upcoming slot within the look-ahead window.
  */
 
-import connectDB from '@/lib/mongodb';
-import Booking from '@/models/Booking';
-import RecurringBookingTemplate from '@/models/RecurringBookingTemplate';
-import Tenant from '@/models/Tenant';
+import { getRepos } from '@/lib/db';
 import { getActiveTenants, type ActiveTenant } from '@/lib/tenant-active-query';
 import { getTenantDayBoundaries, DEFAULT_TENANT_TIMEZONE } from '@/lib/timezone';
 import { AutomationResult } from './types';
@@ -83,7 +80,7 @@ function getOccurrenceDates(
 export async function generateRecurringBookings(
   options: RecurringBookingOptions = {}
 ): Promise<AutomationResult> {
-  await connectDB();
+  const { bookings, recurringBookingTemplates } = getRepos();
 
   const daysAhead = options.daysAhead ?? 30;
 
@@ -99,9 +96,7 @@ export async function generateRecurringBookings(
     // Get tenants to process
     let tenants: ActiveTenant[];
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId)
-        .select(`_id slug name ${TENANT_FIELDS}`)
-        .lean<ActiveTenant>();
+      const tenant = (await getRepos().tenants.findById(options.tenantId, { select: `_id slug name ${TENANT_FIELDS}` })) as ActiveTenant | null;
       if (!tenant) {
         results.message = `Tenant ${options.tenantId} not found`;
         return results;
@@ -112,21 +107,12 @@ export async function generateRecurringBookings(
     }
 
     for (const tenant of tenants) {
-      const tenantId = tenant._id;
+      const tenantId = String(tenant._id);
       const settings = (tenant.settings ?? {}) as { timezone?: string };
       const tz = settings.timezone || DEFAULT_TENANT_TIMEZONE;
       const now = new Date();
 
-      const templates = await RecurringBookingTemplate.find({
-        tenantId,
-        isActive: true,
-        effectiveFrom: { $lte: now },
-        $or: [
-          { effectiveTo: { $exists: false } },
-          { effectiveTo: null },
-          { effectiveTo: { $gte: now } },
-        ],
-      }).lean();
+      const templates = await recurringBookingTemplates.listEffective(tenantId, now);
 
       if (templates.length === 0) continue;
 
@@ -145,13 +131,14 @@ export async function generateRecurringBookings(
 
       // …then check which already exist with ONE query (was one findOne per slot)
       const slotKey = (staffId: unknown, startTime: Date) => `${staffId ? String(staffId) : ''}|${startTime.getTime()}`;
-      const existing = await Booking.find({
+      const existing = await bookings.list(
         tenantId,
-        startTime: { $in: [...new Set(slots.map((s) => s.startTime.getTime()))].map((t) => new Date(t)) },
-        status: { $nin: ['cancelled'] },
-      })
-        .select('staffId startTime')
-        .lean();
+        {
+          startTimeIn: [...new Set(slots.map((s) => s.startTime.getTime()))].map((t) => new Date(t)),
+          notStatus: ['cancelled'],
+        },
+        { select: 'staffId startTime' }
+      );
       const taken = new Set(existing.map((b) => slotKey(b.staffId, new Date(b.startTime))));
 
       for (const { template, ymd, startTime, endTime } of slots) {
@@ -162,8 +149,7 @@ export async function generateRecurringBookings(
         try {
           // Inserts stay one-by-one: each is a billed write either way, and
           // per-document create keeps validation errors isolated per slot.
-          await Booking.create({
-            tenantId,
+          await bookings.create(tenantId, {
             customerName: template.customerName,
             customerEmail: template.customerEmail,
             customerPhone: template.customerPhone,

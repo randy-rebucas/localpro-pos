@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Table from '@/models/Table';
+import { getRepos, TABLE_STATUSES, type TableStatus } from '@/lib/db';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -10,7 +9,6 @@ import { getTenantSettingsById } from '@/lib/tenant';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId, user } = authResult;
@@ -23,29 +21,28 @@ export async function GET(request: NextRequest) {
     const branchId = searchParams.get('branchId');
     const status = searchParams.get('status');
 
-    const query: Record<string, unknown> = { tenantId };
-    
+    const filter: { isActive?: boolean; branchId?: string; status?: TableStatus } = {};
+
     // Filter by active status (default to active only)
     if (isActive === null || isActive === undefined) {
-      query.isActive = true;
+      filter.isActive = true;
     } else if (isActive === 'all') {
       // No filter
     } else {
-      query.isActive = isActive === 'true';
+      filter.isActive = isActive === 'true';
     }
 
     if (branchId) {
-      query.branchId = branchId;
+      filter.branchId = branchId;
     }
 
     if (status) {
-      const validStatuses = ['open', 'occupied', 'check-requested'];
-      if (validStatuses.includes(status)) {
-        query.status = status;
+      if ((TABLE_STATUSES as readonly string[]).includes(status)) {
+        filter.status = status as TableStatus;
       }
     }
 
-    const tables = await Table.find(query).sort({ name: 1 }).lean();
+    const tables = await getRepos().tables.list(tenantId, filter);
 
     return NextResponse.json({ success: true, data: tables });
   } catch (error) {
@@ -55,7 +52,6 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId, user } = authResult;
@@ -99,8 +95,7 @@ export async function POST(request: NextRequest) {
       capacity = cap;
     }
 
-    const table = await Table.create({
-      tenantId,
+    const table = await getRepos().tables.create(tenantId, {
       name,
       capacity: capacity || undefined,
       branchId: branchId || undefined,
@@ -112,7 +107,7 @@ export async function POST(request: NextRequest) {
       tenantId,
       action: AuditActions.CREATE,
       entityType: 'table',
-      entityId: table._id.toString(),
+      entityId: table._id,
       changes: { name: table.name, capacity: table.capacity },
     });
 

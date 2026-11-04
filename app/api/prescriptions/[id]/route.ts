@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Prescription from '@/models/Prescription';
+import { getRepos, type Patch, type Prescription } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { handleApiError } from '@/lib/error-handler';
@@ -18,9 +17,8 @@ export async function GET(
     }
 
     const { id } = await params;
-    await connectDB();
 
-    const prescription = await Prescription.findOne({ _id: id, tenantId: user.tenantId }).lean();
+    const prescription = await getRepos().prescriptions.findById(user.tenantId, id);
     if (!prescription) {
       return NextResponse.json({ success: false, error: 'Prescription not found' }, { status: 404 });
     }
@@ -51,9 +49,9 @@ export async function PUT(
     }
 
     const { id } = await params;
-    await connectDB();
 
-    const prescription = await Prescription.findOne({ _id: id, tenantId: user.tenantId });
+    const { prescriptions } = getRepos();
+    const prescription = await prescriptions.findById(user.tenantId, id);
     if (!prescription) {
       return NextResponse.json({ success: false, error: 'Prescription not found' }, { status: 404 });
     }
@@ -67,11 +65,15 @@ export async function PUT(
 
     const body = await request.json();
     const allowed = ['notes', 'scannedCopy', 'doctorClinic'] as const;
+    const patch: Patch<Pick<Prescription, (typeof allowed)[number]>> = {};
     for (const key of allowed) {
-      if (body[key] !== undefined) prescription.set(key, body[key]);
+      if (body[key] !== undefined) patch[key] = body[key];
     }
 
-    await prescription.save();
+    const result = await prescriptions.update(user.tenantId, id, patch);
+    if (!result) {
+      return NextResponse.json({ success: false, error: 'Prescription not found' }, { status: 404 });
+    }
 
     await createAuditLog(request, {
       tenantId: user.tenantId,
@@ -82,7 +84,7 @@ export async function PUT(
       changes: body,
     });
 
-    return NextResponse.json({ success: true, data: prescription });
+    return NextResponse.json({ success: true, data: result.after });
   } catch (error: unknown) {
     return handleApiError(error, 'Failed to update prescription');
   }
@@ -103,16 +105,12 @@ export async function DELETE(
     }
 
     const { id } = await params;
-    await connectDB();
-
-    const prescription = await Prescription.findOne({ _id: id, tenantId: user.tenantId });
-    if (!prescription) {
-      return NextResponse.json({ success: false, error: 'Prescription not found' }, { status: 404 });
-    }
 
     // Cancel instead of hard delete to preserve audit trail
-    prescription.status = 'cancelled';
-    await prescription.save();
+    const result = await getRepos().prescriptions.update(user.tenantId, id, { status: 'cancelled' });
+    if (!result) {
+      return NextResponse.json({ success: false, error: 'Prescription not found' }, { status: 404 });
+    }
 
     await createAuditLog(request, {
       tenantId: user.tenantId,

@@ -3,12 +3,9 @@
  * Automatically archive old data to reduce database size
  */
 
-import connectDB from '@/lib/mongodb';
-import Transaction from '@/models/Transaction'; // eslint-disable-line @typescript-eslint/no-unused-vars
-import Tenant from '@/models/Tenant';
+import { getRepos } from '@/lib/db';
 import { getActiveTenants, type ActiveTenant } from '@/lib/tenant-active-query';
 import { AutomationResult } from './types';
-import mongoose from 'mongoose';
 
 export interface DataArchivingOptions {
   tenantId?: string;
@@ -22,8 +19,6 @@ export interface DataArchivingOptions {
 export async function archiveOldData(
   options: DataArchivingOptions = {}
 ): Promise<AutomationResult> {
-  await connectDB();
-
   const results: AutomationResult = {
     success: true,
     message: '',
@@ -42,9 +37,7 @@ export async function archiveOldData(
     // Only _id/name are needed here — no settings
     let tenants: ActiveTenant[];
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId)
-        .select('_id slug name')
-        .lean<ActiveTenant>();
+      const tenant = (await getRepos().tenants.findById(options.tenantId, { select: '_id slug name' })) as ActiveTenant | null;
       tenants = tenant ? [tenant] : [];
     } else {
       tenants = await getActiveTenants();
@@ -61,41 +54,13 @@ export async function archiveOldData(
     for (const tenant of tenants) {
       try {
         const tenantId = tenant._id.toString();
-        const db = mongoose.connection.db;
-        if (!db) continue;
-
-        // Create archive collection if it doesn't exist
-        const archiveCollectionName = `${collections[0]}_archive`; // eslint-disable-line @typescript-eslint/no-unused-vars
-
         for (const collectionName of collections) {
           try {
-            const collection = db.collection(collectionName);
-            
-            // Find old documents
-            const oldDocuments = await collection.find({
-              tenantId: new mongoose.Types.ObjectId(tenantId),
-              createdAt: { $lt: cutoffDate },
-            }).limit(1000).toArray(); // Process in batches
-
-            if (oldDocuments.length === 0) {
-              continue;
-            }
-
-            // Move to archive collection
-            const archiveCollection = db.collection(`${collectionName}_archive`);
-            await archiveCollection.insertMany(oldDocuments.map(doc => ({
-              ...doc,
-              archivedAt: new Date(),
-              originalCollection: collectionName,
-            })));
-
-            // Delete from original collection
-            const ids = oldDocuments.map(doc => doc._id);
-            await collection.deleteMany({
-              _id: { $in: ids },
+            // Process in batches
+            totalArchived += await getRepos().dataArchive.moveOlderThan(tenantId, collectionName, {
+              before: cutoffDate,
+              limit: 1000,
             });
-
-            totalArchived += oldDocuments.length;
           } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
             totalFailed++;
             results.errors?.push(`Collection ${collectionName}: ${error.message}`);

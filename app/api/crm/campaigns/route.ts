@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Campaign from '@/models/Campaign';
+import { getRepos, type Campaign, type CampaignSegment } from '@/lib/db';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { checkRateLimit } from '@/lib/rate-limit';
@@ -9,16 +8,11 @@ import { handleApiError } from '@/lib/error-handler';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
-
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId } = authResult;
 
-    const campaigns = await Campaign.find({ tenantId })
-      .sort({ createdAt: -1 })
-      .limit(50)
-      .lean();
+    const campaigns = await getRepos().campaigns.list(tenantId, { limit: 50 });
 
     return NextResponse.json({ success: true, data: campaigns });
   } catch (error) {
@@ -28,8 +22,6 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
-
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId, user } = authResult;
@@ -56,14 +48,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Subject is required for email campaigns' }, { status: 400 });
     }
 
-    const campaign = await Campaign.create({
-      tenantId,
+    // Created as a draft (the schema default)
+    const campaign = await getRepos().campaigns.create(tenantId, {
       name: name.trim(),
-      channel,
-      segment,
+      channel: channel as Campaign['channel'],
+      segment: segment as CampaignSegment,
       subject: subject?.trim(),
       body: messageBody.trim(),
-      status: 'draft',
       createdBy: userId,
     });
 

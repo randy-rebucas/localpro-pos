@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Transaction from '@/models/Transaction';
+import { getRepos, isDuplicateKeyError, type TransactionPaymentMethod } from '@/lib/db';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
@@ -18,7 +17,6 @@ interface ManualItem {
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     const t = await getValidationTranslatorFromRequest(request);
 
     let tenantId: string;
@@ -58,8 +56,9 @@ export async function POST(request: NextRequest) {
     // "Add" button is disabled while the first request is in flight, but a
     // network retry after a dropped response could otherwise create a
     // second identical transaction.
+    const { transactions } = getRepos();
     if (idempotencyKey) {
-      const existing = await Transaction.findOne({ tenantId, idempotencyKey }).lean();
+      const existing = await transactions.findByIdempotencyKey(tenantId, idempotencyKey);
       if (existing) {
         return NextResponse.json({ success: true, data: existing }, { status: 200 });
       }
@@ -111,12 +110,11 @@ export async function POST(request: NextRequest) {
 
     let transaction;
     try {
-      transaction = await Transaction.create({
-        tenantId,
+      transaction = await transactions.create(tenantId, {
         items: transactionItems,
         subtotal: total,
         total,
-        paymentMethod,
+        paymentMethod: paymentMethod as TransactionPaymentMethod,
         ...(paymentMethod === 'cash' && cashReceived != null ? { cashReceived, change } : {}),
         status: 'completed',
         notes: notes?.trim() || undefined,
@@ -126,8 +124,8 @@ export async function POST(request: NextRequest) {
     } catch (createErr: unknown) {
       // A concurrent duplicate request raced us and created it first — return
       // that one instead of surfacing a spurious failure.
-      if (idempotencyKey && createErr instanceof Error && 'code' in createErr && (createErr as { code?: number }).code === 11000) {
-        const existing = await Transaction.findOne({ tenantId, idempotencyKey }).lean();
+      if (idempotencyKey && isDuplicateKeyError(createErr)) {
+        const existing = await transactions.findByIdempotencyKey(tenantId, idempotencyKey);
         if (existing) {
           return NextResponse.json({ success: true, data: existing }, { status: 200 });
         }
@@ -141,7 +139,7 @@ export async function POST(request: NextRequest) {
       tenantId,
       action: AuditActions.TRANSACTION_CREATE,
       entityType: 'transaction',
-      entityId: transaction._id.toString(),
+      entityId: transaction._id,
       changes: { receiptNumber: transaction.receiptNumber, total, itemsCount: transactionItems.length },
     });
 

@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import ProductBundle from '@/models/ProductBundle';
-import Transaction from '@/models/Transaction';
+import { getRepos, type TransactionFilter } from '@/lib/db';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { logger } from '@/lib/logger';
@@ -11,7 +9,6 @@ import { logger } from '@/lib/logger';
  */
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     const { tenantId, user } = await requireTenantAccess(request);
 
     if (!(await hasTenantPermission(user.role, tenantId, 'bundles.manage'))) {
@@ -24,30 +21,26 @@ export async function GET(request: NextRequest) {
     const bundleId = searchParams.get('bundleId');
 
     // Build date query
-    const dateQuery: any = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
-    if (startDate) dateQuery.$gte = new Date(startDate);
+    const dateQuery: NonNullable<TransactionFilter['createdAt']> = {};
+    if (startDate) dateQuery.gte = new Date(startDate);
     if (endDate) {
       const end = new Date(endDate);
       end.setHours(23, 59, 59, 999);
-      dateQuery.$lte = end;
+      dateQuery.lte = end;
     }
 
     // Get all transactions in the date range
-    const transactionQuery: any = { tenantId, status: 'completed' }; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const transactionFilter: TransactionFilter = { status: 'completed' };
     if (Object.keys(dateQuery).length > 0) {
-      transactionQuery.createdAt = dateQuery;
+      transactionFilter.createdAt = dateQuery;
     }
 
-    const transactions = await Transaction.find(transactionQuery)
-      .select('items createdAt total')
-      .lean();
+    const transactions = await getRepos().transactions.list(tenantId, transactionFilter, {
+      select: 'items createdAt total',
+    });
 
     // Get all bundles
-    const bundleQuery: any = { tenantId }; // eslint-disable-line @typescript-eslint/no-explicit-any
-    if (bundleId) bundleQuery._id = bundleId;
-    const bundles = await ProductBundle.find(bundleQuery)
-      .select('_id name price')
-      .lean();
+    const bundles = await getRepos().bundles.list(tenantId, bundleId ? { ids: [bundleId] } : {}, { select: '_id name price' });
 
     // Calculate analytics for each bundle
     const analytics = bundles.map(bundle => {

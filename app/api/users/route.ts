@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import User from '@/models/User';
+import { getRepos, isDuplicateKeyError } from '@/lib/db';
 import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { getRoleRank } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
@@ -13,7 +12,6 @@ import { logger } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     // SECURITY: Validate tenant access for authenticated requests
     let tenantId: string;
     try {
@@ -34,14 +32,11 @@ export async function GET(request: NextRequest) {
     }
 
     const isActiveParam = request.nextUrl.searchParams.get('isActive');
-    const query: Record<string, unknown> = { tenantId };
-    if (isActiveParam === 'true') query.isActive = { $ne: false };
-    else if (isActiveParam === 'false') query.isActive = false;
+    const filter: { active?: boolean } = {};
+    if (isActiveParam === 'true') filter.active = true;
+    else if (isActiveParam === 'false') filter.active = false;
 
-    const users = await User.find(query)
-      .select('-password')
-      .sort({ createdAt: -1 })
-      .lean();
+    const users = await getRepos().users.list(tenantId, filter);
 
     return NextResponse.json({ success: true, data: users });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -58,7 +53,6 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   let t: (key: string, fallback: string) => string;
   try {
-    await connectDB();
     // SECURITY: Validate tenant access for authenticated requests
     let tenantId: string;
     let actingUser: { userId: string; role: string };
@@ -140,7 +134,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Check subscription limits
-    const currentUserCount = await User.countDocuments({ tenantId, isActive: true });
+    const { users } = getRepos();
+    const currentUserCount = await users.countActive(tenantId);
     try {
       await checkSubscriptionLimit(tenantId.toString(), 'maxUsers', currentUserCount);
     } catch (limitError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -150,7 +145,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const user = await User.create({
+    const user = await users.create({
       email: email.toLowerCase(),
       password,
       name,
@@ -162,7 +157,7 @@ export async function POST(request: NextRequest) {
       tenantId,
       action: AuditActions.CREATE,
       entityType: 'user',
-      entityId: user._id.toString(),
+      entityId: user._id,
       changes: { email, name, role: user.role },
     });
 
@@ -176,12 +171,10 @@ export async function POST(request: NextRequest) {
       // Don't fail the request if usage update fails
     }
 
-    const userResponse = user.toObject();
-    const { password: _, ...userWithoutPassword } = userResponse;
-
-    return NextResponse.json({ success: true, data: userWithoutPassword }, { status: 201 });
+    // users.create() never returns the password hash
+    return NextResponse.json({ success: true, data: user }, { status: 201 });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    if (error.code === 11000) {
+    if (isDuplicateKeyError(error)) {
       return NextResponse.json(
         { success: false, error: 'User with this email already exists' },
         { status: 400 }

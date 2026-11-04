@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
+import { getRepos } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { handleApiError } from '@/lib/error-handler';
@@ -18,12 +17,11 @@ export async function GET(
     if (!user) return NextResponse.json({ success: false, error: t('validation.unauthorized', 'Unauthorized') }, { status: 401 });
 
     const { slug } = await params;
-    await connectDB();
 
-    const tenant = await Tenant.findOne({ slug, isActive: true }).lean();
+    const tenant = await getRepos().tenants.findBySlug(slug, { activeOnly: true, select: 'settings.serviceCompliance' });
     if (!tenant) return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
 
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant._id) {
       return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden') }, { status: 403 });
     }
 
@@ -50,31 +48,32 @@ export async function PUT(
     if (!rl.allowed) return NextResponse.json({ success: false, error: t('validation.tooManyRequests', 'Too many requests') }, { status: 429 });
 
     const { slug } = await params;
-    await connectDB();
 
-    const tenant = await Tenant.findOne({ slug });
+    const tenant = await getRepos().tenants.findBySlug(slug, { select: 'settings.serviceCompliance' });
     if (!tenant) return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
 
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant._id) {
       return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden') }, { status: 403 });
     }
 
     const body = await request.json();
 
-    if (!tenant.settings.serviceCompliance) tenant.settings.serviceCompliance = {} as never;
-    const sc = tenant.settings.serviceCompliance as Record<string, unknown>;
+    const sc: Record<string, unknown> = { ...tenant.settings?.serviceCompliance };
 
     if (body.dohAccreditation !== undefined) sc.dohAccreditation = body.dohAccreditation || undefined;
     if (body.dohAccreditationExpiry !== undefined) sc.dohAccreditationExpiry = body.dohAccreditationExpiry ? new Date(body.dohAccreditationExpiry) : undefined;
     if (body.practitionerLicenses !== undefined) sc.practitionerLicenses = body.practitionerLicenses;
 
-    tenant.markModified('settings');
-    await tenant.save();
+    // Fields cleared above (undefined) are dropped, as save() did
+    const updated = await getRepos().tenants.update(tenant._id, {
+      set: { 'settings.serviceCompliance': Object.fromEntries(Object.entries(sc).filter(([, v]) => v !== undefined)) },
+    });
+    if (!updated) return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
 
     await createAuditLog(request, {
       tenantId: tenant._id, userId: user.userId,
       action: AuditActions.UPDATE, entityType: 'service_compliance',
-      entityId: tenant._id.toString(), changes: body,
+      entityId: tenant._id, changes: body,
     });
 
     return NextResponse.json({ success: true });

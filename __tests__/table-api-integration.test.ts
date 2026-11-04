@@ -3,7 +3,7 @@ process.env.JWT_SECRET = 'test-secret-for-table-api-tests-32chars!!';
 process.env.NODE_ENV = 'test';
 process.env.MONGODB_URI = 'mongodb://test:test@localhost:27017/localpro-pos-test';
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
 import { generateToken } from '@/lib/auth';
 
@@ -47,19 +47,44 @@ vi.mock('@/lib/audit', () => ({
   },
 }));
 
-// Mock the Table model
-const mockTableFind = vi.fn();
-const mockTableFindOne = vi.fn();
-const mockTableCreate = vi.fn();
-
-vi.mock('@/models/Table', () => ({
-  default: {
-    find: mockTableFind,
-    findOne: mockTableFindOne,
-    create: mockTableCreate,
-    findByIdAndUpdate: vi.fn(),
+// Mock the repository layer (dining tables)
+const repos = vi.hoisted(() => ({
+  tables: {
+    list: vi.fn(),
+    findById: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
   },
 }));
+
+vi.mock('@/lib/db', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/db/errors')>('@/lib/db/errors');
+  return {
+    getRepos: () => repos,
+    isDuplicateKeyError: actual.isDuplicateKeyError,
+    TABLE_STATUSES: ['open', 'occupied', 'check-requested'],
+  };
+});
+
+const mockRequireTenantAccess = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/api-tenant', () => ({
+  requireTenantAccess: (...args: unknown[]) => mockRequireTenantAccess(...args),
+}));
+
+const mockHasTenantPermission = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/permissions-server', () => ({
+  hasTenantPermission: (...args: unknown[]) => mockHasTenantPermission(...args),
+}));
+
+const mockGetTenantSettingsById = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/tenant', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/tenant')>()),
+  getTenantSettingsById: (...args: unknown[]) => mockGetTenantSettingsById(...args),
+}));
+
+import { GET as listTables, POST as createTable } from '@/app/api/tables/route';
+import { GET as getTable, PATCH as patchTable, DELETE as deleteTable } from '@/app/api/tables/[id]/route';
+import { createAuditLog } from '@/lib/audit';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -519,5 +544,203 @@ describe('Table API — Content Type Handling', () => {
 
     expect(request.method).toBe('POST');
     // Real API would validate body parsing
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Table API — route handlers against the repository layer
+// ---------------------------------------------------------------------------
+
+describe('Table API — route handlers', () => {
+  const TENANT = 'tenant-1';
+  const OTHER_TENANT = 'tenant-2';
+  const ID = '507f1f77bcf86cd799439011';
+  const params = { params: Promise.resolve({ id: ID }) };
+
+  function authAs(tenantId: string, role = 'owner') {
+    mockRequireTenantAccess.mockResolvedValue({
+      tenantId,
+      user: { userId: 'user-1', tenantId, email: 'test@example.com', role },
+    });
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockHasTenantPermission.mockResolvedValue(true);
+    mockGetTenantSettingsById.mockResolvedValue({ enableTableManagement: true });
+  });
+
+  it('GET defaults to active tables scoped to the authenticated tenant', async () => {
+    authAs(TENANT);
+    repos.tables.list.mockResolvedValue([{ _id: 't1', name: 'Table 1' }]);
+
+    const res = await listTables(createRequest('/api/tables'));
+    const { status, body } = await parseResponse(res);
+
+    expect(status).toBe(200);
+    expect(body.data).toEqual([{ _id: 't1', name: 'Table 1' }]);
+    expect(repos.tables.list).toHaveBeenCalledWith(TENANT, { isActive: true });
+  });
+
+  it('GET with isActive=all omits the active filter', async () => {
+    authAs(TENANT);
+    repos.tables.list.mockResolvedValue([]);
+
+    await listTables(createRequest('/api/tables?isActive=all&branchId=b1&status=occupied'));
+
+    expect(repos.tables.list).toHaveBeenCalledWith(TENANT, { branchId: 'b1', status: 'occupied' });
+  });
+
+  it('GET ignores an invalid status filter', async () => {
+    authAs(TENANT);
+    repos.tables.list.mockResolvedValue([]);
+
+    await listTables(createRequest('/api/tables?isActive=false&status=bogus'));
+
+    expect(repos.tables.list).toHaveBeenCalledWith(TENANT, { isActive: false });
+  });
+
+  it('GET /:id 404s for a table outside the caller tenant', async () => {
+    authAs(OTHER_TENANT);
+    repos.tables.findById.mockResolvedValue(null);
+
+    const res = await getTable(createRequest(`/api/tables/${ID}`), params);
+
+    expect(res.status).toBe(404);
+    expect(repos.tables.findById).toHaveBeenCalledWith(OTHER_TENANT, ID);
+  });
+
+  it('POST creates the table in the authenticated tenant, ignoring body tenantId', async () => {
+    authAs(TENANT);
+    repos.tables.create.mockResolvedValue({ _id: 't1', name: 'Table 5A', capacity: 6, status: 'open' });
+
+    const res = await createTable(
+      createRequest('/api/tables', 'POST', undefined, { name: '  Table 5A ', capacity: 6, tenantId: OTHER_TENANT })
+    );
+    const { status } = await parseResponse(res);
+
+    expect(status).toBe(201);
+    expect(repos.tables.create).toHaveBeenCalledWith(TENANT, {
+      name: 'Table 5A',
+      capacity: 6,
+      branchId: undefined,
+      status: 'open',
+      isActive: true,
+    });
+  });
+
+  it('POST rejects a missing name with 400', async () => {
+    authAs(TENANT);
+
+    const res = await createTable(createRequest('/api/tables', 'POST', undefined, { capacity: 4 }));
+
+    expect(res.status).toBe(400);
+    expect(repos.tables.create).not.toHaveBeenCalled();
+  });
+
+  it('PATCH with no actual change skips the audit log and returns the table', async () => {
+    authAs(TENANT);
+    const table = { _id: ID, name: 'Table 1', status: 'open' };
+    repos.tables.update.mockResolvedValue({ before: table, after: table, changed: [] });
+
+    const res = await patchTable(createRequest(`/api/tables/${ID}`, 'PATCH', undefined, { status: 'open' }), params);
+    const { status, body } = await parseResponse(res);
+
+    expect(status).toBe(200);
+    expect(body).toEqual({ success: true, data: table });
+    expect(repos.tables.update).toHaveBeenCalledWith(TENANT, ID, expect.objectContaining({ status: 'open' }));
+    expect(createAuditLog).not.toHaveBeenCalled();
+  });
+
+  it('PATCH audits only the changed fields', async () => {
+    authAs(TENANT);
+    const before = { _id: ID, name: 'Table 1', status: 'open', capacity: 4 };
+    const after = { ...before, status: 'occupied', currentOrderId: 'order-1' };
+    repos.tables.update.mockResolvedValue({ before, after, changed: ['status', 'currentOrderId'] });
+
+    const res = await patchTable(
+      createRequest(`/api/tables/${ID}`, 'PATCH', undefined, { status: 'occupied', currentOrderId: 'order-1' }),
+      params
+    );
+    const { status, body } = await parseResponse(res);
+
+    expect(status).toBe(200);
+    expect(body.data).toEqual(after);
+    expect(createAuditLog).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        tenantId: TENANT,
+        entityId: ID,
+        changes: {
+          before: { status: 'open', currentOrderId: undefined },
+          after: { status: 'occupied', currentOrderId: 'order-1' },
+        },
+      })
+    );
+  });
+
+  it('PATCH clears currentOrderId when a falsy value is sent', async () => {
+    authAs(TENANT);
+    const table = { _id: ID, name: 'Table 1', status: 'open' };
+    repos.tables.update.mockResolvedValue({ before: table, after: table, changed: [] });
+
+    await patchTable(createRequest(`/api/tables/${ID}`, 'PATCH', undefined, { currentOrderId: '' }), params);
+
+    const patch = repos.tables.update.mock.calls[0][2];
+    expect(patch.currentOrderId).toBeNull();
+    expect(patch.name).toBeUndefined();
+    expect(patch.status).toBeUndefined();
+  });
+
+  it('PATCH rejects an invalid status with 400 without writing', async () => {
+    authAs(TENANT);
+
+    const res = await patchTable(createRequest(`/api/tables/${ID}`, 'PATCH', undefined, { status: 'bogus' }), params);
+
+    expect(res.status).toBe(400);
+    expect(repos.tables.update).not.toHaveBeenCalled();
+  });
+
+  it('PATCH 404s for a table outside the caller tenant', async () => {
+    authAs(OTHER_TENANT);
+    repos.tables.update.mockResolvedValue(null);
+
+    const res = await patchTable(createRequest(`/api/tables/${ID}`, 'PATCH', undefined, { status: 'open' }), params);
+
+    expect(res.status).toBe(404);
+    expect(repos.tables.update).toHaveBeenCalledWith(OTHER_TENANT, ID, expect.anything());
+  });
+
+  it('PATCH config changes require tables.configure', async () => {
+    authAs(TENANT, 'cashier');
+    mockHasTenantPermission.mockResolvedValue(false);
+
+    const res = await patchTable(createRequest(`/api/tables/${ID}`, 'PATCH', undefined, { name: 'X' }), params);
+
+    expect(res.status).toBe(403);
+    expect(mockHasTenantPermission).toHaveBeenCalledWith('cashier', TENANT, 'tables.configure');
+    expect(repos.tables.update).not.toHaveBeenCalled();
+  });
+
+  it('DELETE soft-deletes within the caller tenant', async () => {
+    authAs(TENANT);
+    const table = { _id: ID, name: 'Table 1', isActive: true };
+    repos.tables.update.mockResolvedValue({ before: table, after: { ...table, isActive: false }, changed: ['isActive'] });
+
+    const res = await deleteTable(createRequest(`/api/tables/${ID}`, 'DELETE'), params);
+    const { status, body } = await parseResponse(res);
+
+    expect(status).toBe(200);
+    expect(body).toEqual({ success: true, message: 'Table deactivated' });
+    expect(repos.tables.update).toHaveBeenCalledWith(TENANT, ID, { isActive: false });
+  });
+
+  it('DELETE 404s for a missing table', async () => {
+    authAs(TENANT);
+    repos.tables.update.mockResolvedValue(null);
+
+    const res = await deleteTable(createRequest(`/api/tables/${ID}`, 'DELETE'), params);
+
+    expect(res.status).toBe(404);
   });
 });

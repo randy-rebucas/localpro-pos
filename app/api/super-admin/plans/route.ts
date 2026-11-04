@@ -1,27 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import SubscriptionPlan from '@/models/SubscriptionPlan';
-import Subscription from '@/models/Subscription';
 import { requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { handleApiError } from '@/lib/error-handler';
+import { getRepos } from '@/lib/db';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     await requireRole(request, ['super_admin']);
 
-    const plans = await SubscriptionPlan.find({})
-      .sort({ 'price.monthly': 1 })
-      .lean();
+    const { subscriptionPlans, subscriptions } = getRepos();
+    const plans = await subscriptionPlans.list();
 
     // Attach active subscriber count to each plan
-    const counts = await Subscription.aggregate([
-      { $match: { status: { $in: ['active', 'trial'] } } },
-      { $group: { _id: '$planId', count: { $sum: 1 } } },
-    ]);
-    const countMap = Object.fromEntries(counts.map(c => [String(c._id), c.count]));
-    const plansWithCounts = plans.map(p => ({ ...p, subscriberCount: countMap[String(p._id)] || 0 }));
+    const countMap = await subscriptions.countActiveByPlanAcrossTenants();
+    const plansWithCounts = plans.map(p => ({ ...p, subscriberCount: countMap[p._id] || 0 }));
 
     return NextResponse.json({ success: true, data: plansWithCounts });
   } catch (error: unknown) {
@@ -37,7 +29,6 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     const user = await requireRole(request, ['super_admin']);
 
     const body = await request.json();
@@ -50,7 +41,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const existing = await SubscriptionPlan.findOne({ tier });
+    const { subscriptionPlans } = getRepos();
+    const existing = await subscriptionPlans.findByTier(tier);
     if (existing) {
       return NextResponse.json(
         { success: false, error: `A plan with tier '${tier}' already exists` },
@@ -58,7 +50,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const plan = await SubscriptionPlan.create({
+    const plan = await subscriptionPlans.create({
       name,
       tier,
       description,
@@ -71,15 +63,15 @@ export async function POST(request: NextRequest) {
       yearlyDiscount: yearlyDiscount || 0,
     });
 
-    const Tenant = (await import('@/models/Tenant')).default;
-    const defaultTenant = await Tenant.findOne({ slug: 'default' }).select('_id').lean();
+    const defaultTenant = await getRepos().tenants.findBySlug('default', { select: '_id' });
     if (defaultTenant) {
       await createAuditLog(request, {
         tenantId: defaultTenant._id,
         userId: user.userId,
         action: AuditActions.CREATE,
         entityType: 'subscription_plan',
-        entityId: plan._id.toString(),
+        entityId: plan._id,
+
         changes: { name, tier, price },
         metadata: { createdBy: user.userId, role: 'super_admin' },
       });

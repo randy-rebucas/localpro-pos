@@ -1,13 +1,11 @@
 import { NextRequest } from 'next/server';
-import mongoose from 'mongoose';
-import connectDB from './mongodb';
-import AuditLog from '@/models/AuditLog';
+import { getRepos, isValidId } from '@/lib/db';
 import { getCurrentUser, verifyToken } from './auth';
 import { getTenantId } from './tenant';
 import { logger } from '@/lib/logger';
 
 export interface AuditLogData {
-  tenantId: string | mongoose.Types.ObjectId;
+  tenantId: string;
   userId?: string;
   action: string;
   entityType: string;
@@ -27,13 +25,11 @@ export interface AuditLogData {
 export async function createAuditLog(
   request: NextRequest,
   data: Omit<AuditLogData, 'userId'> & {
-    tenantId?: string | mongoose.Types.ObjectId;
+    tenantId?: string;
     userId?: string;
   }
 ): Promise<void> {
   try {
-    await connectDB();
-
     const ipAddress = request.headers.get('x-forwarded-for') ||
                      request.headers.get('x-real-ip') ||
                      'unknown';
@@ -55,10 +51,10 @@ export async function createAuditLog(
     const metadata = impersonatedBy ? { ...data.metadata, impersonatedBy } : data.metadata;
 
     // Get tenantId from parameter, user, or request
-    let tenantId: string | mongoose.Types.ObjectId;
+    let tenantId: string;
 
     if (data.tenantId) {
-      // Use provided tenantId (could be ObjectId or string)
+      // Use provided tenantId (an id, or a slug resolved below)
       tenantId = data.tenantId;
     } else if (user) {
       // Get from authenticated user
@@ -80,11 +76,11 @@ export async function createAuditLog(
           return;
         }
       } else {
-        // For non-API routes, extract tenant slug and convert to ObjectId
+        // For non-API routes, extract tenant slug and convert to an id
         const tenantMatch = pathname.match(/\/([^/]+)\//);
         const tenantSlug = tenantMatch ? tenantMatch[1] : 'default';
         
-        // Convert slug to ObjectId
+        // Convert slug to id
         const slugTenantId = await getTenantId(tenantSlug);
         if (slugTenantId) {
           tenantId = slugTenantId;
@@ -95,25 +91,17 @@ export async function createAuditLog(
       }
     }
 
-    // Ensure tenantId is an ObjectId
-    if (typeof tenantId === 'string') {
-      // Check if it's already a valid ObjectId string
-      if (mongoose.Types.ObjectId.isValid(tenantId)) {
-        tenantId = new mongoose.Types.ObjectId(tenantId);
-      } else {
-        // It's a slug, need to look up the tenant
-        const slugTenantId = await getTenantId(tenantId);
-        if (slugTenantId) {
-          tenantId = new mongoose.Types.ObjectId(slugTenantId);
-        } else {
-          console.warn('Cannot create audit log: tenant not found for slug:', tenantId);
-          return;
-        }
+    // A value that isn't an id is a slug
+    if (!isValidId(tenantId)) {
+      const slugTenantId = await getTenantId(tenantId);
+      if (!slugTenantId) {
+        console.warn('Cannot create audit log: tenant not found for slug:', tenantId);
+        return;
       }
+      tenantId = slugTenantId;
     }
 
-    await AuditLog.create({
-      tenantId,
+    await getRepos().auditLogs.create(tenantId, {
       userId: resolvedUserId,
       action: data.action,
       entityType: data.entityType,

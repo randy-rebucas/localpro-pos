@@ -8,7 +8,7 @@
  * if the tenant has configured a push endpoint, POSTs it there.
  */
 import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
+import { getRepos } from '@/lib/db';
 import { getDailySalesAggregate, startOfBusinessDay } from '@/lib/bir-readings';
 import { formatGrandTotalRegister } from '@/lib/bir-format';
 import { logger } from '@/lib/logger';
@@ -19,6 +19,9 @@ import { AutomationResult } from './types';
 const _importFs = () => import('fs/promises');
 /* turbopackIgnore: true */
 const _importPath = () => import('path');
+
+/** Every tenant field the export reads (isActive for the active filter below). */
+const TENANT_FIELDS = 'slug isActive grandTotalSales settings.birEsalesPushUrl';
 
 export interface SalesSummaryExportOptions {
   tenantId?: string; // If specified, export only this tenant
@@ -89,9 +92,13 @@ export async function generateSalesSummaryExport(
   };
 
   try {
+    // isActive === true only (not the listActive() isActive !== false rule), as before
+    const isFlaggedActive = (t: { isActive?: boolean }) => t.isActive === true;
     const tenants = options.tenantId
-      ? await Tenant.find({ _id: options.tenantId, isActive: true }).lean()
-      : await Tenant.find({ isActive: true }).lean();
+      ? [await getRepos().tenants.findById(options.tenantId, { select: TENANT_FIELDS })].filter(
+          (t): t is NonNullable<typeof t> => !!t && isFlaggedActive(t)
+        )
+      : (await getRepos().tenants.listActive({ select: TENANT_FIELDS })).filter(isFlaggedActive);
 
     if (tenants.length === 0) {
       results.message = 'No active tenants found to export';

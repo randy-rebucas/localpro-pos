@@ -1,6 +1,5 @@
 import { NextRequest } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import StockMovement from '@/models/StockMovement';
+import { getRepos } from '@/lib/db';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
@@ -12,7 +11,6 @@ import { logger } from '@/lib/logger';
  */
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const t = await getValidationTranslatorFromRequest(request);
@@ -51,26 +49,17 @@ export async function GET(request: NextRequest) {
         
         const poll = async () => {
           try {
-            const query: any = { // eslint-disable-line @typescript-eslint/no-explicit-any
-              tenantId,
-              createdAt: { $gt: lastCheck },
-            };
-            
-            if (productId) {
-              query.productId = productId;
-            }
-            
-            if (branchId) {
-              query.branchId = branchId;
-            }
-
             // Served by the { tenantId, createdAt } index. Movements are already
             // tenant-scoped, so no extra Product lookup is needed per tick.
-            const recentMovements = await StockMovement.find(query)
-              .select('productId branchId variation type quantity newStock previousStock createdAt')
-              .sort({ createdAt: -1 })
-              .limit(500)
-              .lean();
+            const recentMovements = await getRepos().stockMovements.list(
+              tenantId,
+              {
+                productId: productId ?? undefined,
+                branchId: branchId ?? undefined,
+                createdAt: { gt: lastCheck },
+              },
+              { select: 'productId branchId variation type quantity newStock previousStock createdAt', limit: 500 }
+            );
 
             if (recentMovements.length > 0) {
               // Oldest first, so the last update applied per product is the newest

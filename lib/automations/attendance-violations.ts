@@ -3,10 +3,7 @@
  * Alert managers for attendance issues (late arrivals, missing clock-ins)
  */
 
-import connectDB from '@/lib/mongodb';
-import Attendance from '@/models/Attendance';
-import Tenant from '@/models/Tenant';
-import User from '@/models/User'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import { getRepos } from '@/lib/db';
 import { sendEmail } from '@/lib/notifications';
 import type { ITenantSettings } from '@/models/Tenant';
 import { getActiveTenants, type ActiveTenant } from '@/lib/tenant-active-query';
@@ -34,8 +31,6 @@ const TENANT_FIELDS =
 export async function detectAttendanceViolations(
   options: AttendanceViolationOptions = {}
 ): Promise<AutomationResult> {
-  await connectDB();
-
   const results: AutomationResult = {
     success: true,
     message: '',
@@ -53,9 +48,7 @@ export async function detectAttendanceViolations(
     // Get tenants to process
     let tenants: ActiveTenant[];
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId)
-        .select(`_id slug name ${TENANT_FIELDS}`)
-        .lean<ActiveTenant>();
+      const tenant = (await getRepos().tenants.findById(options.tenantId, { select: `_id slug name ${TENANT_FIELDS}` })) as ActiveTenant | null;
       tenants = tenant ? [tenant] : [];
     } else {
       tenants = await getActiveTenants(TENANT_FIELDS);
@@ -93,16 +86,11 @@ export async function detectAttendanceViolations(
         const fmtTime = (d: Date) => d.toLocaleTimeString('en-US', { timeZone: timezone });
 
         // Find attendance records clocked in during this run's window
-        const todayAttendance = await Attendance.find({
-          tenantId: tenant._id,
-          clockIn: {
-            $gte: windowStart,
-            $lt: now,
-          },
-        })
-          .select('userId clockIn')
-          .populate('userId', 'name email')
-          .lean();
+        const todayAttendance = await getRepos().attendance.list(
+          String(tenant._id),
+          { clockIn: { gte: windowStart, lt: now } },
+          { select: 'userId clockIn', populateUser: true }
+        );
 
         // Check for late arrivals
         for (const attendance of todayAttendance) {

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
+import { getRepos } from '@/lib/db';
 import { requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { handleApiError } from '@/lib/error-handler';
@@ -8,11 +7,10 @@ import { applyBusinessTypeDefaults } from '@/lib/business-types';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   try {
-    await connectDB();
     await requireRole(request, ['super_admin']);
     const { slug } = await params;
 
-    const tenant = await Tenant.findOne({ slug }).lean();
+    const tenant = await getRepos().tenants.findBySlug(slug);
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
@@ -31,11 +29,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   try {
-    await connectDB();
     const user = await requireRole(request, ['super_admin']);
     const { slug } = await params;
 
-    const oldTenant = await Tenant.findOne({ slug }).lean();
+    const oldTenant = await getRepos().tenants.findBySlug(slug);
     if (!oldTenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
@@ -67,7 +64,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       updateData.settings = mergedSettings;
     }
 
-    const tenant = await Tenant.findOneAndUpdate({ slug }, updateData, { new: true, runValidators: true });
+    // update() runs the schema validators, as runValidators did; null values are stored as null.
+    const tenant = await getRepos().tenants.update(oldTenant._id, { set: updateData });
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
@@ -85,7 +83,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       userId: user.userId,
       action: AuditActions.UPDATE,
       entityType: 'tenant',
-      entityId: tenant._id.toString(),
+      entityId: tenant._id,
       changes,
       metadata: { updatedBy: user.userId, role: 'super_admin' },
     });

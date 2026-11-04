@@ -3,7 +3,7 @@
  * Handles exchange rates and currency conversion
  */
 
-import { ITenantSettings } from '@/models/Tenant';
+import type { ITenantSettings } from '@/types/tenant';
 import { formatCurrency, formatNumber } from './currency'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { logger } from '@/lib/logger';
 

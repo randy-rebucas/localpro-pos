@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
+import { getRepos } from '@/lib/db';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
 
     const [aggregate, tenant] = await Promise.all([
       getDailySalesAggregate(tenantId, businessDate),
-      Tenant.findById(tenantId).select('grandTotalSales grandTotalTransactionCount').lean(),
+      getRepos().tenants.findById(tenantId, { select: 'grandTotalSales grandTotalTransactionCount' }),
     ]);
 
     await createAuditLog(request, {

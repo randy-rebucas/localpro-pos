@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Device from '@/models/Device';
+import { getRepos, isDuplicateKeyError } from '@/lib/db';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -13,7 +12,6 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId, user } = authResult;
@@ -29,28 +27,22 @@ export async function PUT(
       return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
     }
 
-    const device = await Device.findOne({ _id: id, tenantId });
-    if (!device) {
-      return NextResponse.json({ success: false, error: t('validation.deviceNotFound', 'Device not found') }, { status: 404 });
-    }
-
     const body = await request.json();
     const { label, serialNumber, terminalId, branchId, ptuNumber, ptuStatus, isActive } = body;
 
-    const oldData = device.toObject();
-
-    if (label !== undefined) device.label = label;
-    if (serialNumber !== undefined) device.serialNumber = serialNumber;
-    if (terminalId !== undefined) device.terminalId = terminalId;
-    if (branchId !== undefined) device.branchId = branchId || undefined;
-    if (ptuNumber !== undefined) device.ptuNumber = ptuNumber;
-    if (ptuStatus !== undefined) device.ptuStatus = ptuStatus;
-    if (isActive !== undefined) device.isActive = isActive;
-
+    let result;
     try {
-      await device.save();
+      result = await getRepos().devices.update(tenantId, id, {
+        label,
+        serialNumber,
+        terminalId,
+        branchId: branchId === undefined ? undefined : branchId || null,
+        ptuNumber,
+        ptuStatus,
+        isActive,
+      });
     } catch (saveErr: unknown) {
-      if (saveErr instanceof Error && 'code' in saveErr && (saveErr as { code?: number }).code === 11000) {
+      if (isDuplicateKeyError(saveErr)) {
         return NextResponse.json(
           { success: false, error: t('validation.deviceDuplicate', 'A device with this terminal ID or serial number already exists') },
           { status: 409 }
@@ -58,14 +50,18 @@ export async function PUT(
       }
       throw saveErr;
     }
+    if (!result) {
+      return NextResponse.json({ success: false, error: t('validation.deviceNotFound', 'Device not found') }, { status: 404 });
+    }
+    const device = result.after;
 
     await createAuditLog(request, {
       tenantId,
       userId: user.userId,
       action: AuditActions.DEVICE_UPDATE,
       entityType: 'device',
-      entityId: device._id.toString(),
-      changes: { before: oldData, after: device.toObject() },
+      entityId: device._id,
+      changes: { before: result.before, after: result.after },
     });
 
     return NextResponse.json({ success: true, data: device });
@@ -79,7 +75,6 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId, user } = authResult;
@@ -95,21 +90,19 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
     }
 
-    const device = await Device.findOne({ _id: id, tenantId });
-    if (!device) {
+    // Soft delete — preserve device history for receipts/audit already issued
+    const result = await getRepos().devices.update(tenantId, id, { isActive: false });
+    if (!result) {
       return NextResponse.json({ success: false, error: t('validation.deviceNotFound', 'Device not found') }, { status: 404 });
     }
-
-    // Soft delete — preserve device history for receipts/audit already issued
-    device.isActive = false;
-    await device.save();
+    const device = result.after;
 
     await createAuditLog(request, {
       tenantId,
       userId: user.userId,
       action: AuditActions.DEVICE_DELETE,
       entityType: 'device',
-      entityId: device._id.toString(),
+      entityId: device._id,
       changes: { label: device.label, terminalId: device.terminalId },
     });
 

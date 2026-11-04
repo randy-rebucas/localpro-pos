@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import TenantEcommerceIntegration from '@/models/TenantEcommerceIntegration';
+import { getRepos } from '@/lib/db';
 import { verifyWooCommerceWebhookSignature } from '@/lib/ecommerce/webhook-verify';
 import { getWooWebhookSecretPlain } from '@/lib/ecommerce/integration-credentials';
 import { handleWooCommerceWebhook } from '@/lib/ecommerce/process-channel-webhook';
@@ -19,8 +18,7 @@ export async function POST(
     return new NextResponse('Not Found', { status: 404 });
   }
 
-  await connectDB();
-  const integration = await TenantEcommerceIntegration.findById(integrationId).lean();
+  const integration = await getRepos().ecommerceIntegrations.findByIdAcrossTenants(integrationId);
   if (!integration || integration.provider !== 'woocommerce' || !integration.isActive) {
     return new NextResponse('Not Found', { status: 404 });
   }

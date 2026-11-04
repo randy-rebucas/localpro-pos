@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
+import { getRepos } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -44,7 +43,6 @@ export async function PUT(
   { params }: { params: Promise<{ slug: string }> }
 ) {
   try {
-    await connectDB();
     const { slug } = await params;
 
     const t = await getValidationTranslatorFromRequest(request);
@@ -81,8 +79,8 @@ export async function PUT(
     // (taxRules, businessHours, holidays, receiptTemplates, notificationTemplates,
     //  advancedBranding, hardwareConfig, birTin, etc.) are preserved when the
     // main settings page saves only its own tabs.
-    const existingTenant = await Tenant.findOne({ slug }).select('_id settings').lean();
-    const existingSettings = existingTenant?.settings || {};
+    const existingTenant = await getRepos().tenants.findBySlug(slug, { select: '_id settings' });
+    const existingSettings: Record<string, any> = existingTenant?.settings || {}; // eslint-disable-line @typescript-eslint/no-explicit-any
 
     // Three-way merge: defaults → existing → incoming (incoming wins on conflict)
     const mergedSettings = { ...defaultSettings, ...existingSettings, ...settings };
@@ -128,7 +126,7 @@ export async function PUT(
     }
 
     // Tenant isolation: verify the authenticated user belongs to this tenant (reuse existingTenant)
-    if (existingTenant && user && user.role !== 'super_admin' && user.tenantId !== existingTenant._id.toString()) {
+    if (existingTenant && user && user.role !== 'super_admin' && user.tenantId !== existingTenant._id) {
       return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden') }, { status: 403 });
     }
 
@@ -150,11 +148,8 @@ export async function PUT(
       setPayload[`settings.${key}`] = updatedSettings[key];
     }
 
-    const tenant = await Tenant.findOneAndUpdate(
-      { slug },
-      { $set: setPayload },
-      { new: true, runValidators: true }
-    );
+    // No tenant with this slug → nothing to update → 404 below
+    const tenant = existingTenant ? await getRepos().tenants.update(existingTenant._id, { set: setPayload }) : null;
 
     if (!tenant) {
       return NextResponse.json(
@@ -168,7 +163,7 @@ export async function PUT(
       userId: user?.userId,
       action: AuditActions.UPDATE,
       entityType: 'tenant',
-      entityId: tenant._id.toString(),
+      entityId: tenant._id,
       // Only the changed keys (before → after), not the whole settings tree
       changes: {
         settings: Object.fromEntries(

@@ -3,11 +3,10 @@
  * Auto-detect and log breaks based on inactivity
  */
 
-import mongoose, { type AnyBulkWriteOperation } from 'mongoose';
+import mongoose from 'mongoose';
 import connectDB from '@/lib/mongodb';
-import Attendance, { type IAttendance } from '@/models/Attendance';
 import Transaction from '@/models/Transaction';
-import Tenant from '@/models/Tenant';
+import { getRepos, type AttendanceRepo } from '@/lib/db';
 import { getActiveTenants, type ActiveTenant } from '@/lib/tenant-active-query';
 import { AutomationResult } from './types';
 
@@ -39,9 +38,7 @@ export async function detectBreaks(
     // Get tenants to process (no tenant settings are needed here)
     let tenants: ActiveTenant[];
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId)
-        .select('_id slug name')
-        .lean<ActiveTenant>();
+      const tenant = (await getRepos().tenants.findById(options.tenantId, { select: '_id slug name' })) as ActiveTenant | null;
       tenants = tenant ? [tenant] : [];
     } else {
       tenants = await getActiveTenants();
@@ -60,12 +57,13 @@ export async function detectBreaks(
         const tenantObjectId = new mongoose.Types.ObjectId(String(tenant._id));
 
         // Find active attendance sessions
-        const activeSessions = await Attendance.find({
-          tenantId: tenantObjectId,
-          clockOut: null,
-        })
-          .select('userId clockIn breakStart breakEnd')
-          .lean();
+        const tenantId = String(tenant._id);
+        const { attendance } = getRepos();
+        const activeSessions = await attendance.list(
+          tenantId,
+          { open: true },
+          { select: 'userId clockIn breakStart breakEnd' }
+        );
 
         if (activeSessions.length === 0) continue;
 
@@ -80,7 +78,7 @@ export async function detectBreaks(
           {
             $match: {
               tenantId: tenantObjectId,
-              userId: { $in: [...new Set(activeSessions.map((s) => s.userId.toString()))].map((id) => new mongoose.Types.ObjectId(id)) },
+              userId: { $in: [...new Set(activeSessions.map((s) => String(s.userId)))].map((id) => new mongoose.Types.ObjectId(id)) },
               createdAt: { $gte: earliestClockIn },
             },
           },
@@ -88,14 +86,14 @@ export async function detectBreaks(
         ]);
         const lastTxByUser = new Map(lastTxRows.map((r) => [r._id.toString(), new Date(r.last)]));
 
-        const ops: AnyBulkWriteOperation<IAttendance>[] = [];
+        const updates: Parameters<AttendanceRepo['updateEach']>[1] = [];
 
         for (const session of activeSessions) {
           try {
             const clockInTime = new Date(session.clockIn);
 
             // Last transaction for this user during this session
-            const lastActivityTime = lastTxByUser.get(session.userId.toString());
+            const lastActivityTime = lastTxByUser.get(String(session.userId));
             if (!lastActivityTime || lastActivityTime < clockInTime) {
               // No transactions yet, can't detect break
               continue;
@@ -105,21 +103,11 @@ export async function detectBreaks(
 
             // If no activity for X minutes and no break started, start break
             if (minutesSinceActivity >= inactivityMinutes && !session.breakStart) {
-              ops.push({
-                updateOne: {
-                  filter: { _id: session._id, tenantId: tenantObjectId },
-                  update: { $set: { breakStart: lastActivityTime } }, // Use last activity time as break start
-                },
-              } as AnyBulkWriteOperation<IAttendance>);
+              updates.push({ id: session._id, set: { breakStart: lastActivityTime } }); // Use last activity time as break start
             }
             // If break started and activity resumed, end break
             else if (session.breakStart && minutesSinceActivity < inactivityMinutes && !session.breakEnd) {
-              ops.push({
-                updateOne: {
-                  filter: { _id: session._id, tenantId: tenantObjectId },
-                  update: { $set: { breakEnd: now } },
-                },
-              } as AnyBulkWriteOperation<IAttendance>);
+              updates.push({ id: session._id, set: { breakEnd: now } });
             }
           } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
             totalFailed++;
@@ -127,9 +115,9 @@ export async function detectBreaks(
           }
         }
 
-        if (ops.length > 0) {
-          await Attendance.bulkWrite(ops, { ordered: false });
-          totalBreaksDetected += ops.length;
+        if (updates.length > 0) {
+          await attendance.updateEach(tenantId, updates);
+          totalBreaksDetected += updates.length;
         }
       } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
         totalFailed++;

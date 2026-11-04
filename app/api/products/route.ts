@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Product from '@/models/Product';
-import '@/models/Category'; // register schema for populate
+import { getRepos, isDuplicateKeyError, type DuplicateKeyError, type ProductFilter, type ProductInput } from '@/lib/db';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -14,8 +12,6 @@ import { handleApiError } from '@/lib/error-handler';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
-
     // Require authentication to prevent unauthenticated product enumeration
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
@@ -32,44 +28,24 @@ export async function GET(request: NextRequest) {
     const isActiveParam = searchParams.get('isActive');
     const filterParam = searchParams.get('filter'); // 'missing-barcode' | 'missing-image' | null
 
-    const query: any = { tenantId }; // eslint-disable-line @typescript-eslint/no-explicit-any
-    if (isActiveParam === 'true') {
-      query.isActive = { $ne: false };
-    } else if (isActiveParam === 'false') {
-      query.isActive = false;
-    } else if (isActiveParam === 'all') {
-      // no isActive filter
-    } else {
-      query.isActive = { $ne: false };
+    const query: ProductFilter = {};
+    if (isActiveParam === 'false') {
+      query.active = false;
+    } else if (isActiveParam !== 'all') {
+      // 'true' or no parameter
+      query.active = true;
     }
 
     // Pre-set filters for the mobile bulk-scan workflow
     if (filterParam === 'missing-barcode') {
-      query.$or = [
-        { barcode: { $exists: false } },
-        { barcode: null },
-        { barcode: '' },
-        { barcode: /^\s*$/ },
-      ];
+      query.missing = 'barcode';
     } else if (filterParam === 'missing-image') {
-      query.$or = [{ image: { $exists: false } }, { image: null }, { image: '' }];
+      query.missing = 'image';
     }
 
+    // Name, description, SKU or barcode substring
     if (search) {
-      const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const searchOr = [
-        { name: { $regex: escapedSearch, $options: 'i' } },
-        { description: { $regex: escapedSearch, $options: 'i' } },
-        { sku: { $regex: escapedSearch, $options: 'i' } },
-        { barcode: { $regex: escapedSearch, $options: 'i' } },
-      ];
-      // Merge with existing $or if a filter is already applied
-      if (query.$or) {
-        query.$and = [{ $or: query.$or }, { $or: searchOr }];
-        delete query.$or;
-      } else {
-        query.$or = searchOr;
-      }
+      query.search = search;
     }
     if (category) {
       query.category = category;
@@ -83,18 +59,13 @@ export async function GET(request: NextRequest) {
     const usePagination = rawPage > 0 && rawLimit > 0;
     const page = usePagination ? Math.max(1, rawPage) : 1;
     const limit = usePagination ? Math.min(Math.max(1, rawLimit), 100) : 0;
-    const sort = { pinned: -1 as const, createdAt: -1 as const };
+    const { products: productRepo } = getRepos();
 
     if (usePagination) {
       const skip = (page - 1) * limit;
       const [products, total] = await Promise.all([
-        Product.find(query)
-          .populate('categoryId', 'name')
-          .sort(sort)
-          .skip(skip)
-          .limit(limit)
-          .lean(),
-        Product.countDocuments(query),
+        productRepo.list(tenantId, query, { populateCategory: true, sort: 'catalog', page: { skip, limit } }),
+        productRepo.count(tenantId, query),
       ]);
 
       return NextResponse.json({
@@ -109,10 +80,7 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const products = await Product.find(query)
-      .populate('categoryId', 'name')
-      .sort(sort)
-      .lean();
+    const products = await productRepo.list(tenantId, query, { populateCategory: true, sort: 'catalog' });
 
     return NextResponse.json({ success: true, data: products });
   } catch (error) {
@@ -122,7 +90,6 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     // SECURITY: Validate tenant access for authenticated requests
     let tenantId: string;
     try {
@@ -164,13 +131,13 @@ export async function POST(request: NextRequest) {
     // Warn on likely duplicates (same name, case-insensitive) instead of silently creating
     // a second product — this is how duplicate SKUs for the same item have crept in before.
     // Callers that intend to create anyway (confirmed by the user) pass confirmDuplicate: true.
+    const { products: productRepo } = getRepos();
     if (!body.confirmDuplicate) {
-      const escapedName = String(data.name).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const possibleDuplicate = await Product.findOne({
+      const possibleDuplicate = await productRepo.findOne(
         tenantId,
-        isActive: { $ne: false },
-        name: { $regex: `^${escapedName}$`, $options: 'i' },
-      }).select('_id name sku stock').lean();
+        { active: true, name: String(data.name).trim() },
+        { select: '_id name sku stock' }
+      );
 
       if (possibleDuplicate) {
         return NextResponse.json(
@@ -186,7 +153,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check subscription limits
-    const currentProductCount = await Product.countDocuments({ tenantId, isActive: true });
+    const currentProductCount = await productRepo.count(tenantId, { active: 'flagged' });
     try {
       await checkSubscriptionLimit(tenantId.toString(), 'maxProducts', currentProductCount);
     } catch (limitError: unknown) {
@@ -196,13 +163,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const product = await Product.create({ ...data, tenantId });
+    const product = await productRepo.create(tenantId, data as ProductInput);
 
     await createAuditLog(request, {
       tenantId,
       action: AuditActions.CREATE,
       entityType: 'product',
-      entityId: product._id.toString(),
+      entityId: product._id,
       changes: data,
     });
 
@@ -218,9 +185,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true, data: product }, { status: 201 });
   } catch (error: unknown) {
-    if ((error as Record<string, unknown>).code === 11000) {
-      const keyPattern = (error as any)?.keyPattern; // eslint-disable-line @typescript-eslint/no-explicit-any
-      if (keyPattern?.barcode) {
+    if (isDuplicateKeyError(error)) {
+      if ((error as DuplicateKeyError).field === 'barcode') {
         return NextResponse.json(
           { success: false, error: 'A product with this barcode already exists' },
           { status: 400 }

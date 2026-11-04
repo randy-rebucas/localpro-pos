@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import mongoose from 'mongoose';
-import connectDB from '@/lib/mongodb';
-import Product from '@/models/Product';
+import { getRepos, type ProductPatch } from '@/lib/db';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -24,7 +23,7 @@ function generateSkuCandidate(): string {
 async function generateUniqueSku(tenantId: string): Promise<string> {
   for (let attempt = 0; attempt < 10; attempt++) {
     const candidate = generateSkuCandidate();
-    const exists = await Product.exists({ tenantId, sku: candidate });
+    const exists = await getRepos().products.exists(tenantId, { sku: candidate });
     if (!exists) return candidate;
   }
   // Fallback: timestamp-based to guarantee uniqueness
@@ -36,8 +35,6 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
-
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId } = authResult;
@@ -83,11 +80,8 @@ export async function PATCH(
       sessionId?: string;
     };
 
-    const product = await Product.findOne({
-      _id: id,
-      tenantId,
-      isActive: { $ne: false },
-    });
+    const { products } = getRepos();
+    const product = await products.findById(tenantId, id, { activeOnly: true });
 
     if (!product) {
       return NextResponse.json({ success: false, error: 'Product not found' }, { status: 404 });
@@ -101,11 +95,7 @@ export async function PATCH(
       skuGenerated = true;
     } else {
       // Ensure provided SKU is unique within tenant (excluding this product)
-      const conflict = await Product.exists({
-        tenantId,
-        sku: resolvedSku,
-        _id: { $ne: id },
-      });
+      const conflict = await products.exists(tenantId, { sku: resolvedSku, excludeId: id });
       if (conflict) {
         return NextResponse.json(
           { success: false, error: 'SKU already in use by another product' },
@@ -114,21 +104,17 @@ export async function PATCH(
       }
     }
 
-    const updates: Record<string, unknown> = { sku: resolvedSku };
+    const updates: ProductPatch = { sku: resolvedSku };
     if (barcode !== undefined) updates.barcode = barcode.trim();
     if (name !== undefined && name.trim()) updates.name = name.trim();
     if (price !== undefined && price >= 0) updates.price = price;
     if (categoryId && mongoose.Types.ObjectId.isValid(categoryId)) {
-      updates.categoryId = new mongoose.Types.ObjectId(categoryId);
+      updates.categoryId = categoryId;
     }
     if (imageUrl !== undefined) updates.image = imageUrl;
     if (notes !== undefined) updates.description = notes;
 
-    await Product.findOneAndUpdate(
-      { _id: id, tenantId },
-      { $set: updates },
-      { new: true }
-    );
+    await products.update(tenantId, id, updates);
 
     // Route stock changes through updateStock() so a StockMovement record is created
     // and the allowOutOfStockSales guard is applied consistently.
@@ -143,7 +129,7 @@ export async function PATCH(
       }
     }
 
-    const updatedProduct = await Product.findOne({ _id: id, tenantId }).lean();
+    const updatedProduct = await products.findById(tenantId, id);
 
     await createAuditLog(request, {
       tenantId,

@@ -4,11 +4,7 @@
  * and auto-generates a personal discount code for them.
  */
 
-import connectDB from '@/lib/mongodb';
-import Customer from '@/models/Customer';
-import Discount from '@/models/Discount';
-import LoyaltyTransaction from '@/models/LoyaltyTransaction';
-import mongoose from 'mongoose';
+import { getRepos } from '@/lib/db';
 
 // Points thresholds → reward config
 const MILESTONES: Array<{ points: number; discountPct: number; label: string }> = [
@@ -30,18 +26,16 @@ export interface LoyaltyMilestonesResult {
 export async function runLoyaltyMilestones(
   tenantId: string
 ): Promise<LoyaltyMilestonesResult> {
-  await connectDB();
-
   const result: LoyaltyMilestonesResult = { processed: 0, rewardsIssued: 0, errors: [] };
-
-  const tid = new mongoose.Types.ObjectId(tenantId);
+  const { customers: customerRepo, loyaltyTransactions } = getRepos();
 
   // Customers who have enough points for at least the first milestone
   const minPoints = MILESTONES[0].points;
-  const customers = await Customer.find(
-    { tenantId: tid, isActive: true, loyaltyPointsBalance: { $gte: minPoints } },
-    { _id: 1, firstName: 1, lastName: 1, loyaltyPointsBalance: 1 }
-  ).lean();
+  const customers = await customerRepo.list(
+    tenantId,
+    { isActive: true, minLoyaltyPoints: minPoints },
+    { select: '_id firstName lastName loyaltyPointsBalance' }
+  );
 
   for (const customer of customers) {
     result.processed++;
@@ -55,11 +49,7 @@ export async function runLoyaltyMilestones(
 
     // Check if we've already issued this tier's reward recently (within validity window)
     const codePrefix = `LOYALTY-${String(customer._id).slice(-6).toUpperCase()}-${milestone.points}`;
-    const existing = await Discount.findOne({
-      tenantId: tid,
-      code: { $regex: `^${codePrefix}` },
-      validUntil: { $gt: new Date() },
-    }).lean();
+    const existing = await getRepos().discounts.findValidByCodePrefix(tenantId, codePrefix, new Date());
 
     if (existing) continue; // already has an active reward at this tier
 
@@ -72,8 +62,7 @@ export async function runLoyaltyMilestones(
     validUntil.setDate(validUntil.getDate() + CODE_VALID_DAYS);
 
     try {
-      await Discount.create({
-        tenantId: tid,
+      await getRepos().discounts.create(tenantId, {
         code,
         name: `${milestone.label} — ${customer.firstName} ${customer.lastName}`,
         description: `Auto-generated loyalty reward for reaching ${milestone.points} points`,
@@ -88,9 +77,9 @@ export async function runLoyaltyMilestones(
       });
 
       // Record the award in loyalty ledger (0-point "adjustment" just for history)
-      await LoyaltyTransaction.create({
-        tenantId: tid,
+      await loyaltyTransactions.create(tenantId, {
         customerId: customer._id,
+
         type: 'adjust',
         points: 0,
         balanceBefore: customer.loyaltyPointsBalance ?? 0,

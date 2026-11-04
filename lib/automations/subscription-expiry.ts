@@ -6,10 +6,7 @@
  * - Suspends auto-renew subscriptions past their billing date (grace period)
  */
 
-import mongoose from 'mongoose';
-import connectDB from '@/lib/mongodb';
-import Subscription from '@/models/Subscription';
-import BillingEvent from '@/models/BillingEvent';
+import { getRepos, runInTransaction } from '@/lib/db';
 import { positiveInt } from '@/lib/automation-validation';
 import { logger } from '@/lib/logger';
 
@@ -30,8 +27,7 @@ export async function expireSubscriptions(options?: {
   tenantId?: string;
   gracePeriodDays?: number;
 }): Promise<ExpireSubscriptionsResult> {
-  await connectDB();
-
+  const { subscriptions, billingEvents } = getRepos();
   const now = new Date();
   const gracePeriodDays = positiveInt(options?.gracePeriodDays, 3, 30);
   const graceDate = new Date(now.getTime() - gracePeriodDays * 24 * 60 * 60 * 1000);
@@ -44,30 +40,26 @@ export async function expireSubscriptions(options?: {
 
   try {
     // 1. Expire trial subscriptions past trialEndDate
-    const expiringTrials = await Subscription.find({
+    const expiringTrials = await subscriptions.findAcrossTenants({
       ...tenantFilter,
       status: 'trial',
       isTrial: true,
-      trialEndDate: { $lte: now },
-    }).select('_id tenantId');
+      trialEndDate: { lte: now },
+    });
 
     if (expiringTrials.length > 0) {
       // Status flip and billing-event record must land together — otherwise a
       // subscription can end up expired with no corresponding trial_expired
       // event, breaking the billing/audit trail with nothing flagging it for
       // reconciliation.
-      const session = await mongoose.startSession();
-      try {
-        session.startTransaction();
-
-        const expiredTrials = await Subscription.updateMany(
-          { _id: { $in: expiringTrials.map((s) => s._id) } },
-          { $set: { status: 'inactive', isTrial: false } },
-          { session }
+      trialsExpired = await runInTransaction(async (tx) => {
+        const expired = await subscriptions.updateManyAcrossTenants(
+          { ids: expiringTrials.map((s) => s._id) },
+          { status: 'inactive', isTrial: false },
+          { tx }
         );
-        trialsExpired = expiredTrials.modifiedCount;
 
-        await BillingEvent.insertMany(
+        await billingEvents.createManyAcrossTenants(
           expiringTrials.map((sub) => ({
             tenantId: sub.tenantId,
             subscriptionId: sub._id,
@@ -75,50 +67,34 @@ export async function expireSubscriptions(options?: {
             amount: 0,
             description: 'Trial expired without conversion to a paid plan',
           })),
-          { session }
+          { tx }
         );
-
-        await session.commitTransaction();
-      } catch (e) {
-        await session.abortTransaction();
-        trialsExpired = 0;
-        throw e;
-      } finally {
-        session.endSession();
-      }
+        return expired;
+      });
     }
 
     // 2. Expire active subscriptions past their endDate
-    const expiredSubs = await Subscription.updateMany(
+    subscriptionsExpired = await subscriptions.updateManyAcrossTenants(
       {
         ...tenantFilter,
         status: 'active',
-        endDate: { $exists: true, $lte: now },
+        endDate: { lte: now },
         autoRenew: false,
       },
-      {
-        $set: { status: 'inactive' },
-      }
+      { status: 'inactive' }
     );
-    subscriptionsExpired = expiredSubs.modifiedCount;
 
     // 3. Suspend auto-renew subscriptions past billing date (grace period)
     //    These haven't been billed — likely payment failure
-    const suspendedSubs = await Subscription.updateMany(
+    subscriptionsSuspended = await subscriptions.updateManyAcrossTenants(
       {
         ...tenantFilter,
         status: 'active',
         autoRenew: true,
-        nextBillingDate: { $lte: graceDate },
+        nextBillingDate: { lte: graceDate },
       },
-      {
-        $set: {
-          status: 'suspended',
-          suspendedAt: now,
-        },
-      }
+      { status: 'suspended', suspendedAt: now }
     );
-    subscriptionsSuspended = suspendedSubs.modifiedCount;
 
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);

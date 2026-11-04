@@ -6,9 +6,7 @@
  * When archive=false, logs are deleted directly without archiving.
  */
 
-import connectDB from '@/lib/mongodb';
-import AuditLog from '@/models/AuditLog';
-import ArchivedAuditLog from '@/models/ArchivedAuditLog';
+import { getRepos } from '@/lib/db';
 import { AutomationResult } from './types';
 
 export interface AuditLogCleanupOptions {
@@ -24,14 +22,12 @@ export interface AuditLogCleanupOptions {
 /**
  * Archive (or delete) audit logs older than the retention window.
  * Runs globally across tenants — one indexed range scan on createdAt instead of
- * a query per tenant. Each batch reads only `_id`s; the documents are copied
- * server-side with $merge, so they never travel to the app.
+ * a query per tenant. The rows are moved inside the database, so they never
+ * travel to the app.
  */
 export async function cleanupAuditLogs(
   options: AuditLogCleanupOptions = {}
 ): Promise<AutomationResult> {
-  await connectDB();
-
   const retentionDays = options.retentionDays
     ?? (options.retentionYears != null ? options.retentionYears * 365 : 90);
   const archive = options.archive ?? true;
@@ -48,35 +44,16 @@ export async function cleanupAuditLogs(
     errors: [],
   };
 
-  const match: Record<string, unknown> = { createdAt: { $lt: cutoffDate } };
-  if (options.tenantId) match.tenantId = options.tenantId;
-
   try {
     for (let batch = 0; batch < maxBatches; batch++) {
-      const ids = (await AuditLog.find(match).select('_id').sort({ createdAt: 1 }).limit(batchSize).lean())
-        .map((l) => l._id);
-      if (ids.length === 0) break;
+      const { found, removed } = await getRepos().auditLogs.retireBatch(options.tenantId ?? null, {
+        before: cutoffDate,
+        limit: batchSize,
+        archive,
+      });
+      results.processed += removed;
 
-      if (archive) {
-        // Keeps the original _id, so a retried batch doesn't duplicate archive rows
-        await AuditLog.aggregate([
-          { $match: { _id: { $in: ids } } },
-          { $set: { archivedAt: '$$NOW' } },
-          {
-            $merge: {
-              into: ArchivedAuditLog.collection.collectionName,
-              on: '_id',
-              whenMatched: 'keepExisting',
-              whenNotMatched: 'insert',
-            },
-          },
-        ]);
-      }
-
-      const deleteResult = await AuditLog.deleteMany({ _id: { $in: ids } });
-      results.processed += deleteResult.deletedCount ?? 0;
-
-      if (ids.length < batchSize) break;
+      if (found < batchSize) break;
     }
 
     const action = archive ? 'Archived' : 'Deleted';

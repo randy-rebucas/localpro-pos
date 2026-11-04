@@ -3,13 +3,11 @@
  * Automatically close cash drawers at end of business day
  */
 
-import mongoose, { type AnyBulkWriteOperation } from 'mongoose';
+import mongoose from 'mongoose';
 import connectDB from '@/lib/mongodb';
-import CashDrawerSession, { type ICashDrawerSession } from '@/models/CashDrawerSession';
-import Tenant from '@/models/Tenant';
 import type { ITenantSettings } from '@/models/Tenant';
 import Transaction from '@/models/Transaction';
-import Expense from '@/models/Expense';
+import { getRepos, type CashDrawerClosing, type CashDrawerSessionRepo } from '@/lib/db';
 import { sendEmail } from '@/lib/notifications';
 import { getActiveTenants, type ActiveTenant } from '@/lib/tenant-active-query';
 import { AutomationResult } from './types';
@@ -73,9 +71,7 @@ export async function autoCloseCashDrawers(
     // Get tenants to process
     let tenants: ActiveTenant[];
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId)
-        .select(`_id slug name ${TENANT_FIELDS}`)
-        .lean<ActiveTenant>();
+      const tenant = (await getRepos().tenants.findById(options.tenantId, { select: `_id slug name ${TENANT_FIELDS}` })) as ActiveTenant | null;
       tenants = tenant ? [tenant] : [];
     } else {
       // Get all active tenants
@@ -99,13 +95,13 @@ export async function autoCloseCashDrawers(
         const tenantObjectId = new mongoose.Types.ObjectId(String(tenant._id));
 
         // Find all open cash drawer sessions
-        const openSessions = await CashDrawerSession.find({
-          tenantId: tenantObjectId,
-          status: 'open',
-        })
-          .select('userId openingTime openingAmount notes')
-          .populate('userId', 'name email')
-          .lean();
+        const tenantId = String(tenant._id);
+        const { cashDrawerSessions } = getRepos();
+        const openSessions = await cashDrawerSessions.list(
+          tenantId,
+          { status: 'open' },
+          { select: 'userId openingTime openingAmount notes', populateUser: true }
+        );
 
         if (openSessions.length === 0) continue;
 
@@ -169,15 +165,9 @@ export async function autoCloseCashDrawers(
         }
 
         // Cash expenses since the earliest opening, fetched once and split per session in memory
-        const cashExpenseRows = await Expense.find({
-          tenantId: tenantObjectId,
-          paymentMethod: 'cash',
-          date: { $gte: earliestOpening, $lte: sessionEnd },
-        })
-          .select('amount date')
-          .lean();
+        const cashExpenseRows = await getRepos().expenses.listCashBetween(String(tenant._id), earliestOpening, sessionEnd);
 
-        const ops: AnyBulkWriteOperation<ICashDrawerSession>[] = [];
+        const closings: Parameters<CashDrawerSessionRepo['closeEach']>[1] = [];
         const closed: Array<{
           session: (typeof openSessions)[number];
           cashSales: number;
@@ -213,8 +203,7 @@ export async function autoCloseCashDrawers(
             const shortage = actualDifference < 0 ? Math.abs(actualDifference) : 0;
             const overage = actualDifference > 0 ? actualDifference : 0;
 
-            const set: Record<string, unknown> = {
-              status: 'closed',
+            const closing: CashDrawerClosing = {
               closingTime: sessionEnd,
               closingAmount,
               expectedAmount,
@@ -222,17 +211,12 @@ export async function autoCloseCashDrawers(
               totalDiscounts: totals.discountCents / 100,
               notes: (session.notes || '') + (session.notes ? '\n' : '') + '[AUTO] Automatically closed at end of business day.',
             };
-            if (shortage > 0) set.shortage = shortage;
-            if (overage > 0) set.overage = overage;
+            if (shortage > 0) closing.shortage = shortage;
+            if (overage > 0) closing.overage = overage;
 
-            // Per-session computed values -> one bulkWrite per tenant. The
-            // status guard avoids clobbering a drawer closed manually meanwhile.
-            ops.push({
-              updateOne: {
-                filter: { _id: session._id, tenantId: tenantObjectId, status: 'open' },
-                update: { $set: set },
-              },
-            } as AnyBulkWriteOperation<ICashDrawerSession>);
+            // Per-session computed values -> one batch per tenant. closeEach
+            // skips a drawer closed manually meanwhile.
+            closings.push({ id: session._id, closing });
             closed.push({ session, cashSales, cashExpensesTotal, expectedAmount, closingAmount, shortage, overage });
           } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
             totalFailed++;
@@ -240,10 +224,10 @@ export async function autoCloseCashDrawers(
           }
         }
 
-        if (ops.length === 0) continue;
+        if (closings.length === 0) continue;
 
         // Update sessions
-        await CashDrawerSession.bulkWrite(ops, { ordered: false });
+        await cashDrawerSessions.closeEach(tenantId, closings);
         totalProcessed += closed.length;
 
         for (const { session, cashSales, cashExpensesTotal, expectedAmount, closingAmount, shortage, overage } of closed) {

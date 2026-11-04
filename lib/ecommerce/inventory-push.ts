@@ -1,7 +1,4 @@
-import connectDB from '@/lib/mongodb';
-import ProductChannelListing from '@/models/ProductChannelListing';
-import TenantEcommerceIntegration from '@/models/TenantEcommerceIntegration';
-import Product from '@/models/Product';
+import { getRepos } from '@/lib/db';
 import { computeProductStock, STOCK_SNAPSHOT_FIELDS, type StockProductSnapshot } from '@/lib/stock';
 import { getWooCommerceCredentials } from '@/lib/ecommerce/integration-credentials';
 import { getShopifyAccessTokenForIntegration } from '@/lib/ecommerce/shopify-token';
@@ -48,28 +45,25 @@ export async function pushChannelInventoryForProducts(
 
   // Runs after every POS sale — most tenants have no storefront linked, so skip
   // the listing/integration lookups entirely for them (cached 60s).
-  await connectDB();
-  const hasIntegrations = await cacheWrap(CacheKeys.tenantHasIntegrations(tenantId), TTL.DEFAULT, async () =>
-    Boolean(await TenantEcommerceIntegration.exists({ tenantId, isActive: true }))
+  const hasIntegrations = await cacheWrap(CacheKeys.tenantHasIntegrations(tenantId), TTL.DEFAULT, () =>
+    getRepos().ecommerceIntegrations.hasActive(tenantId)
   );
   if (!hasIntegrations) return;
 
-  const listings = await ProductChannelListing.find({ tenantId, productId: { $in: unique } }).lean();
+  const listings = await getRepos().channelListings.list(tenantId, { productIds: unique });
   if (!listings.length) return;
 
   const [integrations, products] = await Promise.all([
-    TenantEcommerceIntegration.find({
+    getRepos().ecommerceIntegrations.listActive(tenantId),
+    getRepos().products.list(
       tenantId,
-      isActive: true,
-      provider: { $in: ['shopify', 'woocommerce'] },
-    }).lean(),
-    Product.find({ _id: { $in: [...new Set(listings.map((l) => l.productId.toString()))] }, tenantId })
-      .select(STOCK_SNAPSHOT_FIELDS)
-      .lean<(StockProductSnapshot & { _id: { toString(): string } })[]>(),
+      { ids: [...new Set(listings.map((l) => l.productId))] },
+      { select: STOCK_SNAPSHOT_FIELDS }
+    ),
   ]);
 
   const byProvider = new Map(integrations.map((i) => [i.provider, i]));
-  const productById = new Map(products.map((p) => [p._id.toString(), p]));
+  const productById = new Map<string, StockProductSnapshot>(products.map((p) => [p._id, p]));
 
   // Group listings per product: products are pushed in parallel, a product's
   // listings sequentially (same concurrency as the former per-product calls)
@@ -84,14 +78,14 @@ export async function pushChannelInventoryForProducts(
   await Promise.all(
     [...listingsByProduct].map(async ([productId, productListings]) => {
       for (const list of productListings) {
-        const integration = byProvider.get(list.provider) as (typeof integrations)[0] | undefined;
+        const integration = byProvider.get(list.provider);
         if (!integration) continue;
 
         try {
           const product = productById.get(productId);
           if (!product) throw new Error('Product not found');
           const available = computeProductStock(product, {
-            branchId: integration.defaultBranchId?.toString() || options?.branchId,
+            branchId: integration.defaultBranchId || options?.branchId,
             variation: list.variation || options?.variation,
           });
 
@@ -110,7 +104,7 @@ export async function pushChannelInventoryForProducts(
               available
             );
           } else if (list.provider === 'woocommerce') {
-            const cred = getWooCommerceCredentials(integration as Parameters<typeof getWooCommerceCredentials>[0]);
+            const cred = getWooCommerceCredentials(integration);
             if (!integration.siteUrl) continue;
             await wooSetProductStock(
               integration.siteUrl,

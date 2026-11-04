@@ -1,17 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
-import mongoose from 'mongoose';
-import connectDB from '@/lib/mongodb';
-import Subscription from '@/models/Subscription';
-import Tenant from '@/models/Tenant';
-import SubscriptionPlan from '@/models/SubscriptionPlan';
-import BillingEvent from '@/models/BillingEvent';
-import SuperAdminAction from '@/models/SuperAdminAction';
+import {
+  getRepos,
+  isDuplicateKeyError,
+  runInTransaction,
+  type BillingEventInput,
+  type BillingEventType,
+  type DbTx,
+  type Patch,
+  type Subscription,
+  type SubscriptionFields,
+  type SubscriptionUpdate,
+} from '@/lib/db';
 import { requireRole } from '@/lib/auth';
 import { createAuditLog } from '@/lib/audit';
 import { handleApiError } from '@/lib/error-handler';
 
-async function resolveTenant(slug: string) {
-  return Tenant.findOne({ slug }).select('_id slug name').lean() as Promise<{ _id: unknown; slug: string; name: string } | null>;
+function resolveTenant(slug: string) {
+  return getRepos().tenants.findBySlug(slug, { select: '_id slug name' });
 }
 
 export async function GET(
@@ -19,7 +24,6 @@ export async function GET(
   { params }: { params: Promise<{ tenantSlug: string }> }
 ) {
   try {
-    await connectDB();
     await requireRole(request, ['super_admin']);
 
     const { tenantSlug } = await params;
@@ -28,9 +32,9 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
-    const subscription = await Subscription.findOne({ tenantId: tenant._id })
-      .populate('planId', 'name tier price features')
-      .lean();
+    const subscription = await getRepos().subscriptions.findByTenant(tenant._id, {
+      populate: { plan: 'name tier price features' },
+    });
 
     if (!subscription) {
       return NextResponse.json({ success: false, error: 'No subscription found for this tenant' }, { status: 404 });
@@ -50,12 +54,12 @@ export async function GET(
 
 // A validation failure here (missing field, plan not found, invalid date, positive-amount
 // check) surfaces as { error } and must be resolved *before* the transaction opens below —
-// nothing here reads/writes with a session.
-async function validateAction(action: string, body: Record<string, unknown>, subscription: InstanceType<typeof Subscription>): Promise<{ error: string; status: number } | null> {
+// nothing here reads/writes inside the transaction.
+async function validateAction(action: string, body: Record<string, unknown>, subscription: Subscription): Promise<{ error: string; status: number } | null> {
   switch (action) {
     case 'assign-plan': {
       if (!body.planId) return { error: 'planId is required', status: 400 };
-      const plan = await SubscriptionPlan.findById(body.planId).lean();
+      const plan = await getRepos().subscriptionPlans.findById(body.planId as string);
       if (!plan) return { error: 'Plan not found', status: 404 };
       if (body.nextBillingDate && isNaN(new Date(body.nextBillingDate as string).getTime())) {
         return { error: 'Invalid nextBillingDate', status: 400 };
@@ -94,41 +98,59 @@ async function validateAction(action: string, body: Record<string, unknown>, sub
 
 interface AuditPlan { changes: Record<string, unknown> }
 
+function nextBillingFrom(now: Date, billingCycle: Subscription['billingCycle']): Date {
+  const next = new Date(now);
+  if (billingCycle === 'yearly') next.setFullYear(next.getFullYear() + 1);
+  else next.setMonth(next.getMonth() + 1);
+  return next;
+}
+
 // Applies the mutation for `action` against `subscription` (and, for a few actions, the
-// tenant's isActive flag + a BillingEvent) inside the caller's transaction session. Returns
+// tenant's isActive flag + a BillingEvent) inside the caller's transaction. Returns
 // the audit-log changes payload for the caller to log once the transaction has committed.
 async function applyAction(
   action: string,
   body: Record<string, unknown>,
-  subscription: InstanceType<typeof Subscription>,
+  subscription: Subscription,
   tenantId: string,
   adminUserId: string,
   previousStatus: string,
-  session: mongoose.ClientSession
+  tx: DbTx
 ): Promise<AuditPlan> {
+  const { subscriptions, billingEvents, tenants } = getRepos();
+  const save = (ops: SubscriptionUpdate) => subscriptions.update(tenantId, subscription._id, ops, { tx });
+  const recordEvent = (type: BillingEventType, description: string, extra: Partial<BillingEventInput> = {}) =>
+    billingEvents.create(tenantId, {
+      subscriptionId: subscription._id,
+      type,
+      amount: 0,
+      currency: 'PHP',
+      description,
+      recordedBy: adminUserId,
+      ...extra,
+    }, { tx });
+
   switch (action) {
     case 'assign-plan': {
       const planId = body.planId as string;
-      const previousPlanId = String(subscription.planId);
+      const previousPlanId = subscription.planId;
       const now = new Date();
-      let nextBilling: Date;
-      if (body.nextBillingDate) {
-        nextBilling = new Date(body.nextBillingDate as string);
-      } else {
-        nextBilling = new Date(now);
-        if (subscription.billingCycle === 'yearly') nextBilling.setFullYear(nextBilling.getFullYear() + 1);
-        else nextBilling.setMonth(nextBilling.getMonth() + 1);
-      }
-      subscription.planId = new mongoose.Types.ObjectId(planId);
-      subscription.status = 'active';
-      subscription.isTrial = false;
-      subscription.startDate = now;
-      subscription.nextBillingDate = nextBilling;
-      subscription.trialEndDate = undefined;
-      subscription.endDate = undefined;
-      subscription.cancelledAt = undefined;
-      subscription.suspendedAt = undefined;
-      await subscription.save({ session });
+      const nextBilling = body.nextBillingDate
+        ? new Date(body.nextBillingDate as string)
+        : nextBillingFrom(now, subscription.billingCycle);
+      await save({
+        set: {
+          planId,
+          status: 'active',
+          isTrial: false,
+          startDate: now,
+          nextBillingDate: nextBilling,
+          trialEndDate: null,
+          endDate: null,
+          cancelledAt: null,
+          suspendedAt: null,
+        },
+      });
       return {
         changes: {
           planId: { from: previousPlanId, to: planId },
@@ -143,27 +165,16 @@ async function applyAction(
       const base = subscription.trialEndDate && subscription.trialEndDate > new Date()
         ? subscription.trialEndDate
         : new Date();
-      subscription.trialEndDate = new Date(base.getTime() + days * 86_400_000);
-      subscription.nextBillingDate = subscription.trialEndDate;
-      if (subscription.status !== 'trial') subscription.status = 'trial';
-      await subscription.save({ session });
-      return { changes: { trialEndDate: subscription.trialEndDate, days } };
+      const trialEndDate = new Date(base.getTime() + days * 86_400_000);
+      await save({ set: { trialEndDate, nextBillingDate: trialEndDate, status: 'trial' } });
+      return { changes: { trialEndDate, days } };
     }
     case 'cancel': {
       const cancelReason = body.reason as string | undefined;
-      subscription.status = 'cancelled';
-      subscription.cancelledAt = new Date();
-      if (cancelReason) subscription.cancellationReason = cancelReason;
-      await subscription.save({ session });
-      await BillingEvent.create([{
-        tenantId,
-        subscriptionId: subscription._id,
-        type: 'subscription_cancelled',
-        amount: 0,
-        currency: 'PHP',
-        description: cancelReason || 'Cancelled by super-admin',
-        recordedBy: adminUserId,
-      }], { session });
+      await save({
+        set: { status: 'cancelled', cancelledAt: new Date(), ...(cancelReason && { cancellationReason: cancelReason }) },
+      });
+      await recordEvent('subscription_cancelled', cancelReason || 'Cancelled by super-admin');
       return { changes: { status: { from: previousStatus, to: 'cancelled' }, reason: cancelReason } };
     }
     case 'activate': {
@@ -171,172 +182,99 @@ async function applyAction(
       const wasDeactivated = !!subscription.deactivatedAt;
       const wasCancelled = previousStatus === 'cancelled';
       const reactivationReason = (body.reactivationReason as string | undefined)?.trim();
-      subscription.status = 'active';
-      subscription.isTrial = false;
-      if (wasTrial && !subscription.trialConvertedAt) subscription.trialConvertedAt = new Date();
-      const nextBilling = new Date();
-      if (subscription.billingCycle === 'yearly') nextBilling.setFullYear(nextBilling.getFullYear() + 1);
-      else nextBilling.setMonth(nextBilling.getMonth() + 1);
-      subscription.nextBillingDate = nextBilling;
-      subscription.gracePeriodEndDate = undefined;
-      subscription.paymentOverdue = false;
-      subscription.deactivatedAt = undefined;
-      subscription.lateFeeAppliedAt = undefined;
-      subscription.reactivationFeeAppliedAt = undefined;
-      await subscription.save({ session });
+      await save({
+        set: {
+          status: 'active',
+          isTrial: false,
+          ...(wasTrial && !subscription.trialConvertedAt && { trialConvertedAt: new Date() }),
+          nextBillingDate: nextBillingFrom(new Date(), subscription.billingCycle),
+          gracePeriodEndDate: null,
+          paymentOverdue: false,
+          deactivatedAt: null,
+          lateFeeAppliedAt: null,
+          reactivationFeeAppliedAt: null,
+        },
+      });
       if (wasDeactivated) {
-        await Tenant.findByIdAndUpdate(tenantId, { isActive: true }, { session });
-        await BillingEvent.create([{
-          tenantId,
-          subscriptionId: subscription._id,
-          type: 'account_reactivated',
-          amount: 0,
-          currency: 'PHP',
-          description: 'Account reactivated by super-admin after outstanding balance settled',
-          recordedBy: adminUserId,
-        }], { session });
+        await tenants.update(tenantId, { set: { isActive: true } }, { tx });
+        await recordEvent('account_reactivated', 'Account reactivated by super-admin after outstanding balance settled');
       }
       if (wasTrial) {
-        await BillingEvent.create([{
-          tenantId,
-          subscriptionId: subscription._id,
-          type: 'trial_converted',
-          amount: 0,
-          currency: 'PHP',
-          description: 'Trial converted to active subscription by super-admin',
-          recordedBy: adminUserId,
-        }], { session });
+        await recordEvent('trial_converted', 'Trial converted to active subscription by super-admin');
       }
       if (wasCancelled) {
-        await BillingEvent.create([{
-          tenantId,
-          subscriptionId: subscription._id,
-          type: 'account_reactivated',
-          amount: 0,
-          currency: 'PHP',
-          description: `Reactivated from cancelled by super-admin: ${reactivationReason}`,
-          recordedBy: adminUserId,
-        }], { session });
+        await recordEvent('account_reactivated', `Reactivated from cancelled by super-admin: ${reactivationReason}`);
       }
       return { changes: { status: { from: previousStatus, to: 'active' }, reactivationReason: wasCancelled ? reactivationReason : undefined } };
     }
     case 'suspend': {
       const graceDays = body.graceDays as number | undefined;
-      subscription.status = 'suspended';
-      subscription.suspendedAt = new Date();
+      const set: Patch<SubscriptionFields> = { status: 'suspended', suspendedAt: new Date() };
       if (graceDays && Number(graceDays) > 0) {
         const graceEnd = new Date();
         graceEnd.setDate(graceEnd.getDate() + Number(graceDays));
-        subscription.gracePeriodEndDate = graceEnd;
+        set.gracePeriodEndDate = graceEnd;
       }
-      await subscription.save({ session });
-      await BillingEvent.create([{
-        tenantId,
-        subscriptionId: subscription._id,
-        type: 'subscription_suspended',
-        amount: 0,
-        currency: 'PHP',
-        description: `Suspended by super-admin${graceDays ? ` (grace period: ${graceDays} days)` : ''}`,
-        recordedBy: adminUserId,
-      }], { session });
+      await save({ set });
+      await recordEvent('subscription_suspended', `Suspended by super-admin${graceDays ? ` (grace period: ${graceDays} days)` : ''}`);
       return { changes: { status: { from: previousStatus, to: 'suspended' } } };
     }
     case 'pause': {
       const pauseReason = body.pauseReason as string | undefined;
       const pauseDays = body.pauseDays as number | undefined;
-      subscription.status = 'paused';
-      subscription.pausedAt = new Date();
-      if (pauseReason) subscription.pauseReason = pauseReason;
+      const set: Patch<SubscriptionFields> = { status: 'paused', pausedAt: new Date() };
+      if (pauseReason) set.pauseReason = pauseReason;
       if (pauseDays && Number(pauseDays) > 0) {
         const pauseEnd = new Date();
         pauseEnd.setDate(pauseEnd.getDate() + Number(pauseDays));
-        subscription.pauseEndsAt = pauseEnd;
+        set.pauseEndsAt = pauseEnd;
       }
-      await subscription.save({ session });
-      await BillingEvent.create([{
-        tenantId,
-        subscriptionId: subscription._id,
-        type: 'subscription_paused',
-        amount: 0,
-        currency: 'PHP',
-        description: pauseReason || 'Paused by super-admin',
-        recordedBy: adminUserId,
-      }], { session });
+      await save({ set });
+      await recordEvent('subscription_paused', pauseReason || 'Paused by super-admin');
       return { changes: { status: { from: previousStatus, to: 'paused' }, pauseReason } };
     }
     case 'resume': {
-      subscription.status = 'active';
-      subscription.pausedAt = undefined;
-      subscription.pauseReason = undefined;
-      subscription.pauseEndsAt = undefined;
-      await subscription.save({ session });
-      await BillingEvent.create([{
-        tenantId,
-        subscriptionId: subscription._id,
-        type: 'subscription_resumed',
-        amount: 0,
-        currency: 'PHP',
-        description: 'Resumed by super-admin',
-        recordedBy: adminUserId,
-      }], { session });
+      await save({ set: { status: 'active', pausedAt: null, pauseReason: null, pauseEndsAt: null } });
+      await recordEvent('subscription_resumed', 'Resumed by super-admin');
       return { changes: { status: { from: previousStatus, to: 'active' } } };
     }
     case 'record-payment': {
       const payAmount = Number(body.amount);
       const payNotes = body.notes as string | undefined;
       const payTxId = body.transactionId as string | undefined;
-      await BillingEvent.create([{
-        tenantId,
-        subscriptionId: subscription._id,
-        type: 'payment_received',
+      await recordEvent('payment_received', payNotes || 'Manual payment recorded by super-admin', {
         amount: payAmount,
-        currency: 'PHP',
-        description: payNotes || 'Manual payment recorded by super-admin',
         notes: payNotes,
         transactionId: payTxId,
-        recordedBy: adminUserId,
-      }], { session });
-      subscription.billingHistory.push({
-        date: new Date(),
-        amount: payAmount,
-        currency: 'PHP',
-        status: 'paid',
-        transactionId: payTxId,
       });
-      subscription.outstandingBalance = Math.max(0, (subscription.outstandingBalance || 0) - payAmount);
 
+      const outstandingBalance = Math.max(0, (subscription.outstandingBalance || 0) - payAmount);
       const wasDeactivated = !!subscription.deactivatedAt || subscription.status === 'suspended';
-      const fullyPaid = subscription.outstandingBalance <= 0;
+      const fullyPaid = outstandingBalance <= 0;
       const wasOverdue = subscription.paymentOverdue;
 
+      const set: Patch<SubscriptionFields> = { outstandingBalance };
       if (fullyPaid && (wasOverdue || wasDeactivated)) {
-        const nextBilling = new Date();
-        if (subscription.billingCycle === 'yearly') nextBilling.setFullYear(nextBilling.getFullYear() + 1);
-        else nextBilling.setMonth(nextBilling.getMonth() + 1);
-        subscription.nextBillingDate = nextBilling;
-        subscription.paymentOverdue = false;
-        subscription.gracePeriodEndDate = undefined;
-        subscription.deactivatedAt = undefined;
-        subscription.lateFeeAppliedAt = undefined;
-        subscription.reactivationFeeAppliedAt = undefined;
-        if (wasDeactivated) subscription.status = 'active';
+        Object.assign(set, {
+          nextBillingDate: nextBillingFrom(new Date(), subscription.billingCycle),
+          paymentOverdue: false,
+          gracePeriodEndDate: null,
+          deactivatedAt: null,
+          lateFeeAppliedAt: null,
+          reactivationFeeAppliedAt: null,
+          ...(wasDeactivated && { status: 'active' }),
+        });
       }
-
-      await subscription.save({ session });
+      await save({
+        set,
+        addBillingEntry: { date: new Date(), amount: payAmount, currency: 'PHP', status: 'paid', transactionId: payTxId },
+      });
 
       if (fullyPaid && wasDeactivated) {
-        await Tenant.findByIdAndUpdate(tenantId, { isActive: true }, { session });
-        await BillingEvent.create([{
-          tenantId,
-          subscriptionId: subscription._id,
-          type: 'account_reactivated',
-          amount: 0,
-          currency: 'PHP',
-          description: 'Account reactivated automatically after payment settled outstanding balance',
-          recordedBy: adminUserId,
-        }], { session });
+        await tenants.update(tenantId, { set: { isActive: true } }, { tx });
+        await recordEvent('account_reactivated', 'Account reactivated automatically after payment settled outstanding balance');
       }
-      return { changes: { amount: payAmount, transactionId: payTxId, outstandingBalance: subscription.outstandingBalance, fullyPaid } };
+      return { changes: { amount: payAmount, transactionId: payTxId, outstandingBalance, fullyPaid } };
     }
     default:
       // Unreachable — validateAction already rejected unknown actions.
@@ -349,7 +287,7 @@ export async function PUT(
   { params }: { params: Promise<{ tenantSlug: string }> }
 ) {
   try {
-    await connectDB();
+    // SuperAdminAction is not behind the repository layer yet
     const adminUser = await requireRole(request, ['super_admin']);
 
     const { tenantSlug } = await params;
@@ -361,13 +299,15 @@ export async function PUT(
     const body = await request.json();
     const { action } = body;
 
-    const subscription = await Subscription.findOne({ tenantId: tenant._id });
+    const { subscriptions, billingEvents } = getRepos();
+    const subscription = (await subscriptions.findByTenant(tenant._id)) as Subscription | null;
     if (!subscription) {
       return NextResponse.json({ success: false, error: 'No subscription found for this tenant' }, { status: 404 });
     }
 
-    const tenantId = String((tenant as { _id: unknown })._id);
+    const tenantId = tenant._id;
     const previousStatus = subscription.status;
+    const current = () => subscriptions.findById(tenantId, subscription._id, { populate: { plan: 'name tier price' } });
 
     const validationError = await validateAction(action, body, subscription);
     if (validationError) {
@@ -378,15 +318,12 @@ export async function PUT(
     // transactionId must not double-credit the account — payment recording
     // is the highest-risk action here since it moves money on the ledger.
     if (action === 'record-payment' && body.transactionId) {
-      const alreadyRecorded = await BillingEvent.findOne({
-        tenantId,
+      const alreadyRecorded = await billingEvents.findByTransactionId(tenantId, body.transactionId, {
         subscriptionId: subscription._id,
         type: 'payment_received',
-        transactionId: body.transactionId,
-      }).lean();
+      });
       if (alreadyRecorded) {
-        const current = await Subscription.findById(subscription._id).populate('planId', 'name tier price').lean();
-        return NextResponse.json({ success: true, data: current });
+        return NextResponse.json({ success: true, data: await current() });
       }
     }
 
@@ -394,24 +331,19 @@ export async function PUT(
     // event (and sometimes the tenant's isActive flag) — these must land
     // together or the ledger/tenant state can drift from the subscription
     // (e.g. status flipped to cancelled with no matching billing event).
-    const session = await mongoose.startSession();
     let auditPlan: AuditPlan;
     try {
-      session.startTransaction();
-      auditPlan = await applyAction(action, body, subscription, tenantId, adminUser.userId, previousStatus, session);
-      await session.commitTransaction();
+      auditPlan = await runInTransaction((tx) =>
+        applyAction(action, body, subscription, tenantId, adminUser.userId, previousStatus, tx)
+      );
     } catch (e) {
-      await session.abortTransaction();
       // A concurrent request recorded this exact payment between our
       // pre-check above and this transaction's insert — the unique index
       // on {tenantId, transactionId} caught it. Treat as already-applied.
-      if (action === 'record-payment' && body.transactionId && e instanceof Error && (e as { code?: number }).code === 11000) {
-        const current = await Subscription.findById(subscription._id).populate('planId', 'name tier price').lean();
-        return NextResponse.json({ success: true, data: current });
+      if (action === 'record-payment' && body.transactionId && isDuplicateKeyError(e)) {
+        return NextResponse.json({ success: true, data: await current() });
       }
       throw e;
-    } finally {
-      session.endSession();
     }
 
     await createAuditLog(request, {
@@ -419,26 +351,22 @@ export async function PUT(
       userId: adminUser.userId,
       action: `subscription.${action.replace(/-/g, '_')}`,
       entityType: 'Subscription',
-      entityId: String(subscription._id),
+      entityId: subscription._id,
       changes: auditPlan.changes,
     });
 
     const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || '';
-    await SuperAdminAction.create({
+    await getRepos().superAdminActions.create({
       adminUserId: adminUser.userId,
       action: `subscription.${action}`,
       targetType: 'Subscription',
-      targetId: String(subscription._id),
+      targetId: subscription._id,
       description: `Action "${action}" on subscription for tenant ${tenantSlug}`,
       ipAddress: ip,
       userAgent: request.headers.get('user-agent') || '',
     });
 
-    const updated = await Subscription.findById(subscription._id)
-      .populate('planId', 'name tier price')
-      .lean();
-
-    return NextResponse.json({ success: true, data: updated });
+    return NextResponse.json({ success: true, data: await current() });
   } catch (error: unknown) {
     if (error instanceof Error && (error.message === 'Unauthorized' || error.message.includes('Forbidden'))) {
       return NextResponse.json(

@@ -1,5 +1,4 @@
-import mongoose from 'mongoose';
-import Coupon, { ICoupon } from '@/models/Coupon';
+import { getRepos, type Coupon, type DbTx } from '@/lib/db';
 
 export class CouponError extends Error {}
 
@@ -14,8 +13,8 @@ export class CouponError extends Error {}
  * omitted, plan-eligibility isn't checked and callers are expected to filter
  * eligible plans themselves using the returned coupon's appliesTo/planIds.
  */
-export async function validateCoupon(code: string, planId?: string): Promise<InstanceType<typeof Coupon>> {
-  const coupon = await Coupon.findOne({ code: code.toUpperCase() });
+export async function validateCoupon(code: string, planId?: string): Promise<Coupon> {
+  const coupon = await getRepos().coupons.findByCode(code);
   if (!coupon) throw new CouponError('Coupon code not found');
   if (!coupon.isActive) throw new CouponError('This coupon is no longer active');
 
@@ -28,7 +27,7 @@ export async function validateCoupon(code: string, planId?: string): Promise<Ins
   }
 
   if (planId && coupon.appliesTo === 'specific_plans') {
-    const applies = coupon.planIds.some((id) => id.toString() === planId);
+    const applies = coupon.planIds.some((id) => id === planId);
     if (!applies) throw new CouponError('This coupon does not apply to the selected plan');
   }
 
@@ -36,7 +35,7 @@ export async function validateCoupon(code: string, planId?: string): Promise<Ins
 }
 
 /** Applies a coupon's discount to a base amount, floored at 0. */
-export function applyCouponDiscount(baseAmount: number, coupon: Pick<ICoupon, 'discountType' | 'discountValue'>): number {
+export function applyCouponDiscount(baseAmount: number, coupon: Pick<Coupon, 'discountType' | 'discountValue'>): number {
   const discount = coupon.discountType === 'percentage'
     ? baseAmount * (coupon.discountValue / 100)
     : coupon.discountValue;
@@ -44,21 +43,15 @@ export function applyCouponDiscount(baseAmount: number, coupon: Pick<ICoupon, 'd
 }
 
 /**
- * Atomically reserves one use of the coupon, inside the caller's transaction
- * session. The maxUses precondition is enforced by the filter itself (not a
+ * Atomically reserves one use of the coupon, inside the caller's
+ * transaction. The maxUses precondition is enforced by the filter itself (not a
  * read-then-write), so two concurrent checkouts against the last remaining
  * use can't both succeed.
  */
-export async function incrementCouponUsage(couponId: mongoose.Types.ObjectId, session: mongoose.ClientSession): Promise<void> {
-  const result = await Coupon.updateOne(
-    {
-      _id: couponId,
-      $or: [{ maxUses: { $exists: false } }, { $expr: { $lt: ['$usedCount', '$maxUses'] } }],
-    },
-    { $inc: { usedCount: 1 } },
-    { session }
-  );
-  if (result.modifiedCount === 0) {
+export async function incrementCouponUsage(couponId: string, tx: DbTx): Promise<void> {
+  const reserved = await getRepos().coupons.incrementUsage(couponId, tx);
+
+  if (!reserved) {
     throw new CouponError('This coupon has reached its usage limit');
   }
 }

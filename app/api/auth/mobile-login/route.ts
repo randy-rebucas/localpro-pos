@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import bcrypt from 'bcryptjs';
-import connectDB from '@/lib/mongodb';
-import User from '@/models/User';
-import Tenant from '@/models/Tenant';
+import { getRepos } from '@/lib/db';
 import { generateToken } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { validateEmail } from '@/lib/validation';
@@ -29,8 +26,6 @@ export async function POST(request: NextRequest) {
         { status: 429, headers: { 'Retry-After': String(Math.ceil(rl.resetAfterMs / 1000)) } }
       );
     }
-
-    await connectDB();
 
     const body = await request.json();
     const { email, password, tenantSlug } = body as {
@@ -60,7 +55,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const tenant = await Tenant.findOne({ slug: tenantSlug, isActive: true }).lean();
+    const { tenants, users } = getRepos();
+    const tenant = await tenants.findBySlug(tenantSlug, { activeOnly: true });
     if (!tenant) {
       return NextResponse.json(
         { success: false, error: 'Store not found or inactive' },
@@ -68,10 +64,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const user = await User.findOne({
-      email: email.toLowerCase(),
-      tenantId: tenant._id,
-    }).select('+password');
+    const user = await users.findByEmailForLogin(email, { tenantId: tenant._id });
 
     const failedLogin = async (reason: string) => {
       await createAuditLog(request, {
@@ -92,7 +85,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Invalid credentials' }, { status: 401 });
     }
 
-    const valid = await bcrypt.compare(password, user.password).catch(() => false);
+    const valid = await users.verifyPassword(user, password).catch(() => false);
     if (!valid) {
       await failedLogin('invalid_password');
       return NextResponse.json({ success: false, error: 'Invalid credentials' }, { status: 401 });
@@ -108,11 +101,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await User.findByIdAndUpdate(user._id, { lastLogin: new Date() });
+    await users.touchLastLogin(user._id);
 
     const token = generateToken({
-      userId: user._id.toString(),
-      tenantId: tenant._id.toString(),
+      userId: user._id,
+      tenantId: tenant._id,
       email: user.email,
       role: user.role,
     });
@@ -121,7 +114,7 @@ export async function POST(request: NextRequest) {
       tenantId: tenant._id,
       action: AuditActions.LOGIN,
       entityType: 'user',
-      entityId: user._id.toString(),
+      entityId: user._id,
       metadata: { success: true, channel: 'mobile' },
     });
 
@@ -131,13 +124,13 @@ export async function POST(request: NextRequest) {
         token,
         access_token: token, // alias for clients that expect this key
         user: {
-          id: user._id.toString(),
+          id: user._id,
           email: user.email,
           name: user.name,
           role: user.role,
         },
         tenant: {
-          id: tenant._id.toString(),
+          id: tenant._id,
           name: tenant.name,
           slug: tenant.slug,
         },

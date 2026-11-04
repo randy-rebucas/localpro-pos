@@ -1,5 +1,5 @@
 import { shopifyAdminFetch } from '@/lib/ecommerce/shopify-api';
-import ProductChannelListing from '@/models/ProductChannelListing';
+import { getRepos } from '@/lib/db';
 import { logger } from '@/lib/logger';
 
 interface RefundItem {
@@ -46,15 +46,11 @@ export async function createShopifyRefund(
 
     // Look up our listings to get externalVariantId per productId
     const productIds = items.map((i) => i.productId);
-    const listings = await ProductChannelListing.find({
-      tenantId,
-      productId: { $in: productIds },
-      provider: 'shopify',
-    }).lean();
+    const listings = await getRepos().channelListings.list(tenantId, { productIds, provider: 'shopify' });
 
     const productToVariant = new Map<string, string>();
     for (const l of listings) {
-      if (l.externalVariantId) productToVariant.set(l.productId.toString(), l.externalVariantId);
+      if (l.externalVariantId) productToVariant.set(l.productId, l.externalVariantId);
     }
 
     const refundLineItems = [];

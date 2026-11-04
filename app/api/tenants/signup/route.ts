@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
-import User from '@/models/User';
+import { getRepos, isDuplicateKeyError } from '@/lib/db';
 import { getDefaultTenantSettings } from '@/lib/currency';
 import { validateEmail, validatePassword, validateTenant } from '@/lib/validation';
 import { getValidationTranslator } from '@/lib/validation-translations';
@@ -27,7 +25,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await connectDB();
+    const { tenants: tenantRepo, users: userRepo } = getRepos();
 
     const body = await request.json();
     const { 
@@ -92,11 +90,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if tenant already exists
-    const existingTenant = await Tenant.findOne({
-      $or: [
-        { slug: slug.toLowerCase() },
-      ]
-    });
+    const existingTenant = await tenantRepo.findBySlug(slug.toLowerCase(), { select: '_id' });
 
     if (existingTenant) {
       return NextResponse.json(
@@ -106,7 +100,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if admin email already exists
-    const existingUser = await User.findOne({ email: adminEmail.toLowerCase() });
+    const existingUser = await userRepo.findByEmail(adminEmail);
     if (existingUser) {
       return NextResponse.json(
         { success: false, error: t('validation.emailExists', 'An account with this email already exists') },
@@ -139,10 +133,10 @@ export async function POST(request: NextRequest) {
       isActive: true,
     };
 
-    const tenant = await Tenant.create(tenantData);
+    const tenant = await tenantRepo.create(tenantData);
 
     // Create admin user for the tenant
-    const adminUser = await User.create({
+    const adminUser = await userRepo.create({
       email: adminEmail.toLowerCase(),
       password: adminPassword,
       name: adminName,
@@ -152,7 +146,7 @@ export async function POST(request: NextRequest) {
     });
 
     try {
-      await SubscriptionService.ensureTrialSubscription(tenant._id.toString());
+      await SubscriptionService.ensureTrialSubscription(tenant._id);
     } catch (subscriptionError) {
       logger.error('Failed to create trial subscription during signup:', subscriptionError);
     }
@@ -172,8 +166,8 @@ export async function POST(request: NextRequest) {
       }
     }, { status: 201 });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    if (error.code === 11000) {
-      const field = Object.keys(error.keyPattern)[0];
+    if (isDuplicateKeyError(error)) {
+      const field = Object.keys(error.keyPattern ?? error.cause?.keyPattern ?? {})[0] ?? 'Field';
       return NextResponse.json(
         { success: false, error: `${field} already exists` },
         { status: 400 }

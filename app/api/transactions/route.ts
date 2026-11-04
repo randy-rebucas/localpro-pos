@@ -1,36 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server';
-import mongoose from 'mongoose';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
-import Device from '@/models/Device';
-import Transaction from '@/models/Transaction';
-import Payment from '@/models/Payment';
-import Product from '@/models/Product';
-import Discount from '@/models/Discount';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { validateAndSanitize, validateTransaction } from '@/lib/validation';
 import { generateReceiptNumber, isDuplicateReceiptNumberError } from '@/lib/receipt';
 import { updateStock, updateBundleStock, computeProductStock, insertStockMovements, StockMovementInput } from '@/lib/stock';
-import ProductBundle from '@/models/ProductBundle';
+import {
+  DuplicateKeyError,
+  getRepos,
+  isDuplicateKeyError,
+  isTransactional,
+  isValidId,
+  newId,
+  runInTransaction,
+  type Customer,
+  type DiscountCategory,
+  type Payment,
+  type PaymentDetails,
+  type ProductBundle,
+  type Transaction,
+  type TransactionPaymentMethod,
+} from '@/lib/db';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { getTenantSettingsById } from '@/lib/tenant';
 import { checkSubscriptionLimit, SubscriptionService, checkFeatureAccess } from '@/lib/subscription';
 import { logger } from '@/lib/logger';
 import { calculateTax } from '@/lib/tax-calculation';
-import Customer from '@/models/Customer';
-import LoyaltyConfig from '@/models/LoyaltyConfig';
-import LoyaltyTransaction from '@/models/LoyaltyTransaction';
-import Table from '@/models/Table';
-import Branch from '@/models/Branch';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { wouldExceedCreditLimit } from '@/lib/customer-credit';
-import {
-  runWithOptionalMongoTransaction,
-  sessionOpts,
-  withOptionalSession,
-} from '@/lib/mongo-session';
 
 interface VariationInput {
   size?: string;
@@ -89,17 +86,17 @@ const TRANSACTION_PAYMENT_METHODS = new Set([
   'cash', 'card', 'digital', 'tap_to_pay', 'wallet', 'qr_code', 'bnpl', 'on_account',
 ]);
 
-function normalizeTransactionPaymentMethod(m: string): string {
-  if (TRANSACTION_PAYMENT_METHODS.has(m)) return m;
+function normalizeTransactionPaymentMethod(m: string): TransactionPaymentMethod {
+  if (TRANSACTION_PAYMENT_METHODS.has(m)) return m as TransactionPaymentMethod;
   if (m === 'check' || m === 'other') return 'digital';
   throw new Error(`Invalid payment method: ${m}`);
 }
 
 function getTransactionErrorStatus(error: unknown): number {
   if (error && typeof error === 'object') {
-    const err = error as { name?: string; code?: number; message?: string };
+    const err = error as { name?: string };
     if (err.name === 'ValidationError' || err.name === 'CastError') return 400;
-    if (err.code === 11000) return 400;
+    if (isDuplicateKeyError(error)) return 400;
   }
   const message = error instanceof Error ? error.message.toLowerCase() : '';
   const businessPatterns = [
@@ -130,12 +127,12 @@ class IdempotentReplayError extends Error {
 }
 
 interface TransactionItemRecord {
-  product: unknown;
+  product: string;
   name: string;
   price: number;
   quantity: number;
   subtotal: number;
-  bundleId?: unknown;
+  bundleId?: string;
   categoryId?: string;
   taxExempt?: boolean;
   zeroRated?: boolean;
@@ -144,7 +141,6 @@ interface TransactionItemRecord {
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     // Require authentication — financial data must not be public
     let tenantId: string;
     let role: string;
@@ -176,26 +172,14 @@ export async function GET(request: NextRequest) {
     const skip = (page - 1) * limit;
     const customerIdFilter = searchParams.get('customerId');
 
-    const txQuery: Record<string, unknown> = { tenantId, isActive: { $ne: false } };
-    if (customerIdFilter) {
-      txQuery.customerId = customerIdFilter;
-    }
-
-    const transactions = await Transaction.find(txQuery)
-      .sort({ createdAt: -1 })
-      .limit(limit)
-      .skip(skip)
-      // items[].name is stored on each line, so items.product isn't populated
-      // (clients expect it as an id string)
-      .populate('customerId', 'firstName lastName')
-      .populate('userId', 'name email')
-      .lean();
-
-    const total = await Transaction.countDocuments(txQuery);
+    const filter = { notDisabled: true as const, ...(customerIdFilter && { customerId: customerIdFilter }) };
+    const repo = getRepos().transactions;
+    const transactions = await repo.listWithRefs(tenantId, filter, { page: { skip, limit } });
+    const total = await repo.count(tenantId, filter);
 
     return NextResponse.json({
       success: true,
-      data: transactions || [],
+      data: transactions,
       pagination: {
         total,
         page,
@@ -211,7 +195,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
+    const repos = getRepos();
     // SECURITY: Validate tenant access for authenticated requests
     let tenantId: string;
     let user: { userId: string; tenantId: string; email: string; role: string };
@@ -248,7 +232,7 @@ export async function POST(request: NextRequest) {
 
     const { items, paymentMethod, cashReceived, notes, discountCode, branchId, payments, scPwdName, scPwdId, deviceId } = data as unknown as TransactionInput;
     const customerId = body.customerId as string | undefined;
-    if (customerId && !mongoose.Types.ObjectId.isValid(customerId)) {
+    if (customerId && !isValidId(customerId)) {
       return NextResponse.json({ success: false, error: t('validation.invalidCustomerId', 'Invalid customer ID') }, { status: 400 });
     }
     const loyaltyPointsToRedeem = typeof body.loyaltyPointsToRedeem === 'number' ? Math.floor(body.loyaltyPointsToRedeem) : 0;
@@ -261,7 +245,7 @@ export async function POST(request: NextRequest) {
       ? body.idempotencyKey.trim()
       : undefined;
     if (idempotencyKey) {
-      const existing = await Transaction.findOne({ tenantId, idempotencyKey }).lean();
+      const existing = await repos.transactions.findByIdempotencyKey(tenantId, idempotencyKey);
       if (existing) {
         return NextResponse.json({ success: true, data: existing }, { status: 200 });
       }
@@ -281,11 +265,10 @@ export async function POST(request: NextRequest) {
     // Check subscription transaction limits. The monthly count comes from the
     // subscription's usage counter; counting the month's transactions is only
     // the fallback when the counter hasn't been seeded for this month.
-    const countTransactionsThisMonth = () => Transaction.countDocuments({
-      tenantId,
+    const countTransactionsThisMonth = () => repos.transactions.count(tenantId, {
       createdAt: {
-        $gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
-        $lt: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1)
+        gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+        lt: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1)
       }
     });
     const currentTransactionCount =
@@ -303,8 +286,7 @@ export async function POST(request: NextRequest) {
     // ─── Loyalty: pre-validate customer and redemption ───
     let loyaltyEnabled = false;
     let loyaltyConfig: { pointsPerPeso: number; pesoPerPoint: number; minRedemption: number; isEnabled: boolean } | null = null;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let loyaltyCustomer: any = null;
+    let loyaltyCustomer: Customer | null = null;
     let loyaltyDiscountAmount = 0;
 
     try {
@@ -315,7 +297,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (loyaltyEnabled && customerId) {
-      const foundConfig = await LoyaltyConfig.findOne({ tenantId }).lean();
+      const foundConfig = await repos.loyaltyConfigs.get(tenantId);
       loyaltyConfig = foundConfig ?? { pointsPerPeso: 1, pesoPerPoint: 0.10, minRedemption: 100, isEnabled: true };
 
       if (!loyaltyConfig.isEnabled) {
@@ -323,7 +305,7 @@ export async function POST(request: NextRequest) {
       }
 
       if (loyaltyEnabled) {
-        const customer = await Customer.findOne({ _id: customerId, tenantId });
+        const customer = await repos.customers.findById(tenantId, customerId);
         if (!customer) {
           return NextResponse.json({ success: false, error: t('validation.customerNotFound', 'Customer not found') }, { status: 404 });
         }
@@ -413,28 +395,28 @@ export async function POST(request: NextRequest) {
     let subtotal = 0;
 
     // Batch-load all products and bundles upfront to avoid N+1 queries
-    const productIds = items.filter(i => i.productId && !i.bundleId).map(i => i.productId);
-    const bundleIds = items.filter(i => i.bundleId).map(i => i.bundleId);
+    const productIds = items.filter(i => i.productId && !i.bundleId).map(i => i.productId as string);
+    const bundleIds = items.filter(i => i.bundleId).map(i => i.bundleId as string);
 
     const [productsArray, bundlesArray] = await Promise.all([
       productIds.length > 0
-        ? Product.find({ _id: { $in: productIds }, tenantId }).lean()
+        ? repos.products.list(tenantId, { ids: productIds })
         : Promise.resolve([]),
       bundleIds.length > 0
-        ? ProductBundle.find({ _id: { $in: bundleIds }, tenantId, isActive: true }).lean()
+        ? (repos.bundles.list(tenantId, { ids: bundleIds, isActive: true }) as Promise<ProductBundle[]>) // not populated: productId is an id
         : Promise.resolve([]),
     ]);
 
-    const productMap = new Map(productsArray.map(p => [p._id.toString(), p]));
-    const bundleMap = new Map(bundlesArray.map(b => [b._id.toString(), b]));
+    const productMap = new Map(productsArray.map(p => [p._id, p]));
+    const bundleMap = new Map(bundlesArray.map(b => [b._id, b]));
 
     // Also batch-load all products referenced by bundles
-    const bundleProductIds = bundlesArray.flatMap(b => b.items.map((bi: any) => bi.productId)); // eslint-disable-line @typescript-eslint/no-explicit-any
+    const bundleProductIds = bundlesArray.flatMap(b => b.items.map((bi) => bi.productId));
     if (bundleProductIds.length > 0) {
-      const bundleProducts = await Product.find({ _id: { $in: bundleProductIds }, tenantId }).lean();
+      const bundleProducts = await repos.products.list(tenantId, { ids: bundleProductIds });
       for (const bp of bundleProducts) {
-        if (!productMap.has(bp._id.toString())) {
-          productMap.set(bp._id.toString(), bp);
+        if (!productMap.has(bp._id)) {
+          productMap.set(bp._id, bp);
         }
       }
     }
@@ -452,7 +434,7 @@ export async function POST(request: NextRequest) {
 
         // Check stock for all bundle items - but respect allowOutOfStockSales and trackInventory
         for (const bundleItem of bundle.items) {
-          const bundleProduct = productMap.get(bundleItem.productId.toString());
+          const bundleProduct = productMap.get(bundleItem.productId);
           if (!bundleProduct) {
             continue; // Skip if product not found (shouldn't happen, but safety check)
           }
@@ -571,41 +553,22 @@ export async function POST(request: NextRequest) {
     // Apply discount if provided
     let discountAmount = 0;
     let appliedDiscountCode: string | undefined;
-    let appliedDiscountCategory: string | undefined;
+    let appliedDiscountCategory: DiscountCategory | undefined;
     // Set once the usage-increment below succeeds; used to compensate the
     // increment if checkout fails or is replayed after this point.
-    let appliedDiscountId: mongoose.Types.ObjectId | undefined;
+    let appliedDiscountId: string | undefined;
 
     if (discountCode) {
       const now = new Date();
+      const normalizedCode = typeof discountCode === 'string' ? discountCode : '';
 
-      // Atomic check + increment: find the discount and increment usage in one operation.
-      // The query filter ensures validity, active status, and usage limit in the same step,
-      // preventing race conditions where two transactions pass the check simultaneously.
-      const discount = await Discount.findOneAndUpdate(
-        {
-          tenantId,
-          code: typeof discountCode === 'string' ? discountCode.toUpperCase() : '',
-          isActive: true,
-          validFrom: { $lte: now },
-          validUntil: { $gte: now },
-          $or: [
-            { usageLimit: { $exists: false } },
-            { usageLimit: null },
-            { usageLimit: 0 },
-            { $expr: { $lt: ['$usageCount', '$usageLimit'] } },
-          ],
-        },
-        { $inc: { usageCount: 1 } },
-        { new: false } // return pre-increment doc for calculations
-      );
+      // Atomic check + increment, so two transactions can't both pass the
+      // usage-limit check. Returns the discount as it was before the increment.
+      const discount = await repos.discounts.claimUsage(tenantId, normalizedCode, now);
 
       if (!discount) {
         // Lookup without filters to give a specific error message
-        const rawDiscount = await Discount.findOne({
-          tenantId,
-          code: typeof discountCode === 'string' ? discountCode.toUpperCase() : '',
-        });
+        const rawDiscount = await repos.discounts.findByCode(tenantId, normalizedCode);
 
         if (!rawDiscount || !rawDiscount.isActive) {
           return NextResponse.json(
@@ -629,7 +592,7 @@ export async function POST(request: NextRequest) {
       // Check minimum purchase amount (rollback usage if not met)
       if (discount.minPurchaseAmount && subtotal < discount.minPurchaseAmount) {
         // Rollback the usage increment
-        await Discount.findByIdAndUpdate(discount._id, { $inc: { usageCount: -1 } });
+        await repos.discounts.releaseUsage(tenantId, discount._id);
         const errorMsg = t('validation.minimumPurchaseAmount', 'Minimum purchase amount of {amount} required').replace('{amount}', discount.minPurchaseAmount.toString());
         return NextResponse.json(
           { success: false, error: errorMsg },
@@ -672,7 +635,7 @@ export async function POST(request: NextRequest) {
       // transaction's branch address if one is set, else the tenant's own address.
       let taxRegion: { country?: string; state?: string; city?: string; zipCode?: string } | undefined;
       const branchForTax = typeof branchId === 'string' && branchId
-        ? await Branch.findOne({ _id: branchId, tenantId }).select('address').lean()
+        ? await repos.branches.findById(tenantId, branchId)
         : null;
       const addressSource = branchForTax?.address || tenantSettings?.address;
       if (addressSource) {
@@ -694,9 +657,9 @@ export async function POST(request: NextRequest) {
     // Resolve the registered device/terminal (if any) and snapshot its identity onto the
     // transaction, so receipts remain accurate even if the device is later renamed/deactivated.
     let deviceSnapshot: { terminalId: string; deviceSerialNumber: string } | undefined;
-    if (deviceId && mongoose.Types.ObjectId.isValid(deviceId)) {
-      const device = await Device.findOne({ _id: deviceId, tenantId, isActive: true }).lean();
-      if (device) {
+    if (deviceId && isValidId(deviceId)) {
+      const device = await repos.devices.findById(tenantId, deviceId);
+      if (device?.isActive === true) {
         deviceSnapshot = { terminalId: device.terminalId, deviceSerialNumber: device.serialNumber };
       }
     }
@@ -772,8 +735,8 @@ export async function POST(request: NextRequest) {
     const storedPaymentMethod = normalizeTransactionPaymentMethod(finalPaymentMethod);
 
     // ─── Atomic section: stock + transaction + payments (transaction when DB supports it) ───
-    const checkoutResult = await runWithOptionalMongoTransaction(async (session) => {
-      const paymentRecords: Array<{ _id: unknown; method: string; amount: number; status: string }> = [];
+    const checkoutResult = await runInTransaction(async (tx) => {
+      const paymentRecords: Payment[] = [];
       let onAccountCreditChange: {
         customerId: string;
         amount: number;
@@ -783,7 +746,7 @@ export async function POST(request: NextRequest) {
 
       // The transaction's _id is generated up front so stock movements are written
       // with it directly (batched into one insert below).
-      const transactionObjectId = new mongoose.Types.ObjectId();
+      const transactionObjectId = newId();
       const stockMovements: StockMovementInput[] = [];
 
       // Update stock BEFORE creating transaction (critical - must succeed)
@@ -806,10 +769,10 @@ export async function POST(request: NextRequest) {
                 userId: user.userId,
                 branchId: typeof branchId === 'string' ? branchId : undefined,
                 reason: 'Transaction sale - bundle',
-                transactionId: transactionObjectId.toString(),
+                transactionId: transactionObjectId,
                 movements: stockMovements,
               },
-              session,
+              tx,
               { bundle: bundleMap.get(bundleId), products: productMap }
             );
           } else if (productId) {
@@ -825,27 +788,26 @@ export async function POST(request: NextRequest) {
                   branchId: typeof branchId === 'string' ? branchId : undefined,
                   variation,
                   reason: 'Transaction sale',
-                  transactionId: transactionObjectId.toString(),
+                  transactionId: transactionObjectId,
                   product,
                   movements: stockMovements,
                 },
-                session
+                tx
               );
             }
           }
         }
       } catch (stockErr) {
-        // Without a MongoDB transaction (standalone fallback) the stock already
+        // Without a transaction (standalone fallback) the stock already
         // decremented for earlier lines stays applied — keep their movement records
-        if (!session) await insertStockMovements(stockMovements);
+        if (!isTransactional(tx)) await insertStockMovements(stockMovements);
         throw stockErr;
       }
-      await insertStockMovements(stockMovements, session);
+      await insertStockMovements(stockMovements, tx);
 
-      let transaction;
+      let transaction: Transaction | undefined;
       let receiptNumber = '';
       const txPayloadBase = {
-        tenantId,
         branchId: branchId || undefined,
         items: transactionItems,
         subtotal,
@@ -864,7 +826,7 @@ export async function POST(request: NextRequest) {
         status: 'completed' as const,
         customerId: customerId || undefined,
         userId: user.userId,
-        deviceId: deviceId && mongoose.Types.ObjectId.isValid(deviceId) ? deviceId : undefined,
+        deviceId: deviceId && isValidId(deviceId) ? deviceId : undefined,
         terminalId: deviceSnapshot?.terminalId,
         deviceSerialNumber: deviceSnapshot?.deviceSerialNumber,
         notes,
@@ -879,11 +841,11 @@ export async function POST(request: NextRequest) {
       for (let receiptAttempt = 0; receiptAttempt < 3; receiptAttempt++) {
         receiptNumber = await generateReceiptNumber(tenantId);
         try {
-          const [txn] = await Transaction.create(
-            [{ ...txPayloadBase, _id: transactionObjectId, receiptNumber }],
-            sessionOpts(session)
+          transaction = await repos.transactions.create(
+            tenantId,
+            { ...txPayloadBase, _id: transactionObjectId, receiptNumber },
+            { tx }
           );
-          transaction = txn;
           break;
         } catch (createErr) {
           if (isDuplicateReceiptNumberError(createErr) && receiptAttempt < 2) {
@@ -894,14 +856,7 @@ export async function POST(request: NextRequest) {
           // inside the transaction and won — surface it as a dedicated
           // error so the outer handler can return that transaction instead
           // of a generic failure.
-          if (
-            idempotencyKey &&
-            createErr &&
-            typeof createErr === 'object' &&
-            'code' in createErr &&
-            (createErr as { code?: number }).code === 11000 &&
-            String((createErr as { message?: string }).message || '').includes('idempotencyKey')
-          ) {
+          if (idempotencyKey && createErr instanceof DuplicateKeyError && createErr.field === 'idempotencyKey') {
             throw new IdempotentReplayError(idempotencyKey);
           }
           throw createErr;
@@ -914,21 +869,16 @@ export async function POST(request: NextRequest) {
 
       // BIR Grand Total Accumulator: non-resettable, all-time cumulative sales register.
       // Increments atomically with the transaction commit; never decremented on void/refund.
-      await Tenant.updateOne(
-        { _id: tenantId },
-        { $inc: { grandTotalSales: total, grandTotalTransactionCount: 1 } },
-        sessionOpts(session)
-      );
+      await repos.tenants.addToGrandTotals(tenantId, total, { tx });
 
       if (loyaltyEnabled && loyaltyCustomer && loyaltyConfig) {
         const currentBalance = loyaltyCustomer.loyaltyPointsBalance ?? 0;
         let newBalance = currentBalance;
-        const loyaltyUpdate: Record<string, number> = {};
+        const loyaltyUpdate: { loyaltyPointsEarned?: number; loyaltyPointsRedeemed?: number } = {};
 
         if (loyaltyPointsToRedeem > 0) {
           const balanceAfterRedeem = Math.max(0, newBalance - loyaltyPointsToRedeem);
-          await LoyaltyTransaction.create([{
-            tenantId,
+          await repos.loyaltyTransactions.create(tenantId, {
             customerId: loyaltyCustomer._id,
             transactionId: transaction._id,
             type: 'redeem',
@@ -937,7 +887,7 @@ export async function POST(request: NextRequest) {
             balanceAfter: balanceAfterRedeem,
             description: `Redeemed ${loyaltyPointsToRedeem} points (₱${loyaltyDiscountAmount.toFixed(2)} discount)`,
             createdBy: user.userId,
-          }], sessionOpts(session));
+          }, { tx });
           newBalance = balanceAfterRedeem;
           loyaltyUpdate.loyaltyPointsRedeemed = loyaltyPointsToRedeem;
         }
@@ -945,8 +895,7 @@ export async function POST(request: NextRequest) {
         const pointsEarned = Math.floor(total * loyaltyConfig.pointsPerPeso);
         if (pointsEarned > 0) {
           const balanceAfterEarn = newBalance + pointsEarned;
-          await LoyaltyTransaction.create([{
-            tenantId,
+          await repos.loyaltyTransactions.create(tenantId, {
             customerId: loyaltyCustomer._id,
             transactionId: transaction._id,
             type: 'earn',
@@ -955,26 +904,22 @@ export async function POST(request: NextRequest) {
             balanceAfter: balanceAfterEarn,
             description: `Earned ${pointsEarned} points from receipt #${transaction.receiptNumber}`,
             createdBy: user.userId,
-          }], sessionOpts(session));
+          }, { tx });
           newBalance = balanceAfterEarn;
           loyaltyUpdate.loyaltyPointsEarned = pointsEarned;
         }
 
         if (Object.keys(loyaltyUpdate).length > 0) {
-          await Transaction.updateOne({ _id: transaction._id }, { $set: loyaltyUpdate }, sessionOpts(session));
+          await repos.transactions.setLoyaltyPoints(tenantId, transaction._id, loyaltyUpdate, { tx });
         }
 
-        await Customer.updateOne(
-          { _id: loyaltyCustomer._id },
-          { $set: { loyaltyPointsBalance: newBalance } },
-          sessionOpts(session)
-        );
+        await repos.customers.setBalances(tenantId, loyaltyCustomer._id, { loyaltyPointsBalance: newBalance }, { tx });
       }
 
       if (body.createPaymentRecord !== false) {
         if (isMultiplePayments && effectivePayments) {
           for (const payment of effectivePayments) {
-            const paymentDetails: Record<string, unknown> = {};
+            const paymentDetails: PaymentDetails = {};
             if (payment.method === 'cash') {
               paymentDetails.cashReceived = payment.cashReceived || payment.amount;
               paymentDetails.change = payment.change || 0;
@@ -993,8 +938,7 @@ export async function POST(request: NextRequest) {
               paymentDetails.notes = payment.notes;
             }
 
-            const [paymentRecord] = await Payment.create([{
-              tenantId,
+            paymentRecords.push(await repos.payments.create(tenantId, {
               transactionId: transaction._id,
               method: toPaymentRecordMethod(payment.method),
               amount: payment.amount,
@@ -1002,11 +946,10 @@ export async function POST(request: NextRequest) {
               details: Object.keys(paymentDetails).length > 0 ? paymentDetails : undefined,
               processedBy: user.userId,
               processedAt: new Date(),
-            }], sessionOpts(session));
-            paymentRecords.push(paymentRecord);
+            }, { tx }));
           }
         } else {
-          const paymentDetails: Record<string, unknown> = {};
+          const paymentDetails: PaymentDetails = {};
           if (finalPaymentMethod === 'cash') {
             paymentDetails.cashReceived = finalCashReceived;
             paymentDetails.change = finalChange;
@@ -1020,8 +963,7 @@ export async function POST(request: NextRequest) {
             paymentDetails.notes = 'On-account (customer balance)';
           }
 
-          const [paymentRecord] = await Payment.create([{
-            tenantId,
+          paymentRecords.push(await repos.payments.create(tenantId, {
             transactionId: transaction._id,
             method: toPaymentRecordMethod(finalPaymentMethod),
             amount: total,
@@ -1029,15 +971,15 @@ export async function POST(request: NextRequest) {
             details: Object.keys(paymentDetails).length > 0 ? paymentDetails : undefined,
             processedBy: user.userId,
             processedAt: new Date(),
-          }], sessionOpts(session));
-          paymentRecords.push(paymentRecord);
+          }, { tx }));
         }
       }
 
       if (onAccountAmountToBill > 0.009 && customerId) {
-        const creditCustomer = await withOptionalSession(
-          Customer.findOne({ _id: customerId, tenantId, isActive: true }).select('accountBalance creditLimit'),
-          session
+        const creditCustomer = await repos.customers.findOne(
+          tenantId,
+          { ids: [customerId], isActive: true },
+          { select: 'accountBalance creditLimit', tx }
         );
 
         if (!creditCustomer) {
@@ -1051,11 +993,7 @@ export async function POST(request: NextRequest) {
           );
         }
 
-        await Customer.updateOne(
-          { _id: customerId, tenantId },
-          { $inc: { accountBalance: onAccountAmountToBill } },
-          sessionOpts(session)
-        );
+        await repos.customers.adjustAccountBalance(tenantId, customerId, onAccountAmountToBill, { tx });
 
         onAccountCreditChange = {
           customerId: String(customerId),
@@ -1068,21 +1006,21 @@ export async function POST(request: NextRequest) {
       return { transaction, paymentRecords, onAccountCreditChange };
     }).catch(async (txError) => {
       if (txError instanceof IdempotentReplayError) {
-        const existing = await Transaction.findOne({ tenantId, idempotencyKey: txError.idempotencyKey }).lean();
+        const existing = await repos.transactions.findByIdempotencyKey(tenantId, txError.idempotencyKey);
         if (existing) {
           // A concurrent request with the same idempotencyKey already created the
           // transaction and consumed the discount usage; this loser's earlier
           // usageCount increment is a duplicate and must be compensated.
           if (appliedDiscountId) {
-            await Discount.findByIdAndUpdate(appliedDiscountId, { $inc: { usageCount: -1 } });
+            await repos.discounts.releaseUsage(tenantId, appliedDiscountId);
           }
-          return { transaction: existing, paymentRecords: [], onAccountCreditChange: null, replay: true };
+          return { transaction: existing, paymentRecords: [] as Payment[], onAccountCreditChange: null, replay: true };
         }
       }
       // Checkout failed outright (stock conflict, DB error, etc.) — release
       // the discount usage this request reserved before the atomic section ran.
       if (appliedDiscountId) {
-        await Discount.findByIdAndUpdate(appliedDiscountId, { $inc: { usageCount: -1 } });
+        await repos.discounts.releaseUsage(tenantId, appliedDiscountId);
       }
       throw txError;
     });
@@ -1109,10 +1047,7 @@ export async function POST(request: NextRequest) {
     // Reset table status to 'open' after dine-in payment completes
     if (tableId && orderType === 'dine-in') {
       try {
-        await Table.findOneAndUpdate(
-          { _id: tableId, tenantId },
-          { status: 'open', currentOrderId: undefined }
-        );
+        await repos.tables.update(tenantId, tableId, { status: 'open', currentOrderId: undefined });
       } catch (tableErr) {
         logger.error('Failed to reset table status:', tableErr);
         // Non-critical — don't fail the response
@@ -1146,15 +1081,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Include payment records in response if created
-    const responseData = transaction.toObject ? transaction.toObject() : transaction;
-    if (paymentRecords.length > 0) {
-      (responseData as unknown as Record<string, unknown>).payments = paymentRecords.map((p: { _id: unknown; method: string; amount: number; status: string }) => ({
-        _id: p._id,
-        method: p.method,
-        amount: p.amount,
-        status: p.status,
-      }));
-    }
+    const responseData = {
+      ...transaction,
+      ...(paymentRecords.length > 0 && {
+        payments: paymentRecords.map((p) => ({ _id: p._id, method: p.method, amount: p.amount, status: p.status })),
+      }),
+    };
 
     return NextResponse.json({ success: true, data: responseData }, { status: 201 });
   } catch (error: unknown) {

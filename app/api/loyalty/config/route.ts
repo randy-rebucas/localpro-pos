@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import LoyaltyConfig from '@/models/LoyaltyConfig';
+import { getRepos, LOYALTY_CONFIG_DEFAULTS, type LoyaltyConfig } from '@/lib/db';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
@@ -11,8 +10,6 @@ import { handleApiError } from '@/lib/error-handler';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
-
     const user = await getCurrentUser(request);
     if (!user) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
@@ -34,7 +31,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const config = await LoyaltyConfig.findOne({ tenantId }).lean();
+    const config = await getRepos().loyaltyConfigs.get(tenantId);
 
     // Return defaults if not yet configured
     if (!config) {
@@ -42,10 +39,7 @@ export async function GET(request: NextRequest) {
         success: true,
         data: {
           tenantId,
-          pointsPerPeso: 1,
-          pesoPerPoint: 0.10,
-          minRedemption: 100,
-          isEnabled: true,
+          ...LOYALTY_CONFIG_DEFAULTS,
         },
       });
     }
@@ -58,8 +52,6 @@ export async function GET(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    await connectDB();
-
     const user = await getCurrentUser(request);
     if (!user) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
@@ -102,24 +94,20 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'minRedemption must be at least 1' }, { status: 400 });
     }
 
-    const updates: Record<string, unknown> = {};
+    const updates: Partial<Pick<LoyaltyConfig, 'pointsPerPeso' | 'pesoPerPoint' | 'minRedemption' | 'isEnabled'>> = {};
     if (pointsPerPeso !== undefined) updates.pointsPerPeso = pointsPerPeso;
     if (pesoPerPoint !== undefined) updates.pesoPerPoint = pesoPerPoint;
     if (minRedemption !== undefined) updates.minRedemption = minRedemption;
     if (isEnabled !== undefined) updates.isEnabled = isEnabled;
 
-    const config = await LoyaltyConfig.findOneAndUpdate(
-      { tenantId },
-      { $set: updates },
-      { upsert: true, new: true }
-    );
+    const config = await getRepos().loyaltyConfigs.upsert(tenantId, updates);
 
     await createAuditLog(request, {
       tenantId: tenantId.toString(),
       userId: user.userId,
       action: AuditActions.UPDATE,
       entityType: 'loyalty_config',
-      entityId: config._id.toString(),
+      entityId: config._id,
       changes: updates,
     });
 

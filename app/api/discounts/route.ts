@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Discount from '@/models/Discount';
+import { getRepos, isDuplicateKeyError } from '@/lib/db';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -13,7 +12,6 @@ import { handleApiError } from '@/lib/error-handler';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     const { tenantId } = await requireTenantAccess(request);
 
     const ip = request.headers.get('x-forwarded-for') ?? 'unknown';
@@ -33,19 +31,10 @@ export async function GET(request: NextRequest) {
     const code = searchParams.get('code');
     const activeOnly = searchParams.get('activeOnly') === 'true';
 
-    const query: any = { tenantId }; // eslint-disable-line @typescript-eslint/no-explicit-any
-    
-    if (code) {
-      query.code = code.toUpperCase();
-    }
-    
-    if (activeOnly) {
-      query.isActive = true;
-      query.validFrom = { $lte: new Date() };
-      query.validUntil = { $gte: new Date() };
-    }
-
-    const discounts = await Discount.find(query).sort({ createdAt: -1 }).lean();
+    const discounts = await getRepos().discounts.list(tenantId, {
+      code: code || undefined,
+      activeAt: activeOnly ? new Date() : undefined,
+    });
 
     return NextResponse.json({ success: true, data: discounts });
   } catch (error) {
@@ -55,7 +44,6 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     const { tenantId, user } = await requireTenantAccess(request);
     if (!(await hasTenantPermission(user.role, tenantId, 'discounts.manage'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
@@ -139,7 +127,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if code already exists for this tenant
-    const existing = await Discount.findOne({ tenantId, code: code.toUpperCase() });
+    const existing = await getRepos().discounts.findByCode(tenantId, code);
     if (existing) {
       return NextResponse.json(
         { success: false, error: t('validation.discountCodeExists', 'Discount code already exists') },
@@ -147,8 +135,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const discount = await Discount.create({
-      tenantId,
+    const discount = await getRepos().discounts.create(tenantId, {
       code: code.toUpperCase(),
       name,
       description,
@@ -169,13 +156,13 @@ export async function POST(request: NextRequest) {
       tenantId,
       action: AuditActions.DISCOUNT_CREATE,
       entityType: 'discount',
-      entityId: discount._id.toString(),
+      entityId: discount._id,
       changes: { code, type, value },
     });
 
     return NextResponse.json({ success: true, data: discount }, { status: 201 });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    if (error.code === 11000) {
+    if (isDuplicateKeyError(error)) {
       const t = await getValidationTranslatorFromRequest(request);
       return NextResponse.json(
         { success: false, error: t('validation.discountCodeExists', 'Discount code already exists') },

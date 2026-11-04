@@ -1,14 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Payment from '@/models/Payment';
-import Transaction from '@/models/Transaction';
+import { getRepos, type PaymentFilter, type PaymentRecordMethod, type PaymentStatus } from '@/lib/db';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     const tenantAccess = await requireTenantAccess(request);
     const { tenantId } = tenantAccess;
     
@@ -21,33 +18,27 @@ export async function GET(request: NextRequest) {
     const method = searchParams.get('method');
     const transactionId = searchParams.get('transactionId');
 
-    const query: any = { tenantId, isActive: { $ne: false } }; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const filter: PaymentFilter = { notDisabled: true };
 
     if (status) {
-      query.status = status;
+      filter.status = status as PaymentStatus;
     }
-    
+
     if (method) {
-      query.method = method;
+      filter.method = method as PaymentRecordMethod;
     }
-    
+
     if (transactionId) {
-      query.transactionId = transactionId;
+      filter.transactionId = transactionId;
     }
 
-    const payments = await Payment.find(query)
-      .sort({ createdAt: -1 })
-      .limit(limit)
-      .skip(skip)
-      .populate('transactionId', 'receiptNumber total')
-      .populate('processedBy', 'name email')
-      .lean();
-
-    const total = await Payment.countDocuments(query);
+    const { payments: paymentRepo } = getRepos();
+    const payments = await paymentRepo.listWithRefs(tenantId, filter, { page: { skip, limit } });
+    const total = await paymentRepo.count(tenantId, filter);
 
     return NextResponse.json({
       success: true,
-      data: payments || [],
+      data: payments,
       pagination: {
         total,
         page,
@@ -66,7 +57,6 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     const tenantAccess = await requireTenantAccess(request);
     const { tenantId, user } = tenantAccess;
 
@@ -96,10 +86,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify transaction exists and belongs to tenant
-    const transaction = await Transaction.findOne({
-      _id: transactionId,
-      tenantId,
-    });
+    const { transactions, payments } = getRepos();
+    const transaction = await transactions.findById(tenantId, transactionId, { select: '_id' });
 
     if (!transaction) {
       return NextResponse.json(
@@ -109,8 +97,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create payment record
-    const payment = await Payment.create({
-      tenantId,
+    const payment = await payments.create(tenantId, {
       transactionId,
       method,
       amount,
@@ -126,7 +113,7 @@ export async function POST(request: NextRequest) {
       userId: user.userId,
       action: AuditActions.PAYMENT_CREATE,
       entityType: 'payment',
-      entityId: payment._id.toString(),
+      entityId: payment._id,
       changes: {
         transactionId: transactionId.toString(),
         method,

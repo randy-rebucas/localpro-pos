@@ -1,13 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import User from '@/models/User';
-import Tenant from '@/models/Tenant';
+import { getRepos, type UserRole } from '@/lib/db';
 import { requireRole } from '@/lib/auth';
 import { handleApiError } from '@/lib/error-handler';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     await requireRole(request, ['super_admin']);
 
     const { searchParams } = new URL(request.url);
@@ -17,23 +14,14 @@ export async function GET(request: NextRequest) {
     const role = searchParams.get('role') || '';
     const search = searchParams.get('search') || '';
 
-    // Build query — always exclude super_admin accounts
-    const query: Record<string, unknown> = { role: { $ne: 'super_admin' } };
-
-    if (role) query.role = role;
-
-    if (search) {
-      query.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } },
-      ];
-    }
+    const { tenants: tenantRepo, users: userRepo } = getRepos();
 
     // Resolve tenantSlug → tenantId
+    let tenantId: string | undefined;
     if (tenantSlug) {
-      const tenant = await Tenant.findOne({ slug: tenantSlug }).select('_id').lean();
+      const tenant = await tenantRepo.findBySlug(tenantSlug, { select: '_id' });
       if (tenant) {
-        query.tenantId = (tenant as { _id: unknown })._id;
+        tenantId = tenant._id;
       } else {
         return NextResponse.json({
           success: true,
@@ -43,16 +31,12 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const [users, total] = await Promise.all([
-      User.find(query)
-        .populate('tenantId', 'slug name')
-        .select('name email role isActive lastLogin createdAt tenantId')
-        .sort({ createdAt: -1 })
-        .skip((page - 1) * limit)
-        .limit(limit)
-        .lean(),
-      User.countDocuments(query),
-    ]);
+    // Always excludes super_admin accounts unless ?role= is given (an explicit
+    // role replaces the default exclusion, as before).
+    const { items: users, total } = await userRepo.search(
+      { role: (role || undefined) as UserRole | undefined, search: search || undefined, tenantId },
+      { skip: (page - 1) * limit, limit }
+    );
 
     return NextResponse.json({
       success: true,

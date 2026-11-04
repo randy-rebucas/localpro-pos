@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Product from '@/models/Product';
+import { getRepos, type ProductPatch } from '@/lib/db';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -12,8 +11,6 @@ import { validateProductForBusiness } from '@/lib/business-type-helpers';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await connectDB();
-
     // Require authentication to prevent unauthenticated product lookups
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
@@ -24,7 +21,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ success: false, error: 'Tenant not found or access denied' }, { status: 403 });
     }
 
-    const product = await Product.findOne({ _id: id, tenantId, isActive: { $ne: false } }).lean();
+    const product = await getRepos().products.findById(tenantId, id, { activeOnly: true });
 
     if (!product) {
       return NextResponse.json({ success: false, error: 'Product not found' }, { status: 404 });
@@ -45,7 +42,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await connectDB();
     // SECURITY: Validate tenant access for authenticated requests
     let tenantId: string;
     try {
@@ -83,7 +79,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const tenantSettings = await getTenantSettingsById(tenantId);
     if (tenantSettings) {
       // Merge with existing product data for validation
-      const oldProduct = await Product.findOne({ _id: id, tenantId }).lean();
+      const oldProduct = await getRepos().products.findById(tenantId, id);
       if (oldProduct) {
         const mergedData = { ...oldProduct, ...data };
         // Remove Mongoose internals before validation
@@ -116,19 +112,11 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       }
     }
 
-    const oldProduct = await Product.findOne({ _id: id, tenantId }).lean();
-    if (!oldProduct) {
+    const result = await getRepos().products.update(tenantId, id, data as ProductPatch);
+    if (!result) {
       return NextResponse.json({ success: false, error: 'Product not found' }, { status: 404 });
     }
-    const product = await Product.findOneAndUpdate(
-      { _id: id, tenantId },
-      data,
-      { new: true, runValidators: true }
-    );
-    
-    if (!product) {
-      return NextResponse.json({ success: false, error: 'Product not found' }, { status: 404 });
-    }
+    const { before: oldProduct, after: product } = result;
 
     // Track changes
     const changes: Record<string, any> = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -159,7 +147,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 // soft-deleted product, where PUT's required name/price/stock checks would otherwise reject it).
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await connectDB();
     let tenantId: string;
     try {
       const tenantAccess = await requireTenantAccess(request);
@@ -191,12 +178,11 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ success: false, error: 'No valid fields to update' }, { status: 400 });
     }
 
-    const oldProduct = await Product.findOne({ _id: id, tenantId }).lean();
-    if (!oldProduct) {
+    const result = await getRepos().products.update(tenantId, id, updates);
+    if (!result) {
       return NextResponse.json({ success: false, error: 'Product not found' }, { status: 404 });
     }
-
-    const product = await Product.findOneAndUpdate({ _id: id, tenantId }, updates, { new: true });
+    const { before: oldProduct, after: product } = result;
 
     await createAuditLog(request, {
       tenantId,
@@ -219,7 +205,6 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await connectDB();
     // SECURITY: Validate tenant access for authenticated requests
     let tenantId: string;
     try {
@@ -242,11 +227,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     }
     const { id } = await params;
     
-    const product = await Product.findOneAndUpdate(
-      { _id: id, tenantId, isActive: true },
-      { isActive: false },
-      { new: true }
-    );
+    const product = await getRepos().products.softDelete(tenantId, id);
 
     if (!product) {
       return NextResponse.json({ success: false, error: 'Product not found' }, { status: 404 });

@@ -1,14 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
+import { getRepos, type PosSession, type PosSessionFields } from '@/lib/db';
 import { logger } from '@/lib/logger';
-import PosSession from '@/models/PosSession';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ sessionId: string }> }
 ) {
   try {
-    await connectDB();
     const { sessionId } = await params;
     const tenant = request.nextUrl.searchParams.get('tenant');
 
@@ -19,8 +17,7 @@ export async function GET(
       );
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const session = await PosSession.findOne({ sessionId, tenant }).lean() as any;
+    const session = await getRepos().posSessions.find(tenant, sessionId);
 
     if (!session) {
       return NextResponse.json(
@@ -65,10 +62,13 @@ export async function POST(
   { params }: { params: Promise<{ sessionId: string }> }
 ) {
   try {
-    await connectDB();
     const { sessionId } = await params;
 
-    let body: { tenant?: string; action?: string; data?: Record<string, unknown> };
+    let body: {
+      tenant?: string;
+      action?: string;
+      data?: PosSessionFields & { status?: PosSession['paymentStatus'] };
+    };
     try {
       body = await request.json();
     } catch {
@@ -90,51 +90,35 @@ export async function POST(
     // Once a session belongs to a tenant, no caller may reassign it to a different
     // tenant — the client-supplied `tenant` field is otherwise unauthenticated and
     // sessionId alone must not be enough to hijack or reset another tenant's session.
-    // Every write filters on { sessionId, tenant }; an upsert that collides with
-    // another tenant's session hits the unique sessionId index (E11000) → 404.
+    // Every write is scoped to { sessionId, tenant }; an upsert that collides with
+    // another tenant's session comes back null → 404.
     // One write per call — no read-before-write.
+    const { posSessions } = getRepos();
     const sessionNotFound = () => NextResponse.json(
       { success: false, error: 'Session not found' },
       { status: 404 }
     );
-    const isDuplicateKey = (e: unknown) => (e as { code?: number })?.code === 11000;
 
-    // Upsert scoped to { sessionId, tenant }. A duplicate key means the sessionId
-    // already exists: either another tenant owns it (→ null → 404) or a
-    // concurrent request from this tenant created it first (→ plain update).
-    const upsertSession = async (update: Record<string, unknown>) => {
-      try {
-        return await PosSession.findOneAndUpdate({ sessionId, tenant }, update, { upsert: true, new: true }).lean();
-      } catch (e) {
-        if (!isDuplicateKey(e)) throw e;
-        const { $setOnInsert: _ignored, ...plainUpdate } = update; // eslint-disable-line @typescript-eslint/no-unused-vars
-        return PosSession.findOneAndUpdate({ sessionId, tenant }, plainUpdate, { new: true }).lean();
-      }
-    };
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let session: any;
+    let session: PosSession | null;
 
     if (action === 'init') {
       // Create a brand-new session, or reset an existing one owned by the same tenant
-      session = await upsertSession({
-            $set: {
-              cart: data?.cart || [],
-              subtotal: data?.subtotal || 0,
-              discount: data?.discount || null,
-              taxAmount: data?.taxAmount,
-              taxRate: data?.taxRate,
-              taxLabel: data?.taxLabel,
-              tip: data?.tip || 0,
-              total: data?.total || 0,
-              paymentMethod: data?.paymentMethod || null,
-              paymentStatus: 'pending',
-              lastUpdate: Date.now(),
-            },
-          });
+      session = await posSessions.upsert(tenant, sessionId, {
+        cart: data?.cart || [],
+        subtotal: data?.subtotal || 0,
+        discount: data?.discount || null,
+        taxAmount: data?.taxAmount,
+        taxRate: data?.taxRate,
+        taxLabel: data?.taxLabel,
+        tip: data?.tip || 0,
+        total: data?.total || 0,
+        paymentMethod: data?.paymentMethod || null,
+        paymentStatus: 'pending',
+        lastUpdate: Date.now(),
+      });
       if (!session) return sessionNotFound();
     } else {
-      const updates: Record<string, unknown> = { lastUpdate: Date.now() };
+      const updates: PosSessionFields = { lastUpdate: Date.now() };
 
       if (action === 'update-cart' && data) {
         if (data.cart) updates.cart = data.cart;
@@ -169,19 +153,15 @@ export async function POST(
 
       if (action === 'update-cart') {
         // Auto-create session if it doesn't exist (handles race condition where cart syncs before init completes)
-        const insertDefaults: Record<string, unknown> = {
+        const insertDefaults: PosSessionFields = {
           cart: [], subtotal: 0, discount: null, taxAmount: 0, taxRate: 0, taxLabel: 'Tax',
           tip: 0, total: 0, paymentMethod: null, paymentStatus: 'pending',
         };
-        for (const key of Object.keys(updates)) delete insertDefaults[key];
-        session = await upsertSession({ $set: updates, $setOnInsert: insertDefaults });
+        for (const key of Object.keys(updates) as Array<keyof PosSessionFields>) delete insertDefaults[key];
+        session = await posSessions.upsert(tenant, sessionId, updates, insertDefaults);
         if (!session) return sessionNotFound();
       } else {
-        session = await PosSession.findOneAndUpdate(
-          { sessionId, tenant },
-          { $set: updates },
-          { new: true }
-        ).lean();
+        session = await posSessions.update(tenant, sessionId, updates);
         if (!session) {
           return NextResponse.json(
             { success: false, error: 'Session not found. Please reinitialize.' },

@@ -3,9 +3,7 @@
  * Automatically emails receipts for transactions
  */
 
-import connectDB from '@/lib/mongodb';
-import Transaction from '@/models/Transaction';
-import Tenant from '@/models/Tenant'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import { getRepos } from '@/lib/db';
 import { sendEmail } from '@/lib/notifications';
 import { getTenantSettingsById } from '@/lib/tenant';
 import { formatDate, formatTime } from '@/lib/formatting';
@@ -24,8 +22,6 @@ export interface TransactionReceiptOptions {
 export async function sendTransactionReceipt(
   options: TransactionReceiptOptions
 ): Promise<AutomationResult> {
-  await connectDB();
-
   const results: AutomationResult = {
     success: true,
     message: '',
@@ -41,9 +37,7 @@ export async function sendTransactionReceipt(
       return results;
     }
 
-    const transaction = await Transaction.findById(options.transactionId)
-      .populate('tenantId')
-      .lean();
+    const transaction = await getRepos().transactions.findByIdAcrossTenants(options.transactionId);
 
     if (!transaction) {
       results.success = false;
@@ -51,8 +45,7 @@ export async function sendTransactionReceipt(
       return results;
     }
 
-    const tenantId = transaction.tenantId.toString();
-    const tenantSettings = await getTenantSettingsById(tenantId);
+    const tenantSettings = await getTenantSettingsById(transaction.tenantId);
 
     // Check if email notifications are enabled
     if (!tenantSettings?.emailNotifications) {
@@ -70,7 +63,7 @@ export async function sendTransactionReceipt(
 
     // Generate receipt content
     const companyName = tenantSettings?.companyName || 'Business';
-    const receiptNumber = transaction.receiptNumber || transaction._id.toString().slice(-8);
+    const receiptNumber = transaction.receiptNumber || transaction._id.slice(-8);
     const formattedDate = formatDate(transaction.createdAt, tenantSettings);
     const formattedTime = formatTime(transaction.createdAt, tenantSettings);
 
@@ -180,8 +173,6 @@ ${itemsList}
 export async function sendPendingReceipts(
   options: { tenantId?: string; hoursAgo?: number } = {}
 ): Promise<AutomationResult> {
-  await connectDB();
-
   const results: AutomationResult = {
     success: true,
     message: '',
@@ -197,19 +188,13 @@ export async function sendPendingReceipts(
     // Find transactions without receipt email sent
     // Note: We'll need to add a field to track if receipt was sent
     // For now, we'll check transactions with customer email in notes
-    const query: any = { // eslint-disable-line @typescript-eslint/no-explicit-any
-      createdAt: { $gte: since },
-      status: 'completed',
-    };
+    const filter = { createdAt: { gte: since }, status: 'completed' as const };
+    const listOpts = { sort: '-createdAt' as const, limit: 100 };
 
-    if (options.tenantId) {
-      query.tenantId = options.tenantId;
-    }
-
-    const transactions = await Transaction.find(query)
-      .sort({ createdAt: -1 })
-      .limit(100)
-      .lean();
+    const repo = getRepos().transactions;
+    const transactions = options.tenantId
+      ? await repo.list(options.tenantId, filter, listOpts)
+      : await repo.listAcrossTenants(filter, listOpts);
 
     let processed = 0;
     let failed = 0;
@@ -223,7 +208,7 @@ export async function sendPendingReceipts(
         }
 
         const result = await sendTransactionReceipt({
-          transactionId: transaction._id.toString(),
+          transactionId: transaction._id,
           customerEmail: emailMatch[1],
         });
 

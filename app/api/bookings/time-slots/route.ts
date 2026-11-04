@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Booking from '@/models/Booking';
+import { getRepos, type BookingFilter } from '@/lib/db';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { getCurrentUser } from '@/lib/auth';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
@@ -19,7 +18,6 @@ import { logger } from '@/lib/logger';
  */
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     const user = await getCurrentUser(request);
     const t = await getValidationTranslatorFromRequest(request);
     if (!user) {
@@ -70,17 +68,16 @@ export async function GET(request: NextRequest) {
     endDate.setHours(23, 59, 59, 999);
 
     // Get existing bookings for the date
-    const query: any = { // eslint-disable-line @typescript-eslint/no-explicit-any
-      tenantId,
-      startTime: { $gte: selectedDate, $lte: endDate },
-      status: { $in: ['pending', 'confirmed'] },
+    const query: BookingFilter = {
+      startTime: { gte: selectedDate, lte: endDate },
+      status: ['pending', 'confirmed'],
     };
 
     if (staffId) {
       query.staffId = staffId;
     }
 
-    const existingBookings = await Booking.find(query).lean();
+    const existingBookings = await getRepos().bookings.list(tenantId, query);
 
     // Generate time slots
     const slots: Array<{ time: string; available: boolean; bookingId?: string }> = [];

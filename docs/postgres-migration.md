@@ -38,15 +38,15 @@ The migration is done in phases on the `migration/postgres-drizzle` branch, whic
   - Commands: `pnpm pg:migrate`, `pnpm pg:generate` (after schema edits) and `pnpm pg:check`
   - `pnpm test:integration` runs the constraint tests in `__tests__/integration/pg-schema.test.ts`
   - The TTL cleanup job moves to Phase 4, because it needs the Postgres client that phase builds.
-- [ ] **3. Repository layer on the Mongo implementation**, with no change in behavior. Domains in this order:
-  1. lookup data
-  2. identity
-  3. billing
-  4. catalog
-  5. customers and CRM
-  6. operations
-  7. sales core
-  8. audit
+- [ ] **3. Repository layer on the Mongo implementation**, with no change in behavior. Domains in this order (see "Repository layer (Phase 3)" below):
+  1. ~~lookup data~~ (done)
+  2. ~~identity~~ (done)
+  3. ~~billing~~ (done)
+  4. ~~catalog~~ (done)
+  5. ~~customers and CRM~~ (done)
+  6. ~~operations~~ (done)
+  7. ~~sales core~~ (done)
+  8. ~~audit~~ (done)
   9. analytics
 - [ ] **4. Postgres implementation** of each domain, with contract tests that run against both drivers
 - [ ] **5. Data copy** (`scripts/migrate-mongo-to-pg.ts`) and verification (`scripts/verify-migration.ts`)
@@ -107,9 +107,370 @@ The script is read-only. Run it against production, or a restored snapshot, with
   - cache invalidation
   - applying Mongoose defaults inside JSONB
 
+## Repository layer (Phase 3)
+
+Code in `lib/db/`:
+
+| File | Purpose |
+|---|---|
+| `index.ts` | `getRepos()` returns the repositories for `DB_DRIVER`. `postgres` throws until Phase 4. |
+| `<domain>.ts` (e.g. `lookup.ts`) | Entity types (the API shape: `_id` and references as strings) and repository interfaces |
+| `types.ts` | `Patch<T>` (`undefined` = leave, `null` = clear) and `UpdateResult<T>` (`before`, `after`, `changed`) |
+| `errors.ts` | `DuplicateKeyError` / `isDuplicateKeyError` (Mongo 11000 and Postgres 23505) |
+| `tx.ts` | `runInTransaction`, plus `mongoTx(session)` for routes that still open their own Mongo session |
+| `mongo/` | The Mongo implementation: the same queries the routes ran before, plus `toApi()` serialization (ObjectId to string, drops `__v`) |
+
+**Rules:**
+- Every tenant-scoped method takes `tenantId` first. Cross-tenant methods say so in their name (`listActiveAcrossTenants`, `statusCounts(null, …)`).
+- Repositories connect by themselves, so a route that only uses repositories has no `connectDB()`.
+- `update()` loads the row, applies the patch, and writes only when something changed. `result.changed` drives no-op detection (tables PATCH) and the audit diffs.
+- `__tests__/lib/db/boundaries.test.ts` fails when a file imports a migrated model directly. It also lists the call sites deferred to later domains, so remove entries there as each domain is converted.
+- Route tests mock `@/lib/db` (`getRepos: () => repos`) rather than Mongoose query chains.
+
+**Domain 1 (lookup data), done.** It covers categories, branches, devices, dining tables, expenses, discounts, coupons, feature-flag overrides and loyalty config. The converted code is:
+- their API routes
+- `lib/coupons.ts` and `lib/discount-seeds.ts`
+- the discount-management automation
+- the lookup calls in the cash-drawer, stores, product bulk/import, loyalty-milestones, multi-branch-sync, stock-transfer and automation-status code
+
+These call sites still import the models directly and are deferred (listed in the boundary test):
+- `app/api/transactions/route.ts` → sales core
+- `transactions/stats` and `lib/analytics.ts` → analytics
+- the bundles and products routes → catalog
+- `reset-collections` / `seed-sample-data` → tenant tooling
+
+**Small behavior differences that were accepted:**
+- **Validation before 404.** Some PUT/PATCH routes now validate the body before checking that the row exists, so a bad body on a missing id returns 400 instead of 404.
+- **Explicit `null` clears the field.** An explicit JSON `null` in an update now clears the field, which is then absent from the response, instead of storing `null`.
+- **No-op updates skip `save()`.** `updatedAt` is no longer bumped when nothing changed.
+- **No `__v` in responses.** The client doesn't read it.
+
+**What the Postgres implementation must also do (Phase 4):**
+- **Keep only known columns from input objects.** `create()` receives validated request data, and Mongoose's strict mode used to drop unknown keys.
+- **Apply the Mongoose setters:** trim, and uppercase for discount, coupon and branch codes.
+- **Keep the cash-drawer expense sum as it is.** `expenses.listCashBetween` includes soft-deleted expenses, as Mongo did. This is possibly a bug, but it stays unchanged during the migration.
+- **Feature-flag `upsert` and coupon `update`** keep the stored value for `undefined` fields. This is how Mongoose handled undefined keys before.
+
+**Domain 2 (identity), done.** It covers tenants, users, token revocation, customer OTPs and addresses, across about 120 files:
+- the core helpers `lib/tenant.ts`, `lib/auth.ts`, `lib/api-tenant.ts`, `lib/token-blacklist.ts` and `lib/tenant-active-query.ts`
+- the auth, client, users, tenant-settings, super-admin, subscriptions, reports and stores routes
+- every automation's tenant lookup
+
+**Identity rules:**
+- **Tenant updates use `TenantUpdate` ops.** These are `set`/`unset` on top-level fields or `settings.*` paths, plus `push`, `pull`, `setOnAllItems` and `setOnItem` for settings arrays keyed by `id` (holidays, receipt templates). In Postgres they become a JSONB read-modify-write under `SELECT … FOR UPDATE`, so they stay atomic.
+- **`select` is a projection hint** in Mongoose syntax. Callers read only the fields they selected.
+- **Passwords never leave the repository.** `User` has no password field. Login goes through `findBy…ForLogin` followed by `verifyPassword`. `create`/`update` take the plain password and hash it.
+- **Errors.** `handleApiError` recognises `DuplicateKeyError`, and `DuplicateKeyError.field` carries the conflicting field for both drivers.
+- **Cache invalidation still lives in the Tenant/User model hooks.** The Postgres repositories must call `invalidateTenantCache` / `invalidateUserCache` themselves, skipping tenant counter-only updates.
+
+**Bugs found and fixed while converting:**
+- **`PUT /api/users/[id]` stored a changed password unhashed.** It used `findOneAndUpdate`, which skips the hashing hook, so the user could no longer log in with the new password. It now hashes. Existing rows may still hold plaintext passwords: the Phase 5 copy must report every `users.password` value that is not a bcrypt hash (`$2a$`/`$2b$`), and those users need a password reset.
+- **`register` and `reset-password` failed for a tenant given by slug.** The `$or` with `_id` raised a cast error. Lookups now use `findActiveBySlugOrId`.
+- **`client/address/[addressId]` looked addresses up by id without an owner filter,** then compared the owner. Lookups are now owner-scoped, so another user's address returns 404 instead of 403.
+
+**Accepted behavior differences:**
+- Settings routes that used to rewrite the whole `settings` object with `save()` now `$set` only their own section. Validators run on the written paths.
+- Updates to holidays and receipt templates now run schema validators.
+- `Tenant.subscriptionId` writes were removed (subscriptions routes, `lib/subscription.ts`). Tenant has no such field, so Mongoose strict mode always dropped them. The only lost side effect is the tenant's `updatedAt` bump.
+- `lib/validation.ts` `isPinDuplicate` was deleted. It had no callers and queried a `pin` field that doesn't exist.
+
+**Existing behavior the product owner needs to decide on (not changed):**
+- **Nine automations never run for all tenants.** They use `Tenant.find({ status: 'active' })`, and Tenant has no `status` field, so the query matches nothing. They only run when an explicit tenantId is passed. The nine are customer-lifetime-value, dynamic-pricing, low-stock-alerts, multi-branch-sync, predictive-stock, product-performance, purchase-orders, sales-trend-analysis and stock-transfer. Switching them to `listActive()` would start price changes, stock transfers and emails for every tenant. They are listed in the boundary test until this is decided.
+- **The password reset-by-token flow can never succeed.** `resetToken`/`resetTokenExpiry` aren't in the User schema, so they are never stored.
+- **`transaction-receipts` had an existing bug.** It passed a populated tenant object as an id (`"[object Object]"`). Fixed with the sales domain.
+
+**Domain 3 (billing), done.** It covers subscription plans, subscriptions (with their billing history and usage counters) and billing events. The repositories are `subscriptionPlans`, `subscriptions` and `billingEvents` (`lib/db/billing.ts`). The converted code is:
+- `lib/subscription.ts` (`SubscriptionService`), and `lib/coupons.ts` `incrementCouponUsage`, which now takes a `DbTx`
+- the subscription-billing and subscription-expiry automations
+- the subscriptions, subscription-plans and PayPal create-payment routes
+- the super-admin plans, subscriptions, billing, tenants (provisioning) and system-seed routes
+
+`app/api/super-admin/analytics/route.ts` still imports `Subscription` directly. Its MRR and status aggregates move with the analytics domain. Invoice and SuperAdminAction are not migrated yet, so the routes and automation that use them still call `connectDB()`.
+
+**Billing rules:**
+- **Plans are a global catalog.** Plan methods take no `tenantId`. Plan statistics and the billing automations read every tenant and are named `...AcrossTenants`.
+- **`populate` is explicit.** `{ plan: 'name tier price', tenant: 'slug name' }` returns `planId`/`tenantId` as objects with those fields, the same shape `populate()` produced. In Postgres these become joins.
+- **`SubscriptionFilter` is a structured filter.** It holds statuses, flags, date ranges and must-be-unset fields, used by the super-admin lists and the automations. Without `tenantId` it matches across tenants.
+- **`subscriptions.update` takes `{ set, addBillingEntry }`.** `null` in `set` clears a field. `ifStatus` is an optimistic-concurrency precondition, used by `PUT /api/subscriptions/[id]`, which returns 409 when it fails.
+- **Usage counters have their own methods** (`findUsage`, `incrementTransactionsSince`, `setUsage`). They write only `usage.*`, so the cached subscription status is not flushed on every sale.
+
+**Accepted behavior differences:**
+- **Targeted writes replace `save()`.** The automations and the super-admin subscription actions used to mutate the whole document and `save()` it. They now `$set`/`$unset` only the fields they change, so a concurrent write to another field is no longer overwritten.
+- **More code runs in a transaction.** The expiry automation, the activation route, super-admin subscription actions and tenant provisioning now use `runInTransaction`. On a standalone dev Mongo, they now run without a transaction instead of failing.
+- **`POST /api/subscriptions` no longer opens a transaction** around its single insert.
+- **`POST /api/subscriptions/activate` returns the saved subscription as `data`.** Before, it returned the raw update object, which for an existing subscription contained a `$push` key. The client reads only `success`.
+- **`PUT /api/subscriptions/[id]` runs schema validators** and clears `cancelledAt`/`suspendedAt` on reactivation instead of storing `null` (the same "explicit `null` clears" rule as domain 1).
+- **`request-upgrade` compares the plan id without populating it.** A subscription whose plan was deleted no longer crashes the route with a 500.
+- **`SubscriptionService.createSubscription` / `ensureTrialSubscription` return plain objects,** not Mongoose documents, and responses have no `__v`.
+
+**What the Postgres implementation must also do (Phase 4):**
+- **Call `invalidateSubscriptionCache()`** after every plan write, and after every subscription write except usage-only ones. Today the model hooks do this.
+- **Keep the plan delete guard.** `subscriptionPlans.delete` must refuse a plan that active or trial subscriptions reference. Today this is the model's pre-delete hook. The foreign key alone blocks deleting any referenced plan, which is stricter.
+- **Apply the defaults** for partial `price`/`features`/`birCompliance`/`pharmacyCompliance` on plan create, and for usage counters and billing-history currency on subscription create.
+- **`addBillingEntry` appends a `subscription_billing_history` row** at the next `position`, in the same transaction as the subscription update.
+- **A nested object in a plan patch replaces the stored object as a whole.** This is how Mongo `$set: { features }` behaves (see the bug below).
+
+**Existing behavior the product owner needs to decide on (not changed):**
+- **The two subscription automations disagree about overdue subscriptions.** The billing automation gives a 7-day grace period, sends a final notice and deactivates the tenant at 10 days. The expiry automation suspends any `active` auto-renew subscription 3 days past `nextBillingDate`. After that the billing steps that require `status: 'active'` (final notice, deactivation) never run. `vercel.json` schedules only the billing job, but self-hosted `lib/cron.ts` schedules both. Should expiry step 3 be dropped?
+- **Editing plan features through `PUT /api/subscription-plans/[id]` drops `enableTableManagement`.** The route rebuilds the `features` object without that flag, and `$set: { features }` replaces the stored object. (`PUT /api/super-admin/plans/[id]` passes the body through and is not affected.)
+- **The yearly price uses a fixed 10% discount** (`monthly × 12 × 0.9`) in create-payment and activate. Each plan's `yearlyDiscount` is ignored.
+
+**Domain 4 (catalog), done.** It covers products (with variations and per-branch stock), bundles, e-commerce channel listings and tax rules. The repositories are `products`, `bundles`, `channelListings` and `taxRules` (`lib/db/catalog.ts`). The converted code, about 40 files, is:
+- `lib/stock.ts`, whose functions now take a `DbTx` instead of a Mongo session, and `lib/tax-calculation.ts`
+- the products, bundles, tax-rules, services, saved-carts, booking-availability, insights, expiry/products reports and prescription-dispense routes
+- the e-commerce integration routes and `lib/ecommerce/*`
+- the Product calls in six automations (dynamic-pricing, multi-branch-sync, predictive-stock, product-performance, purchase-orders, stock-transfer). Their `Tenant.find({ status: 'active' })` is unchanged, pending the decision under domain 2.
+
+These still import the models directly and are deferred (listed in the boundary test):
+- `app/api/transactions/route.ts` and `transactions/[id]/refund` → sales core. Their stock calls now pass `mongoTx(session)`.
+- `lib/analytics.ts` → analytics
+- `reset-collections` / `seed-sample-data` → tenant tooling
+
+StockMovement stays a direct model in `lib/stock.ts` until the sales core. TenantEcommerceIntegration also stays direct: the schema puts it in `billing.ts`, but domain 3 did not cover it. It should move with whichever domain next touches the e-commerce code.
+
+**Catalog rules:**
+- **`ProductFilter` is a structured filter** (ids, active flags, case-insensitive name/code/search, missing barcode/image, expiry range, and so on). String matches are always literal: the repository escapes regex input.
+- **Stock changes go through `products.adjustStock(tenantId, id, target, quantity, { allowNegative, tx })`.** It is one atomic conditional increment on the master stock, a variation (by id), an existing branch entry, or a new branch entry. It returns null when the condition fails. `lib/stock.ts` picks the target and explains a failure with a fresh read.
+- **`createMany` and `upsertManyByVariant` never throw for rejected rows.** They return the ids that were stored, or the indexes that failed, so `sync-catalog` keeps linking the rest.
+- **`DuplicateKeyError.field` skips the tenant key.** Tenant-scoped unique indexes such as `{ tenantId, sku }` now report `sku`, not `tenantId`. Before this, the products POST and import routes could not tell a barcode duplicate from a SKU duplicate.
+- **Aggregation pipelines are not cast by Mongoose.** Ids from repositories are hex strings, so code that puts one into an `aggregate` `$match` must wrap it in `new mongoose.Types.ObjectId(...)`. predictive-stock and product-performance do this.
+
+**Accepted behavior differences:**
+- **Product PUT and PATCH write only what changed.** A no-op skips the write (no `updatedAt` bump), and an explicit `null` clears the field. PATCH now runs field validators.
+- **Bundle and tax-rule writes go through load-and-save.** A missing bundle on PUT/DELETE returns 404 after the body is parsed, so a bad body on a missing id gives 400. The bundle PUT audit has no `__v`.
+- **Bundle analytics lists bundles newest first**; before, the order was undefined.
+- **The services route search is regex-escaped**; before, it was a raw regex.
+- **Stock transfer.** stock-transfer moved stock with a read-modify-`save()`. It now makes two atomic increments in one `runInTransaction`. The old `findById` was not tenant-scoped; the new calls are.
+- **Responses are plain objects** (PUT/PATCH/pin/refill): no `__v`.
+
+**What the Postgres implementation must also do (Phase 4):**
+- **Enforce the negative-stock rule on create** (the Product pre-validate hook): stock, variation stock and branch stock may be negative only with `allowOutOfStockSales`. `adjustStock` already enforces it with a `WHERE stock >= -quantity` guard.
+- **Assign variation ids on create and update**, as the Mongo repository does, so ids match across drivers.
+- **`adjustStock` with `newBranch`** becomes `INSERT … ON CONFLICT DO NOTHING RETURNING` into `product_branch_stock`, at the next `position`.
+- **Call `invalidateTaxRulesCache()`** after every tax-rule write. Today the model hooks do this.
+- **Keep the bundle "at least one item" validator.**
+- **Report camelCase field names in `DuplicateKeyError.field`.** Postgres reports column names (`external_variant_id`), but callers compare against the API names.
+
+**Existing bugs found (not changed):**
+- **stock-transfer records no stock movements.** It writes StockMovement types `'transfer-out'`/`'transfer-in'`, but the enum only allows `'transfer'`. The stock moves, then the movement insert throws and the transfer is counted as a failure. The movements also lack `previousStock`/`newStock`.
+- **dynamic-pricing doesn't compound rules.** Each rule recomputes the price from the base price, so the last matching rule wins.
+- **multi-branch-sync's product loop does nothing.** It only increments a counter.
+- **scan-update computes the stock correction from master stock only,** which is wrong for products with variations or branch stock.
+- **Bundle POST rejects a price of 0** (`!price`), although the schema allows it.
+
+**Domain 5 (customers and CRM), done.** It covers customers, on-account balance payments, loyalty point transactions and marketing campaigns. The repositories are `customers`, `balancePayments`, `loyaltyTransactions` and `campaigns` (`lib/db/crm.ts`). The converted code is:
+- `lib/auth-customer.ts`, the customer OTP login, and the customer-welcome, customer-lifetime-value and loyalty-milestones automations
+- the customers (list, detail, profile, balance payments), loyalty (adjust, history, stats) and CRM (segments, campaigns, send) routes
+- the customer lookups in the bookings and invoices routes, the Shopify customer push, and the customer auto-link in `lib/ecommerce/import-channel-order.ts`
+
+These still import the models directly and are deferred (listed in the boundary test):
+- `app/api/transactions/route.ts` (loyalty earn/redeem, on-account charges) and `transactions/[id]/refund` → sales core
+- `reset-collections` / `seed-sample-data` → tenant tooling
+
+**CRM rules:**
+- **`CustomerFilter` is a structured filter** (ids, active flags, literal name/email/phone search, contact present, minimum points). The repository lowercases and trims the email it matches on.
+- **`customers.update` loads and saves**, so the trim/lowercase setters and validators run. `null` clears a field, which is what assigning `undefined` to the document did.
+- **Account balance changes are atomic increments** (`adjustAccountBalance`). A balance payment, and its decrement, run in one `runInTransaction`.
+- **`campaigns.claimForSending`** is the atomic draft/failed → sent claim that stops two concurrent sends from both delivering.
+- **Aggregates cast ids themselves**: `customers.loyaltyStats` builds the `ObjectId`.
+
+**Accepted behavior differences:**
+- **Customer lookups are tenant-scoped everywhere.** `lib/auth-customer.ts`, the bookings route and the customer-welcome automation used an unscoped `findById` (auth then compared the tenant). They now look the customer up within the token's or caller's tenant. The result is the same for valid requests.
+- **Customer PATCH/DELETE and the CLV automation write only what changed.** A no-op doesn't bump `updatedAt`, and the CLV update now runs validators.
+- **Loyalty adjust writes its audit log after the transaction.** Before, an audit failure after the commit tried to abort an already-committed transaction.
+- **The balance-payment duplicate check uses `DuplicateKeyError.field`** instead of matching `idempotencyKey` in the error message.
+- **The CRM segments list is newest first**; before, the order was undefined.
+
+**What the Postgres implementation must also do (Phase 4):**
+- **Apply the Customer setters** (trim; lowercase email) and the email-format and non-negative balance/points validators.
+- **Keep `customers.addresses` as JSONB** with the `isDefault: false` default per item.
+- **Report `email` / `idempotencyKey` in `DuplicateKeyError.field`** (camelCase API names, not column names).
+
+**Existing bugs found (not changed):**
+- **The customer-lifetime-value automation computes the wrong totals.** It matches a customer's transactions by an unescaped regex of their email in the transaction notes. For customers without an email the condition is `{}`, so they get the whole tenant's sales as `totalSpent`.
+- **Loyalty adjust can lose concurrent adjustments.** It reads the balance, then writes an absolute value. Two adjustments at the same time can overwrite each other.
+
+**Domain 6 (operations), done.** It covers bookings, recurring booking templates, attendance, cash drawer sessions and Z-Readings. The repositories are `bookings`, `recurringBookingTemplates`, `attendance`, `cashDrawerSessions` and `zReadings` (`lib/db/operations.ts`). The converted code is:
+- the bookings, booking, attendance, cash-drawer and Z-Reading routes, and the attendance and cash counts in `automations/status`
+- the booking-confirmations, booking-no-show, booking-reminders, recurring-bookings, attendance-auto-clockout, attendance-violations, break-detection, cash-count-reminders, cash-drawer-closure and suspicious-activity automations
+
+These still import the models directly and are deferred (listed in the boundary test):
+- `lib/analytics.ts` (CashDrawerSession) → analytics
+- `reset-collections` (Booking, Attendance, CashDrawerSession) → tenant tooling
+
+**Operations rules:**
+- **`BookingFilter` and `AttendanceFilter` are structured filters.** `overlaps: { start, end }` is the shared conflict check. `customerContact` matches one customer's bookings by the email or phone that is actually set.
+- **Writes that need model logic load and save.** `bookings.create`/`update` compute `endTime` and `staffName` and re-check staff overlap, and `attendance.update` computes `totalHours`. `bookings.updateMany` and `attendance.updateEach` are flag and field writes that skip that logic, as the old `updateMany`/`bulkWrite` calls did.
+- **Guards live in the batch methods.** `attendance.updateEach` takes `ifOpen`, and `cashDrawerSessions.close`/`closeEach` only match open sessions, so an automation can't overwrite a manual clock-out or close.
+- **Z-Readings are insert-only.** The repository has no update.
+- **System-health counts take `null` for every tenant** (`countOpen(null)`), like `statusCounts(null, …)`.
+
+**Bug found and fixed while converting:**
+- **The customer portal showed other customers' bookings.** `GET /api/bookings/customer/[customerId]` matched `{ customerEmail: customer.email }` or `{ customerPhone: customer.phone }`. A missing value reaches Mongo as `null`, which matches every booking without that field. A phone-only customer (every OTP signup) therefore received all of the tenant's bookings that have no email, with those customers' names and contact details. `customerContact` now compares only the values that are set. Whether this exposure needs follow-up is a product decision.
+
+**Accepted behavior differences:**
+- **Booking transactions use `runInTransaction`** instead of `session.withTransaction`. On a standalone dev Mongo they now run without a transaction instead of failing.
+- **Flag writes are tenant-scoped.** `reminderSent`/`confirmationSent` writes used an unscoped `findByIdAndUpdate`.
+- **Booking PUT reloads the booking inside the transaction** before applying the change. A no-op doesn't bump `updatedAt`, and an explicit `null` clears a field.
+- **Cash drawer and clock-in/out responses are plain objects**: no `__v`.
+- **Attendance lists are always newest first**; the automations' order was undefined before.
+
+**What the Postgres implementation must also do (Phase 4):**
+- **Move the Booking pre-save logic into the repository:** `endTime = startTime + duration`, `endTime > startTime`, `staffName` from the user, and lowercase/trim on `customerEmail`. The overlap exclusion constraint must surface as the same `Staff member has an overlapping booking during this time` error.
+- **Compute `totalHours` on save** (hours worked minus the break, 2 decimals) in `attendance.update` only, not in `updateEach`.
+- **Translate the partial unique indexes to `DuplicateKeyError`:** one open attendance session per user, one open drawer per tenant, one Z-Reading per day (`NULLS NOT DISTINCT` on `branch_id`).
+- **`customerContact` needs no special handling:** `= NULL` matches nothing in SQL. Just skip unset values.
+
+**Existing bugs found (not changed):**
+- **Auto clock-out ignores breaks.** `attendance-auto-clockout` computes `totalHours` as clock-out minus clock-in, without subtracting the break, unlike a manual clock-out.
+- **`POST /api/booking` can double-book when no staff member is chosen.** It checks for conflicts outside a transaction, and the model's overlap re-check only runs with a `staffId`.
+- **`attendance/notifications` crashes on a deleted user.** `typeof session.userId === 'object'` is also true for `null`, so reading `.email` throws.
+
+**Domain 7 (sales core), done.** It covers transactions, payments, invoices, offline transactions, saved carts, POS sessions, stock movements, prescriptions, e-commerce integrations and the number counters. The repositories are `transactions`, `payments`, `invoices`, `offlineTransactions`, `savedCarts`, `posSessions`, `stockMovements`, `prescriptions`, `ecommerceIntegrations` and `counters` (`lib/db/sales.ts`). The converted code is:
+- checkout (`POST /api/transactions`) and refunds, which no longer import any model or open a Mongo session
+- `lib/stock.ts`, `lib/receipt.ts`, `lib/customer-credit.ts`, `lib/bir-readings.ts`
+- the transactions, payments, invoices, prescriptions, saved-carts, POS session, stock-movements and sales report routes
+- the e-commerce integration routes, webhooks and `lib/ecommerce/*`, including TenantEcommerceIntegration, which domain 4 left out
+- the offline-sync, transaction-receipts and subscription-billing automations, and the non-aggregate reads in the others
+
+These still import the models directly and are deferred (listed in the boundary test):
+- every `Transaction.aggregate` / `StockMovement.aggregate` call site → analytics
+- `lib/automations/data-archiving.ts` → audit
+- `lib/automations/stock-transfer.ts` (StockMovement) → waits for the stock-transfer bug under domain 4. Its `transfer-out` / `transfer-in` movements can't pass a typed repository.
+- `lib/transaction-indexes.ts` → Mongo index maintenance, removed with Mongoose
+- `reset-collections` → tenant tooling
+
+`getStockMovements` in `lib/stock.ts` was deleted: it had no callers.
+
+**Sales rules:**
+- **`...WithRefs` and `findDetail` are the populated reads.** Each has a fixed populate set, so the plain methods always return ids. In Postgres these become joins.
+- **Atomic claims stay single conditional writes:** `transactions.claimStatus`, `payments.markRefunded`, `offlineTransactions.claimForSync`, `discounts.claimUsage`. A null result means another request won.
+- **`claimStatus` with `from === to` is still a write.** A partial refund relies on it to serialize against other refunds of the same transaction.
+- **`prescriptions.dispenseItems` runs first in the transaction**, before any stock change. It reads inside the transaction, so a retried attempt sees the current state.
+- **`getOnAccountTotalForTransaction` takes no `tx`, on purpose.** The refund has already marked the original payment refunded, and the total counts completed payments, so a read inside the transaction would no longer count that payment.
+- **`isTransactional(tx)` replaces `if (!session)`.** It is false when `runInTransaction` fell back to no transaction, so checkout keeps the movement records of stock it already deducted.
+- **`newId()` and `isValidId()` (`lib/db/ids.ts`)** replace `mongoose.Types.ObjectId` in routes.
+- **POS sessions are keyed by the tenant slug** the display client sends, and the route stays public. `null` is a stored value there, so `PosSessionFields` is not a `Patch`.
+- **`ecommerceIntegrations.update` is keyed by tenant and provider**, which the unique index makes equivalent to the row id.
+- **An empty date range matches nothing.** `createdAt: {}` reaches Mongo as an empty match on the field, so set `createdAt` only when it has a bound.
+
+**Bugs found and fixed while converting:**
+- **A transaction retry could deduct prescription stock twice.** The dispense route changed a document loaded outside the transaction, so a retried attempt still saw its items as undispensed. `dispenseItems` now reads inside the transaction, and a conflict returns 409.
+- **`transaction-receipts` passed a populated tenant object as an id** (`"[object Object]"`), the bug noted under domain 2. It now uses the tenant id string. **This turns on receipt emails that were never sent before; see the decision below.**
+
+**Needs a product decision before this reaches production:**
+- **Fixing `transaction-receipts` starts sending customer emails, and they will repeat.** Before the fix the tenant lookup failed, so no receipt was ever sent. Now the job emails any completed sale with an address in `customerEmail` or in notes matching `email: …`, for tenants with `emailNotifications` on. Nothing records that a receipt was sent. `lib/cron.ts` runs every 6 hours over a 24-hour window, so a self-hosted install emails each customer up to 4 times per sale. The daily Vercel job can overlap slightly. The notes regex also accepts free text: "email me later" sends to `me`. The batch takes the 100 newest sales across all tenants, so busy tenants can crowd out the rest. Options: add a `receiptSentAt` guard first, or keep the job disabled until then.
+
+**Accepted behavior differences:**
+- **Dispense and channel-order imports use `runInTransaction`.** On a standalone dev Mongo they now run without a transaction instead of failing, so a failure partway through stays applied there. A transient conflict is now retried up to 3 times, and each channel-import retry uses up a receipt number, which can leave a gap.
+- **Channel-import duplicate detection is exact.** Only a real duplicate-key error counts. Before, any error message containing "duplicate" did.
+- **Tenant-scoped writes.** `releaseUsage` and the checkout and refund customer writes used a bare `_id`.
+- **The idempotency race check uses `DuplicateKeyError.field`** instead of matching the error message.
+- **Freeing a table after a dine-in sale loads and saves,** so validators run. A failure there is still only logged.
+- **The original payment is refunded through `markRefunded`** instead of `save()`.
+- **Invoice PATCH and prescription PUT/DELETE write only what changed.** A no-op doesn't bump `updatedAt`, an explicit `null` clears a field, and a row deleted between the read and the write returns 404.
+- **`offline-sync` and `transaction-receipts` report a connection failure as `{ success: false }`** instead of rejecting, because the connection now happens inside their `try`.
+- **Responses are plain objects:** no `__v`.
+
+**What the Postgres implementation must also do (Phase 4):**
+- **Decide how bundle lines are stored, before writing this domain.** See "Existing-data findings".
+- **Apply the setters and validators:** uppercase and trim on `discountCode` (transactions, offline, saved carts), trim on the text fields, the minimums on amounts and quantities, the enums, and "at least one item" on prescriptions.
+- **Keep only known fields on line items.** Checkout passes `bundleId`, `taxExempt`, `zeroRated` and `categoryId`, which Mongoose's strict mode drops.
+- **Write child rows in the same transaction** at their array `position`: transaction items and split payments, invoice items, saved cart items, prescription items.
+- **`dispenseItems` needs `SELECT … FOR UPDATE`** on the prescription.
+- **Extend `isTransactional`** to return true for Postgres transactions.
+- **Report `receiptNumber`, `idempotencyKey`, `channelSyncKey` and `prescriptionNumber` in `DuplicateKeyError.field`** (camelCase API names).
+- **Call `invalidateTenantCache()`** after every e-commerce integration write. Today the model hooks do this.
+- **Keep `addToGrandTotals` out of the tenant cache flush**, like the other counter-only updates.
+- **Replace `$text` with the `tsvector` column** for the prescription search.
+- **TTL cleanup covers** POS sessions (1 hour idle), soft-deleted saved carts (90 days) and synced offline transactions (30 days).
+
+**Existing bugs found (not changed):**
+
+Sales and refunds:
+- **A void changes nothing but the status.** `PUT /api/transactions/[id]` with `cancelled` doesn't restore stock, reverse loyalty points or credit an on-account balance.
+- **A refund doesn't reverse loyalty points.** The customer keeps the points earned and doesn't get back the points redeemed.
+- **Refunded stock goes to the wrong place.** The refund passes no `branchId` or variation, so stock from a branch or variation sale returns to the master stock. Transaction items don't store the variation, so it can't be recovered.
+- **A second partial refund always fails.** Every refund of a transaction uses the receipt number `REF-<receipt>`, so the second one breaks the unique index and returns a raw 400.
+- **A partial refund marks the whole payment refunded,** and a refund of a split-payment sale marks only one of its payments.
+- **Bundle sales can't be refunded properly.** The line holds the bundle id, no product matches it, and no stock is restored.
+- **A transaction with a manual line can't be refunded.** `item.product` is unset, so the route throws and returns a 400 with a raw error message.
+- **Checkout's loyalty balance can go wrong under concurrency.** It reads the balance before the transaction, then writes an absolute value, so two sales for one customer can lose points or redeem the same points twice.
+- **`currentOrderId` is never cleared after a dine-in sale.** `undefined` means "leave", as it did in the old `findOneAndUpdate`.
+
+Reports:
+- **The customer profile stats are probably always empty.** Both aggregates in `customers/[id]/profile` match a string `tenantId` against an ObjectId, and aggregates aren't cast. Not confirmed against a live database. Fix with the analytics domain.
+- **Bundle analytics always shows 0.** The route reads `items[].bundleId`, which the schema drops on save.
+- **X and Z readings use server-local midnight,** not the tenant's timezone, so in production (UTC) they cover a different day than the `cas` and `sales-journal` reports.
+
+Permissions:
+- **Several routes have no permission check**, only authentication: `POST /api/invoices/from-transaction` (`POST /api/invoices` requires `invoices.manage`), `GET`/`POST /api/payments`, `GET /api/prescriptions`, `inventory/realtime`, and the Shopify `gift-cards/debit` and `validate` routes. Some may be intended for cashiers.
+
+Prescriptions, invoices and carts:
+- **Dispense accepts repeated indexes.** `itemIndexes: [0, 0]` passes validation and deducts stock twice.
+- **Prescription numbers can collide.** The next number comes from a read of the last one, so two concurrent creates can pick the same number and one fails.
+- **`POST /api/invoices` rejects a zero-tax invoice.** `!taxAmount` and `!subtotal` treat 0 as missing.
+- **`POST /api/payments` rejects `on_account`,** which the Payment enum allows.
+- **`GET /api/saved-carts/[id]` returns a soft-deleted cart.**
+- **`inventory/realtime` can skip movements.** It reads the newest 500 per tick, and `lastCheck` jumps to the newest one, so older movements in a larger burst are never sent.
+
+Offline sync (effectively dead code: the client posts to `/api/transactions` through `lib/sync-service.ts`, and no server code creates OfflineTransaction rows):
+- **It never touches stock.**
+- **The sale gets the sync time as `createdAt`,** not `offlineCreatedAt`.
+- **A crash after `claimForSync` strands the row** in `processing`, and a failed `markSynced` creates a duplicate transaction on the retry.
+
+E-commerce:
+- **`lastError` is never cleared** on reconnecting or on a successful catalog sync. `undefined` means "leave", as it did before, so a stale error stays in the status route.
+- **A receipt-number collision during an import is reported as a duplicate order,** so that order is dropped.
+- **`inventory-push` can refresh a Shopify token several times in parallel** with the same refresh token.
+- **`gift-cards/debit` consumes its idempotency key before the debit,** so a failed attempt blocks retries for 24 hours. The key is also stored per instance.
+- **`restockShopifyRefund` has no dedupe,** so a redelivered webhook restocks twice.
+- **`shopDomain` isn't unique across tenants.** If two tenants connect one shop, webhooks go to whichever row is found first.
+
+**Domain 8 (audit), done.** It covers audit logs and their archive, super-admin actions, uploaded file records and long-term data archiving. The repositories are `auditLogs`, `superAdminActions`, `files` and `dataArchive` (`lib/db/audit.ts`). The converted code is:
+- `createAuditLog` in `lib/audit.ts`
+- the audit-logs (list, export), super-admin logs and admin-logs routes, and every `SuperAdminAction` writer
+- `POST`/`GET`/`DELETE /api/upload`
+- the audit-log-cleanup, data-archiving and session-expiration automations, and the failed-login count in suspicious-activity
+
+`reset-collections` (AuditLog) stays direct, as tenant tooling. Every model now has a repository, apart from the deferred call sites in the boundary test.
+
+**Audit rules:**
+- **`tenantId: null` means every tenant,** like `statusCounts(null, …)`. Only the super-admin views and the retention job pass it.
+- **Audit writes never join a caller's transaction,** so a failed sale keeps its trail.
+- **`retireBatch` moves one batch and can be retried.** The copy finishes before the delete starts, and a log already in the archive is kept, so a retry can't duplicate it.
+- **`listForExport` merges the archive and live logs,** oldest first. In Postgres this is a `UNION ALL`.
+
+**Accepted behavior differences:**
+- **Super-admin action search is literal.** The `action` filter on both log views was a raw regex, so an invalid pattern returned a 500, and a slow pattern ran on the database. A search for `a.b` now only matches that text.
+- **Deleting another tenant's file returns 404** instead of 403, like the address routes. The lookup is tenant-scoped.
+- **`createAuditLog` takes a string `tenantId`.** The tenant tooling routes convert their ObjectId.
+- **The automations connect through the repositories,** so a connection failure in cleanup is now reported as `{ success: false }` instead of rejecting.
+
+**Needs a product decision (data loss risk):**
+- **Self-hosted installs remove sales older than 2 years from the app.** `lib/cron.ts` calls `archiveOldData({ archiveYears: 2 })` every Sunday. The job's own default is 10 years, with the comment that BIR requires 10-year retention. Vercel's job passes nothing, so it uses 10. Archived sales move to `transactions_archive`, which **no code reads**, so they disappear from every report, customer history, refund and BIR journal, and nothing restores them. Check what self-hosted installs have already moved. The fix is likely removing `archiveYears: 2`, but whether archived rows must stay reachable is a compliance question.
+
+**What the Postgres implementation must also do (Phase 4):**
+- **Add a table for `dataArchive`.** The schema has no `transactions_archive`. It needs the sale's child rows too (items, split payments), or a decision to drop the job.
+- **Allowlist the `collection` argument.** `POST`/`GET /api/automations/data/archive` pass it straight from the request. Behind the cron secret today, but in SQL it would be a table name.
+- **`retireBatch` becomes one transaction:** `INSERT INTO archived_audit_logs … ON CONFLICT DO NOTHING`, then `DELETE`. `archived_audit_logs.created_at` keeps the original value.
+- **`actionContains` uses `ILIKE` with `%` and `_` escaped.**
+- **`metadata.success` is a JSONB read** in `failedLoginCounts`. An expression index may be needed if it gets slow.
+- **`audit_logs.user_id` has a foreign key.** `userId` can name a super-admin or a deleted user, so a failed insert must not lose the entry silently.
+- **Replace the remaining raw Mongo access.** These don't go through repositories and would break under `DB_DRIVER=postgres`: `app/api/health`, `app/api/super-admin/system/health` and `lib/automations/database-backups.ts` (with its restore route). `lib/transaction-indexes.ts` goes away with Mongoose.
+
+**Existing bugs found (not changed):**
+- **`data-archiving` isn't atomic.** A crash between the copy and the delete leaves rows in both places, and the next run then fails on the duplicate `_id` for that tenant, every time.
+- **Any signed-in user can delete any of the tenant's files.** `DELETE /api/upload` checks authentication only, with no role or permission.
+- **A file is removed from Cloudinary before its record,** so a failed record delete leaves a row pointing at nothing.
+- **Audit entries with no tenant go to the tenant with slug `default`.** An API route without tenant info logs there, so another tenant's event can appear in that tenant's log.
+- **`ipAddress` trusts `x-forwarded-for` as sent.** It can hold a client-supplied value or a whole proxy chain, which weakens the audit trail.
+- **Session expiration only counts.** `expireInactiveSessions` reports expired users but can't revoke anything, although token revocation now exists.
+
 ## Existing-data findings (handle in the data copy, Phase 5)
 
 - **Product variations are probably broken in production today.** In Product, ProductBundle, ProductChannelListing and StockMovement, `variation(s): { size, color, type: String }` is read by Mongoose as "this path is a String", because `type` is Mongoose's type-declaration key. Mongoose then rejects variation objects. Tested: `Cast to [string] failed`. The Postgres schema uses the intended `{size, color, type}` shape. The data copy must check what is actually stored: likely empty arrays, or strings.
+- **Bundle lines break the `transaction_items` foreign key.** Checkout stores the bundle's id in `items[].product`, and refunds copy it, but `transaction_items.product_id` references `products`. Every existing bundle line would fail the data copy, and every new bundle sale would fail in Postgres. The schema needs a decision before Phase 4: add a nullable `bundle_id` column and route bundle lines to it, or drop the foreign key.
 - **Defaults become NOT NULL.** Many fields that Mongoose gave defaults are `NOT NULL DEFAULT …` in Postgres. Older documents missing them get the default during the copy.
 - **Old documents may break the new CHECK constraints** (email format, non-negative amounts, percentages ≤ 100). Mongoose only validates on `save()`, not on most updates, so the copy must report and fix these rows.
 - **New uniqueness rules:** `product_branch_stock` allows one row per (product, branch), and the booking constraint rejects overlapping bookings. Existing duplicates and overlaps must be found before loading.

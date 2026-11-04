@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import User from '@/models/User';
+import { getRepos } from '@/lib/db';
 import { validatePassword } from '@/lib/validation';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { requireAuth } from '@/lib/auth';
-import bcrypt from 'bcryptjs';
 
 /**
  * POST /api/auth/change-password
@@ -15,7 +13,6 @@ import bcrypt from 'bcryptjs';
 export async function POST(request: NextRequest) {
   let t: (key: string, fallback: string) => string;
   try {
-    await connectDB();
     t = await getValidationTranslatorFromRequest(request);
 
     const currentUser = await requireAuth(request);
@@ -37,7 +34,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const user = await User.findById(currentUser.userId).select('+password');
+    const { users } = getRepos();
+    const user = await users.findByIdForLogin(currentUser.userId);
     if (!user) {
       return NextResponse.json(
         { success: false, error: t('validation.userNotFound', 'User not found') },
@@ -46,7 +44,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify current password
-    const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.password);
+    const isCurrentPasswordValid = await users.verifyPassword(user, currentPassword);
     if (!isCurrentPasswordValid) {
       return NextResponse.json(
         { success: false, error: t('validation.currentPasswordIncorrect', 'Current password is incorrect') },
@@ -55,7 +53,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Prevent reusing the same password
-    const isSamePassword = await bcrypt.compare(newPassword, user.password);
+    const isSamePassword = await users.verifyPassword(user, newPassword);
     if (isSamePassword) {
       return NextResponse.json(
         { success: false, error: t('validation.passwordMustDiffer', 'New password must be different from current password') },
@@ -63,9 +61,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Update password (pre-save hook will hash it)
-    user.password = newPassword;
-    await user.save();
+    // Update password (the repository hashes it)
+    await users.update(currentUser.userId, { password: newPassword });
 
     await createAuditLog(request, {
       tenantId: currentUser.tenantId,

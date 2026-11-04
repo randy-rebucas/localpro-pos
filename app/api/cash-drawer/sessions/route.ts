@@ -1,18 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import CashDrawerSession from '@/models/CashDrawerSession';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
-import Transaction from '@/models/Transaction';
-import Expense from '@/models/Expense';
+import { getRepos, isDuplicateKeyError, type CashDrawerSession } from '@/lib/db';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const t = await getValidationTranslatorFromRequest(request);
@@ -31,18 +27,12 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '50', 10)));
     const skip = (page - 1) * limit;
 
-    const query: Record<string, unknown> = { tenantId };
-    if (status) {
-      query.status = status;
-    }
+    const query = status ? { status: status as CashDrawerSession['status'] } : {};
 
+    const { cashDrawerSessions } = getRepos();
     const [sessions, total] = await Promise.all([
-      CashDrawerSession.find(query)
-        .populate('userId', 'name email')
-        .sort({ openingTime: -1 })
-        .skip(skip)
-        .limit(limit),
-      CashDrawerSession.countDocuments(query),
+      cashDrawerSessions.list(tenantId, query, { populateUser: true, page: { skip, limit } }),
+      cashDrawerSessions.count(tenantId, query),
     ]);
 
     return NextResponse.json({
@@ -59,7 +49,6 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const t = await getValidationTranslatorFromRequest(request);
@@ -85,7 +74,8 @@ export async function POST(request: NextRequest) {
       // Atomic check-and-create: prevent race condition where two requests
       // both pass the "no open session" check simultaneously.
       // findOneAndUpdate with upsert + unique index on {tenantId, status: 'open'} ensures only one.
-      const existing = await CashDrawerSession.findOne({ tenantId, status: 'open' });
+      const { cashDrawerSessions } = getRepos();
+      const existing = await cashDrawerSessions.findOpen(tenantId);
       if (existing) {
         return NextResponse.json(
           { success: false, error: t('validation.cashDrawerAlreadyOpen', 'There is already an open cash drawer session') },
@@ -95,17 +85,15 @@ export async function POST(request: NextRequest) {
 
       let session;
       try {
-        session = await CashDrawerSession.create({
-          tenantId,
+        session = await cashDrawerSessions.open(tenantId, {
           userId: user.userId,
           openingAmount: roundedAmount,
           openingTime: new Date(),
-          status: 'open',
           notes: notes || undefined,
         });
       } catch (err: unknown) {
-        // Duplicate key error (11000) means another request created a session between check and create
-        if (err instanceof Error && 'code' in err && (err as { code: number }).code === 11000) {
+        // A duplicate key means another request created a session between check and create
+        if (isDuplicateKeyError(err)) {
           return NextResponse.json(
             { success: false, error: t('validation.cashDrawerAlreadyOpen', 'There is already an open cash drawer session') },
             { status: 400 }
@@ -119,7 +107,7 @@ export async function POST(request: NextRequest) {
         userId: user.userId,
         action: AuditActions.CREATE,
         entityType: 'cashDrawerSession',
-        entityId: session._id.toString(),
+        entityId: session._id,
         changes: { action: 'open', openingAmount: roundedAmount },
       });
 
@@ -137,17 +125,14 @@ export async function POST(request: NextRequest) {
       const actualClosingAmount = Math.round(amount * 100) / 100;
 
       // Find open session — prefer current user's session
-      let openSession = await CashDrawerSession.findOne({
-        tenantId,
-        userId: user.userId,
-        status: 'open',
-      });
+      const { cashDrawerSessions } = getRepos();
+      let openSession = await cashDrawerSessions.findOpen(tenantId, { userId: user.userId });
       // Fallback: any open session (for managers closing another cashier's drawer)
       if (!openSession) {
         if (!(await hasTenantPermission(user.role, tenantId, 'cash_drawer.close'))) {
           return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
         }
-        openSession = await CashDrawerSession.findOne({ tenantId, status: 'open' });
+        openSession = await cashDrawerSessions.findOpen(tenantId);
       }
 
       if (!openSession) {
@@ -159,21 +144,20 @@ export async function POST(request: NextRequest) {
 
       // Calculate expected amount — filter by the session's userId to avoid mixing cashiers
       const sessionEnd = new Date();
-      const sessionUserId = openSession.userId.toString();
+      const sessionUserId = openSession.userId;
 
       const [cashTransactions, cashExpenses] = await Promise.all([
-        Transaction.find({
+        getRepos().transactions.list(
           tenantId,
-          userId: sessionUserId,
-          paymentMethod: 'cash',
-          createdAt: { $gte: openSession.openingTime, $lte: sessionEnd },
-          status: 'completed',
-        }).select('total taxAmount discountAmount').lean(),
-        Expense.find({
-          tenantId,
-          paymentMethod: 'cash',
-          date: { $gte: openSession.openingTime, $lte: sessionEnd },
-        }).select('amount').lean(),
+          {
+            userId: sessionUserId,
+            paymentMethod: 'cash',
+            createdAt: { gte: openSession.openingTime, lte: sessionEnd },
+            status: 'completed',
+          },
+          { select: 'total taxAmount discountAmount' }
+        ),
+        getRepos().expenses.listCashBetween(tenantId, openSession.openingTime, sessionEnd),
       ]);
 
       // Use integer math (cents) to avoid floating point errors
@@ -193,23 +177,16 @@ export async function POST(request: NextRequest) {
 
       // Atomic claim: guards against a double-click/retry closing the same
       // session twice before either write lands (findOne above is not atomic).
-      const closedSession = await CashDrawerSession.findOneAndUpdate(
-        { _id: openSession._id, tenantId, status: 'open' },
-        {
-          $set: {
-            closingAmount: actualClosingAmount,
-            expectedAmount,
-            shortage,
-            overage,
-            closingTime: sessionEnd,
-            status: 'closed',
-            totalVAT: totalVATCents / 100,
-            totalDiscounts: totalDiscountsCents / 100,
-            ...(notes ? { notes } : {}),
-          },
-        },
-        { new: true }
-      );
+      const closedSession = await cashDrawerSessions.close(tenantId, openSession._id, {
+        closingAmount: actualClosingAmount,
+        expectedAmount,
+        shortage,
+        overage,
+        closingTime: sessionEnd,
+        totalVAT: totalVATCents / 100,
+        totalDiscounts: totalDiscountsCents / 100,
+        ...(notes ? { notes } : {}),
+      });
 
       if (!closedSession) {
         return NextResponse.json(
@@ -224,7 +201,7 @@ export async function POST(request: NextRequest) {
         userId: user.userId,
         action: AuditActions.UPDATE,
         entityType: 'cashDrawerSession',
-        entityId: openSession._id.toString(),
+        entityId: openSession._id,
         changes: {
           action: 'close',
           closingAmount: actualClosingAmount,

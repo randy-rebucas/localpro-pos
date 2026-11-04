@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import ProductBundle from '@/models/ProductBundle';
-import '@/models/Category'; // register schema for populate
+import { getRepos, isDuplicateKeyError, type BundleFilter } from '@/lib/db';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
@@ -11,7 +9,6 @@ import { logger } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const t = await getValidationTranslatorFromRequest(request);
@@ -29,41 +26,32 @@ export async function GET(request: NextRequest) {
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
 
-    const query: any = { tenantId }; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const filter: BundleFilter = {};
     if (search) {
-      const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      query.$or = [
-        { name: { $regex: escapedSearch, $options: 'i' } },
-        { description: { $regex: escapedSearch, $options: 'i' } },
-        { sku: { $regex: escapedSearch, $options: 'i' } },
-      ];
+      filter.search = search;
     }
     if (isActive !== null && isActive !== '') {
-      query.isActive = isActive === 'true';
+      filter.isActive = isActive === 'true';
     }
     if (categoryId) {
-      query.categoryId = categoryId;
+      filter.categoryId = categoryId;
     }
     if (minPrice || maxPrice) {
-      query.price = {};
-      if (minPrice) query.price.$gte = parseFloat(minPrice);
-      if (maxPrice) query.price.$lte = parseFloat(maxPrice);
+      filter.price = {};
+      if (minPrice) filter.price.gte = parseFloat(minPrice);
+      if (maxPrice) filter.price.lte = parseFloat(maxPrice);
     }
     if (startDate || endDate) {
-      query.createdAt = {};
-      if (startDate) query.createdAt.$gte = new Date(startDate);
+      filter.createdAt = {};
+      if (startDate) filter.createdAt.gte = new Date(startDate);
       if (endDate) {
         const end = new Date(endDate);
         end.setHours(23, 59, 59, 999);
-        query.createdAt.$lte = end;
+        filter.createdAt.lte = end;
       }
     }
 
-    const bundles = await ProductBundle.find(query)
-      .populate('items.productId', 'name price stock')
-      .populate('categoryId', 'name')
-      .sort({ createdAt: -1 })
-      .lean();
+    const bundles = await getRepos().bundles.list(tenantId, filter, { populate: true });
 
     return NextResponse.json({ success: true, data: bundles });
   } catch (_error: unknown) {
@@ -74,7 +62,6 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const t = await getValidationTranslatorFromRequest(request);
@@ -97,8 +84,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const bundle = await ProductBundle.create({
-      tenantId,
+    const bundle = await getRepos().bundles.create(tenantId, {
       name,
       description,
       price,
@@ -114,14 +100,14 @@ export async function POST(request: NextRequest) {
       tenantId,
       action: AuditActions.CREATE,
       entityType: 'bundle',
-      entityId: bundle._id.toString(),
+      entityId: bundle._id,
       changes: body,
     });
 
     return NextResponse.json({ success: true, data: bundle }, { status: 201 });
   } catch (error: unknown) {
     const t = await getValidationTranslatorFromRequest(request);
-    if ((error as Record<string, unknown>).code === 11000) {
+    if (isDuplicateKeyError(error)) {
       return NextResponse.json(
         { success: false, error: t('validation.bundleSkuExists', 'Bundle with this SKU already exists') },
         { status: 400 }

@@ -5,8 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
+import { getRepos } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -24,14 +23,13 @@ export async function GET(
     }
 
     const { slug } = await params;
-    await connectDB();
 
-    const tenant = await Tenant.findOne({ slug }).lean();
+    const tenant = await getRepos().tenants.findBySlug(slug, { select: 'settings.rolePermissionOverrides' });
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant._id) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
@@ -93,28 +91,27 @@ export async function PUT(
       }
     }
 
-    await connectDB();
-
-    const tenant = await Tenant.findOne({ slug });
+    const tenant = await getRepos().tenants.findBySlug(slug, { select: 'settings.rolePermissionOverrides' });
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant._id) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
     const previous = tenant.settings?.rolePermissionOverrides || {};
-    tenant.settings.rolePermissionOverrides = sanitized;
-    tenant.markModified('settings.rolePermissionOverrides');
-    await tenant.save();
+    const updated = await getRepos().tenants.update(tenant._id, { set: { 'settings.rolePermissionOverrides': sanitized } });
+    if (!updated) {
+      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+    }
 
     await createAuditLog(request, {
       tenantId: tenant._id,
       userId: user.userId,
       action: AuditActions.UPDATE,
       entityType: 'role_permissions',
-      entityId: tenant._id.toString(),
+      entityId: tenant._id,
       changes: { before: previous, after: sanitized },
     });
 

@@ -4,8 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
+import { getRepos } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 import { roleAtLeast } from '@/lib/permissions';
 import { logger } from '@/lib/logger';
@@ -23,20 +22,19 @@ export async function GET(
     }
 
     const { slug } = await params;
-    await connectDB();
 
-    const tenant = await Tenant.findOne({ slug });
+    const tenant = await getRepos().tenants.findBySlug(slug, { select: 'settings.holidays' });
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant._id) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
     return NextResponse.json({
       success: true,
-      data: tenant.settings.holidays || [],
+      data: tenant.settings?.holidays || [],
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     logger.error('Error fetching holidays:', error);
@@ -93,14 +91,12 @@ export async function POST(
       }
     }
 
-    await connectDB();
-
-    const tenant = await Tenant.findOne({ slug });
+    const tenant = await getRepos().tenants.findBySlug(slug, { select: 'settings.holidays' });
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant._id) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
@@ -126,10 +122,7 @@ export async function POST(
     try {
       // Atomic $push avoids clobbering concurrent edits to other holidays
       // (the previous read-modify-write of the whole array + tenant.save() could lose them)
-      await Tenant.updateOne(
-        { _id: tenant._id },
-        { $push: { 'settings.holidays': newHoliday } }
-      );
+      await getRepos().tenants.update(tenant._id, { push: { 'settings.holidays': newHoliday } });
       logger.info('Holiday saved successfully:', newHoliday);
     } catch (saveError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       logger.error('Error saving holiday to database:', saveError);
@@ -185,18 +178,16 @@ export async function PUT(
       return NextResponse.json({ success: false, error: 'Holiday ID is required' }, { status: 400 });
     }
 
-    await connectDB();
-
-    const tenant = await Tenant.findOne({ slug });
+    const tenant = await getRepos().tenants.findBySlug(slug, { select: 'settings.holidays' });
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant._id) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
-    const holidays = tenant.settings.holidays || [];
+    const holidays = tenant.settings?.holidays || [];
     const existing = holidays.find((h: any) => h.id === id); // eslint-disable-line @typescript-eslint/no-explicit-any
 
     if (!existing) {
@@ -208,11 +199,10 @@ export async function PUT(
     try {
       // Positional $set on the matched entry avoids clobbering concurrent edits
       // to other holidays (the previous full-array overwrite + tenant.save() could lose them)
-      const result = await Tenant.updateOne(
-        { _id: tenant._id, 'settings.holidays.id': id },
-        { $set: { 'settings.holidays.$': updatedHoliday } }
-      );
-      if (result.matchedCount === 0) {
+      const result = await getRepos().tenants.update(tenant._id, {
+        setOnItem: { path: 'settings.holidays', id, replace: updatedHoliday },
+      });
+      if (!result) {
         return NextResponse.json({ success: false, error: 'Holiday not found' }, { status: 404 });
       }
       logger.info('Holiday updated successfully:', updatedHoliday);
@@ -270,18 +260,16 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: 'Holiday ID is required' }, { status: 400 });
     }
 
-    await connectDB();
-
-    const tenant = await Tenant.findOne({ slug });
+    const tenant = await getRepos().tenants.findBySlug(slug, { select: 'settings.holidays' });
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant._id) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
-    const holidays = tenant.settings.holidays || [];
+    const holidays = tenant.settings?.holidays || [];
     const stillExists = holidays.some((h: any) => h.id === id); // eslint-disable-line @typescript-eslint/no-explicit-any
 
     if (!stillExists) {
@@ -291,10 +279,7 @@ export async function DELETE(
     try {
       // Atomic $pull avoids clobbering concurrent edits to other holidays
       // (the previous full-array overwrite + tenant.save() could lose them)
-      await Tenant.updateOne(
-        { _id: tenant._id },
-        { $pull: { 'settings.holidays': { id } } }
-      );
+      await getRepos().tenants.update(tenant._id, { pull: { 'settings.holidays': { id } } });
       logger.info('Holiday deleted successfully');
     } catch (saveError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       logger.error('Error saving holiday deletion to database:', saveError);

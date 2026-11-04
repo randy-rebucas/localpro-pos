@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
-import Branch from '@/models/Branch';
+import { getRepos } from '@/lib/db';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
 
@@ -25,40 +23,20 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
     }
 
-    await connectDB();
-
     const searchParams = request.nextUrl.searchParams;
     const search = searchParams.get('search')?.trim() ?? '';
     const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10));
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') ?? '50', 10)));
     const skip = (page - 1) * limit;
 
-    const query: Record<string, unknown> = {
-      isActive: true,
-      'settings.businessType': { $in: ['retail', 'general'] },
-    };
-
-    if (search) {
-      const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      query.name = { $regex: escaped, $options: 'i' };
-    }
-
-    const [tenants, total] = await Promise.all([
-      Tenant.find(query, {
-        slug: 1,
-        name: 1,
-        'settings.businessType': 1,
-        'settings.logo': 1,
-        'settings.phone': 1,
-        'settings.address': 1,
-        'settings.businessName': 1,
-      })
-        .sort({ name: 1 })
-        .skip(skip)
-        .limit(limit)
-        .lean(),
-      Tenant.countDocuments(query),
-    ]);
+    const { items: tenants, total } = await getRepos().tenants.searchRetailStores(
+      { search: search || undefined },
+      { skip, limit },
+      {
+        select:
+          'slug name settings.businessType settings.logo settings.phone settings.address settings.businessName',
+      }
+    );
 
     if (tenants.length === 0) {
       return NextResponse.json({
@@ -69,25 +47,20 @@ export async function GET(request: NextRequest) {
 
     // Fetch all active branches for the matched tenants in one query
     const tenantIds = tenants.map((t) => t._id);
-    const branches = await Branch.find(
-      { tenantId: { $in: tenantIds }, isActive: true },
-      { tenantId: 1, name: 1, address: 1 }
-    )
-      .sort({ name: 1 })
-      .lean();
+    const branches = await getRepos().branches.listActiveAcrossTenants(tenantIds);
 
     // Group branches by tenantId string for quick lookup
     const branchMap = new Map<string, typeof branches>();
     for (const b of branches) {
-      const key = b.tenantId.toString();
+      const key = b.tenantId;
       if (!branchMap.has(key)) branchMap.set(key, []);
       branchMap.get(key)!.push(b);
     }
 
     const stores = tenants.map((t) => {
-      const tenantBranches = branchMap.get(t._id.toString()) ?? [];
+      const tenantBranches = branchMap.get(t._id) ?? [];
       return {
-        id: t._id.toString(),
+        id: t._id,
         name: t.name,
         slug: t.slug,
         businessType: t.settings?.businessType ?? 'general',
@@ -95,9 +68,9 @@ export async function GET(request: NextRequest) {
         phone: t.settings?.phone ?? null,
         address: formatAddress(t.settings?.address),
         branches: tenantBranches.map((b) => ({
-          id: b._id.toString(),
-          branchId: b._id.toString(),
-          tenantId: t._id.toString(),
+          id: b._id,
+          branchId: b._id,
+          tenantId: t._id,
           name: b.name,
           address: formatAddress(b.address),
         })),

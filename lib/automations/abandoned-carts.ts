@@ -5,11 +5,9 @@
 
 import mongoose from 'mongoose';
 import connectDB from '@/lib/mongodb';
-import SavedCart from '@/models/SavedCart';
 import Transaction from '@/models/Transaction';
-import Tenant from '@/models/Tenant';
+import { getRepos, type UserSummary } from '@/lib/db';
 import type { ITenantSettings } from '@/models/Tenant';
-import User from '@/models/User'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { sendEmail } from '@/lib/notifications';
 import { getActiveTenants, type ActiveTenant } from '@/lib/tenant-active-query';
 import { AutomationResult } from './types';
@@ -53,9 +51,7 @@ export async function sendAbandonedCartReminders(
     // Get tenants to process
     let tenants: ActiveTenant[];
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId)
-        .select(`_id slug name ${TENANT_FIELDS}`)
-        .lean<ActiveTenant>();
+      const tenant = (await getRepos().tenants.findById(options.tenantId, { select: `_id slug name ${TENANT_FIELDS}` })) as ActiveTenant | null;
       tenants = tenant ? [tenant] : [];
     } else {
       tenants = await getActiveTenants(TENANT_FIELDS);
@@ -81,23 +77,20 @@ export async function sendAbandonedCartReminders(
         const tenantObjectId = new mongoose.Types.ObjectId(String(tenant._id));
 
         // Find saved carts that became "abandoned" during this run's window
-        const abandonedCarts = await SavedCart.find({
-          tenantId: tenantObjectId,
-          isActive: { $ne: false }, // skip soft-deleted carts
-          updatedAt: { $gt: windowStart, $lte: cutoffTime },
-        })
-          .select('userId items total updatedAt')
-          .populate('userId', 'name email')
-          .sort({ updatedAt: -1 })
-          .limit(100) // Limit to prevent too many emails
-          .lean();
+        const abandonedCarts = await getRepos().savedCarts.listUpdatedBetween(
+          String(tenant._id),
+          { after: windowStart, upTo: cutoffTime },
+          { limit: 100 } // Limit to prevent too many emails
+        );
 
         if (abandonedCarts.length === 0) continue;
 
-        // Last transaction per cart owner, in one query instead of one per cart
+        // Last transaction per cart owner, in one query instead of one per cart.
+        // Aggregate pipelines are not cast, so the hex ids need an ObjectId.
         const userIds = abandonedCarts
-          .map((c) => (c.userId as unknown as { _id?: mongoose.Types.ObjectId } | null)?._id)
-          .filter((id): id is mongoose.Types.ObjectId => !!id);
+          .map((c) => (c.userId as UserSummary | null)?._id)
+          .filter((id): id is string => !!id)
+          .map((id) => new mongoose.Types.ObjectId(id));
         const oldestCart = abandonedCarts.reduce(
           (min, c) => (c.updatedAt < min ? c.updatedAt : min),
           abandonedCarts[0].updatedAt
@@ -118,14 +111,14 @@ export async function sendAbandonedCartReminders(
 
         for (const cart of abandonedCarts) {
           try {
-            const user = cart.userId as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+            const user = cart.userId as UserSummary | null;
             if (!user || !user.email) {
               continue; // Skip if no user or email
             }
 
             // Check if cart was already converted to transaction
             // (This is a simple check - in production, you might want to track this better)
-            const lastTx = lastTxByUser.get(user._id.toString());
+            const lastTx = lastTxByUser.get(user._id);
             if (lastTx && lastTx >= cart.updatedAt) {
               continue; // Cart was likely completed
             }

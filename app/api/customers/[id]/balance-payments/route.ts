@@ -1,9 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import mongoose from 'mongoose';
-import type { Types } from 'mongoose';
-import connectDB from '@/lib/mongodb';
-import Customer from '@/models/Customer';
-import CustomerBalancePayment from '@/models/CustomerBalancePayment';
+import { DuplicateKeyError, getRepos, runInTransaction, type BalancePayment } from '@/lib/db';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -19,7 +15,6 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const { id: customerId } = await params;
 
     let tenantId: string;
@@ -41,7 +36,7 @@ export async function GET(
     }
 
     const t = await getValidationTranslatorFromRequest(request);
-    const customer = await Customer.findOne({ _id: customerId, tenantId }).select('_id').lean();
+    const customer = await getRepos().customers.findById(tenantId, customerId, { select: '_id' });
     if (!customer) {
       return NextResponse.json({ success: false, error: t('validation.customerNotFound', 'Customer not found') }, { status: 404 });
     }
@@ -49,10 +44,7 @@ export async function GET(
     const rawLimit = parseInt(request.nextUrl.searchParams.get('limit') || '20', 10);
     const limit = Math.min(Math.max(1, rawLimit), 100);
 
-    const payments = await CustomerBalancePayment.find({ tenantId, customerId })
-      .sort({ createdAt: -1 })
-      .limit(limit)
-      .lean();
+    const payments = await getRepos().balancePayments.list(tenantId, customerId, { limit });
 
     return NextResponse.json({ success: true, data: payments });
   } catch (error: unknown) {
@@ -69,7 +61,6 @@ export async function POST(
   let idempotencyKeyForConflictCheck: string | undefined;
   let tenantIdForConflictCheck: string | undefined;
   try {
-    await connectDB();
     const { id: customerId } = await params;
     const t = await getValidationTranslatorFromRequest(request);
 
@@ -117,7 +108,7 @@ export async function POST(
     tenantIdForConflictCheck = tenantId;
 
     if (idempotencyKey) {
-      const existing = await CustomerBalancePayment.findOne({ tenantId, idempotencyKey }).lean();
+      const existing = await getRepos().balancePayments.findByIdempotencyKey(tenantId, idempotencyKey);
       if (existing) {
         return NextResponse.json({ success: true, data: existing }, { status: 200 });
       }
@@ -136,71 +127,53 @@ export async function POST(
       );
     }
 
-    const session = await mongoose.startSession();
-    let record;
-    let balanceBefore = 0;
-    let balanceAfter = 0;
-    try {
-      session.startTransaction();
+    // The payment record and the balance decrement land together or not at all
+    const { customers, balancePayments } = getRepos();
+    const outcome = await runInTransaction(async (tx) => {
+      const customer = await customers.findOne(tenantId, { ids: [customerId], isActive: true }, { tx });
+      if (!customer) return { error: 'notFound' as const };
 
-      const customer = await Customer.findOne({ _id: customerId, tenantId, isActive: true }).session(session);
-      if (!customer) {
-        await session.abortTransaction();
-        return NextResponse.json(
-          { success: false, error: t('validation.customerNotFound', 'Customer not found or inactive') },
-          { status: 404 }
-        );
-      }
+      const before = customer.accountBalance ?? 0;
+      if (amount - before > 0.01) return { error: 'exceedsBalance' as const };
 
-      balanceBefore = customer.accountBalance ?? 0;
-      if (amount - balanceBefore > 0.01) {
-        await session.abortTransaction();
-        return NextResponse.json(
-          {
-            success: false,
-            error: t('validation.paymentExceedsBalance', "Amount cannot exceed the customer's outstanding balance"),
-          },
-          { status: 400 }
-        );
-      }
-
-      const [created] = await CustomerBalancePayment.create(
-        [
-          {
-            tenantId,
-            customerId: customer._id,
-            amount,
-            method: method as (typeof VALID_METHODS)[number],
-            notes,
-            recordedBy: new mongoose.Types.ObjectId(userId) as Types.ObjectId,
-            ...(idempotencyKey ? { idempotencyKey } : {}),
-          },
-        ],
-        { session }
+      const created = await balancePayments.create(
+        tenantId,
+        {
+          customerId: customer._id,
+          amount,
+          method: method as BalancePayment['method'],
+          notes,
+          recordedBy: userId,
+          ...(idempotencyKey ? { idempotencyKey } : {}),
+        },
+        { tx }
       );
-      record = created;
+      await customers.adjustAccountBalance(tenantId, customerId, -amount, { tx });
+      return { record: created, balanceBefore: before, balanceAfter: before - amount };
+    });
 
-      await Customer.updateOne(
-        { _id: customerId, tenantId },
-        { $inc: { accountBalance: -amount } },
-        { session }
-      );
-      balanceAfter = balanceBefore - amount;
-
-      await session.commitTransaction();
-    } catch (e) {
-      await session.abortTransaction();
-      throw e;
-    } finally {
-      session.endSession();
+    if ('error' in outcome) {
+      return outcome.error === 'notFound'
+        ? NextResponse.json(
+            { success: false, error: t('validation.customerNotFound', 'Customer not found or inactive') },
+            { status: 404 }
+          )
+        : NextResponse.json(
+            {
+              success: false,
+              error: t('validation.paymentExceedsBalance', "Amount cannot exceed the customer's outstanding balance"),
+            },
+            { status: 400 }
+          );
     }
+    const { record, balanceBefore, balanceAfter } = outcome;
 
     await createAuditLog(request, {
       tenantId,
       userId,
       action: AuditActions.PAYMENT_CREATE,
       entityType: 'customer_balance_payment',
-      entityId: record._id.toString(),
+      entityId: record._id,
       changes: {
         customerId,
         amount,
@@ -216,16 +189,14 @@ export async function POST(
     // return that payment instead of a generic failure.
     if (
       idempotencyKeyForConflictCheck &&
-      error &&
-      typeof error === 'object' &&
-      'code' in error &&
-      (error as { code?: number }).code === 11000 &&
-      String((error as { message?: string }).message || '').includes('idempotencyKey')
+      tenantIdForConflictCheck &&
+      error instanceof DuplicateKeyError &&
+      error.field === 'idempotencyKey'
     ) {
-      const existing = await CustomerBalancePayment.findOne({
-        tenantId: tenantIdForConflictCheck,
-        idempotencyKey: idempotencyKeyForConflictCheck,
-      }).lean();
+      const existing = await getRepos().balancePayments.findByIdempotencyKey(
+        tenantIdForConflictCheck,
+        idempotencyKeyForConflictCheck
+      );
       if (existing) {
         return NextResponse.json({ success: true, data: existing }, { status: 200 });
       }

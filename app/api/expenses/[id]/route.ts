@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Expense from '@/models/Expense';
+import { getRepos } from '@/lib/db';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -13,16 +12,13 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId } = authResult;
     const { id } = await params;
     const t = await getValidationTranslatorFromRequest(request);
 
-    const expense = await Expense.findOne({ _id: id, tenantId })
-      .populate('userId', 'name email')
-      .lean();
+    const expense = await getRepos().expenses.findByIdWithUser(tenantId, id);
 
     if (!expense) {
       return NextResponse.json({ success: false, error: t('validation.expenseNotFound', 'Expense not found') }, { status: 404 });
@@ -39,7 +35,6 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId } = authResult;
@@ -56,32 +51,29 @@ export async function PUT(
       return NextResponse.json({ success: false, error: t('validation.tooManyRequests', 'Too many requests') }, { status: 429 });
     }
 
-    const expense = await Expense.findOne({ _id: id, tenantId });
-    if (!expense) {
-      return NextResponse.json({ success: false, error: t('validation.expenseNotFound', 'Expense not found') }, { status: 404 });
-    }
-
     const body = await request.json();
     const { name, description, amount, date, paymentMethod, receipt, notes } = body;
 
-    const oldData = expense.toObject();
-
-    if (name) expense.name = name;
-    if (description) expense.description = description;
-    if (amount !== undefined) expense.amount = parseFloat(amount);
-    if (date) expense.date = new Date(date);
-    if (paymentMethod) expense.paymentMethod = paymentMethod;
-    if (receipt !== undefined) expense.receipt = receipt;
-    if (notes !== undefined) expense.notes = notes;
-
-    await expense.save();
+    const result = await getRepos().expenses.update(tenantId, id, {
+      name: name ? name : undefined,
+      description: description ? description : undefined,
+      amount: amount !== undefined ? parseFloat(amount) : undefined,
+      date: date ? new Date(date) : undefined,
+      paymentMethod: paymentMethod ? paymentMethod : undefined,
+      receipt: receipt !== undefined ? receipt : undefined,
+      notes: notes !== undefined ? notes : undefined,
+    });
+    if (!result) {
+      return NextResponse.json({ success: false, error: t('validation.expenseNotFound', 'Expense not found') }, { status: 404 });
+    }
+    const expense = result.after;
 
     await createAuditLog(request, {
       tenantId,
       action: AuditActions.UPDATE,
       entityType: 'expense',
-      entityId: expense._id.toString(),
-      changes: { before: oldData, after: expense.toObject() },
+      entityId: expense._id,
+      changes: { before: result.before, after: result.after },
     });
 
     return NextResponse.json({ success: true, data: expense });
@@ -95,7 +87,6 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId } = authResult;
@@ -112,11 +103,7 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: t('validation.tooManyRequests', 'Too many requests') }, { status: 429 });
     }
 
-    const expense = await Expense.findOneAndUpdate(
-      { _id: id, tenantId, isActive: true },
-      { isActive: false },
-      { new: true }
-    );
+    const expense = await getRepos().expenses.softDelete(tenantId, id);
     if (!expense) {
       return NextResponse.json({ success: false, error: t('validation.expenseNotFound', 'Expense not found') }, { status: 404 });
     }
@@ -125,7 +112,7 @@ export async function DELETE(
       tenantId,
       action: AuditActions.DELETE,
       entityType: 'expense',
-      entityId: expense._id.toString(),
+      entityId: expense._id,
       changes: { name: expense.name, description: expense.description, amount: expense.amount, softDeleted: true },
     });
 

@@ -1,15 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import mongoose from 'mongoose';
-import connectDB from '@/lib/mongodb';
-import Prescription from '@/models/Prescription';
-import Product from '@/models/Product';
-import Tenant from '@/models/Tenant';
+import { getRepos, runInTransaction, type Prescription } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { handleApiError } from '@/lib/error-handler';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { updateStock, insertStockMovements, STOCK_SNAPSHOT_FIELDS, StockMovementInput, StockProductSnapshot } from '@/lib/stock';
+
+const DISPENSE_CONFLICT = 'DISPENSE_CONFLICT';
 
 export async function POST(
   request: NextRequest,
@@ -31,9 +29,9 @@ export async function POST(
     }
 
     const { id } = await params;
-    await connectDB();
 
-    const prescription = await Prescription.findOne({ _id: id, tenantId: user.tenantId });
+    const { prescriptions, tenants, products } = getRepos();
+    const prescription = await prescriptions.findById(user.tenantId, id);
     if (!prescription) {
       return NextResponse.json({ success: false, error: 'Prescription not found' }, { status: 404 });
     }
@@ -47,8 +45,7 @@ export async function POST(
 
     // Auto-expire check
     if (prescription.validUntil < new Date()) {
-      prescription.status = 'expired';
-      await prescription.save();
+      await prescriptions.update(user.tenantId, id, { status: 'expired' });
       return NextResponse.json(
         { success: false, error: 'Prescription has expired' },
         { status: 409 }
@@ -76,17 +73,16 @@ export async function POST(
     }
 
     // Load tenant to check PDEA license for dangerous drugs
-    const tenant = await Tenant.findOne({ _id: user.tenantId }).select('settings.pharmacyCompliance.pdeaLicense').lean();
+    const tenant = await tenants.findById(user.tenantId, { select: 'settings.pharmacyCompliance.pdeaLicense' });
 
     // One batched product read — reused for validation and as updateStock snapshots
     const dispenseProductIds = itemIndexes
       .map((idx) => prescription.items[idx].productId)
-      .filter(Boolean);
+      .filter(Boolean)
+      .map(String);
     const dispenseProducts = new Map(
-      (await Product.find({ _id: { $in: dispenseProductIds }, tenantId: user.tenantId })
-        .select(`drugSchedule ${STOCK_SNAPSHOT_FIELDS}`)
-        .lean())
-        .map((p) => [String(p._id), p])
+      (await products.list(user.tenantId, { ids: dispenseProductIds }, { select: `drugSchedule ${STOCK_SNAPSHOT_FIELDS}` }))
+        .map((p) => [p._id, p])
     );
 
     // Validate per-item requirements
@@ -118,41 +114,50 @@ export async function POST(
       }
     }
 
-    // Atomic stock deduction using MongoDB session
-    const session = await mongoose.startSession();
-    await session.withTransaction(async () => {
-      const now = new Date();
-      const movements: StockMovementInput[] = [];
-      for (const idx of itemIndexes) {
-        const item = prescription.items[idx];
-        if (item.productId) {
-          await updateStock(
-            item.productId.toString(),
-            user.tenantId,
-            -item.quantity,
-            'sale',
-            {
-              userId: user.userId,
-              reason: 'Prescription dispense',
-              notes: `Prescription ${id}, item: ${item.drugName}`,
-              product: dispenseProducts.get(String(item.productId)) as StockProductSnapshot | undefined,
-              movements,
-            },
-            session
-          );
+    // Atomic with the stock deduction. dispenseItems claims the items first, so
+    // a concurrent dispense stops here before any stock moves.
+    let dispensed: Prescription;
+    try {
+      dispensed = await runInTransaction(async (tx) => {
+        const claimed = await prescriptions.dispenseItems(
+          user.tenantId,
+          id,
+          itemIndexes,
+          { by: user.userId, at: new Date() },
+          { tx }
+        );
+        if (!claimed) throw new Error(DISPENSE_CONFLICT);
+
+        const movements: StockMovementInput[] = [];
+        for (const idx of itemIndexes) {
+          const item = claimed.items[idx];
+          if (item.productId) {
+            await updateStock(
+              item.productId,
+              user.tenantId,
+              -item.quantity,
+              'sale',
+              {
+                userId: user.userId,
+                reason: 'Prescription dispense',
+                notes: `Prescription ${id}, item: ${item.drugName}`,
+                product: dispenseProducts.get(item.productId) as StockProductSnapshot | undefined,
+                movements,
+              },
+              tx
+            );
+          }
         }
-        prescription.items[idx].dispensed = true;
-        prescription.items[idx].dispensedAt = now;
-        prescription.items[idx].dispensedBy = new mongoose.Types.ObjectId(user.userId);
+
+        await insertStockMovements(movements, tx);
+        return claimed;
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === DISPENSE_CONFLICT) {
+        return NextResponse.json({ success: false, error: 'Prescription was already dispensed' }, { status: 409 });
       }
-
-      await insertStockMovements(movements, session);
-
-      const allDispensed = prescription.items.every(i => i.dispensed);
-      prescription.status = allDispensed ? 'dispensed' : 'partially_dispensed';
-      await prescription.save({ session });
-    });
-    session.endSession();
+      throw error;
+    }
 
     await createAuditLog(request, {
       tenantId: user.tenantId,
@@ -160,10 +165,10 @@ export async function POST(
       action: AuditActions.PRESCRIPTION_DISPENSE,
       entityType: 'prescription',
       entityId: id,
-      changes: { itemIndexes, dispensedBy: user.userId, status: prescription.status },
+      changes: { itemIndexes, dispensedBy: user.userId, status: dispensed.status },
     });
 
-    return NextResponse.json({ success: true, data: prescription });
+    return NextResponse.json({ success: true, data: dispensed });
   } catch (error: unknown) {
     return handleApiError(error, 'Failed to dispense prescription');
   }

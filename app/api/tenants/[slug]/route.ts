@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
+import { getRepos, isDuplicateKeyError } from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -10,10 +9,9 @@ import { applyBusinessTypeDefaults } from '@/lib/business-types';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   try {
-    await connectDB();
     const { slug } = await params;
     const t = await getValidationTranslatorFromRequest(request);
-    const tenant = await Tenant.findOne({ slug }).lean();
+    const tenant = await getRepos().tenants.findBySlug(slug);
 
     if (!tenant) {
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
@@ -31,7 +29,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       user = null;
     }
     const isSameTenantOrAdmin =
-      !!user && (user.role === 'super_admin' || user.tenantId === tenant._id.toString());
+      !!user && (user.role === 'super_admin' || user.tenantId === tenant._id);
 
     if (isSameTenantOrAdmin) {
       return NextResponse.json({ success: true, data: tenant });
@@ -48,24 +46,24 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const { slug } = await params;
     const t = await getValidationTranslatorFromRequest(request);
+    const { tenants: tenantRepo } = getRepos();
 
     const body = await request.json();
     const { name, domain, subdomain, isActive, settings } = body;
 
-    const oldTenant = await Tenant.findOne({ slug }).lean();
+    const oldTenant = await tenantRepo.findBySlug(slug);
     if (!oldTenant) {
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
-    if (user.role !== 'super_admin' && user.tenantId !== oldTenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== oldTenant._id) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
-    if (!(await hasTenantPermission(user.role, oldTenant._id.toString(), 'tenant_profile.manage'))) {
+    if (!(await hasTenantPermission(user.role, oldTenant._id, 'tenant_profile.manage'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
@@ -131,11 +129,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       updateData.settings = { ...oldTenant.settings, ...updatedSettings };
     }
 
-    const tenant = await Tenant.findOneAndUpdate(
-      { slug },
-      { $set: setPayload },
-      { new: true, runValidators: true }
-    );
+    const tenant = await tenantRepo.update(oldTenant._id, { set: setPayload });
     
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
@@ -159,15 +153,15 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       tenantId: tenant._id,
       action: AuditActions.UPDATE,
       entityType: 'tenant',
-      entityId: tenant._id.toString(),
+      entityId: tenant._id,
       changes,
     });
     
     return NextResponse.json({ success: true, data: tenant });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     const t = await getValidationTranslatorFromRequest(request);
-    if (error.code === 11000) {
-      const field = Object.keys(error.keyPattern)[0];
+    if (isDuplicateKeyError(error)) {
+      const field = Object.keys(error.keyPattern ?? error.cause?.keyPattern ?? {})[0] ?? 'Field';
       const errorMsg = t('validation.fieldAlreadyExists', '{field} already exists').replace('{field}', field);
       return NextResponse.json(
         { success: false, error: errorMsg },
@@ -186,32 +180,32 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const { slug } = await params;
     const t = await getValidationTranslatorFromRequest(request);
+    const { tenants: tenantRepo } = getRepos();
 
-    const tenant = await Tenant.findOne({ slug }).lean();
+    const tenant = await tenantRepo.findBySlug(slug);
     if (!tenant) {
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant._id) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
-    if (!(await hasTenantPermission(user.role, tenant._id.toString(), 'tenant_profile.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenant._id, 'tenant_profile.manage'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
     // Soft delete - set isActive to false
-    await Tenant.findOneAndUpdate({ slug }, { isActive: false });
+    await tenantRepo.update(tenant._id, { set: { isActive: false } });
 
     await createAuditLog(request, {
       tenantId: tenant._id,
       action: AuditActions.DELETE,
       entityType: 'tenant',
-      entityId: tenant._id.toString(),
+      entityId: tenant._id,
       changes: { slug: tenant.slug, name: tenant.name },
     });
     

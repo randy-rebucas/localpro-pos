@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import User from '@/models/User';
-import Tenant from '@/models/Tenant';
+import { getRepos, isDuplicateKeyError } from '@/lib/db';
 import { validateEmail, validatePassword } from '@/lib/validation';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
@@ -28,7 +26,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await connectDB();
     const body = await request.json();
     const { name, email, password, tenantId } = body;
 
@@ -57,7 +54,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Check tenant exists and is active
-    const tenant = await Tenant.findOne({ $or: [ { slug: tenantId }, { _id: tenantId } ], isActive: true });
+    const { tenants, users } = getRepos();
+    const tenant = await tenants.findActiveBySlugOrId(String(tenantId));
     if (!tenant) {
       return NextResponse.json(
         { success: false, error: t('validation.tenantNotFound', 'Tenant not found or inactive') },
@@ -66,7 +64,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user already exists
-    const existingUser = await User.findOne({ email: email.toLowerCase(), tenantId: tenant._id });
+    const existingUser = await users.findByEmail(email, { tenantId: tenant._id });
     if (existingUser) {
       return NextResponse.json(
         { success: false, error: t('validation.emailExists', 'An account with this email already exists for this tenant') },
@@ -75,7 +73,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create user (default role: "viewer")
-    const user = await User.create({
+    const user = await users.create({
       email: email.toLowerCase(),
       password,
       name,
@@ -88,20 +86,20 @@ export async function POST(request: NextRequest) {
       tenantId: tenant._id,
       action: AuditActions.CREATE,
       entityType: 'user',
-      entityId: user._id.toString(),
+      entityId: user._id,
       changes: { email, name, role: 'viewer' },
     });
 
     // Issue JWT token
     const token = generateToken({
-        userId: user._id.toString(), 
-        tenantId: tenant._id.toString(), 
+        userId: user._id, 
+        tenantId: tenant._id, 
         role: user.role,
         email: user.email
     });
 
-    const userResponse = user.toObject();
-    const { password: _, ...userWithoutPassword } = userResponse;
+    // users.create() never returns the password hash
+    const userWithoutPassword = user;
 
     // Return token only via httpOnly cookie — not in body
     const response = NextResponse.json({
@@ -120,7 +118,7 @@ export async function POST(request: NextRequest) {
 
     return response;
   } catch (error: unknown) {
-    if ((error as Record<string, unknown>).code === 11000) {
+    if (isDuplicateKeyError(error)) {
       return NextResponse.json(
         { success: false, error: 'User with this email already exists' },
         { status: 400 }

@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import User from '@/models/User';
-import Tenant from '@/models/Tenant';
-import SuperAdminAction from '@/models/SuperAdminAction';
+import { getRepos, type User } from '@/lib/db';
 import { requireRole, generateToken } from '@/lib/auth';
 import { handleApiError } from '@/lib/error-handler';
 
@@ -11,33 +8,25 @@ import { handleApiError } from '@/lib/error-handler';
 // Returns a short-lived JWT the super-admin can use to access the tenant app
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     const adminUser = await requireRole(request, ['super_admin']);
 
     const body = await request.json();
     const { userId, tenantSlug } = body;
 
-    let targetUser;
+    const { tenants: tenantRepo, users: userRepo } = getRepos();
+    let targetUser: User | null = null;
 
     if (userId) {
-      targetUser = await User.findById(userId).select('-password').lean();
+      targetUser = await userRepo.findById(userId);
     } else if (tenantSlug) {
-      const tenant = await Tenant.findOne({ slug: tenantSlug }).lean();
+      const tenant = await tenantRepo.findBySlug(tenantSlug, { select: '_id' });
       if (!tenant) {
         return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
       }
-      targetUser = await User.findOne({
-        tenantId: (tenant as { _id: unknown })._id,
-        role: 'owner',
-        isActive: true,
-      }).select('-password').lean();
+      targetUser = await userRepo.findFirstActiveByRole(tenant._id, ['owner']);
       if (!targetUser) {
         // Fall back to any admin
-        targetUser = await User.findOne({
-          tenantId: (tenant as { _id: unknown })._id,
-          role: { $in: ['owner', 'admin'] },
-          isActive: true,
-        }).select('-password').lean();
+        targetUser = await userRepo.findFirstActiveByRole(tenant._id, ['owner', 'admin']);
       }
     }
 
@@ -45,11 +34,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Target user not found' }, { status: 404 });
     }
 
-    if ((targetUser as { role: string }).role === 'super_admin') {
+    if (targetUser.role === 'super_admin') {
       return NextResponse.json({ success: false, error: 'Cannot impersonate another super-admin' }, { status: 403 });
     }
 
-    const u = targetUser as { _id: unknown; email: string; role: string; tenantId?: unknown };
+    const u = targetUser;
 
     // Generate a short-lived token (1 hour) tagged with the impersonating admin
     const token = generateToken({
@@ -61,7 +50,7 @@ export async function POST(request: NextRequest) {
     }, { expiresIn: '1h' });
 
     const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || '';
-    await SuperAdminAction.create({
+    await getRepos().superAdminActions.create({
       adminUserId: adminUser.userId,
       action: 'impersonation.start',
       targetType: 'User',

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Address from '@/models/Address';
+import { getRepos } from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
@@ -17,26 +16,20 @@ interface RouteParams {
 export async function PUT(request: NextRequest, { params }: RouteParams) {
   let t: (key: string, fallback: string) => string;
   try {
-    await connectDB();
     t = await getValidationTranslatorFromRequest(request);
 
     const currentUser = await requireAuth(request);
     const { addressId } = await params;
     const body = await request.json();
 
-    // Find the address and verify ownership
-    const address = await Address.findById(addressId);
+    // Find the address, scoped to its owner: another user's address is
+    // reported as not found (no unscoped lookup).
+    const { addresses } = getRepos();
+    const address = await addresses.findOwned(currentUser.userId, addressId);
     if (!address) {
       return NextResponse.json(
         { success: false, error: t('validation.addressNotFound', 'Address not found') },
         { status: 404 }
-      );
-    }
-
-    if (address.userId.toString() !== currentUser.userId) {
-      return NextResponse.json(
-        { success: false, error: t('validation.forbidden', 'You can only update your own addresses') },
-        { status: 403 }
       );
     }
 
@@ -52,10 +45,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     // Handle default flag
     if (isDefault === true) {
-      await Address.updateMany(
-        { userId: currentUser.userId, tenantId: address.tenantId, isDefault: true, _id: { $ne: addressId } },
-        { $set: { isDefault: false } }
-      );
+      await addresses.clearDefault(address.tenantId, currentUser.userId, addressId);
       updates.isDefault = true;
     } else if (isDefault === false) {
       updates.isDefault = false;
@@ -68,14 +58,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const updatedAddress = await Address.findByIdAndUpdate(
-      addressId,
-      { $set: updates },
-      { new: true }
-    ).lean();
+    const updatedAddress = await addresses.update(currentUser.userId, addressId, updates);
 
     await createAuditLog(request, {
-      tenantId: address.tenantId.toString(),
+      tenantId: address.tenantId,
       userId: currentUser.userId,
       action: AuditActions.UPDATE,
       entityType: 'address',
@@ -102,13 +88,14 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   let t: (key: string, fallback: string) => string;
   try {
-    await connectDB();
     t = await getValidationTranslatorFromRequest(request);
 
     const currentUser = await requireAuth(request);
     const { addressId } = await params;
 
-    const address = await Address.findOne({ _id: addressId, isActive: true });
+    // Scoped to the owner: another user's address is reported as not found
+    const { addresses } = getRepos();
+    const address = await addresses.findOwned(currentUser.userId, addressId, { activeOnly: true });
     if (!address) {
       return NextResponse.json(
         { success: false, error: t('validation.addressNotFound', 'Address not found') },
@@ -116,35 +103,28 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    if (address.userId.toString() !== currentUser.userId) {
-      return NextResponse.json(
-        { success: false, error: t('validation.forbidden', 'You can only delete your own addresses') },
-        { status: 403 }
-      );
-    }
-
     const wasDefault = address.isDefault;
     const tenantId = address.tenantId;
 
-    address.isActive = false;
-    await address.save();
+    const deleted = await addresses.softDelete(currentUser.userId, addressId);
+    if (!deleted) {
+      return NextResponse.json(
+        { success: false, error: t('validation.addressNotFound', 'Address not found') },
+        { status: 404 }
+      );
+    }
 
     // If we deleted the default address, promote the most recent remaining one
     if (wasDefault) {
-      const nextDefault = await Address.findOne({
-        userId: currentUser.userId,
-        tenantId,
-        isActive: true,
-      }).sort({ createdAt: -1 });
+      const nextDefault = await addresses.findFirstActive(tenantId, currentUser.userId);
 
       if (nextDefault) {
-        nextDefault.isDefault = true;
-        await nextDefault.save();
+        await addresses.update(currentUser.userId, nextDefault._id, { isDefault: true });
       }
     }
 
     await createAuditLog(request, {
-      tenantId: tenantId.toString(),
+      tenantId,
       userId: currentUser.userId,
       action: AuditActions.DELETE,
       entityType: 'address',

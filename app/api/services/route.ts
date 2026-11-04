@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Product from '@/models/Product';
-import Tenant from '@/models/Tenant';
+import { getRepos, type ProductFilter } from '@/lib/db';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 /**
@@ -11,7 +9,6 @@ import { getValidationTranslatorFromRequest } from '@/lib/validation-translation
 export async function GET(request: NextRequest) {
   let t: (key: string, fallback: string) => string;
   try {
-    await connectDB();
     t = await getValidationTranslatorFromRequest(request);
 
     const tenantId = request.nextUrl.searchParams.get('tenantId');
@@ -23,10 +20,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Resolve tenant (accept slug or ObjectId)
-    const tenant = await Tenant.findOne({
-      $or: [{ slug: tenantId }, ...(tenantId.match(/^[0-9a-fA-F]{24}$/) ? [{ _id: tenantId }] : [])],
-      isActive: true,
-    }).lean();
+    const tenant = await getRepos().tenants.findActiveBySlugOrId(tenantId, { select: '_id' });
 
     if (!tenant) {
       return NextResponse.json(
@@ -38,26 +32,21 @@ export async function GET(request: NextRequest) {
     const categoryId = request.nextUrl.searchParams.get('categoryId');
     const search = request.nextUrl.searchParams.get('search');
 
-    const filter: Record<string, any> = { // eslint-disable-line @typescript-eslint/no-explicit-any
-      tenantId: tenant._id,
-      productType: 'service',
-    };
+    const filter: ProductFilter = { productType: 'service' };
 
     if (categoryId) {
       filter.categoryId = categoryId;
     }
 
     if (search) {
-      filter.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } },
-      ];
+      filter.search = search;
+      filter.searchFields = ['name', 'description'];
     }
 
-    const services = await Product.find(filter)
-      .select('name description price image category categoryId')
-      .sort({ name: 1 })
-      .lean();
+    const services = await getRepos().products.list(tenant._id, filter, {
+      select: 'name description price image category categoryId',
+      sort: 'name',
+    });
 
     return NextResponse.json({ success: true, data: services });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any

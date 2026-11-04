@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Booking from '@/models/Booking';
+import { getRepos } from '@/lib/db';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
@@ -18,7 +17,6 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const user = await getCurrentUser(request);
     const t = await getValidationTranslatorFromRequest(request);
     if (!user) {
@@ -49,7 +47,8 @@ export async function POST(
     }
 
     const { id } = await params;
-    const booking = await Booking.findOne({ _id: id, tenantId }).lean();
+    const { bookings } = getRepos();
+    const booking = await bookings.findById(tenantId, id);
 
     if (!booking) {
       return NextResponse.json(
@@ -79,7 +78,7 @@ export async function POST(
     }, tenantSettings || undefined);
 
     // Update reminder sent status
-    await Booking.findByIdAndUpdate(id, { reminderSent: true });
+    await bookings.updateMany(tenantId, { ids: [id] }, { reminderSent: true });
 
     return NextResponse.json({
       success: true,

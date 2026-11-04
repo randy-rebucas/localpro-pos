@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Product from '@/models/Product';
+import { getRepos } from '@/lib/db';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { handleApiError } from '@/lib/error-handler';
 
@@ -10,8 +9,6 @@ import { handleApiError } from '@/lib/error-handler';
  */
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
-
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const tenantId = authResult.tenantId;
@@ -24,17 +21,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: true, exists: false });
     }
 
-    const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const query: Record<string, unknown> = {
+    const existing = await getRepos().products.findOne(
       tenantId,
-      isActive: { $ne: false },
-      name: { $regex: `^${escapedName}$`, $options: 'i' },
-    };
-    if (excludeId) {
-      query._id = { $ne: excludeId };
-    }
-
-    const existing = await Product.findOne(query).select('_id name sku stock').lean();
+      { active: true, name, ...(excludeId && { excludeId }) },
+      { select: '_id name sku stock' }
+    );
 
     return NextResponse.json({
       success: true,

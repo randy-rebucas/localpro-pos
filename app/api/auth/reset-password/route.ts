@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import User from '@/models/User';
+import { getRepos } from '@/lib/db';
 import { validateEmail, validatePassword } from '@/lib/validation';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
@@ -33,7 +32,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await connectDB();
     t = await getValidationTranslatorFromRequest(request);
     const body = await request.json();
 
@@ -77,7 +75,8 @@ async function handleAuthenticatedReset(
     );
   }
 
-  const user = await User.findById(currentUser.userId).select('+password');
+  const { users } = getRepos();
+  const user = await users.findByIdForLogin(currentUser.userId);
   if (!user) {
     return NextResponse.json(
       { success: false, error: t('validation.userNotFound', 'User not found') },
@@ -86,7 +85,7 @@ async function handleAuthenticatedReset(
   }
 
   // Verify current password
-  const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.password);
+  const isCurrentPasswordValid = await users.verifyPassword(user, currentPassword);
   if (!isCurrentPasswordValid) {
     return NextResponse.json(
       { success: false, error: t('validation.currentPasswordIncorrect', 'Current password is incorrect') },
@@ -94,9 +93,8 @@ async function handleAuthenticatedReset(
     );
   }
 
-  // Update password (pre-save hook will hash it)
-  user.password = newPassword;
-  await user.save();
+  // Update password (the repository hashes it)
+  await users.update(currentUser.userId, { password: newPassword });
 
   await createAuditLog(request, {
     tenantId: currentUser.tenantId,
@@ -143,11 +141,8 @@ async function handleTokenReset(
   }
 
   // Find tenant
-  const Tenant = (await import('@/models/Tenant')).default;
-  const tenant = await Tenant.findOne({
-    $or: [{ slug: tenantId }, { _id: tenantId }],
-    isActive: true,
-  });
+  const { tenants, users } = getRepos();
+  const tenant = await tenants.findActiveBySlugOrId(String(tenantId));
 
   if (!tenant) {
     return NextResponse.json(
@@ -156,10 +151,7 @@ async function handleTokenReset(
     );
   }
 
-  const user = await User.findOne({
-    email: email.toLowerCase(),
-    tenantId: tenant._id,
-  }).select('+password +resetToken +resetTokenExpiry');
+  const user = await users.findByEmailForLogin(email, { tenantId: tenant._id });
 
   if (!user) {
     return NextResponse.json(
@@ -168,9 +160,11 @@ async function handleTokenReset(
     );
   }
 
-  // Verify reset token and expiry
-  const storedToken = (user as any).resetToken; // eslint-disable-line @typescript-eslint/no-explicit-any
-  const tokenExpiry = (user as any).resetTokenExpiry; // eslint-disable-line @typescript-eslint/no-explicit-any
+  // Verify reset token and expiry.
+  // NOTE: resetToken / resetTokenExpiry are not part of the User schema, so they
+  // are never persisted; this branch therefore always rejects the request.
+  const storedToken = undefined as string | undefined;
+  const tokenExpiry = undefined as Date | undefined;
 
   if (!storedToken || !tokenExpiry) {
     return NextResponse.json(
@@ -187,17 +181,14 @@ async function handleTokenReset(
     );
   }
 
-  // Update password and clear reset token
-  user.password = newPassword;
-  (user as any).resetToken = undefined; // eslint-disable-line @typescript-eslint/no-explicit-any
-  (user as any).resetTokenExpiry = undefined; // eslint-disable-line @typescript-eslint/no-explicit-any
-  await user.save();
+  // Update password (the reset token fields are not persisted, see above)
+  await users.update(user._id, { password: newPassword }, { tenantId: tenant._id });
 
   await createAuditLog(request, {
-    tenantId: tenant._id.toString(),
+    tenantId: tenant._id,
     action: AuditActions.UPDATE,
     entityType: 'user',
-    entityId: user._id.toString(),
+    entityId: user._id,
     changes: { passwordReset: true, method: 'token' },
   });
 

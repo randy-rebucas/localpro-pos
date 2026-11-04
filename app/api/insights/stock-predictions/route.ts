@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import StockMovement from '@/models/StockMovement';
-import Product from '@/models/Product';
+import { getRepos } from '@/lib/db';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { handleApiError } from '@/lib/error-handler';
@@ -14,6 +14,7 @@ const ALERT_HORIZON_DAYS = 14;
 
 export async function GET(request: NextRequest) {
   try {
+    // StockMovement is not behind the repository layer yet
     await connectDB();
 
     const authResult = await requireTenantAccess(request);
@@ -63,12 +64,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: true, data: [] });
     }
 
-    const productIds = salesByProduct.map((s) => s._id);
+    const productIds = salesByProduct.map((s) => String(s._id));
 
-    const products = await Product.find(
-      { _id: { $in: productIds }, tenantId, isActive: { $ne: false }, trackInventory: { $ne: false } },
-      { _id: 1, name: 1, stock: 1, image: 1, category: 1, branchStock: 1 }
-    ).lean();
+    const products = await getRepos().products.list(
+      tenantId,
+      { ids: productIds, active: true, tracksInventory: true },
+      { select: '_id name stock image category branchStock' }
+    );
 
     const stockMap = new Map(products.map((p) => [String(p._id), p]));
 

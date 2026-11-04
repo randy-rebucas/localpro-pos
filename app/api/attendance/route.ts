@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Attendance from '@/models/Attendance';
+import { getRepos, isDuplicateKeyError, type AttendanceFilter } from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -13,8 +12,6 @@ import { logger } from '@/lib/logger';
 export async function GET(request: NextRequest) {
   try {
     const user = await requireAuth(request);
-    await connectDB();
-
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
     const startDate = searchParams.get('startDate');
@@ -23,7 +20,7 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(Math.max(1, rawLimit), 200);
 
     // Build query
-    const query: any = { tenantId: user.tenantId, isActive: { $ne: false } }; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const query: AttendanceFilter = { notDisabled: true };
 
     const isManagerPlus = await hasTenantPermission(user.role, user.tenantId, 'attendance.manage');
 
@@ -40,20 +37,16 @@ export async function GET(request: NextRequest) {
     if (startDate || endDate) {
       query.clockIn = {};
       if (startDate) {
-        query.clockIn.$gte = new Date(startDate);
+        query.clockIn.gte = new Date(startDate);
       }
       if (endDate) {
         const endOfDay = new Date(endDate);
         endOfDay.setHours(23, 59, 59, 999);
-        query.clockIn.$lte = endOfDay;
+        query.clockIn.lte = endOfDay;
       }
     }
 
-    const attendances = await Attendance.find(query)
-      .populate('userId', 'name email')
-      .sort({ clockIn: -1 })
-      .limit(limit)
-      .lean();
+    const attendances = await getRepos().attendance.list(user.tenantId, query, { populateUser: true, limit });
 
     return NextResponse.json({
       success: true,
@@ -75,8 +68,6 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const user = await requireAuth(request);
-    await connectDB();
-
     const body = await request.json();
     const { action, notes, location } = body; // action: 'clock-in' | 'clock-out'
 
@@ -90,11 +81,7 @@ export async function POST(request: NextRequest) {
 
     if (action === 'clock-in') {
       // Check if user already has an active session (clocked in but not out)
-      const activeSession = await Attendance.findOne({
-        userId: user.userId,
-        tenantId: user.tenantId,
-        clockOut: null,
-      });
+      const activeSession = await getRepos().attendance.findOpen(user.tenantId, user.userId);
 
       if (activeSession) {
         return NextResponse.json(
@@ -109,15 +96,14 @@ export async function POST(request: NextRequest) {
       // for the common case and returns a friendly error.
       let attendance;
       try {
-        attendance = await Attendance.create({
+        attendance = await getRepos().attendance.clockIn(user.tenantId, {
           userId: user.userId,
-          tenantId: user.tenantId,
           clockIn: new Date(),
           notes,
           location,
         });
-      } catch (createError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-        if (createError?.code === 11000) {
+      } catch (createError: unknown) {
+        if (isDuplicateKeyError(createError)) {
           return NextResponse.json(
             { success: false, error: t('validation.alreadyClockedIn', 'You are already clocked in. Please clock out first.') },
             { status: 400 }
@@ -141,11 +127,7 @@ export async function POST(request: NextRequest) {
       });
     } else {
       // Clock out
-      const activeSession = await Attendance.findOne({
-        userId: user.userId,
-        tenantId: user.tenantId,
-        clockOut: null,
-      }).sort({ clockIn: -1 });
+      const activeSession = await getRepos().attendance.findOpen(user.tenantId, user.userId);
 
       if (!activeSession) {
         return NextResponse.json(
@@ -154,25 +136,24 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Update attendance with clock out time
-      activeSession.clockOut = new Date();
-      if (notes) {
-        activeSession.notes = (activeSession.notes || '') + (activeSession.notes ? '\n' : '') + notes;
-      }
-      await activeSession.save();
+      // Update attendance with clock out time (saving computes totalHours)
+      const clockedOut = await getRepos().attendance.update(user.tenantId, activeSession._id, {
+        clockOut: new Date(),
+        ...(notes && { notes: (activeSession.notes || '') + (activeSession.notes ? '\n' : '') + notes }),
+      });
 
       await createAuditLog(request, {
         tenantId: user.tenantId,
         userId: user.userId,
         action: AuditActions.ATTENDANCE_CLOCK_OUT,
         entityType: 'attendance',
-        entityId: activeSession._id.toString(),
+        entityId: activeSession._id,
         metadata: { action: 'clock-out' },
       });
 
       return NextResponse.json({
         success: true,
-        data: activeSession,
+        data: clockedOut?.after ?? activeSession,
       });
     }
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any

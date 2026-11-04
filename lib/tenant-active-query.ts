@@ -1,5 +1,4 @@
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
+import { getRepos } from '@/lib/db';
 
 /**
  * Tenant is considered active unless explicitly disabled.
@@ -23,8 +22,5 @@ export interface ActiveTenant {
  * `_id slug name` are always included.
  */
 export async function getActiveTenants(fields = ''): Promise<ActiveTenant[]> {
-  await connectDB();
-  return Tenant.find(TENANT_IS_ACTIVE_FILTER)
-    .select(`_id slug name ${fields}`.trim())
-    .lean<ActiveTenant[]>();
+  return getRepos().tenants.listActive({ select: `_id slug name ${fields}`.trim() }) as unknown as Promise<ActiveTenant[]>;
 }

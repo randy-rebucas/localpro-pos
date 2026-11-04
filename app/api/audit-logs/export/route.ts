@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import AuditLog from '@/models/AuditLog';
-import ArchivedAuditLog from '@/models/ArchivedAuditLog';
+import { getRepos } from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -17,12 +15,11 @@ import { logger } from '@/lib/logger';
  * "raw file extract proving every transaction, void, and back-end change
  * without gaps" required for BIR accreditation.
  *
- * Note: AuditLog documents auto-expire after 90 days (see models/AuditLog.ts
- * TTL index) — export and archive periodically if longer retention is needed.
+ * Logs older than 90 days live in the archive; a range that reaches past that
+ * cutoff reads both.
  */
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const t = await getValidationTranslatorFromRequest(request);
 
@@ -49,29 +46,14 @@ export async function GET(request: NextRequest) {
     if (searchParams.get('endDate')) endDate.setHours(23, 59, 59, 999);
     const format = searchParams.get('format') || 'json'; // json, csv
 
-    const query = {
-      tenantId: user.tenantId,
-      createdAt: { $gte: startDate, $lte: endDate },
-    };
-
-    // Logs older than 90 days are moved to ArchivedAuditLog by the daily archive
-    // job — read the archive too when the range reaches past that cutoff.
+    // Logs older than 90 days are moved to the archive by the daily job — read
+    // the archive too when the range reaches past that cutoff.
     const archiveCutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
-    const [liveLogs, archivedLogs] = await Promise.all([
-      AuditLog.find(query)
-        .populate('userId', 'name email')
-        .sort({ createdAt: 1 })
-        .lean(),
-      startDate < archiveCutoff
-        ? ArchivedAuditLog.find(query)
-          .populate('userId', 'name email')
-          .sort({ createdAt: 1 })
-          .lean()
-        : Promise.resolve([]),
-    ]);
     // chronological, matching an electronic journal's expected order
-    const logs = [...archivedLogs, ...liveLogs].sort(
-      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    const logs = await getRepos().auditLogs.listForExport(
+      user.tenantId,
+      { gte: startDate, lte: endDate },
+      { includeArchived: startDate < archiveCutoff }
     );
 
     const entries = logs.map((log) => {

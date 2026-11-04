@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import SubscriptionPlan from '@/models/SubscriptionPlan';
+import { getRepos, isDuplicateKeyError, type SubscriptionPlanPatch } from '@/lib/db';
 import { requireRole, getCurrentUser } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 
@@ -9,10 +8,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const { id } = await params;
 
-    const plan = await SubscriptionPlan.findById(id).lean();
+    const plan = await getRepos().subscriptionPlans.findById(id);
     if (!plan) {
       return NextResponse.json(
         { success: false, error: 'Subscription plan not found' },
@@ -31,12 +29,12 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     await requireRole(request, ['super_admin']); // global plan catalog — super_admin only
     const currentUser = await getCurrentUser(request);
     const { id } = await params;
 
-    const plan = await SubscriptionPlan.findById(id);
+    const { subscriptionPlans } = getRepos();
+    const plan = await subscriptionPlans.findById(id);
     if (!plan) {
       return NextResponse.json(
         { success: false, error: 'Subscription plan not found' },
@@ -47,7 +45,7 @@ export async function PUT(
     const body = await request.json();
     const { name, description, price, features, birCompliance, isActive, isCustom } = body;
 
-    const changes: Record<string, unknown> = {};
+    const changes: SubscriptionPlanPatch = {};
 
     if (name !== undefined) {
       changes.name = name;
@@ -112,11 +110,7 @@ export async function PUT(
       );
     }
 
-    const updatedPlan = await SubscriptionPlan.findByIdAndUpdate(
-      id,
-      changes,
-      { new: true, runValidators: true }
-    ).lean();
+    const updatedPlan = await subscriptionPlans.update(id, changes);
 
     await createAuditLog(request, {
       tenantId: currentUser?.tenantId || '',
@@ -129,7 +123,7 @@ export async function PUT(
 
     return NextResponse.json({ success: true, data: updatedPlan });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    if (error.code === 11000) {
+    if (isDuplicateKeyError(error)) {
       return NextResponse.json(
         { success: false, error: 'Plan tier already exists' },
         { status: 400 }
@@ -144,12 +138,12 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     await requireRole(request, ['super_admin']); // global plan catalog — super_admin only
     const deleteUser = await getCurrentUser(request);
     const { id } = await params;
 
-    const plan = await SubscriptionPlan.findById(id);
+    const { subscriptionPlans, subscriptions } = getRepos();
+    const plan = await subscriptionPlans.findById(id);
     if (!plan) {
       return NextResponse.json(
         { success: false, error: 'Subscription plan not found' },
@@ -158,15 +152,11 @@ export async function DELETE(
     }
 
     // Check if any active subscriptions use this plan
-    const Subscription = (await import('@/models/Subscription')).default;
-    const activeCount = await Subscription.countDocuments({
-      planId: id,
-      status: { $in: ['active', 'trial'] },
-    });
+    const activeCount = await subscriptions.countActiveOnPlanAcrossTenants(id);
 
     if (activeCount > 0) {
       // Soft delete — deactivate instead of removing
-      await SubscriptionPlan.findByIdAndUpdate(id, { isActive: false });
+      await subscriptionPlans.update(id, { isActive: false });
 
       await createAuditLog(request, {
         tenantId: deleteUser?.tenantId || '',
@@ -185,7 +175,7 @@ export async function DELETE(
     }
 
     // Hard delete if no active subscriptions
-    await SubscriptionPlan.findByIdAndDelete(id);
+    await subscriptionPlans.delete(id);
 
     await createAuditLog(request, {
       tenantId: deleteUser?.tenantId || '',

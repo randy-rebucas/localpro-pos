@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Product from '@/models/Product';
-import ProductChannelListing from '@/models/ProductChannelListing';
-import TenantEcommerceIntegration from '@/models/TenantEcommerceIntegration';
+import { getRepos } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { handleApiError } from '@/lib/error-handler';
@@ -34,11 +31,9 @@ export async function POST(request: NextRequest) {
 
     if (!productId) return NextResponse.json({ success: false, error: 'productId required' }, { status: 400 });
 
-    await connectDB();
-
     const [product, integration] = await Promise.all([
-      Product.findOne({ _id: productId, tenantId: user.tenantId }),
-      TenantEcommerceIntegration.findOne({ tenantId: user.tenantId, provider: 'shopify', isActive: true }),
+      getRepos().products.findById(user.tenantId, productId),
+      getRepos().ecommerceIntegrations.findActive(user.tenantId, 'shopify'),
     ]);
 
     if (!product) return NextResponse.json({ success: false, error: 'Product not found' }, { status: 404 });
@@ -47,11 +42,7 @@ export async function POST(request: NextRequest) {
     }
 
     const accessToken = await getShopifyAccessTokenForIntegration(integration);
-    const existingListing = await ProductChannelListing.findOne({
-      tenantId: user.tenantId,
-      productId,
-      provider: 'shopify',
-    });
+    const existingListing = await getRepos().channelListings.findByProduct(user.tenantId, productId, 'shopify');
 
     let externalProductId: string;
     let externalVariantId: string;
@@ -85,18 +76,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Upsert the listing
-    await ProductChannelListing.findOneAndUpdate(
-      { tenantId: user.tenantId, productId, provider: 'shopify' },
-      {
-        tenantId: user.tenantId,
-        productId,
-        provider: 'shopify',
-        externalProductId,
-        externalVariantId,
-        inventoryItemId,
-      },
-      { upsert: true, new: true }
-    );
+    await getRepos().channelListings.upsertForProduct(user.tenantId, productId, 'shopify', {
+      externalProductId,
+      externalVariantId,
+      inventoryItemId,
+    });
 
     await createAuditLog(request, {
       tenantId: user.tenantId,

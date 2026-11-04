@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Product from '@/models/Product';
-import Tenant from '@/models/Tenant';
+import { getRepos, type ProductFilter } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { handleApiError } from '@/lib/error-handler';
@@ -19,10 +17,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
-    await connectDB();
-
     // Get tenant's configured alert days, fallback to query param or 90
-    const tenant = await Tenant.findOne({ _id: user.tenantId }).lean();
+    const tenant = await getRepos().tenants.findById(user.tenantId);
     const defaultAlertDays = tenant?.settings?.pharmacyCompliance?.expiryAlertDays ?? 90;
     const { searchParams } = new URL(request.url);
     const alertDays = Number(searchParams.get('days') ?? defaultAlertDays);
@@ -32,28 +28,21 @@ export async function GET(request: NextRequest) {
     const alertDate = new Date(today);
     alertDate.setDate(alertDate.getDate() + alertDays);
 
-    const baseFilter: Record<string, unknown> = {
-      tenantId: user.tenantId,
-      isActive: true,
-      expiryDate: { $exists: true, $ne: null },
-    };
-    if (scheduleFilter) baseFilter.drugSchedule = scheduleFilter;
+    const baseFilter: ProductFilter = { active: 'flagged' };
+    if (scheduleFilter) baseFilter.drugSchedule = scheduleFilter as NonNullable<ProductFilter['drugSchedule']>;
 
     // Fetch both already-expired and expiring-within-alertDays
+    const { products } = getRepos();
+    const listOpts = { select: 'name genericName sku batchNumber expiryDate stock drugSchedule', sort: 'expiryDate' as const };
     const [expired, expiring] = await Promise.all([
-      Product.find({ ...baseFilter, expiryDate: { $lt: today } })
-        .select('name genericName sku batchNumber expiryDate stock drugSchedule')
-        .sort({ expiryDate: 1 })
-        .lean(),
-      Product.find({ ...baseFilter, expiryDate: { $gte: today, $lte: alertDate } })
-        .select('name genericName sku batchNumber expiryDate stock drugSchedule')
-        .sort({ expiryDate: 1 })
-        .lean(),
+      products.list(user.tenantId, { ...baseFilter, expiryDate: { lt: today } }, listOpts),
+      products.list(user.tenantId, { ...baseFilter, expiryDate: { gte: today, lte: alertDate } }, listOpts),
     ]);
 
     const now = Date.now();
 
-    const mapProduct = (p: Record<string, unknown>) => {
+    const mapProduct = <P extends { expiryDate?: Date }>(p: P) => {
+
       const expiryDate = p.expiryDate as Date;
       const daysUntilExpiry = Math.ceil((expiryDate.getTime() - now) / 86400000);
       let status: 'expired' | 'critical' | 'warning';

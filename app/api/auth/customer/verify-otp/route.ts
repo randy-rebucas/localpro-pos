@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import CustomerOTP from '@/models/CustomerOTP';
-import Customer from '@/models/Customer';
+import { getRepos } from '@/lib/db';
 import { generateCustomerToken } from '@/lib/auth-customer';
 import { getTenantIdFromRequest } from '@/lib/api-tenant'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
@@ -24,7 +22,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await connectDB();
     const t = await getValidationTranslatorFromRequest(request);
     const body = await request.json();
     const { phone, otp, tenantSlug, firstName, lastName } = body;
@@ -41,12 +38,9 @@ export async function POST(request: NextRequest) {
     const normalizedPhone = phone.replace(/\D/g, '');
 
     // Get tenant ID
-    const Tenant = (await import('@/models/Tenant')).default;
-    const tenant = await Tenant.findOne({ 
-      slug: tenantSlug || 'default', 
-      isActive: true 
-    }).lean();
-    
+    const { tenants, customerOtps, customers } = getRepos();
+    const tenant = await tenants.findBySlug(tenantSlug || 'default', { activeOnly: true });
+
     if (!tenant) {
       return NextResponse.json(
         { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
@@ -55,20 +49,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Find valid OTP
-    const otpRecord = await CustomerOTP.findOne({
-      tenantId: tenant._id,
-      phone: normalizedPhone,
-      otp,
-      verified: false,
-      expiresAt: { $gt: new Date() },
-    });
+    const otpRecord = await customerOtps.findValid(tenant._id, normalizedPhone, otp, new Date());
 
     if (!otpRecord) {
       // Increment attempts for rate limiting
-      await CustomerOTP.updateOne(
-        { tenantId: tenant._id, phone: normalizedPhone, verified: false },
-        { $inc: { attempts: 1 } }
-      );
+      await customerOtps.recordFailedAttempt(tenant._id, normalizedPhone);
 
       return NextResponse.json(
         { success: false, error: t('validation.invalidOtp', 'Invalid or expired OTP') },
@@ -85,14 +70,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Mark OTP as verified
-    otpRecord.verified = true;
-    await otpRecord.save();
+    await customerOtps.markVerified(tenant._id, otpRecord._id);
 
     // Find or create customer
-    let customer = await Customer.findOne({
-      tenantId: tenant._id,
-      phone: normalizedPhone,
-    });
+    let customer = await customers.findOne(tenant._id, { phone: normalizedPhone });
 
     if (!customer) {
       // Create new customer if doesn't exist
@@ -103,8 +84,7 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      customer = await Customer.create({
-        tenantId: tenant._id,
+      customer = await customers.create(tenant._id, {
         firstName,
         lastName,
         phone: normalizedPhone,
@@ -114,15 +94,16 @@ export async function POST(request: NextRequest) {
       // Update last login time (if we add that field)
       // For now, just ensure customer is active
       if (!customer.isActive) {
-        customer.isActive = true;
-        await customer.save();
+        await customers.update(tenant._id, customer._id, { isActive: true });
+        customer = { ...customer, isActive: true };
       }
+
     }
 
     // Generate JWT token
     const token = generateCustomerToken({
       customerId: customer._id.toString(),
-      tenantId: tenant._id.toString(),
+      tenantId: tenant._id,
       phone: customer.phone,
       email: customer.email,
     });

@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Coupon from '@/models/Coupon';
-import SuperAdminAction from '@/models/SuperAdminAction';
+import { getRepos } from '@/lib/db';
 import { requireRole } from '@/lib/auth';
 import { handleApiError } from '@/lib/error-handler';
 
@@ -11,34 +9,31 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const adminUser = await requireRole(request, ['super_admin']);
 
     const { id } = await params;
     const body = await request.json();
 
-    const coupon = await Coupon.findByIdAndUpdate(
-      id,
-      {
-        ...(body.description !== undefined && { description: body.description }),
-        ...(body.discountType !== undefined && { discountType: body.discountType }),
-        ...(body.discountValue !== undefined && { discountValue: Number(body.discountValue) }),
-        ...(body.appliesTo !== undefined && { appliesTo: body.appliesTo }),
-        ...(body.planIds !== undefined && { planIds: body.planIds }),
-        ...(body.maxUses !== undefined && { maxUses: body.maxUses ? Number(body.maxUses) : undefined }),
-        ...(body.validFrom !== undefined && { validFrom: new Date(body.validFrom) }),
-        ...(body.validUntil !== undefined && { validUntil: body.validUntil ? new Date(body.validUntil) : undefined }),
-        ...(body.isActive !== undefined && { isActive: body.isActive }),
-      },
-      { new: true }
-    );
+    // A falsy maxUses/validUntil means "no change" (undefined), as with the
+    // previous findByIdAndUpdate, which dropped undefined keys.
+    const coupon = await getRepos().coupons.update(id, {
+      description: body.description,
+      discountType: body.discountType,
+      discountValue: body.discountValue !== undefined ? Number(body.discountValue) : undefined,
+      appliesTo: body.appliesTo,
+      planIds: body.planIds,
+      maxUses: body.maxUses ? Number(body.maxUses) : undefined,
+      validFrom: body.validFrom !== undefined ? new Date(body.validFrom) : undefined,
+      validUntil: body.validUntil ? new Date(body.validUntil) : undefined,
+      isActive: body.isActive,
+    });
 
     if (!coupon) {
       return NextResponse.json({ success: false, error: 'Coupon not found' }, { status: 404 });
     }
 
     const ip = request.headers.get('x-forwarded-for') || '';
-    await SuperAdminAction.create({
+    await getRepos().superAdminActions.create({
       adminUserId: adminUser.userId,
       action: 'coupon.update',
       targetType: 'Coupon',
@@ -64,17 +59,16 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const adminUser = await requireRole(request, ['super_admin']);
 
     const { id } = await params;
-    const coupon = await Coupon.findByIdAndDelete(id);
+    const coupon = await getRepos().coupons.delete(id);
     if (!coupon) {
       return NextResponse.json({ success: false, error: 'Coupon not found' }, { status: 404 });
     }
 
     const ip = request.headers.get('x-forwarded-for') || '';
-    await SuperAdminAction.create({
+    await getRepos().superAdminActions.create({
       adminUserId: adminUser.userId,
       action: 'coupon.delete',
       targetType: 'Coupon',

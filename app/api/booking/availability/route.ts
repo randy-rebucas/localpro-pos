@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Booking from '@/models/Booking';
-import Product from '@/models/Product';
-import Tenant from '@/models/Tenant';
+import { getRepos, type BookingFilter } from '@/lib/db';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { getClosedHolidayForDate } from '@/lib/holidays';
 
@@ -13,7 +10,6 @@ import { getClosedHolidayForDate } from '@/lib/holidays';
 export async function GET(request: NextRequest) {
   let t: (key: string, fallback: string) => string;
   try {
-    await connectDB();
     t = await getValidationTranslatorFromRequest(request);
 
     const { searchParams } = request.nextUrl;
@@ -29,10 +25,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Resolve tenant
-    const tenant = await Tenant.findOne({
-      $or: [{ slug: tenantIdParam }, ...(tenantIdParam.match(/^[0-9a-fA-F]{24}$/) ? [{ _id: tenantIdParam }] : [])],
-      isActive: true,
-    }).lean();
+    const tenant = await getRepos().tenants.findActiveBySlugOrId(tenantIdParam);
 
     if (!tenant) {
       return NextResponse.json(
@@ -42,11 +35,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch service to get default duration
-    const service = await Product.findOne({
-      _id: serviceId,
-      tenantId: tenant._id,
-      productType: 'service',
-    }).lean();
+    const service = await getRepos().products.findOne(tenant._id, { ids: [serviceId], productType: 'service' });
 
     if (!service) {
       return NextResponse.json(
@@ -68,17 +57,16 @@ export async function GET(request: NextRequest) {
     endDate.setHours(23, 59, 59, 999);
 
     // Fetch existing bookings for this date
-    const query: Record<string, any> = { // eslint-disable-line @typescript-eslint/no-explicit-any
-      tenantId: tenant._id,
-      startTime: { $gte: selectedDate, $lte: endDate },
-      status: { $in: ['pending', 'confirmed'] },
+    const query: BookingFilter = {
+      startTime: { gte: selectedDate, lte: endDate },
+      status: ['pending', 'confirmed'],
     };
 
     if (staffId) {
       query.staffId = staffId;
     }
 
-    const existingBookings = await Booking.find(query).lean();
+    const existingBookings = await getRepos().bookings.list(tenant._id, query);
 
     // Days the tenant has marked the business closed (Admin → Holidays) have no
     // available slots — mirrors the same check enforced at booking creation/reschedule time.

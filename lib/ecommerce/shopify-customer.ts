@@ -1,5 +1,5 @@
 import { shopifyAdminFetch } from '@/lib/ecommerce/shopify-api';
-import type { ICustomer } from '@/models/Customer';
+import type { Customer as ICustomer } from '@/lib/db';
 
 interface ShopifyCustomerResponse {
   customer: { id: number };

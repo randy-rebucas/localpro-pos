@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Subscription from '@/models/Subscription';
+import { getRepos } from '@/lib/db';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
@@ -9,7 +8,6 @@ import { logger } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     const { tenantId, user } = await requireTenantAccess(request);
 
     if (!(await hasTenantPermission(user.role, tenantId, 'subscriptions.manage'))) {
@@ -23,7 +21,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Get the current subscription for this tenant
-    const subscription = await Subscription.findOne({ tenantId }).lean();
+    const subscription = await getRepos().subscriptions.findByTenant(tenantId);
 
     if (!subscription) {
       return NextResponse.json({

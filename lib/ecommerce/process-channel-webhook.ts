@@ -1,7 +1,4 @@
-import connectDB from '@/lib/mongodb';
-import TenantEcommerceIntegration from '@/models/TenantEcommerceIntegration';
-import ProductChannelListing from '@/models/ProductChannelListing';
-import Product from '@/models/Product';
+import { getRepos } from '@/lib/db';
 import { parseShopifyOrderWebhook } from '@/lib/ecommerce/parse-shopify-order';
 import { parseShopifyRefundWebhook, type NormalizedRefund } from '@/lib/ecommerce/parse-shopify-refund';
 import { parseWooCommerceOrderWebhook } from '@/lib/ecommerce/parse-woo-order';
@@ -26,22 +23,18 @@ async function restockShopifyRefund(tenantId: string, refund: NormalizedRefund):
   let listingByVariant: Map<string, { productId: { toString(): string } }>;
   let snapshotById: Map<string, StockProductSnapshot>;
   try {
-    const listings = await ProductChannelListing.find({
+    const listings = await getRepos().channelListings.list(
       tenantId,
-      provider: 'shopify',
-      externalVariantId: { $in: [...new Set(refund.lines.map((l) => l.externalVariantId))] },
-    })
-      .select('externalVariantId productId')
-      .lean();
+      { provider: 'shopify', externalVariantIds: [...new Set(refund.lines.map((l) => l.externalVariantId))] },
+      { select: 'externalVariantId productId' }
+    );
     listingByVariant = new Map(listings.map((l) => [l.externalVariantId, l]));
 
-    const productIds = [...new Set(listings.map((l) => l.productId.toString()))];
+    const productIds = [...new Set(listings.map((l) => l.productId))];
     const snapshots = productIds.length
-      ? await Product.find({ _id: { $in: productIds }, tenantId })
-          .select(STOCK_SNAPSHOT_FIELDS)
-          .lean<(StockProductSnapshot & { _id: { toString(): string } })[]>()
+      ? await getRepos().products.list(tenantId, { ids: productIds }, { select: STOCK_SNAPSHOT_FIELDS })
       : [];
-    snapshotById = new Map(snapshots.map((p) => [p._id.toString(), p]));
+    snapshotById = new Map<string, StockProductSnapshot>(snapshots.map((p) => [p._id, p]));
   } catch (err) {
     logger.error('Shopify refund restock failed', { externalOrderId: refund.externalOrderId, err });
     return;
@@ -81,20 +74,15 @@ export async function handleShopifyWebhook(
   rawBody: string,
   payload: unknown
 ): Promise<{ status: number; body: string }> {
-  await connectDB();
   const shop = (shopDomainHeader || '').toLowerCase().trim();
   if (!shop) return { status: 401, body: 'missing shop' };
 
-  const integration = await TenantEcommerceIntegration.findOne({
-    provider: 'shopify',
-    shopDomain: shop,
-    isActive: true,
-  });
+  const integration = await getRepos().ecommerceIntegrations.findActiveByShopDomainAcrossTenants(shop);
   if (!integration) {
     return { status: 404, body: 'unknown shop' };
   }
 
-  const tenantId = integration.tenantId.toString();
+  const tenantId = integration.tenantId;
 
   if (topic?.startsWith('orders/')) {
     const order = parseShopifyOrderWebhook(payload);
@@ -119,17 +107,14 @@ export async function handleWooCommerceWebhook(
   rawBody: string,
   payload: unknown
 ): Promise<{ status: number; body: string }> {
-  await connectDB();
-  const integration = await TenantEcommerceIntegration.findOne({
-    _id: integrationId,
-    provider: 'woocommerce',
-    isActive: true,
-  });
-  if (!integration) return { status: 404, body: 'unknown integration' };
+  const integration = await getRepos().ecommerceIntegrations.findByIdAcrossTenants(integrationId);
+  if (!integration || integration.provider !== 'woocommerce' || !integration.isActive) {
+    return { status: 404, body: 'unknown integration' };
+  }
 
   const order = parseWooCommerceOrderWebhook(payload);
   if (order) {
-    const r = await importPaidChannelOrder(integration.tenantId.toString(), order);
+    const r = await importPaidChannelOrder(integration.tenantId, order);
     if (!r.ok && !r.duplicate) {
       logger.warn('Woo order import skipped', { reason: r.reason, integrationId });
     }

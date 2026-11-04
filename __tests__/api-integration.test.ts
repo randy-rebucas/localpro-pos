@@ -28,10 +28,8 @@ vi.mock('@/lib/token-blacklist', () => ({
   isTokenIssuedBeforeRevocation: vi.fn().mockResolvedValue(false),
 }));
 
-vi.mock('@/models/User', () => ({
-  default: {
-    findById: vi.fn(),
-  },
+vi.mock('@/lib/db', () => ({
+  getRepos: () => ({ users: { findById: vi.fn() } }),
 }));
 
 vi.mock('@/lib/rate-limit', () => ({

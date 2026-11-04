@@ -1,4 +1,4 @@
-process.env.NODE_ENV = 'test';
+(process.env as Record<string, string>).NODE_ENV = 'test';
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -10,51 +10,28 @@ vi.mock('@/lib/logger', () => ({
   logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock('@/models/Product', () => ({
-  default: {
-    findOne: vi.fn(),
-    findOneAndUpdate: vi.fn(),
-  },
+const repos = vi.hoisted(() => ({
+  products: { findById: vi.fn(), adjustStock: vi.fn() },
+  bundles: { findById: vi.fn() },
+  stockMovements: { createMany: vi.fn().mockResolvedValue(undefined) },
 }));
+vi.mock('@/lib/db', () => ({ getRepos: () => repos }));
 
-vi.mock('@/models/ProductBundle', () => ({
-  default: { findOne: vi.fn() },
-}));
-
-vi.mock('@/models/StockMovement', () => ({
-  default: {
-    create: vi.fn().mockResolvedValue(undefined),
-    insertMany: vi.fn().mockResolvedValue(undefined),
-  },
-}));
-
-import Product from '@/models/Product';
-import StockMovement from '@/models/StockMovement';
 import {
   computeProductStock,
   updateStock,
   insertStockMovements,
+  STOCK_SNAPSHOT_FIELDS,
   type StockMovementInput,
   type StockProductSnapshot,
 } from '@/lib/stock';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const ProductMock = Product as any;
-const StockMovementMock = StockMovement as any;
+const createMany = repos.stockMovements.createMany;
+const { products } = repos;
 
-/** Product.findOne(...).select(...).lean() chain resolving to `doc`. */
-function findOneChain(doc: unknown) {
-  return {
-    select: vi.fn().mockReturnValue({
-      lean: vi.fn().mockResolvedValue(doc),
-    }),
-  };
-}
-
-/** Product.findOneAndUpdate(...).lean() chain resolving to `doc`. */
-function findOneAndUpdateChain(doc: unknown) {
-  return { lean: vi.fn().mockResolvedValue(doc) };
-}
+/** adjustStock call `i`: [tenantId, id, target, quantity, opts]. */
+const adjustCall = (i = 0) => products.adjustStock.mock.calls[i];
 
 describe('computeProductStock', () => {
   it('returns 999999 when trackInventory is false', () => {
@@ -137,66 +114,57 @@ describe('updateStock', () => {
     vi.clearAllMocks();
   });
 
-  it('uses the snapshot (no findOne) and applies a guarded $inc on master stock', async () => {
-    ProductMock.findOneAndUpdate.mockReturnValue(findOneAndUpdateChain({ stock: 8 }));
+  it('uses the snapshot (no read) and adjusts master stock without allowing negatives', async () => {
+    products.adjustStock.mockResolvedValue({ stock: 8 });
 
     await updateStock('p1', 't1', -2, 'sale', {
       product: { trackInventory: true, allowOutOfStockSales: false, stock: 10 },
       transactionId: 'tx1',
     });
 
-    expect(ProductMock.findOne).not.toHaveBeenCalled();
-    expect(ProductMock.findOneAndUpdate).toHaveBeenCalledTimes(1);
-    const [filter, update, opts] = ProductMock.findOneAndUpdate.mock.calls[0];
-    expect(filter).toEqual({ _id: 'p1', tenantId: 't1', stock: { $gte: 2 } });
-    expect(update).toEqual({ $inc: { stock: -2 } });
-    expect(opts.new).toBe(true);
+    expect(products.findById).not.toHaveBeenCalled();
+    expect(products.adjustStock).toHaveBeenCalledTimes(1);
+    expect(adjustCall()).toEqual(['t1', 'p1', { kind: 'master' }, -2, { allowNegative: false, tx: undefined }]);
   });
 
-  it('omits the stock guard when allowOutOfStockSales is true', async () => {
-    ProductMock.findOneAndUpdate.mockReturnValue(findOneAndUpdateChain({ stock: -1 }));
+  it('allows negative stock when allowOutOfStockSales is true', async () => {
+    products.adjustStock.mockResolvedValue({ stock: -1 });
 
     await updateStock('p1', 't1', -2, 'sale', {
       product: { trackInventory: true, allowOutOfStockSales: true, stock: 1 },
     });
 
-    const [filter, update] = ProductMock.findOneAndUpdate.mock.calls[0];
-    expect(filter).toEqual({ _id: 'p1', tenantId: 't1' });
-    expect(filter).not.toHaveProperty('stock');
-    expect(update).toEqual({ $inc: { stock: -2 } });
+    expect(adjustCall()[4]).toMatchObject({ allowNegative: true });
   });
 
-  it('omits the stock guard for positive quantities', async () => {
-    ProductMock.findOneAndUpdate.mockReturnValue(findOneAndUpdateChain({ stock: 15 }));
+  it('passes positive quantities through unchanged', async () => {
+    products.adjustStock.mockResolvedValue({ stock: 15 });
 
     await updateStock('p1', 't1', 5, 'purchase', {
       product: { trackInventory: true, stock: 10 },
     });
 
-    const [filter] = ProductMock.findOneAndUpdate.mock.calls[0];
-    expect(filter).toEqual({ _id: 'p1', tenantId: 't1' });
+    expect(adjustCall()).toEqual(['t1', 'p1', { kind: 'master' }, 5, { allowNegative: false, tx: undefined }]);
   });
 
-  it('loads the product via findOne when no snapshot is passed', async () => {
-    ProductMock.findOne.mockReturnValue(findOneChain({ trackInventory: true, stock: 10 }));
-    ProductMock.findOneAndUpdate.mockReturnValue(findOneAndUpdateChain({ stock: 9 }));
+  it('loads the product snapshot when none is passed', async () => {
+    products.findById.mockResolvedValue({ trackInventory: true, stock: 10 });
+    products.adjustStock.mockResolvedValue({ stock: 9 });
 
     await updateStock('p1', 't1', -1, 'sale');
 
-    expect(ProductMock.findOne).toHaveBeenCalledWith({ _id: 'p1', tenantId: 't1' });
-    expect(ProductMock.findOneAndUpdate).toHaveBeenCalledTimes(1);
+    expect(products.findById).toHaveBeenCalledWith('t1', 'p1', { select: STOCK_SNAPSHOT_FIELDS, tx: undefined });
+    expect(products.adjustStock).toHaveBeenCalledTimes(1);
   });
 
-  it('throws Product not found when findOne returns null', async () => {
-    ProductMock.findOne.mockReturnValue(findOneChain(null));
+  it('throws Product not found when the product is missing', async () => {
+    products.findById.mockResolvedValue(null);
     await expect(updateStock('p1', 't1', -1, 'sale')).rejects.toThrow('Product not found');
-    expect(ProductMock.findOneAndUpdate).not.toHaveBeenCalled();
+    expect(products.adjustStock).not.toHaveBeenCalled();
   });
 
-  it('uses $elemMatch and positional $inc for variations', async () => {
-    ProductMock.findOneAndUpdate.mockReturnValue(
-      findOneAndUpdateChain({ variations: [{ _id: 'v1', stock: 1 }, { _id: 'v2', stock: 5 }] })
-    );
+  it('targets the matching variation by id', async () => {
+    products.adjustStock.mockResolvedValue({ variations: [{ _id: 'v1', stock: 1 }, { _id: 'v2', stock: 5 }] });
     const movements: StockMovementInput[] = [];
 
     await updateStock('p1', 't1', -3, 'sale', {
@@ -212,13 +180,8 @@ describe('updateStock', () => {
       movements,
     });
 
-    const [filter, update] = ProductMock.findOneAndUpdate.mock.calls[0];
-    expect(filter).toEqual({
-      _id: 'p1',
-      tenantId: 't1',
-      variations: { $elemMatch: { _id: 'v1', stock: { $gte: 3 } } },
-    });
-    expect(update).toEqual({ $inc: { 'variations.$.stock': -3 } });
+    expect(adjustCall()[2]).toEqual({ kind: 'variation', variationId: 'v1' });
+    expect(adjustCall()[3]).toBe(-3);
     expect(movements).toHaveLength(1);
     expect(movements[0]).toMatchObject({ newStock: 1, previousStock: 4, quantity: -3 });
   });
@@ -234,13 +197,11 @@ describe('updateStock', () => {
         variation: { size: 'XL' },
       })
     ).rejects.toThrow('Product variation not found');
-    expect(ProductMock.findOneAndUpdate).not.toHaveBeenCalled();
+    expect(products.adjustStock).not.toHaveBeenCalled();
   });
 
-  it('uses $elemMatch and positional $inc for an existing branch entry', async () => {
-    ProductMock.findOneAndUpdate.mockReturnValue(
-      findOneAndUpdateChain({ branchStock: [{ branchId: 'b1', stock: 6 }] })
-    );
+  it('targets an existing branch entry', async () => {
+    products.adjustStock.mockResolvedValue({ branchStock: [{ branchId: 'b1', stock: 6 }] });
     const movements: StockMovementInput[] = [];
 
     await updateStock('p1', 't1', -4, 'sale', {
@@ -249,20 +210,12 @@ describe('updateStock', () => {
       movements,
     });
 
-    const [filter, update] = ProductMock.findOneAndUpdate.mock.calls[0];
-    expect(filter).toEqual({
-      _id: 'p1',
-      tenantId: 't1',
-      branchStock: { $elemMatch: { branchId: 'b1', stock: { $gte: 4 } } },
-    });
-    expect(update).toEqual({ $inc: { 'branchStock.$.stock': -4 } });
+    expect(adjustCall()[2]).toEqual({ kind: 'branch', branchId: 'b1' });
     expect(movements[0]).toMatchObject({ branchId: 'b1', previousStock: 10, newStock: 6 });
   });
 
-  it('pushes a new branch entry when the branch is missing', async () => {
-    ProductMock.findOneAndUpdate.mockReturnValue(
-      findOneAndUpdateChain({ branchStock: [{ branchId: 'b2', stock: 5 }] })
-    );
+  it('creates a new branch entry when the branch is missing', async () => {
+    products.adjustStock.mockResolvedValue({ branchStock: [{ branchId: 'b2', stock: 5 }] });
 
     await updateStock('p1', 't1', 5, 'purchase', {
       product: { trackInventory: true, branchStock: [] },
@@ -270,68 +223,63 @@ describe('updateStock', () => {
       movements: [],
     });
 
-    const [filter, update] = ProductMock.findOneAndUpdate.mock.calls[0];
-    expect(filter).toEqual({ _id: 'p1', tenantId: 't1', 'branchStock.branchId': { $ne: 'b2' } });
-    expect(update).toEqual({ $push: { branchStock: { branchId: 'b2', stock: 5 } } });
+    expect(adjustCall()[2]).toEqual({ kind: 'newBranch', branchId: 'b2' });
+    expect(adjustCall()[3]).toBe(5);
   });
 
-  it('throws Insufficient stock with the fresh available amount when the guard fails (no snapshot)', async () => {
-    ProductMock.findOne
-      .mockReturnValueOnce(findOneChain({ trackInventory: true, stock: 5 }))
-      .mockReturnValueOnce(findOneChain({ trackInventory: true, stock: 1 }));
-    ProductMock.findOneAndUpdate.mockReturnValue(findOneAndUpdateChain(null));
+  it('throws Insufficient stock with the fresh available amount when the adjustment is refused (no snapshot)', async () => {
+    products.findById
+      .mockResolvedValueOnce({ trackInventory: true, stock: 5 })
+      .mockResolvedValueOnce({ trackInventory: true, stock: 1 });
+    products.adjustStock.mockResolvedValue(null);
 
-    await expect(updateStock('p1', 't1', -3, 'sale')).rejects.toThrow(
-      'Insufficient stock. Available: 1, Requested: 3'
-    );
-    expect(ProductMock.findOneAndUpdate).toHaveBeenCalledTimes(1);
-    expect(StockMovementMock.create).not.toHaveBeenCalled();
+    await expect(updateStock('p1', 't1', -3, 'sale')).rejects.toThrow('Insufficient stock. Available: 1, Requested: 3');
+    expect(products.adjustStock).toHaveBeenCalledTimes(1);
+    expect(createMany).not.toHaveBeenCalled();
   });
 
   it('throws Product not found when the fresh re-read finds nothing', async () => {
-    ProductMock.findOne
-      .mockReturnValueOnce(findOneChain({ trackInventory: true, stock: 5 }))
-      .mockReturnValueOnce(findOneChain(null));
-    ProductMock.findOneAndUpdate.mockReturnValue(findOneAndUpdateChain(null));
+    products.findById.mockResolvedValueOnce({ trackInventory: true, stock: 5 }).mockResolvedValueOnce(null);
+    products.adjustStock.mockResolvedValue(null);
 
     await expect(updateStock('p1', 't1', -3, 'sale')).rejects.toThrow('Product not found');
   });
 
-  it('does not retry when a plain stock guard fails (genuinely insufficient)', async () => {
-    ProductMock.findOne.mockReturnValueOnce(findOneChain({ trackInventory: true, stock: 1 }));
-    ProductMock.findOneAndUpdate.mockReturnValue(findOneAndUpdateChain(null));
+  it('does not retry when a plain stock adjustment is refused (genuinely insufficient)', async () => {
+    products.findById.mockResolvedValueOnce({ trackInventory: true, stock: 1 });
+    products.adjustStock.mockResolvedValue(null);
 
     await expect(
       updateStock('p1', 't1', -3, 'sale', { product: { trackInventory: true, stock: 10 } })
     ).rejects.toThrow('Insufficient stock. Available: 1, Requested: 3');
-    expect(ProductMock.findOneAndUpdate).toHaveBeenCalledTimes(1);
-    expect(ProductMock.findOne).toHaveBeenCalledTimes(1);
+    expect(products.adjustStock).toHaveBeenCalledTimes(1);
+    expect(products.findById).toHaveBeenCalledTimes(1);
   });
 
   it('retries with the fresh product when the branch entry was created meanwhile', async () => {
     const fresh = { trackInventory: true, branchStock: [{ branchId: 'b1', stock: 5 }] };
-    ProductMock.findOne.mockReturnValueOnce(findOneChain(fresh));
-    ProductMock.findOneAndUpdate
-      .mockReturnValueOnce(findOneAndUpdateChain(null)) // $push lost the race
-      .mockReturnValueOnce(findOneAndUpdateChain({ branchStock: [{ branchId: 'b1', stock: 8 }] }));
+    products.findById.mockResolvedValueOnce(fresh);
+    products.adjustStock
+      .mockResolvedValueOnce(null) // the new entry lost the race
+      .mockResolvedValueOnce({ branchStock: [{ branchId: 'b1', stock: 8 }] });
 
     await updateStock('p1', 't1', 3, 'purchase', {
       branchId: 'b1',
       product: { trackInventory: true, branchStock: [] },
     });
-    expect(ProductMock.findOneAndUpdate).toHaveBeenCalledTimes(2);
-    expect(ProductMock.findOneAndUpdate.mock.calls[1][1]).toEqual({ $inc: { 'branchStock.$.stock': 3 } });
+    expect(products.adjustStock).toHaveBeenCalledTimes(2);
+    expect(adjustCall(1)[2]).toEqual({ kind: 'branch', branchId: 'b1' });
   });
 
   it('refuses to create a negative branch entry when out-of-stock sales are not allowed', async () => {
     await expect(
       updateStock('p1', 't1', -2, 'sale', { branchId: 'b1', product: { trackInventory: true, branchStock: [] } })
     ).rejects.toThrow('Insufficient stock at branch. Available: 0, Requested: 2');
-    expect(ProductMock.findOneAndUpdate).not.toHaveBeenCalled();
+    expect(products.adjustStock).not.toHaveBeenCalled();
   });
 
   it('creates a movement record with previousStock = newStock - quantity and transactionId', async () => {
-    ProductMock.findOneAndUpdate.mockReturnValue(findOneAndUpdateChain({ stock: 8 }));
+    products.adjustStock.mockResolvedValue({ stock: 8 });
 
     await updateStock('p1', 't1', -2, 'sale', {
       product: { trackInventory: true, stock: 10 },
@@ -340,38 +288,38 @@ describe('updateStock', () => {
       reason: 'Sale',
     });
 
-    expect(StockMovementMock.create).toHaveBeenCalledTimes(1);
-    expect(StockMovementMock.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        productId: 'p1',
-        tenantId: 't1',
-        type: 'sale',
-        quantity: -2,
-        previousStock: 10,
-        newStock: 8,
-        transactionId: 'tx1',
-        userId: 'u1',
-        reason: 'Sale',
-      })
+    expect(createMany).toHaveBeenCalledTimes(1);
+    expect(createMany).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({
+          productId: 'p1',
+          tenantId: 't1',
+          type: 'sale',
+          quantity: -2,
+          previousStock: 10,
+          newStock: 8,
+          transactionId: 'tx1',
+          userId: 'u1',
+          reason: 'Sale',
+        }),
+      ],
+      { tx: undefined }
     );
   });
 
-  it('passes the session to StockMovement.create as an array call', async () => {
-    ProductMock.findOneAndUpdate.mockReturnValue(findOneAndUpdateChain({ stock: 8 }));
+  it('passes the transaction to adjustStock and the movement write', async () => {
+    products.adjustStock.mockResolvedValue({ stock: 8 });
     const session = {} as any;
+    const tx = { driver: 'mongo' as const, session };
 
-    await updateStock('p1', 't1', -2, 'sale', { product: { trackInventory: true, stock: 10 } }, session);
+    await updateStock('p1', 't1', -2, 'sale', { product: { trackInventory: true, stock: 10 } }, tx);
 
-    const [, , opts] = ProductMock.findOneAndUpdate.mock.calls[0];
-    expect(opts.session).toBe(session);
-    expect(StockMovementMock.create).toHaveBeenCalledWith(
-      [expect.objectContaining({ previousStock: 10, newStock: 8 })],
-      { session }
-    );
+    expect(adjustCall()[4].tx).toBe(tx);
+    expect(createMany).toHaveBeenCalledWith([expect.objectContaining({ previousStock: 10, newStock: 8 })], { tx });
   });
 
-  it('pushes into options.movements instead of calling StockMovement.create', async () => {
-    ProductMock.findOneAndUpdate.mockReturnValue(findOneAndUpdateChain({ stock: 8 }));
+  it('pushes into options.movements instead of writing the movement', async () => {
+    products.adjustStock.mockResolvedValue({ stock: 8 });
     const movements: StockMovementInput[] = [];
 
     await updateStock('p1', 't1', -2, 'sale', {
@@ -380,7 +328,7 @@ describe('updateStock', () => {
       movements,
     });
 
-    expect(StockMovementMock.create).not.toHaveBeenCalled();
+    expect(createMany).not.toHaveBeenCalled();
     expect(movements).toEqual([
       expect.objectContaining({ previousStock: 10, newStock: 8, transactionId: 'tx1', quantity: -2 }),
     ]);
@@ -389,9 +337,9 @@ describe('updateStock', () => {
   it('skips the update entirely when trackInventory is false', async () => {
     await updateStock('p1', 't1', -2, 'sale', { product: { trackInventory: false, stock: 0 } });
 
-    expect(ProductMock.findOne).not.toHaveBeenCalled();
-    expect(ProductMock.findOneAndUpdate).not.toHaveBeenCalled();
-    expect(StockMovementMock.create).not.toHaveBeenCalled();
+    expect(products.findById).not.toHaveBeenCalled();
+    expect(products.adjustStock).not.toHaveBeenCalled();
+    expect(createMany).not.toHaveBeenCalled();
   });
 });
 
@@ -400,36 +348,24 @@ describe('insertStockMovements', () => {
     vi.clearAllMocks();
   });
 
-  it('does nothing for an empty array', async () => {
-    await insertStockMovements([]);
-    expect(StockMovementMock.insertMany).not.toHaveBeenCalled();
-  });
+  const m: StockMovementInput = {
+    productId: 'p1',
+    tenantId: 't1',
+    type: 'sale',
+    quantity: -1,
+    previousStock: 2,
+    newStock: 1,
+  };
 
   it('inserts all movements in one call', async () => {
-    const m: StockMovementInput = {
-      productId: 'p1',
-      tenantId: 't1',
-      type: 'sale',
-      quantity: -1,
-      previousStock: 2,
-      newStock: 1,
-    };
     await insertStockMovements([m, m]);
-    expect(StockMovementMock.insertMany).toHaveBeenCalledTimes(1);
-    expect(StockMovementMock.insertMany).toHaveBeenCalledWith([m, m], {});
+    expect(createMany).toHaveBeenCalledTimes(1);
+    expect(createMany).toHaveBeenCalledWith([m, m], { tx: undefined });
   });
 
-  it('forwards the session', async () => {
-    const session = {} as any;
-    const m: StockMovementInput = {
-      productId: 'p1',
-      tenantId: 't1',
-      type: 'sale',
-      quantity: -1,
-      previousStock: 2,
-      newStock: 1,
-    };
-    await insertStockMovements([m], session);
-    expect(StockMovementMock.insertMany).toHaveBeenCalledWith([m], { session });
+  it('forwards the transaction', async () => {
+    const tx = { driver: 'mongo' as const, session: {} as any };
+    await insertStockMovements([m], tx);
+    expect(createMany).toHaveBeenCalledWith([m], { tx });
   });
 });

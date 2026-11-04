@@ -4,10 +4,7 @@
  */
 
 import connectDB from '@/lib/mongodb';
-import Product from '@/models/Product';
-import Customer from '@/models/Customer'; // eslint-disable-line @typescript-eslint/no-unused-vars
-import Discount from '@/models/Discount'; // eslint-disable-line @typescript-eslint/no-unused-vars
-import Branch from '@/models/Branch';
+import { getRepos } from '@/lib/db';
 import Tenant from '@/models/Tenant';
 import { AutomationResult } from './types';
 
@@ -44,9 +41,14 @@ export async function syncMultiBranchData(
     // Get tenants to process
     let tenants;
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).lean();
+      const tenant = await getRepos().tenants.findById(options.tenantId);
       tenants = tenant ? [tenant] : [];
     } else {
+      // TODO(postgres-migration): Tenant has no `status` field (and Mongoose 8 passes
+      // unknown filter keys through), so this query matches NO tenants today and the
+      // automation only runs when options.tenantId is given. Left on the model on
+      // purpose: replacing it with tenants.listActive() would start running this
+      // automation for every tenant. Decide the intended scope before converting.
       tenants = await Tenant.find({ status: 'active' }).lean();
     }
 
@@ -63,7 +65,7 @@ export async function syncMultiBranchData(
         const tenantId = tenant._id.toString();
 
         // Get all branches
-        const branches = await Branch.find({ tenantId, isActive: true }).lean();
+        const branches = await getRepos().branches.listActive(tenantId);
         
         if (branches.length < 2) {
           continue; // Need at least 2 branches to sync
@@ -72,7 +74,7 @@ export async function syncMultiBranchData(
         // Sync products (pricing, descriptions, etc.)
         if (syncProducts) {
           // Get master product data (from first branch or tenant-level)
-          const masterProducts = await Product.find({ tenantId }).lean();
+          const masterProducts = await getRepos().products.list(tenantId, {}, { select: '_id' });
 
           // For each product, sync pricing and basic info across branches
           // Note: Stock levels are branch-specific and shouldn't be synced

@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import CustomerOTP from '@/models/CustomerOTP';
-import Customer from '@/models/Customer'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import { getRepos } from '@/lib/db';
 import { sendSMS } from '@/lib/notifications';
 import { getTenantIdFromRequest } from '@/lib/api-tenant'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
@@ -25,7 +23,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await connectDB();
     const t = await getValidationTranslatorFromRequest(request);
     const body = await request.json();
     const { phone, tenantSlug } = body;
@@ -49,12 +46,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Get tenant ID
-    const Tenant = (await import('@/models/Tenant')).default;
-    const tenant = await Tenant.findOne({ 
-      slug: tenantSlug || 'default', 
-      isActive: true 
-    }).lean();
-    
+    const { tenants, customerOtps } = getRepos();
+    const tenant = await tenants.findBySlug(tenantSlug || 'default', { activeOnly: true });
+
     if (!tenant) {
       return NextResponse.json(
         { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
@@ -64,11 +58,7 @@ export async function POST(request: NextRequest) {
 
     // Check for recent OTP (rate limiting - max 1 per minute)
     const oneMinuteAgo = new Date(Date.now() - 60 * 1000);
-    const recentOTP = await CustomerOTP.findOne({
-      tenantId: tenant._id,
-      phone: normalizedPhone,
-      createdAt: { $gte: oneMinuteAgo },
-    });
+    const recentOTP = await customerOtps.findCreatedSince(tenant._id, normalizedPhone, oneMinuteAgo);
 
     if (recentOTP) {
       return NextResponse.json(
@@ -86,20 +76,11 @@ export async function POST(request: NextRequest) {
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes expiry
 
     // Invalidate any existing OTPs for this phone
-    await CustomerOTP.updateMany(
-      { tenantId: tenant._id, phone: normalizedPhone, verified: false },
-      { verified: true } // Mark as used
-    );
+    await customerOtps.invalidateAll(tenant._id, normalizedPhone); // Mark as used
 
     // Create new OTP
-    await CustomerOTP.create({
-      tenantId: tenant._id,
-      phone: normalizedPhone,
-      otp,
-      expiresAt,
-      verified: false,
-      attempts: 0,
-    });
+    // verified: false and attempts: 0 are set by the repository / schema default
+    await customerOtps.create(tenant._id, { phone: normalizedPhone, otp, expiresAt });
 
     // Send OTP via SMS using Twilio
     const smsMessage = `Your verification code is ${otp}. This code expires in 10 minutes.`;

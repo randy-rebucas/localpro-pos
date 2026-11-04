@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import SavedCart from '@/models/SavedCart';
+import { getRepos } from '@/lib/db';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
-import mongoose from 'mongoose';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
 
@@ -12,7 +10,6 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
@@ -22,13 +19,7 @@ export async function GET(
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
-    const tenantObjectId = new mongoose.Types.ObjectId(tenantId);
-
-    const savedCart = await SavedCart.findOne({
-      _id: id,
-      tenantId: tenantObjectId,
-      userId: user.userId,
-    }).lean();
+    const savedCart = await getRepos().savedCarts.findForUser(tenantId, user.userId, id);
 
     if (!savedCart) {
       return NextResponse.json({ success: false, error: t('validation.savedCartNotFound', 'Saved cart not found') }, { status: 404 });
@@ -46,7 +37,6 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
@@ -56,15 +46,9 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
-    const tenantObjectId = new mongoose.Types.ObjectId(tenantId);
+    const deactivated = await getRepos().savedCarts.deactivate(tenantId, user.userId, id);
 
-    const savedCart = await SavedCart.findOneAndUpdate(
-      { _id: id, tenantId: tenantObjectId, userId: user.userId, isActive: true },
-      { isActive: false },
-      { new: true }
-    );
-
-    if (!savedCart) {
+    if (!deactivated) {
       return NextResponse.json({ success: false, error: t('validation.savedCartNotFound', 'Saved cart not found') }, { status: 404 });
     }
 

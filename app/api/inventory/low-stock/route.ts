@@ -1,16 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
 import { getLowStockProducts } from '@/lib/stock';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
-import Tenant from '@/models/Tenant';
+import { getRepos } from '@/lib/db';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
 import { handleApiError } from '@/lib/error-handler';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     const user = await requireAuth(request); // eslint-disable-line @typescript-eslint/no-unused-vars
     const tenantId = await getTenantIdFromRequest(request);
     const t = await getValidationTranslatorFromRequest(request);
@@ -24,7 +22,7 @@ export async function GET(request: NextRequest) {
     const threshold = searchParams.get('threshold') ? parseInt(searchParams.get('threshold')!) : undefined;
 
     // Get tenant settings for default threshold
-    const tenant = await Tenant.findById(tenantId).select('settings.lowStockThreshold').lean();
+    const tenant = await getRepos().tenants.findById(tenantId, { select: 'settings.lowStockThreshold' });
     const defaultThreshold = tenant?.settings?.lowStockThreshold || 10;
     const finalThreshold = threshold || defaultThreshold;
 

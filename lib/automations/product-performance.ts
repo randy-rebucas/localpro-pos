@@ -4,9 +4,9 @@
  */
 
 import connectDB from '@/lib/mongodb';
-import Product from '@/models/Product';
 import Transaction from '@/models/Transaction';
 import Tenant from '@/models/Tenant';
+import { getRepos } from '@/lib/db';
 import mongoose from 'mongoose';
 import { sendEmail } from '@/lib/notifications';
 import { getTenantSettingsById } from '@/lib/tenant';
@@ -42,9 +42,14 @@ export async function analyzeProductPerformance(
     // Get tenants to process
     let tenants;
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).lean();
+      const tenant = await getRepos().tenants.findById(options.tenantId);
       tenants = tenant ? [tenant] : [];
     } else {
+      // TODO(postgres-migration): Tenant has no `status` field (and Mongoose 8 passes
+      // unknown filter keys through), so this query matches NO tenants today and the
+      // automation only runs when options.tenantId is given. Left on the model on
+      // purpose: replacing it with tenants.listActive() would start running this
+      // automation for every tenant. Decide the intended scope before converting.
       tenants = await Tenant.find({ status: 'active' }).lean();
     }
 
@@ -67,13 +72,15 @@ export async function analyzeProductPerformance(
         }
 
         // Get all products
-        const products = await Product.find({ tenantId, trackInventory: true }).lean();
+        const products = await getRepos().products.list(tenantId, { trackInventory: true });
 
         const slowMovingProducts: any[] = []; // eslint-disable-line @typescript-eslint/no-explicit-any
         const topPerformers: any[] = []; // eslint-disable-line @typescript-eslint/no-explicit-any
 
         for (const product of products) {
           try {
+            // Aggregate pipelines are not cast, so the hex id needs an ObjectId
+            const productObjectId = new mongoose.Types.ObjectId(product._id);
             // Get sales for this product in the analysis period
             const sales = await Transaction.aggregate([
               {
@@ -81,7 +88,7 @@ export async function analyzeProductPerformance(
                   tenantId: new mongoose.Types.ObjectId(tenantId),
                   createdAt: { $gte: analysisStartDate },
                   status: 'completed',
-                  'items.product': product._id,
+                  'items.product': productObjectId,
                 },
               },
               {
@@ -89,7 +96,7 @@ export async function analyzeProductPerformance(
               },
               {
                 $match: {
-                  'items.product': product._id,
+                  'items.product': productObjectId,
                 },
               },
               {
@@ -106,13 +113,11 @@ export async function analyzeProductPerformance(
             const revenue = salesData.totalRevenue || 0;
 
             // Get last sale date
-            const lastSale = await Transaction.findOne({
+            const lastSale = await getRepos().transactions.findOne(
               tenantId,
-              'items.product': product._id,
-              status: 'completed',
-            })
-              .sort({ createdAt: -1 })
-              .lean();
+              { productId: product._id, status: 'completed' },
+              { sort: '-createdAt', select: 'createdAt' }
+            );
 
             const daysSinceLastSale = lastSale
               ? Math.floor((Date.now() - new Date(lastSale.createdAt).getTime()) / (1000 * 60 * 60 * 24))

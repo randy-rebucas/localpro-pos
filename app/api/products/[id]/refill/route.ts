@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
+import { getRepos } from '@/lib/db';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
@@ -10,7 +10,6 @@ import { getValidationTranslatorFromRequest } from '@/lib/validation-translation
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
@@ -35,8 +34,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
     
     // Get product before update to track previous stock
-    const Product = (await import('@/models/Product')).default;
-    const productBefore = await Product.findOne({ _id: id, tenantId });
+    const { products } = getRepos();
+    const productBefore = await products.findById(tenantId, id);
     
     if (!productBefore) {
       return NextResponse.json({ success: false, error: t('validation.productNotFound', 'Product not found') }, { status: 404 });
@@ -58,7 +57,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     );
     
     // Get updated product
-    const product = await Product.findOne({ _id: id, tenantId });
+    const product = await products.findById(tenantId, id);
     
     if (!product) {
       return NextResponse.json({ success: false, error: t('validation.productNotFound', 'Product not found') }, { status: 404 });

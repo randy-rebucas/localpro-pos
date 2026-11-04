@@ -1,6 +1,6 @@
 import { shopifyAdminFetch } from '@/lib/ecommerce/shopify-api';
 import { shopifySetInventoryLevel } from '@/lib/ecommerce/shopify-catalog';
-import type { IProduct } from '@/models/Product';
+import type { Product } from '@/lib/db';
 
 interface ShopifyVariantResponse {
   id: number;
@@ -15,7 +15,7 @@ interface ShopifyProductResponse {
 export async function shopifyCreateProduct(
   shopDomain: string,
   accessToken: string,
-  product: IProduct
+  product: Product
 ): Promise<{ externalProductId: string; externalVariantId: string; inventoryItemId: string }> {
   const data = await shopifyAdminFetch<{ product: ShopifyProductResponse }>(
     shopDomain,

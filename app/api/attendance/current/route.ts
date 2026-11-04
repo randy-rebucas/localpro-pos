@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Attendance from '@/models/Attendance';
+import { getRepos } from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
@@ -12,8 +11,6 @@ import { logger } from '@/lib/logger';
 export async function GET(request: NextRequest) {
   try {
     const user = await requireAuth(request);
-    await connectDB();
-
     // Manager+ can look up another employee's active session (e.g. the admin
     // attendance page polling every employee's current clock-in status);
     // everyone else can only ever see their own.
@@ -21,13 +18,7 @@ export async function GET(request: NextRequest) {
     const isManagerPlus = await hasTenantPermission(user.role, user.tenantId, 'attendance.manage');
     const targetUserId = requestedUserId && isManagerPlus ? requestedUserId : user.userId;
 
-    const activeSession = await Attendance.findOne({
-      userId: targetUserId,
-      tenantId: user.tenantId,
-      clockOut: null,
-    })
-      .sort({ clockIn: -1 })
-      .lean();
+    const activeSession = await getRepos().attendance.findOpen(user.tenantId, targetUserId);
 
     if (!activeSession) {
       return NextResponse.json({

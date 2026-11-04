@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import User from '@/models/User';
+import { getRepos } from '@/lib/db';
 import { generateToken } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
@@ -20,7 +19,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await connectDB();
     const body = await request.json();
     const { qrToken, tenantSlug } = body;
     t = await getValidationTranslatorFromRequest(request);
@@ -34,9 +32,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Get tenant ID from slug
-    const Tenant = (await import('@/models/Tenant')).default;
-    const tenant = await Tenant.findOne({ slug: tenantSlug || 'default', isActive: true }).lean();
-    
+    const { tenants, users } = getRepos();
+    const tenant = await tenants.findBySlug(tenantSlug || 'default', { activeOnly: true });
+
     if (!tenant) {
       return NextResponse.json(
         { success: false, error: t('validation.tenantNotFoundOrInactive', 'Tenant not found or inactive') },
@@ -45,11 +43,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Find user by QR token
-    const user = await User.findOne({ 
-      qrToken, 
-      tenantId: tenant._id, 
-      isActive: true 
-    });
+    const user = await users.findByQrToken(tenant._id, qrToken);
 
     if (!user) {
       await createAuditLog(request, {
@@ -65,12 +59,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Update last login
-    await User.findByIdAndUpdate(user._id, { lastLogin: new Date() });
+    await users.touchLastLogin(user._id);
 
     // Generate token
     const token = generateToken({
-      userId: user._id.toString(),
-      tenantId: tenant._id.toString(),
+      userId: user._id,
+      tenantId: tenant._id,
       email: user.email,
       role: user.role,
     });
@@ -80,7 +74,7 @@ export async function POST(request: NextRequest) {
       tenantId: tenant._id,
       action: AuditActions.LOGIN,
       entityType: 'user',
-      entityId: user._id.toString(),
+      entityId: user._id,
       metadata: { success: true, method: 'qr' },
     });
 

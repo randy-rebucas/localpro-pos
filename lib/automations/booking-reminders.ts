@@ -3,9 +3,7 @@
  * Sends reminders for upcoming bookings
  */
 
-import connectDB from '@/lib/mongodb';
-import Booking from '@/models/Booking';
-import Tenant from '@/models/Tenant';
+import { getRepos } from '@/lib/db';
 import type { ITenantSettings } from '@/models/Tenant';
 import { sendBookingReminder } from '@/lib/notifications';
 import { getActiveTenants, type ActiveTenant } from '@/lib/tenant-active-query';
@@ -25,7 +23,7 @@ const TENANT_FIELDS = 'settings';
 export async function sendBookingReminders(
   options: BookingReminderOptions = {}
 ): Promise<AutomationResult> {
-  await connectDB();
+  const { bookings } = getRepos();
 
   const { tenantId, hoursBefore = 24 } = options;
   const results: AutomationResult = {
@@ -40,9 +38,7 @@ export async function sendBookingReminders(
     // Get tenants to process
     let tenants: ActiveTenant[];
     if (tenantId) {
-      const tenant = await Tenant.findById(tenantId)
-        .select(`_id slug name ${TENANT_FIELDS}`)
-        .lean<ActiveTenant>();
+      const tenant = (await getRepos().tenants.findById(tenantId, { select: `_id slug name ${TENANT_FIELDS}` })) as ActiveTenant | null;
       tenants = tenant ? [tenant] : [];
     } else {
       tenants = await getActiveTenants(TENANT_FIELDS);
@@ -70,19 +66,17 @@ export async function sendBookingReminders(
         const reminderWindowEnd = new Date(reminderWindowStart.getTime() + 60 * 60 * 1000); // 1 hour window
 
         // Find bookings that need reminders (reminderSent guarantees at-most-once)
-        const bookingsToRemind = await Booking.find({
-          tenantId: tenant._id,
-          startTime: {
-            $gte: reminderWindowStart,
-            $lte: reminderWindowEnd,
+        const bookingsToRemind = await bookings.list(
+          String(tenant._id),
+          {
+            startTime: { gte: reminderWindowStart, lte: reminderWindowEnd },
+            status: ['pending', 'confirmed'],
+            reminderNotSent: true,
           },
-          status: { $in: ['pending', 'confirmed'] },
-          reminderSent: { $ne: true },
-        })
-          .select('customerName customerEmail customerPhone serviceName startTime endTime staffName notes')
-          .lean();
+          { select: 'customerName customerEmail customerPhone serviceName startTime endTime staffName notes' }
+        );
 
-        const remindedIds: unknown[] = [];
+        const remindedIds: string[] = [];
 
         // Send reminders for each booking
         for (const booking of bookingsToRemind) {
@@ -112,10 +106,7 @@ export async function sendBookingReminders(
 
         // Mark all sent reminders in one write
         if (remindedIds.length > 0) {
-          await Booking.updateMany(
-            { tenantId: tenant._id, _id: { $in: remindedIds } },
-            { $set: { reminderSent: true } }
-          );
+          await bookings.updateMany(String(tenant._id), { ids: remindedIds }, { reminderSent: true });
         }
       } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
         totalFailed++;

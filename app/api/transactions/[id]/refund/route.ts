@@ -1,19 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Transaction from '@/models/Transaction';
-import Payment from '@/models/Payment';
-import Product from '@/models/Product';
-import Customer from '@/models/Customer';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth, getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { updateStock, insertStockMovements, STOCK_SNAPSHOT_FIELDS, StockMovementInput, StockProductSnapshot } from '@/lib/stock';
+import { getRepos, runInTransaction, type Payment, type Transaction } from '@/lib/db';
 import { SubscriptionService } from '@/lib/subscription';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
-import { runWithOptionalMongoTransaction } from '@/lib/mongo-session';
 import {
   calculateOnAccountRefundAmount,
   getOnAccountTotalForTransaction,
@@ -21,7 +16,7 @@ import {
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await connectDB();
+    const repos = getRepos();
     const authUser = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
@@ -41,7 +36,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ success: false, error: t('validation.tooManyRequests', 'Too many requests') }, { status: 429 });
     }
 
-    const transaction = await Transaction.findOne({ _id: id, tenantId });
+    const transaction = await repos.transactions.findById(tenantId, id);
     if (!transaction) {
       return NextResponse.json({ success: false, error: t('validation.transactionNotFound', 'Transaction not found') }, { status: 404 });
     }
@@ -64,8 +59,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const { items, reason, notes } = body;
 
     // If no items specified, refund all items (full refund)
-    const itemsToRefund = items || transaction.items.map((item: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
-      productId: item.product.toString(),
+    const itemsToRefund = items || transaction.items.map((item) => ({
+      productId: item.product!.toString(),
       quantity: item.quantity,
     }));
 
@@ -74,9 +69,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     let refundAmount = 0;
 
     for (const refundItem of itemsToRefund) {
-      const originalItem = transaction.items.find(
-        (item: any) => item.product.toString() === refundItem.productId // eslint-disable-line @typescript-eslint/no-explicit-any
-      );
+      const originalItem = transaction.items.find((item) => item.product!.toString() === refundItem.productId);
 
       if (!originalItem) {
         const errorMsg = t('validation.itemNotFoundInTransaction', 'Item {productId} not found in transaction').replace('{productId}', refundItem.productId);
@@ -112,36 +105,32 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     // Mark original transaction as refunded if full refund
     const isFullRefund = refundItems.length === transaction.items.length &&
-      refundItems.every((item: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-        const original = transaction.items.find((i: any) => i.product.toString() === item.productId); // eslint-disable-line @typescript-eslint/no-explicit-any
+      refundItems.every((item) => {
+        const original = transaction.items.find((i) => i.product!.toString() === item.productId);
         return original && item.quantity === original.quantity;
       });
 
-    let refundTransaction: any; // eslint-disable-line @typescript-eslint/no-explicit-any
-    let refundPayment: any = null; // eslint-disable-line @typescript-eslint/no-explicit-any
+    let refundTransaction!: Transaction;
+    let refundPayment = null as Payment | null;
     let onAccountRefundAmount = 0;
     let accountBalanceBefore: number | undefined;
     let accountBalanceAfter: number | undefined;
 
     try {
-      await runWithOptionalMongoTransaction(async (session) => {
+      await runInTransaction(async (tx) => {
         // Atomic claim: fails if a concurrent refund already changed this
         // transaction's status (double-submit / retry / two staff refunding at once).
-        const claimed = await Transaction.findOneAndUpdate(
-          { _id: id, tenantId, status: 'completed' },
-          { $set: { status: isFullRefund ? 'refunded' : 'completed' } },
-          session ? { session, new: true } : { new: true }
-        );
+        const claimed = await repos.transactions.claimStatus(tenantId, id, 'completed', isFullRefund ? 'refunded' : 'completed', { tx });
         if (!claimed) {
           throw new Error('REFUND_CONFLICT');
         }
 
-        const [createdRefund] = await Transaction.create(
-          [{
-            tenantId,
-            items: refundItems.map((item: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+        refundTransaction = await repos.transactions.create(
+          tenantId,
+          {
+            items: refundItems.map((item) => ({
               product: item.productId,
-              name: transaction.items.find((i: any) => i.product.toString() === item.productId)?.name || '', // eslint-disable-line @typescript-eslint/no-explicit-any
+              name: transaction.items.find((i) => i.product!.toString() === item.productId)?.name || '',
               price: item.price,
               quantity: item.quantity,
               subtotal: item.subtotal,
@@ -150,24 +139,24 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             total: refundAmount,
             paymentMethod: transaction.paymentMethod,
             status: 'refunded',
-            receiptNumber: `REF-${transaction.receiptNumber || transaction._id.toString().slice(-8)}`,
+            receiptNumber: `REF-${transaction.receiptNumber || transaction._id.slice(-8)}`,
             notes: notes || reason || 'Refund',
-          }],
-          session ? { session } : {}
+          },
+          { tx }
         );
-        refundTransaction = createdRefund;
 
         // Restore stock for refunded items (only if product tracks inventory).
         // One batched product read (reused as updateStock snapshots) and one
         // movement insert, instead of two reads + an insert per item.
-        const refundProductsQuery = Product.find({
-          _id: { $in: refundItems.map((i: { productId: string }) => i.productId) },
-          tenantId,
-        })
-          .select(STOCK_SNAPSHOT_FIELDS)
-          .lean<Array<StockProductSnapshot & { _id: { toString(): string } }>>();
-        if (session) refundProductsQuery.session(session);
-        const refundProducts = new Map((await refundProductsQuery).map((p) => [p._id.toString(), p]));
+        const refundProducts = new Map<string, StockProductSnapshot>(
+          (
+            await repos.products.list(
+              tenantId,
+              { ids: refundItems.map((i) => i.productId) },
+              { select: STOCK_SNAPSHOT_FIELDS, tx }
+            )
+          ).map((p) => [p._id, p])
+        );
         const refundMovements: StockMovementInput[] = [];
         for (const refundItem of refundItems) {
           const product = refundProducts.get(String(refundItem.productId));
@@ -178,30 +167,30 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
               refundItem.quantity, // Positive to restore
               'return',
               {
-                transactionId: refundTransaction._id.toString(),
+                transactionId: refundTransaction._id,
                 reason: reason || 'Transaction refund',
                 notes: notes,
                 product,
                 movements: refundMovements,
               },
-              session
+              tx
             );
           }
         }
-        await insertStockMovements(refundMovements, session);
+        await insertStockMovements(refundMovements, tx);
 
         // Create Payment refund record if original payment exists
-        const originalPaymentQuery = Payment.findOne({
+        const originalPayment = await repos.payments.findOne(
           tenantId,
-          transactionId: transaction._id,
-          status: 'completed',
-        });
-        const originalPayment = session ? await originalPaymentQuery.session(session) : await originalPaymentQuery;
+          { transactionId: transaction._id, status: 'completed' },
+          { tx }
+        );
 
         if (originalPayment) {
-          const [createdPayment] = await Payment.create(
-            [{
-              tenantId,
+          const refundReason = body.reason || body.notes || 'Transaction refund';
+          refundPayment = await repos.payments.create(
+            tenantId,
+            {
               transactionId: refundTransaction._id,
               method: originalPayment.method,
               amount: refundAmount,
@@ -210,19 +199,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
               processedBy: currentUser?.userId,
               processedAt: new Date(),
               refundedAt: new Date(),
-              refundReason: body.reason || body.notes || 'Transaction refund',
-            }],
-            session ? { session } : {}
+              refundReason,
+            },
+            { tx }
           );
-          refundPayment = createdPayment;
 
-          originalPayment.status = 'refunded';
-          originalPayment.refundedAt = new Date();
-          originalPayment.refundReason = body.reason || body.notes || 'Transaction refund';
-          await originalPayment.save(session ? { session } : {});
+          await repos.payments.markRefunded(tenantId, originalPayment._id, { at: new Date(), reason: refundReason }, { tx });
         }
 
         if (transaction.customerId && refundAmount > 0) {
+          // Reads outside the transaction on purpose: the original payment was
+          // just marked refunded, and this total counts completed payments
           const onAccountTotal = await getOnAccountTotalForTransaction(
             tenantId,
             transaction._id,
@@ -238,23 +225,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             );
 
             if (onAccountRefundAmount > 0) {
-              const custQuery = Customer.findOne({ _id: transaction.customerId, tenantId }).select('accountBalance');
-              const cust = session ? await custQuery.session(session) : await custQuery;
+              const cust = await repos.customers.findById(tenantId, transaction.customerId, { select: 'accountBalance', tx });
               if (cust) {
                 accountBalanceBefore = cust.accountBalance ?? 0;
                 accountBalanceAfter = Math.max(0, accountBalanceBefore - onAccountRefundAmount);
-                await Customer.updateOne(
-                  { _id: cust._id },
-                  { $inc: { accountBalance: -onAccountRefundAmount } },
-                  session ? { session } : {}
-                );
+                await repos.customers.adjustAccountBalance(tenantId, cust._id, -onAccountRefundAmount, { tx });
                 // Clamp negative balances from rounding edge cases
                 if (accountBalanceAfter < 0.01) {
-                  await Customer.updateOne(
-                    { _id: cust._id },
-                    { $set: { accountBalance: 0 } },
-                    session ? { session } : {}
-                  );
+                  await repos.customers.setBalances(tenantId, cust._id, { accountBalance: 0 }, { tx });
                   accountBalanceAfter = 0;
                 }
               }
@@ -287,11 +265,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     // If this was a Shopify-imported order, mirror the refund on Shopify
     if (transaction.salesChannel === 'shopify' && transaction.externalOrderId) {
-      const integration = await (await import('@/models/TenantEcommerceIntegration')).default.findOne({
-        tenantId,
-        provider: 'shopify',
-        isActive: true,
-      }).lean();
+      const integration = await repos.ecommerceIntegrations.findActive(tenantId, 'shopify');
       if (integration?.shopDomain) {
         const { getShopifyAccessTokenForIntegration } = await import('@/lib/ecommerce/shopify-token');
         const { createShopifyRefund } = await import('@/lib/ecommerce/shopify-refund');
@@ -316,15 +290,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       entityType: 'transaction',
       entityId: id,
       changes: {
-        refundTransactionId: refundTransaction._id.toString(),
+        refundTransactionId: refundTransaction._id,
         refundAmount,
         onAccountRefundAmount,
-        customerId: transaction.customerId?.toString(),
+        customerId: transaction.customerId,
         accountBalanceBefore,
         accountBalanceAfter,
         itemsRefunded: refundItems.length,
         isFullRefund,
-        refundPaymentId: refundPayment?._id.toString(),
+        refundPaymentId: refundPayment?._id,
       },
     });
 

@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
-import Transaction from '@/models/Transaction';
-import Tenant from '@/models/Tenant';
+import { getRepos } from '@/lib/db';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkFeatureAccess } from '@/lib/subscription';
 import { arrayToCSV } from '@/lib/export';
@@ -13,7 +11,6 @@ import { resolveTenantDateRange, DEFAULT_TENANT_TIMEZONE } from '@/lib/timezone'
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const t = await getValidationTranslatorFromRequest(request);
@@ -36,7 +33,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const tenantDoc = await Tenant.findById(tenantId).select('settings.timezone settings.timeFormat').lean();
+    const tenantDoc = await getRepos().tenants.findById(tenantId, { select: 'settings.timezone settings.timeFormat' });
     const tenantTz = tenantDoc?.settings?.timezone || DEFAULT_TENANT_TIMEZONE;
     const tenantTimeFormat = tenantDoc?.settings?.timeFormat || '12h';
 
@@ -49,19 +46,18 @@ export async function GET(request: NextRequest) {
     const format = searchParams.get('format') || 'json'; // json, csv
 
     // Query transactions for the date range
-    const transactions = await Transaction.find({
+    const transactions = await getRepos().transactions.list(
       tenantId,
-      createdAt: { $gte: startDate, $lte: endDate },
-    })
-      .sort({ createdAt: -1 })
-      .lean();
+      { createdAt: { gte: startDate, lte: endDate } },
+      { sort: '-createdAt' }
+    );
 
     // Map to sales journal format
-    const journalEntries = transactions.map((txn: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+    const journalEntries = transactions.map((txn) => ({
       receiptNumber: txn.receiptNumber || '',
       date: new Date(txn.createdAt).toLocaleDateString('en-CA', { timeZone: tenantTz }),
       time: new Date(txn.createdAt).toLocaleTimeString('en-US', { timeZone: tenantTz, hour12: tenantTimeFormat === '12h' }),
-      items: txn.items?.map((item: any) => item.name).join('; ') || '', // eslint-disable-line @typescript-eslint/no-explicit-any
+      items: txn.items?.map((item) => item.name).join('; ') || '',
       itemCount: txn.items?.length || 0,
       subtotal: txn.subtotal || 0,
       discountCategory: txn.discountCategory || '',

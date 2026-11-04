@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Transaction from '@/models/Transaction';
+import { getRepos } from '@/lib/db';
 import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { requireAuth } from '@/lib/auth'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { hasTenantPermission } from '@/lib/permissions-server';
@@ -9,7 +8,6 @@ import { getValidationTranslatorFromRequest } from '@/lib/validation-translation
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await connectDB();
     // SECURITY: Validate tenant access for authenticated requests
     let tenantId: string;
     try {
@@ -28,10 +26,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const { id } = await params;
     const t = await getValidationTranslatorFromRequest(request);
     
-    const transaction = await Transaction.findOne({ _id: id, tenantId, isActive: { $ne: false } })
-      .populate('items.product', 'name sku')
-      .populate('userId', 'name email')
-      .lean();
+    const transaction = await getRepos().transactions.findDetail(tenantId, id);
     
     if (!transaction) {
       return NextResponse.json({ success: false, error: t('validation.transactionNotFound', 'Transaction not found') }, { status: 404 });
@@ -50,7 +45,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await connectDB();
     // SECURITY: Validate tenant access for authenticated requests
     let tenantId: string;
     try {
@@ -74,7 +68,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const body = await request.json();
     const t = await getValidationTranslatorFromRequest(request);
 
-    const transaction = await Transaction.findOne({ _id: id, tenantId });
+    const { transactions } = getRepos();
+    const transaction = await transactions.findById(tenantId, id);
     if (!transaction) {
       return NextResponse.json({ success: false, error: t('validation.transactionNotFound', 'Transaction not found') }, { status: 404 });
     }
@@ -103,11 +98,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (body.status === 'cancelled') {
       // Atomic claim: guards against a concurrent void/refund racing on the
       // same transaction (double-click, retry) before either write lands.
-      const claimed = await Transaction.findOneAndUpdate(
-        { _id: id, tenantId, status: transaction.status },
-        { $set: { status: 'cancelled' } },
-        { new: true }
-      );
+      const claimed = await transactions.claimStatus(tenantId, id, transaction.status, 'cancelled');
       if (!claimed) {
         return NextResponse.json(
           { success: false, error: t('validation.transactionAlreadyFinalized', 'This transaction has already been voided or refunded and cannot be modified') },

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
-import Campaign from '@/models/Campaign';
-import Customer from '@/models/Customer';
+import { getRepos } from '@/lib/db';
 import Transaction from '@/models/Transaction';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
@@ -50,6 +49,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Transaction is not behind the repository layer yet
     await connectDB();
 
     const authResult = await requireTenantAccess(request);
@@ -68,13 +68,10 @@ export async function POST(
     // followed by a later status check is a race — two concurrent clicks (or
     // two admins) could both read 'draft' and each blast the full segment.
     // Claiming via findOneAndUpdate makes only one request win the send.
-    const campaign = await Campaign.findOneAndUpdate(
-      { _id: id, tenantId, status: { $in: ['draft', 'failed'] } },
-      { $set: { status: 'sent' } },
-      { new: true }
-    );
+    const { campaigns, customers } = getRepos();
+    const campaign = await campaigns.claimForSending(tenantId, id);
     if (!campaign) {
-      const exists = await Campaign.exists({ _id: id, tenantId });
+      const exists = await campaigns.exists(tenantId, id);
       return NextResponse.json(
         { success: false, error: exists ? 'Campaign already sent' : 'Campaign not found' },
         { status: exists ? 409 : 404 }
@@ -82,11 +79,11 @@ export async function POST(
     }
 
     // Resolve recipients — fetch all active customers with contact info
-    const contactField = campaign.channel === 'email' ? { email: { $exists: true, $ne: '' } } : { phone: { $exists: true, $ne: '' } };
-    const candidates = await Customer.find(
-      { tenantId, isActive: true, ...contactField },
-      { _id: 1, email: 1, phone: 1, lastPurchaseDate: 1, loyaltyPointsBalance: 1, totalSpent: 1 }
-    ).lean();
+    const candidates = await customers.list(
+      tenantId,
+      { isActive: true, hasContact: campaign.channel === 'email' ? 'email' : 'phone' },
+      { select: '_id email phone lastPurchaseDate loyaltyPointsBalance totalSpent' }
+    );
 
     // Real order counts per customer — must match the same logic /api/crm/segments
     // uses, so who actually receives a segment's campaign matches who the admin
@@ -132,10 +129,11 @@ export async function POST(
       }
     }
 
-    campaign.status = sentCount > 0 ? 'sent' : 'failed';
-    campaign.sentCount = sentCount;
-    campaign.sentAt = new Date();
-    await campaign.save();
+    await campaigns.recordSendResult(tenantId, campaign._id, {
+      status: sentCount > 0 ? 'sent' : 'failed',
+      sentCount,
+      sentAt: new Date(),
+    });
 
     await createAuditLog(request, {
       tenantId,

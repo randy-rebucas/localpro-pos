@@ -3,12 +3,8 @@
  * Remind staff to count and close drawers at shift end
  */
 
-import connectDB from '@/lib/mongodb';
-import Attendance from '@/models/Attendance';
-import CashDrawerSession from '@/models/CashDrawerSession';
-import Tenant from '@/models/Tenant';
+import { getRepos } from '@/lib/db';
 import type { ITenantSettings } from '@/models/Tenant';
-import User from '@/models/User'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { sendEmail, sendSMS } from '@/lib/notifications';
 import { getActiveTenants, type ActiveTenant } from '@/lib/tenant-active-query';
 import { AutomationResult } from './types';
@@ -33,8 +29,6 @@ const SHIFT_MS = 8 * 60 * 60 * 1000; // 8-hour shift default
 export async function sendCashCountReminders(
   options: CashCountReminderOptions = {}
 ): Promise<AutomationResult> {
-  await connectDB();
-
   const results: AutomationResult = {
     success: true,
     message: '',
@@ -52,9 +46,7 @@ export async function sendCashCountReminders(
     // Get tenants to process
     let tenants: ActiveTenant[];
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId)
-        .select(`_id slug name ${TENANT_FIELDS}`)
-        .lean<ActiveTenant>();
+      const tenant = (await getRepos().tenants.findById(options.tenantId, { select: `_id slug name ${TENANT_FIELDS}` })) as ActiveTenant | null;
       tenants = tenant ? [tenant] : [];
     } else {
       tenants = await getActiveTenants(TENANT_FIELDS);
@@ -80,34 +72,29 @@ export async function sendCashCountReminders(
         // Active attendance sessions (clocked in but not out) whose estimated
         // shift end (clock-in + 8h) falls inside the reminder window — the
         // window is pushed into the query instead of filtering in memory.
-        const activeSessions = await Attendance.find({
-          tenantId: tenant._id,
-          clockOut: null,
-          clockIn: {
-            $gte: new Date(reminderWindowStart.getTime() - SHIFT_MS),
-            $lte: new Date(reminderWindowEnd.getTime() - SHIFT_MS),
+        const tenantId = String(tenant._id);
+        const activeSessions = await getRepos().attendance.list(
+          tenantId,
+          {
+            open: true,
+            clockIn: {
+              gte: new Date(reminderWindowStart.getTime() - SHIFT_MS),
+              lte: new Date(reminderWindowEnd.getTime() - SHIFT_MS),
+            },
           },
-        })
-          .select('userId clockIn')
-          .populate('userId', 'name email')
-          .lean();
+          { select: 'userId clockIn', populateUser: true }
+        );
 
         if (activeSessions.length === 0) continue;
 
         // Open drawers for all these users in one query (was one findOne per session)
         const userIds = activeSessions
-          .map((s) => (s.userId as unknown as { _id?: unknown } | null)?._id)
-          .filter(Boolean);
+          .map((s) => (s.userId as unknown as { _id?: string } | null)?._id)
+          .filter((id): id is string => !!id);
         const openDrawers = userIds.length
-          ? await CashDrawerSession.find({
-              tenantId: tenant._id,
-              userId: { $in: userIds },
-              status: 'open',
-            })
-              .select('userId')
-              .lean()
+          ? await getRepos().cashDrawerSessions.list(tenantId, { status: 'open', userIds }, { select: 'userId' })
           : [];
-        const drawerByUser = new Map(openDrawers.map((d) => [d.userId.toString(), d]));
+        const drawerByUser = new Map(openDrawers.map((d) => [String(d.userId), d]));
 
         const timezone = tenantSettings?.timezone || undefined;
 

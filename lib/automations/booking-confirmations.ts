@@ -3,9 +3,7 @@
  * Auto-confirm bookings based on rules (e.g., no conflicts, payment received)
  */
 
-import connectDB from '@/lib/mongodb';
-import Booking from '@/models/Booking';
-import Tenant from '@/models/Tenant';
+import { getRepos, type BookingFilter } from '@/lib/db';
 import type { ITenantSettings } from '@/models/Tenant';
 import { sendBookingConfirmation } from '@/lib/notifications';
 import { getActiveTenants, type ActiveTenant } from '@/lib/tenant-active-query';
@@ -30,8 +28,7 @@ const TENANT_FIELDS = 'settings';
 export async function autoConfirmBookings(
   options: BookingConfirmationOptions = {}
 ): Promise<AutomationResult> {
-  await connectDB();
-
+  const { bookings } = getRepos();
   const results: AutomationResult = {
     success: true,
     message: '',
@@ -44,9 +41,7 @@ export async function autoConfirmBookings(
     // Get tenants to process
     let tenants: ActiveTenant[];
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId)
-        .select(`_id slug name ${TENANT_FIELDS}`)
-        .lean<ActiveTenant>();
+      const tenant = (await getRepos().tenants.findById(options.tenantId, { select: `_id slug name ${TENANT_FIELDS}` })) as ActiveTenant | null;
       tenants = tenant ? [tenant] : [];
     } else {
       tenants = await getActiveTenants(TENANT_FIELDS);
@@ -68,15 +63,14 @@ export async function autoConfirmBookings(
         // Every pending/confirmed booking that has not ended yet. Any booking
         // overlapping an upcoming candidate necessarily ends after now, so this
         // single result set contains both the candidates and their conflicts.
-        const scheduleFilter: Record<string, unknown> = {
-          tenantId: tenant._id,
-          status: { $in: ['pending', 'confirmed'] },
-          endTime: { $gt: now },
+        const scheduleFilter: BookingFilter = {
+          status: ['pending', 'confirmed'],
+          endTime: { gt: now },
         };
-        const schedule = await Booking.find(scheduleFilter)
-          .select('status confirmationSent startTime endTime customerName customerEmail customerPhone serviceName staffName notes')
-          .sort({ startTime: 1 })
-          .lean();
+        const schedule = await bookings.list(String(tenant._id), scheduleFilter, {
+          select: 'status confirmationSent startTime endTime customerName customerEmail customerPhone serviceName staffName notes',
+          sort: 'startTime',
+        });
 
         // Rules: no conflicts, status is pending, confirmation not yet sent, starts in the future
         const candidates = schedule.filter((b) =>
@@ -100,13 +94,10 @@ export async function autoConfirmBookings(
         if (toConfirm.length === 0) continue;
 
         // One write for all confirmations; the status guard keeps it idempotent
-        await Booking.updateMany(
-          {
-            tenantId: tenant._id,
-            _id: { $in: toConfirm.map((b) => b._id) },
-            status: 'pending',
-          },
-          { $set: { status: 'confirmed', confirmationSent: true } }
+        await bookings.updateMany(
+          String(tenant._id),
+          { ids: toConfirm.map((b) => b._id), status: 'pending' },
+          { status: 'confirmed', confirmationSent: true }
         );
 
         for (const booking of toConfirm) {

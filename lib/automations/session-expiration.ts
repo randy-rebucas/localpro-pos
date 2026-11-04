@@ -3,11 +3,7 @@
  * Enhanced session management with activity tracking
  */
 
-import mongoose from 'mongoose';
-import connectDB from '@/lib/mongodb';
-import AuditLog from '@/models/AuditLog';
-import User from '@/models/User';
-import Tenant from '@/models/Tenant';
+import { getRepos } from '@/lib/db';
 import { getActiveTenants, type ActiveTenant } from '@/lib/tenant-active-query';
 import { AutomationResult } from './types';
 
@@ -28,8 +24,6 @@ export interface SessionExpirationOptions {
 export async function expireInactiveSessions(
   options: SessionExpirationOptions = {}
 ): Promise<AutomationResult> {
-  await connectDB();
-
   const results: AutomationResult = {
     success: true,
     message: '',
@@ -45,9 +39,7 @@ export async function expireInactiveSessions(
     // Get tenants to process (no tenant settings are needed)
     let tenants: ActiveTenant[];
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId)
-        .select('_id slug name')
-        .lean<ActiveTenant>();
+      const tenant = (await getRepos().tenants.findById(options.tenantId, { select: '_id slug name' })) as ActiveTenant | null;
       tenants = tenant ? [tenant] : [];
     } else {
       tenants = await getActiveTenants();
@@ -63,12 +55,10 @@ export async function expireInactiveSessions(
 
     for (const tenant of tenants) {
       try {
-        const tenantObjectId = new mongoose.Types.ObjectId(String(tenant._id));
+        const tenantId = String(tenant._id);
 
         // Get all active users
-        const users = await User.find({ tenantId: tenantObjectId, isActive: true })
-          .select('_id lastLogin')
-          .lean();
+        const users = await getRepos().users.listActiveLogins(tenantId);
         if (users.length === 0) continue;
 
         const userIds = users.map((u) => u._id);
@@ -76,16 +66,10 @@ export async function expireInactiveSessions(
         // Users with any audit activity since the cutoff — they are not expired.
         // Bounded to the inactivity window, served by { tenantId, userId, createdAt }.
         const recentlyActive = new Set(
-          (
-            await AuditLog.distinct('userId', {
-              tenantId: tenantObjectId,
-              userId: { $in: userIds },
-              createdAt: { $gte: cutoffTime },
-            })
-          ).map((id) => String(id))
+          await getRepos().auditLogs.activeUserIds(tenantId, userIds, { since: cutoffTime })
         );
 
-        const inactive = users.filter((u) => !recentlyActive.has(u._id.toString()));
+        const inactive = users.filter((u) => !recentlyActive.has(u._id));
         if (inactive.length === 0) continue;
 
         // Previously: a user whose last audit entry is older than the cutoff is
@@ -95,14 +79,7 @@ export async function expireInactiveSessions(
           (u) => !(u.lastLogin && new Date(u.lastLogin) < cutoffTime)
         );
         const hasAnyActivity = needsHistoryCheck.length
-          ? new Set(
-              (
-                await AuditLog.distinct('userId', {
-                  tenantId: tenantObjectId,
-                  userId: { $in: needsHistoryCheck.map((u) => u._id) },
-                })
-              ).map((id) => String(id))
-            )
+          ? new Set(await getRepos().auditLogs.activeUserIds(tenantId, needsHistoryCheck.map((u) => u._id)))
           : new Set<string>();
 
         for (const user of inactive) {
@@ -112,7 +89,7 @@ export async function expireInactiveSessions(
             // Note: JWT tokens can't be invalidated server-side without a blacklist
             // This automation would work better with a session store or token blacklist
             // For now, we'll track it in results
-            if (staleLogin || hasAnyActivity.has(user._id.toString())) {
+            if (staleLogin || hasAnyActivity.has(user._id)) {
               totalExpired++;
             }
           } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any

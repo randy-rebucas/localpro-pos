@@ -4,14 +4,12 @@
  */
 
 import connectDB from '@/lib/mongodb';
-import Product from '@/models/Product';
-import Branch from '@/models/Branch';
+import { getRepos, runInTransaction } from '@/lib/db';
 import StockMovement from '@/models/StockMovement';
 import Tenant from '@/models/Tenant';
 import { sendEmail } from '@/lib/notifications';
 import { getTenantSettingsById } from '@/lib/tenant';
 import { AutomationResult } from './types';
-import mongoose from 'mongoose';
 
 export interface StockTransferOptions {
   tenantId?: string;
@@ -42,9 +40,14 @@ export async function detectStockImbalances(
     // Get tenants to process
     let tenants;
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).lean();
+      const tenant = await getRepos().tenants.findById(options.tenantId);
       tenants = tenant ? [tenant] : [];
     } else {
+      // TODO(postgres-migration): Tenant has no `status` field (and Mongoose 8 passes
+      // unknown filter keys through), so this query matches NO tenants today and the
+      // automation only runs when options.tenantId is given. Left on the model on
+      // purpose: replacing it with tenants.listActive() would start running this
+      // automation for every tenant. Decide the intended scope before converting.
       tenants = await Tenant.find({ status: 'active' }).lean();
     }
 
@@ -62,18 +65,15 @@ export async function detectStockImbalances(
         const tenantSettings = await getTenantSettingsById(tenantId);
 
         // Get all branches for this tenant
-        const branches = await Branch.find({ tenantId, isActive: true }).lean();
+        const branches = await getRepos().branches.listActive(tenantId);
         
         if (branches.length < 2) {
           continue; // Need at least 2 branches for transfers
         }
 
         // Get all products with branch stock
-        const products = await Product.find({
-          tenantId,
-          trackInventory: true,
-          branchStock: { $exists: true, $ne: [] },
-        }).lean();
+        const { products: productRepo } = getRepos();
+        const products = await productRepo.list(tenantId, { trackInventory: true, hasBranchStock: true });
 
         for (const product of products) {
           try {
@@ -111,41 +111,40 @@ export async function detectStockImbalances(
               }
 
               // Get branch names
-              const fromBranch = branches.find(b => b._id.toString() === highStock.branchId);
-              const toBranch = branches.find(b => b._id.toString() === lowStock.branchId);
+              const fromBranch = branches.find(b => b._id === highStock.branchId);
+              const toBranch = branches.find(b => b._id === lowStock.branchId);
 
               if (!fromBranch || !toBranch) {
                 continue;
               }
 
               if (autoApprove) {
-                // Auto-transfer (update stock)
-                const productDoc = await Product.findById(product._id);
-                if (productDoc && productDoc.branchStock) {
-                  // Update source branch stock
-                  const fromBranchStock = productDoc.branchStock.find(
-                    (bs: any) => bs.branchId.toString() === highStock.branchId // eslint-disable-line @typescript-eslint/no-explicit-any
+                // Auto-transfer: take from the source branch (refused if it would go
+                // negative), then add to the destination. Both in one transaction so
+                // a failed destination write can't lose the stock taken from the source.
+                const taken = await runInTransaction(async (tx) => {
+                  const fromSource = await productRepo.adjustStock(
+                    tenantId,
+                    product._id,
+                    { kind: 'branch', branchId: highStock.branchId },
+                    -transferQuantity,
+                    { allowNegative: false, tx }
                   );
-                  if (fromBranchStock) {
-                    fromBranchStock.stock -= transferQuantity;
-                  }
-
-                  // Update destination branch stock
-                  const toBranchStock = productDoc.branchStock.find(
-                    (bs: any) => bs.branchId.toString() === lowStock.branchId // eslint-disable-line @typescript-eslint/no-explicit-any
+                  if (!fromSource) return null;
+                  const hasDestination = fromSource.branchStock.some((bs) => String(bs.branchId) === lowStock.branchId);
+                  const toDestination = await productRepo.adjustStock(
+                    tenantId,
+                    product._id,
+                    hasDestination
+                      ? { kind: 'branch', branchId: lowStock.branchId }
+                      : { kind: 'newBranch', branchId: lowStock.branchId },
+                    transferQuantity,
+                    { allowNegative: false, tx }
                   );
-                  if (toBranchStock) {
-                    toBranchStock.stock += transferQuantity;
-                  } else {
-                    // Add new branch stock entry
-                    productDoc.branchStock.push({
-                      branchId: new mongoose.Types.ObjectId(lowStock.branchId),
-                      stock: transferQuantity,
-                    });
-                  }
-
-                  await productDoc.save();
-
+                  if (!toDestination) throw new Error('Stock transfer destination update failed');
+                  return fromSource;
+                });
+                if (taken) {
                   // Create stock movement records
                   await StockMovement.create({
                     productId: product._id,

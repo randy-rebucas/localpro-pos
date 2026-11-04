@@ -9,10 +9,6 @@ import { NextRequest } from 'next/server';
 // Mocks
 // ---------------------------------------------------------------------------
 
-vi.mock('@/lib/mongodb', () => ({
-  default: vi.fn().mockResolvedValue(undefined),
-}));
-
 vi.mock('@/lib/rate-limit', () => ({
   checkRateLimit: vi.fn().mockReturnValue({ allowed: true, retryAfter: 0 }),
 }));
@@ -48,16 +44,21 @@ vi.mock('@/lib/permissions-server', () => ({
   hasTenantPermission: (...args: unknown[]) => mockHasTenantPermission(...args),
 }));
 
-const mockDiscountFind = vi.fn();
-const mockDiscountFindOne = vi.fn();
-const mockDiscountCreate = vi.fn();
-
-vi.mock('@/models/Discount', () => ({
-  default: {
-    find: (...args: unknown[]) => mockDiscountFind(...args),
-    findOne: (...args: unknown[]) => mockDiscountFindOne(...args),
-    create: (...args: unknown[]) => mockDiscountCreate(...args),
+const repos = {
+  discounts: {
+    list: vi.fn(),
+    findById: vi.fn(),
+    findByCode: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    delete: vi.fn(),
   },
+};
+
+vi.mock('@/lib/db', () => ({
+  getRepos: () => repos,
+  isDuplicateKeyError: (e: { code?: number; name?: string } | null) =>
+    e?.code === 11000 || e?.name === 'DuplicateKeyError',
 }));
 
 import { GET, POST } from '@/app/api/discounts/route';
@@ -108,16 +109,24 @@ beforeEach(() => {
 describe('GET /api/discounts', () => {
   it('scopes the query to the authenticated tenant', async () => {
     authAs(TENANT_A);
-    const leanMock = vi.fn().mockResolvedValue([{ _id: 'd1', tenantId: TENANT_A }]);
-    const sortMock = vi.fn().mockReturnValue({ lean: leanMock });
-    mockDiscountFind.mockReturnValue({ sort: sortMock });
+    repos.discounts.list.mockResolvedValue([{ _id: 'd1', tenantId: TENANT_A }]);
 
     const res = await GET(createRequest('/api/discounts'));
     const { status, body } = await parseResponse(res);
 
     expect(status).toBe(200);
     expect(body.success).toBe(true);
-    expect(mockDiscountFind).toHaveBeenCalledWith(expect.objectContaining({ tenantId: TENANT_A }));
+    expect(body.data).toEqual([{ _id: 'd1', tenantId: TENANT_A }]);
+    expect(repos.discounts.list).toHaveBeenCalledWith(TENANT_A, { code: undefined, activeAt: undefined });
+  });
+
+  it('passes the code and activeOnly filters through', async () => {
+    authAs(TENANT_A);
+    repos.discounts.list.mockResolvedValue([]);
+
+    await GET(createRequest('/api/discounts?code=save10&activeOnly=true'));
+
+    expect(repos.discounts.list).toHaveBeenCalledWith(TENANT_A, { code: 'save10', activeAt: expect.any(Date) });
   });
 });
 
@@ -134,7 +143,7 @@ describe('POST /api/discounts', () => {
     const { status } = await parseResponse(res);
 
     expect(status).toBe(403);
-    expect(mockDiscountCreate).not.toHaveBeenCalled();
+    expect(repos.discounts.create).not.toHaveBeenCalled();
   });
 
   it('requires code, type, value, validFrom, validUntil', async () => {
@@ -144,23 +153,23 @@ describe('POST /api/discounts', () => {
     const { status } = await parseResponse(res);
 
     expect(status).toBe(400);
-    expect(mockDiscountCreate).not.toHaveBeenCalled();
+    expect(repos.discounts.create).not.toHaveBeenCalled();
   });
 
   it('rejects a percentage value over 100', async () => {
     authAs(TENANT_A);
-    mockDiscountFindOne.mockResolvedValue(null);
+    repos.discounts.findByCode.mockResolvedValue(null);
 
     const res = await POST(createRequest('/api/discounts', 'POST', { ...validPayload, value: 150 }));
     const { status } = await parseResponse(res);
 
     expect(status).toBe(400);
-    expect(mockDiscountCreate).not.toHaveBeenCalled();
+    expect(repos.discounts.create).not.toHaveBeenCalled();
   });
 
   it('rejects when validUntil is not after validFrom', async () => {
     authAs(TENANT_A);
-    mockDiscountFindOne.mockResolvedValue(null);
+    repos.discounts.findByCode.mockResolvedValue(null);
 
     const res = await POST(createRequest('/api/discounts', 'POST', {
       ...validPayload, validFrom: '2026-06-01', validUntil: '2026-01-01',
@@ -168,32 +177,48 @@ describe('POST /api/discounts', () => {
     const { status } = await parseResponse(res);
 
     expect(status).toBe(400);
-    expect(mockDiscountCreate).not.toHaveBeenCalled();
+    expect(repos.discounts.create).not.toHaveBeenCalled();
   });
 
   it('rejects a duplicate code for the same tenant', async () => {
     authAs(TENANT_A);
-    mockDiscountFindOne.mockResolvedValue({ _id: 'existing', code: 'SAVE10' });
+    repos.discounts.findByCode.mockResolvedValue({ _id: 'existing', code: 'SAVE10' });
 
     const res = await POST(createRequest('/api/discounts', 'POST', validPayload));
     const { status, body } = await parseResponse(res);
 
     expect(status).toBe(400);
     expect(body.error).toMatch(/already exists/i);
-    expect(mockDiscountCreate).not.toHaveBeenCalled();
+    expect(repos.discounts.findByCode).toHaveBeenCalledWith(TENANT_A, 'SAVE10');
+    expect(repos.discounts.create).not.toHaveBeenCalled();
+  });
+
+  it('maps a duplicate-key error on create to 400', async () => {
+    authAs(TENANT_A);
+    repos.discounts.findByCode.mockResolvedValue(null);
+    repos.discounts.create.mockRejectedValue(Object.assign(new Error('dup'), { name: 'DuplicateKeyError' }));
+
+    const res = await POST(createRequest('/api/discounts', 'POST', validPayload));
+    const { status, body } = await parseResponse(res);
+
+    expect(status).toBe(400);
+    expect(body.error).toMatch(/already exists/i);
   });
 
   it('creates the discount scoped to the authenticated tenant', async () => {
     authAs(TENANT_A);
-    mockDiscountFindOne.mockResolvedValue(null);
-    mockDiscountCreate.mockResolvedValue({ _id: 'd1', code: 'SAVE10' });
+    repos.discounts.findByCode.mockResolvedValue(null);
+    repos.discounts.create.mockResolvedValue({ _id: 'd1', code: 'SAVE10' });
 
     const res = await POST(createRequest('/api/discounts', 'POST', validPayload));
     const { status, body } = await parseResponse(res);
 
     expect(status).toBe(201);
     expect(body.success).toBe(true);
-    expect(mockDiscountCreate).toHaveBeenCalledWith(expect.objectContaining({ tenantId: TENANT_A, code: 'SAVE10' }));
+    expect(repos.discounts.create).toHaveBeenCalledWith(
+      TENANT_A,
+      expect.objectContaining({ code: 'SAVE10', category: 'general', usageCount: 0, isActive: true })
+    );
   });
 });
 
@@ -204,7 +229,7 @@ describe('POST /api/discounts', () => {
 describe('PUT /api/discounts/:id', () => {
   it('404s when the discount does not belong to the caller tenant', async () => {
     authAs(TENANT_B);
-    mockDiscountFindOne.mockResolvedValue(null);
+    repos.discounts.findById.mockResolvedValue(null);
 
     const res = await PUT(createRequest('/api/discounts/d1', 'PUT', { name: 'Renamed' }), {
       params: Promise.resolve({ id: 'd1' }),
@@ -212,13 +237,13 @@ describe('PUT /api/discounts/:id', () => {
     const { status } = await parseResponse(res);
 
     expect(status).toBe(404);
-    expect(mockDiscountFindOne).toHaveBeenCalledWith({ _id: 'd1', tenantId: TENANT_B });
+    expect(repos.discounts.findById).toHaveBeenCalledWith(TENANT_B, 'd1');
+    expect(repos.discounts.update).not.toHaveBeenCalled();
   });
 
   it('rejects changing the discount code after creation', async () => {
     authAs(TENANT_A);
-    const save = vi.fn();
-    mockDiscountFindOne.mockResolvedValue({ _id: 'd1', code: 'SAVE10', save });
+    repos.discounts.findById.mockResolvedValue({ _id: 'd1', code: 'SAVE10' });
 
     const res = await PUT(createRequest('/api/discounts/d1', 'PUT', { code: 'DIFFERENT' }), {
       params: Promise.resolve({ id: 'd1' }),
@@ -226,7 +251,7 @@ describe('PUT /api/discounts/:id', () => {
     const { status } = await parseResponse(res);
 
     expect(status).toBe(400);
-    expect(save).not.toHaveBeenCalled();
+    expect(repos.discounts.update).not.toHaveBeenCalled();
   });
 
   it('rejects update when the caller lacks discounts.manage', async () => {
@@ -239,23 +264,45 @@ describe('PUT /api/discounts/:id', () => {
     const { status } = await parseResponse(res);
 
     expect(status).toBe(403);
-    expect(mockDiscountFindOne).not.toHaveBeenCalled();
+    expect(repos.discounts.findById).not.toHaveBeenCalled();
+    expect(repos.discounts.update).not.toHaveBeenCalled();
   });
 
-  it('updates only the fields provided', async () => {
+  it('rejects a percentage value over 100 based on the stored type', async () => {
     authAs(TENANT_A);
-    const save = vi.fn().mockResolvedValue(undefined);
-    const discount = { _id: 'd1', code: 'SAVE10', name: 'Old Name', type: 'percentage', validFrom: '2026-01-01', validUntil: '2026-12-31', save };
-    mockDiscountFindOne.mockResolvedValue(discount);
+    repos.discounts.findById.mockResolvedValue({
+      _id: 'd1', code: 'SAVE10', type: 'percentage', validFrom: '2026-01-01', validUntil: '2026-12-31',
+    });
 
-    const res = await PUT(createRequest('/api/discounts/d1', 'PUT', { name: 'New Name' }), {
+    const res = await PUT(createRequest('/api/discounts/d1', 'PUT', { value: 150 }), {
       params: Promise.resolve({ id: 'd1' }),
     });
     const { status } = await parseResponse(res);
 
+    expect(status).toBe(400);
+    expect(repos.discounts.update).not.toHaveBeenCalled();
+  });
+
+  it('updates only the fields provided', async () => {
+    authAs(TENANT_A);
+    const discount = {
+      _id: 'd1', code: 'SAVE10', name: 'Old Name', type: 'percentage', validFrom: '2026-01-01', validUntil: '2026-12-31',
+    };
+    repos.discounts.findById.mockResolvedValue(discount);
+    repos.discounts.update.mockResolvedValue({
+      before: discount,
+      after: { ...discount, name: 'New Name' },
+      changed: ['name'],
+    });
+
+    const res = await PUT(createRequest('/api/discounts/d1', 'PUT', { name: 'New Name' }), {
+      params: Promise.resolve({ id: 'd1' }),
+    });
+    const { status, body } = await parseResponse(res);
+
     expect(status).toBe(200);
-    expect(discount.name).toBe('New Name');
-    expect(save).toHaveBeenCalled();
+    expect(body.data.name).toBe('New Name');
+    expect(repos.discounts.update).toHaveBeenCalledWith(TENANT_A, 'd1', { name: 'New Name' });
   });
 });
 
@@ -266,7 +313,7 @@ describe('PUT /api/discounts/:id', () => {
 describe('DELETE /api/discounts/:id', () => {
   it('404s for a discount outside the caller tenant', async () => {
     authAs(TENANT_B);
-    mockDiscountFindOne.mockResolvedValue(null);
+    repos.discounts.findById.mockResolvedValue(null);
 
     const res = await DELETE(createRequest('/api/discounts/d1', 'DELETE'), {
       params: Promise.resolve({ id: 'd1' }),
@@ -274,6 +321,8 @@ describe('DELETE /api/discounts/:id', () => {
     const { status } = await parseResponse(res);
 
     expect(status).toBe(404);
+    expect(repos.discounts.findById).toHaveBeenCalledWith(TENANT_B, 'd1');
+    expect(repos.discounts.delete).not.toHaveBeenCalled();
   });
 
   it('rejects deletion when the caller lacks discounts.manage', async () => {
@@ -286,13 +335,13 @@ describe('DELETE /api/discounts/:id', () => {
     const { status } = await parseResponse(res);
 
     expect(status).toBe(403);
-    expect(mockDiscountFindOne).not.toHaveBeenCalled();
+    expect(repos.discounts.findById).not.toHaveBeenCalled();
+    expect(repos.discounts.delete).not.toHaveBeenCalled();
   });
 
   it('blocks deletion of a discount already used in transactions', async () => {
     authAs(TENANT_A);
-    const deleteOne = vi.fn();
-    mockDiscountFindOne.mockResolvedValue({ _id: 'd1', code: 'SAVE10', usageCount: 3, deleteOne });
+    repos.discounts.findById.mockResolvedValue({ _id: 'd1', code: 'SAVE10', usageCount: 3 });
 
     const res = await DELETE(createRequest('/api/discounts/d1', 'DELETE'), {
       params: Promise.resolve({ id: 'd1' }),
@@ -301,13 +350,13 @@ describe('DELETE /api/discounts/:id', () => {
 
     expect(status).toBe(400);
     expect(body.error).toContain('SAVE10');
-    expect(deleteOne).not.toHaveBeenCalled();
+    expect(repos.discounts.delete).not.toHaveBeenCalled();
   });
 
   it('deletes an unused discount', async () => {
     authAs(TENANT_A);
-    const deleteOne = vi.fn().mockResolvedValue(undefined);
-    mockDiscountFindOne.mockResolvedValue({ _id: 'd1', code: 'SAVE10', usageCount: 0, deleteOne });
+    repos.discounts.findById.mockResolvedValue({ _id: 'd1', code: 'SAVE10', usageCount: 0 });
+    repos.discounts.delete.mockResolvedValue(true);
 
     const res = await DELETE(createRequest('/api/discounts/d1', 'DELETE'), {
       params: Promise.resolve({ id: 'd1' }),
@@ -316,6 +365,6 @@ describe('DELETE /api/discounts/:id', () => {
 
     expect(status).toBe(200);
     expect(body.success).toBe(true);
-    expect(deleteOne).toHaveBeenCalled();
+    expect(repos.discounts.delete).toHaveBeenCalledWith(TENANT_A, 'd1');
   });
 });

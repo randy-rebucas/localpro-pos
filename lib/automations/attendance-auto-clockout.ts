@@ -3,12 +3,8 @@
  * Auto-clock-out employees who forgot to clock out
  */
 
-import type { AnyBulkWriteOperation } from 'mongoose';
-import connectDB from '@/lib/mongodb';
-import Attendance, { type IAttendance } from '@/models/Attendance';
-import Tenant from '@/models/Tenant';
+import { getRepos, type AttendanceRepo } from '@/lib/db';
 import type { ITenantSettings } from '@/models/Tenant';
-import User from '@/models/User'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { sendEmail } from '@/lib/notifications';
 import { getActiveTenants, type ActiveTenant } from '@/lib/tenant-active-query';
 import { getTenantDayBoundaries, DEFAULT_TENANT_TIMEZONE } from '@/lib/timezone';
@@ -39,7 +35,7 @@ interface PendingClockOut {
 export async function autoClockOutForgottenSessions(
   options: AutoClockOutOptions = {}
 ): Promise<AutomationResult> {
-  await connectDB();
+  const { attendance } = getRepos();
 
   const results: AutomationResult = {
     success: true,
@@ -55,9 +51,7 @@ export async function autoClockOutForgottenSessions(
     // Get tenants to process
     let tenants: ActiveTenant[];
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId)
-        .select(`_id slug name ${TENANT_FIELDS}`)
-        .lean<ActiveTenant>();
+      const tenant = (await getRepos().tenants.findById(options.tenantId, { select: `_id slug name ${TENANT_FIELDS}` })) as ActiveTenant | null;
       tenants = tenant ? [tenant] : [];
     } else {
       // Get all active tenants
@@ -84,16 +78,13 @@ export async function autoClockOutForgottenSessions(
         }
 
         // Find all open attendance sessions
-        const openSessions = await Attendance.find({
-          tenantId: tenant._id,
-          clockOut: null,
-          clockIn: { $gte: new Date(Date.now() - (options.maxAgeHours ?? 48) * 60 * 60 * 1000) },
-        })
-          .select('userId clockIn notes')
-          .populate('userId', 'name email')
-          .lean();
+        const openSessions = await attendance.list(
+          String(tenant._id),
+          { open: true, clockIn: { gte: new Date(Date.now() - (options.maxAgeHours ?? 48) * 60 * 60 * 1000) } },
+          { select: 'userId clockIn notes', populateUser: true }
+        );
 
-        const ops: AnyBulkWriteOperation<IAttendance>[] = [];
+        const updates: Parameters<AttendanceRepo['updateEach']>[1] = [];
         const pending: PendingClockOut[] = [];
 
         for (const session of openSessions) {
@@ -146,21 +137,18 @@ export async function autoClockOutForgottenSessions(
               const totalMs = clockOutTime.getTime() - clockInTime.getTime();
               const totalHours = Math.round((totalMs / (1000 * 60 * 60)) * 100) / 100;
 
-              // Each record gets its own computed values -> one bulkWrite per tenant.
-              // `clockOut: null` in the filter keeps it idempotent if a user clocks
-              // out between the read and the write.
-              ops.push({
-                updateOne: {
-                  filter: { _id: session._id, tenantId: tenant._id, clockOut: null },
-                  update: {
-                    $set: {
-                      clockOut: clockOutTime,
-                      totalHours,
-                      notes: (session.notes || '') + (session.notes ? '\n' : '') + `[AUTO] Automatically clocked out after grace period.`,
-                    },
-                  },
+              // Each record gets its own computed values -> one batch per tenant.
+              // `ifOpen` keeps it idempotent if a user clocks out between the
+              // read and the write.
+              updates.push({
+                id: session._id,
+                ifOpen: true,
+                set: {
+                  clockOut: clockOutTime,
+                  totalHours,
+                  notes: (session.notes || '') + (session.notes ? '\n' : '') + `[AUTO] Automatically clocked out after grace period.`,
                 },
-              } as AnyBulkWriteOperation<IAttendance>);
+              });
 
               pending.push({
                 user: session.userId as unknown as PendingClockOut['user'],
@@ -175,10 +163,10 @@ export async function autoClockOutForgottenSessions(
           }
         }
 
-        if (ops.length === 0) continue;
+        if (updates.length === 0) continue;
 
         // Update attendance records
-        await Attendance.bulkWrite(ops, { ordered: false });
+        await attendance.updateEach(String(tenant._id), updates);
         totalProcessed += pending.length;
 
         // Send notification to employee and manager

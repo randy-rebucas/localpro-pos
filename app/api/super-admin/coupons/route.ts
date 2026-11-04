@@ -1,14 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Coupon from '@/models/Coupon';
-import SuperAdminAction from '@/models/SuperAdminAction';
+import { getRepos } from '@/lib/db';
 import { requireRole } from '@/lib/auth';
 import { handleApiError } from '@/lib/error-handler';
 
 // GET /api/super-admin/coupons
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     await requireRole(request, ['super_admin']);
 
     const { searchParams } = new URL(request.url);
@@ -16,14 +13,9 @@ export async function GET(request: NextRequest) {
     const page = Math.max(1, parseInt(searchParams.get('page') || '1'));
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '20')));
 
-    const query: Record<string, unknown> = {};
-    if (active === 'true') query.isActive = true;
-    if (active === 'false') query.isActive = false;
+    const isActive = active === 'true' ? true : active === 'false' ? false : undefined;
 
-    const [coupons, total] = await Promise.all([
-      Coupon.find(query).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
-      Coupon.countDocuments(query),
-    ]);
+    const { items: coupons, total } = await getRepos().coupons.list({ isActive, page, limit });
 
     return NextResponse.json({
       success: true,
@@ -41,7 +33,6 @@ export async function GET(request: NextRequest) {
 // POST /api/super-admin/coupons
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     const adminUser = await requireRole(request, ['super_admin']);
 
     const body = await request.json();
@@ -51,7 +42,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'code, discountType, and discountValue are required' }, { status: 400 });
     }
 
-    const coupon = await Coupon.create({
+    const coupon = await getRepos().coupons.create({
       code: String(code).toUpperCase(),
       description,
       discountType,
@@ -66,7 +57,7 @@ export async function POST(request: NextRequest) {
     });
 
     const ip = request.headers.get('x-forwarded-for') || '';
-    await SuperAdminAction.create({
+    await getRepos().superAdminActions.create({
       adminUserId: adminUser.userId,
       action: 'coupon.create',
       targetType: 'Coupon',

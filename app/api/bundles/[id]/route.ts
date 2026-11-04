@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import ProductBundle from '@/models/ProductBundle';
-import '@/models/Category'; // register schema for populate
+import { getRepos, isDuplicateKeyError, type BundleInput, type Patch } from '@/lib/db';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
@@ -14,7 +12,6 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
@@ -24,10 +21,7 @@ export async function GET(
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
-    const bundle = await ProductBundle.findOne({ _id: id, tenantId })
-      .populate('items.productId', 'name price stock')
-      .populate('categoryId', 'name')
-      .lean();
+    const bundle = await getRepos().bundles.findById(tenantId, id, { populate: true });
 
     if (!bundle) {
       return NextResponse.json({ success: false, error: t('validation.bundleNotFound', 'Bundle not found') }, { status: 404 });
@@ -45,7 +39,6 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
@@ -58,38 +51,36 @@ export async function PUT(
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
-    const bundle = await ProductBundle.findOne({ _id: id, tenantId });
-    if (!bundle) {
+    const body = await request.json();
+
+    const patch: Patch<BundleInput> = {};
+    if (body.name) patch.name = body.name;
+    if (body.description !== undefined) patch.description = body.description;
+    if (body.price !== undefined) patch.price = body.price;
+    if (body.items) patch.items = body.items;
+    if (body.sku !== undefined) patch.sku = body.sku;
+    if (body.categoryId !== undefined) patch.categoryId = body.categoryId;
+    if (body.image !== undefined) patch.image = body.image;
+    if (body.trackInventory !== undefined) patch.trackInventory = body.trackInventory;
+    if (body.isActive !== undefined) patch.isActive = body.isActive;
+
+    const result = await getRepos().bundles.update(tenantId, id, patch);
+    if (!result) {
       return NextResponse.json({ success: false, error: 'Bundle not found' }, { status: 404 });
     }
-
-    const body = await request.json();
-    const oldData = bundle.toObject();
-
-    if (body.name) bundle.name = body.name;
-    if (body.description !== undefined) bundle.description = body.description;
-    if (body.price !== undefined) bundle.price = body.price;
-    if (body.items) bundle.items = body.items;
-    if (body.sku !== undefined) bundle.sku = body.sku;
-    if (body.categoryId !== undefined) bundle.categoryId = body.categoryId;
-    if (body.image !== undefined) bundle.image = body.image;
-    if (body.trackInventory !== undefined) bundle.trackInventory = body.trackInventory;
-    if (body.isActive !== undefined) bundle.isActive = body.isActive;
-
-    await bundle.save();
 
     await createAuditLog(request, {
       tenantId,
       action: AuditActions.UPDATE,
       entityType: 'bundle',
-      entityId: bundle._id.toString(),
-      changes: { before: oldData, after: bundle.toObject() },
+      entityId: id,
+      changes: { before: result.before, after: result.after },
     });
 
-    return NextResponse.json({ success: true, data: bundle });
+    return NextResponse.json({ success: true, data: result.after });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     const t = await getValidationTranslatorFromRequest(request);
-    if (error.code === 11000) {
+    if (isDuplicateKeyError(error)) {
       return NextResponse.json(
         { success: false, error: t('validation.bundleSkuExists', 'Bundle with this SKU already exists') },
         { status: 400 }
@@ -105,7 +96,6 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
@@ -119,21 +109,18 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
     }
 
-    const bundle = await ProductBundle.findOne({ _id: id, tenantId });
-    if (!bundle) {
+    // Soft delete - set isActive to false
+    const result = await getRepos().bundles.update(tenantId, id, { isActive: false });
+    if (!result) {
       return NextResponse.json({ success: false, error: t('validation.bundleNotFound', 'Bundle not found') }, { status: 404 });
     }
-
-    // Soft delete - set isActive to false
-    bundle.isActive = false;
-    await bundle.save();
 
     await createAuditLog(request, {
       tenantId,
       action: AuditActions.DELETE,
       entityType: 'bundle',
-      entityId: bundle._id.toString(),
-      changes: { name: bundle.name },
+      entityId: id,
+      changes: { name: result.after.name },
     });
 
     return NextResponse.json({ success: true, message: t('validation.bundleDeactivated', 'Bundle deactivated') });

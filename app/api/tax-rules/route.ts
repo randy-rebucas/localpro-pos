@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import TaxRule from '@/models/TaxRule';
+import { getRepos } from '@/lib/db';
 import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
@@ -10,8 +9,6 @@ import { checkRateLimit } from '@/lib/rate-limit';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
-
     // Require authentication to prevent unauthenticated tax-rule enumeration
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
@@ -29,16 +26,12 @@ export async function GET(request: NextRequest) {
 
     const searchParams = request.nextUrl.searchParams;
     const isActive = searchParams.get('isActive');
-    
-    const query: any = { tenantId }; // eslint-disable-line @typescript-eslint/no-explicit-any
-    if (isActive !== null) {
-      query.isActive = isActive === 'true';
-    }
-    
-    const taxRules = await TaxRule.find(query)
-      .sort({ priority: -1, createdAt: -1 })
-      .lean();
-    
+
+    const taxRules = await getRepos().taxRules.list(
+      tenantId,
+      isActive !== null ? { isActive: isActive === 'true' } : {}
+    );
+
     return NextResponse.json({ success: true, data: taxRules });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
@@ -47,7 +40,6 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const t = await getValidationTranslatorFromRequest(request);
@@ -68,7 +60,7 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const { name, rate, label, appliesTo, categoryIds, productIds, region, priority, isActive } = body;
-    
+
     // Validate required fields
     if (!name || !name.trim()) {
       return NextResponse.json(
@@ -76,16 +68,15 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-    
+
     if (rate === undefined || rate === null || isNaN(rate) || rate < 0 || rate > 100) {
       return NextResponse.json(
         { success: false, error: t('validation.taxRateRequired', 'Tax rate must be between 0 and 100') },
         { status: 400 }
       );
     }
-    
-    const taxRule = await TaxRule.create({
-      tenantId,
+
+    const taxRule = await getRepos().taxRules.create(tenantId, {
       name: name.trim(),
       rate: parseFloat(rate),
       label: label?.trim() || 'Tax',
@@ -96,16 +87,17 @@ export async function POST(request: NextRequest) {
       priority: priority || 0,
       isActive: isActive !== undefined ? isActive : true,
     });
-    
+
     await createAuditLog(request, {
       tenantId,
       userId: user.userId,
       action: AuditActions.CREATE,
       entityType: 'taxRule',
-      entityId: taxRule._id.toString(),
+      entityId: taxRule._id,
+
       changes: { name, rate, label },
     });
-    
+
     return NextResponse.json({ success: true, data: taxRule }, { status: 201 });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     return NextResponse.json({ success: false, error: error.message }, { status: 400 });

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Branch from '@/models/Branch';
+import { getRepos } from '@/lib/db';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -12,7 +11,6 @@ import { handleApiError } from '@/lib/error-handler';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId } = authResult;
@@ -20,15 +18,10 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const isActive = searchParams.get('isActive');
 
-    const query: any = { tenantId }; // eslint-disable-line @typescript-eslint/no-explicit-any
-    if (searchParams.has('isActive')) {
-      query.isActive = isActive === 'true';
-    }
-
-    const branches = await Branch.find(query)
-      .populate('managerId', 'name email')
-      .sort({ name: 1 })
-      .lean();
+    const branches = await getRepos().branches.list(
+      tenantId,
+      searchParams.has('isActive') ? { isActive: isActive === 'true' } : {}
+    );
 
     return NextResponse.json({ success: true, data: branches });
   } catch (error) {
@@ -38,7 +31,6 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId, user } = authResult;
@@ -61,7 +53,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if multi-branch feature is enabled (skip for first branch)
-    const currentBranchCount = await Branch.countDocuments({ tenantId, isActive: true });
+    const currentBranchCount = await getRepos().branches.countActive(tenantId);
     if (currentBranchCount >= 1) {
       try {
         await checkFeatureAccess(tenantId.toString(), 'enableMultiBranch');
@@ -83,8 +75,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const branch = await Branch.create({
-      tenantId,
+    const branch = await getRepos().branches.create(tenantId, {
       name,
       code,
       address,
@@ -98,7 +89,7 @@ export async function POST(request: NextRequest) {
       tenantId,
       action: AuditActions.CREATE,
       entityType: 'branch',
-      entityId: branch._id.toString(),
+      entityId: branch._id,
       changes: body,
     });
 

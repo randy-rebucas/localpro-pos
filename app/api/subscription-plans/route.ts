@@ -1,19 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import SubscriptionPlan from '@/models/SubscriptionPlan';
+import { getRepos, isDuplicateKeyError } from '@/lib/db';
 import { requireRole } from '@/lib/auth';
 
 export async function GET(request: NextRequest) { // eslint-disable-line @typescript-eslint/no-unused-vars
   try {
-    await connectDB();
-
     // This route has no auth/tenant context, so it can't tell a grandfathered
     // subscriber apart from a first-time browser — it returns all active plans
     // and leaves the availableToNewTenants decision to callers that *do* know
     // the requesting tenant's current plan (see subscription/page.tsx).
-    const plans = await SubscriptionPlan.find({ isActive: true })
-      .sort({ 'price.monthly': 1 })
-      .lean();
+    const plans = await getRepos().subscriptionPlans.list({ activeOnly: true });
 
     return NextResponse.json({ success: true, data: plans });
   } catch (_error: unknown) {
@@ -23,7 +18,6 @@ export async function GET(request: NextRequest) { // eslint-disable-line @typesc
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     // Creating a global subscription plan tier (visible to every tenant) — super_admin only
     await requireRole(request, ['super_admin']);
 
@@ -38,7 +32,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if tier already exists
-    const existingPlan = await SubscriptionPlan.findOne({ tier });
+    const { subscriptionPlans } = getRepos();
+    const existingPlan = await subscriptionPlans.findByTier(tier);
     if (existingPlan) {
       return NextResponse.json(
         { success: false, error: 'A plan with this tier already exists' },
@@ -85,11 +80,11 @@ export async function POST(request: NextRequest) {
       isCustom,
     };
 
-    const plan = await SubscriptionPlan.create(planData);
+    const plan = await subscriptionPlans.create(planData);
 
     return NextResponse.json({ success: true, data: plan }, { status: 201 });
   } catch (error: unknown) {
-    if ((error as Record<string, unknown>).code === 11000) {
+    if (isDuplicateKeyError(error)) {
       return NextResponse.json(
         { success: false, error: 'Plan tier already exists' },
         { status: 400 }

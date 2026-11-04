@@ -1,13 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import SubscriptionPlan from '@/models/SubscriptionPlan';
 import { requireRole } from '@/lib/auth';
 import { handleApiError } from '@/lib/error-handler';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
-import Tenant from '@/models/Tenant';
+import { getRepos, type SubscriptionPlanInput } from '@/lib/db';
 
-const DEFAULT_PLANS = [
+const DEFAULT_PLANS: SubscriptionPlanInput[] = [
   {
     tier: 'starter',
     name: 'Starter',
@@ -157,7 +155,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await connectDB();
     const user = await requireRole(request, ['super_admin']);
 
     const body = await request.json();
@@ -174,16 +171,13 @@ export async function POST(request: NextRequest) {
 
     if (target === 'plans' || target === 'all') {
       for (const planData of DEFAULT_PLANS) {
-        await SubscriptionPlan.findOneAndUpdate(
-          { tier: planData.tier },
-          { $set: planData },
-          { upsert: true, new: true, runValidators: true }
-        );
+        await getRepos().subscriptionPlans.upsertByTier(planData);
+
         seeded.push(`plan:${planData.tier}`);
       }
     }
 
-    const defaultTenant = await Tenant.findOne({ slug: 'default' }).select('_id').lean();
+    const defaultTenant = await getRepos().tenants.findBySlug('default', { select: '_id' });
     if (defaultTenant) {
       await createAuditLog(request, {
         tenantId: defaultTenant._id,

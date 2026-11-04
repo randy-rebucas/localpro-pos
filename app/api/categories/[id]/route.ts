@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Category from '@/models/Category';
+import { getRepos, isDuplicateKeyError } from '@/lib/db';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
@@ -13,7 +12,6 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     await requireAuth(request);
     const t = await getValidationTranslatorFromRequest(request);
     const tenantId = await getTenantIdFromRequest(request);
@@ -23,7 +21,7 @@ export async function GET(
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
-    const category = await Category.findOne({ _id: id, tenantId }).lean();
+    const category = await getRepos().categories.findById(tenantId, id);
 
     if (!category) {
       return NextResponse.json({ success: false, error: t('validation.categoryNotFound', 'Category not found') }, { status: 404 });
@@ -43,7 +41,6 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const t = await getValidationTranslatorFromRequest(request);
@@ -58,11 +55,6 @@ export async function PUT(
 
     const { id } = await params;
 
-    const category = await Category.findOne({ _id: id, tenantId });
-    if (!category) {
-      return NextResponse.json({ success: false, error: t('validation.categoryNotFound', 'Category not found') }, { status: 404 });
-    }
-
     const body = await request.json();
     const { data, errors } = validateAndSanitize(body, validateCategory, t);
 
@@ -73,25 +65,27 @@ export async function PUT(
       );
     }
 
-    const oldData = category.toObject();
-
-    if (Object.prototype.hasOwnProperty.call(data, 'name') && typeof data.name === 'string') category.name = data.name;
-    if (Object.prototype.hasOwnProperty.call(data, 'description') && (typeof data.description === 'string' || typeof data.description === 'undefined')) category.description = data.description;
-    if (Object.prototype.hasOwnProperty.call(data, 'isActive') && typeof data.isActive === 'boolean') category.isActive = data.isActive;
-
-    await category.save();
+    const result = await getRepos().categories.update(tenantId, id, {
+      name: typeof data.name === 'string' ? data.name : undefined,
+      description: typeof data.description === 'string' ? data.description : undefined,
+      isActive: typeof data.isActive === 'boolean' ? data.isActive : undefined,
+    });
+    if (!result) {
+      return NextResponse.json({ success: false, error: t('validation.categoryNotFound', 'Category not found') }, { status: 404 });
+    }
+    const category = result.after;
 
     await createAuditLog(request, {
       tenantId,
       action: AuditActions.UPDATE,
       entityType: 'category',
-      entityId: category._id.toString(),
-      changes: { before: oldData, after: category.toObject() },
+      entityId: category._id,
+      changes: { before: result.before, after: result.after },
     });
 
     return NextResponse.json({ success: true, data: category });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    if (error.code === 11000) {
+    if (isDuplicateKeyError(error)) {
       const t = await getValidationTranslatorFromRequest(request);
       return NextResponse.json(
         { success: false, error: t('validation.categoryNameExists', 'Category with this name already exists') },
@@ -107,7 +101,6 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const t = await getValidationTranslatorFromRequest(request);
@@ -122,22 +115,18 @@ export async function DELETE(
 
     const { id } = await params;
 
-    const category = await Category.findOne({ _id: id, tenantId });
-    if (!category) {
+    // Soft delete - set isActive to false
+    const result = await getRepos().categories.update(tenantId, id, { isActive: false });
+    if (!result) {
       return NextResponse.json({ success: false, error: t('validation.categoryNotFound', 'Category not found') }, { status: 404 });
     }
-
-    // Soft delete - set isActive to false
-    const oldData = category.toObject(); // eslint-disable-line @typescript-eslint/no-unused-vars
-    category.isActive = false;
-    await category.save();
 
     await createAuditLog(request, {
       tenantId,
       action: AuditActions.DELETE,
       entityType: 'category',
-      entityId: category._id.toString(),
-      changes: { name: category.name },
+      entityId: result.after._id,
+      changes: { name: result.after.name },
     });
 
     return NextResponse.json({ success: true, message: t('validation.categoryDeactivated', 'Category deactivated') });

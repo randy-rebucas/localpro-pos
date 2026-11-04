@@ -4,8 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
+import { getRepos, type TenantPath } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { handleApiError } from '@/lib/error-handler';
@@ -24,15 +23,14 @@ export async function GET(
     }
 
     const { slug } = await params;
-    await connectDB();
 
-    const tenant = await Tenant.findOne({ slug, isActive: true }).lean();
+    const tenant = await getRepos().tenants.findBySlug(slug, { activeOnly: true });
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
     // Tenant isolation
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant._id) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
@@ -67,24 +65,23 @@ export async function PUT(
     }
 
     const { slug } = await params;
-    await connectDB();
 
-    const tenant = await Tenant.findOne({ slug });
+    const tenant = await getRepos().tenants.findBySlug(slug, { select: '_id' });
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
     // Tenant isolation
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant._id) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
-    if (!(await hasTenantPermission(user.role, tenant._id.toString(), 'bir_compliance.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenant._id, 'bir_compliance.manage'))) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
     try {
-      await checkBirFeatureAccess(tenant._id.toString(), 'ptuAssistance');
+      await checkBirFeatureAccess(tenant._id, 'ptuAssistance');
     } catch (featureError: unknown) {
       return NextResponse.json(
         { success: false, error: featureError instanceof Error ? featureError.message : 'Feature not available' },
@@ -103,24 +100,33 @@ export async function PUT(
       );
     }
 
-    if (birTin !== undefined) tenant.settings.birTin = birTin || undefined;
-    if (birPtuNumber !== undefined) tenant.settings.birPtuNumber = birPtuNumber || undefined;
+    // Submitted fields only; an empty value clears the field
+    const set: Partial<Record<TenantPath, unknown>> = {};
+    const unset: TenantPath[] = [];
+    const assign = (key: string, value: unknown) => {
+      if (value === undefined) unset.push(`settings.${key}`);
+      else set[`settings.${key}`] = value;
+    };
+    if (birTin !== undefined) assign('birTin', birTin || undefined);
+    if (birPtuNumber !== undefined) assign('birPtuNumber', birPtuNumber || undefined);
     if (birPtuIssuedDate !== undefined) {
-      tenant.settings.birPtuIssuedDate = birPtuIssuedDate ? new Date(birPtuIssuedDate) : undefined;
+      assign('birPtuIssuedDate', birPtuIssuedDate ? new Date(birPtuIssuedDate) : undefined);
     }
     if (birPtuExpiryDate !== undefined) {
-      tenant.settings.birPtuExpiryDate = birPtuExpiryDate ? new Date(birPtuExpiryDate) : undefined;
+      assign('birPtuExpiryDate', birPtuExpiryDate ? new Date(birPtuExpiryDate) : undefined);
     }
 
-    tenant.markModified('settings');
-    await tenant.save();
+    const updated = await getRepos().tenants.update(tenant._id, { set, unset });
+    if (!updated) {
+      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+    }
 
     await createAuditLog(request, {
       tenantId: tenant._id,
       userId: user.userId,
       action: AuditActions.UPDATE,
       entityType: 'bir_settings',
-      entityId: tenant._id.toString(),
+      entityId: tenant._id,
       changes: { birTin, birPtuNumber, birPtuIssuedDate, birPtuExpiryDate },
     });
 

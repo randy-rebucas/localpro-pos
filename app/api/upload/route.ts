@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, getCurrentUser } from '@/lib/auth';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
-import connectDB from '@/lib/mongodb';
 import { logger } from '@/lib/logger';
 import { uploadToCloudinary, deleteFromCloudinary } from '@/lib/cloudinary';
-import File from '@/models/File';
+import { getRepos } from '@/lib/db';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { createAuditLog } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
@@ -73,10 +72,8 @@ export async function POST(request: NextRequest) {
     const fileBuffer = Buffer.from(await file.arrayBuffer());
     const cloudinaryResult = await uploadToCloudinary(fileBuffer, file.name, tenantId, file.type);
 
-    // Connect to database and save file record
-    await connectDB();
-    const fileDoc = await File.create({
-      tenantId,
+    // Save file record
+    const fileDoc = await getRepos().files.create(tenantId, {
       name: file.name,
       filename: cloudinaryResult.public_id,
       size: file.size,
@@ -91,7 +88,7 @@ export async function POST(request: NextRequest) {
       userId: user.userId,
       action: 'upload_file',
       entityType: 'File',
-      entityId: fileDoc._id.toString(),
+      entityId: fileDoc._id,
       metadata: {
         fileName: file.name,
         fileSize: file.size,
@@ -146,13 +143,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    await connectDB();
-
-    const files = await File.find({ tenantId })
-      .select('_id name filename size type url uploadedAt uploadedBy')
-      .sort({ uploadedAt: -1 })
-      .limit(100)
-      .lean();
+    const files = await getRepos().files.list(tenantId, { limit: 100 });
 
     return NextResponse.json({
       success: true,
@@ -204,21 +195,12 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ success: false, error: t('validation.fileIdRequired', 'File ID is required') }, { status: 400 });
     }
 
-    await connectDB();
-
-    // Fetch the file to get cloudinary public_id
-    const file = await File.findById(fileId);
+    // Fetch the file to get cloudinary public_id. Scoped to the tenant, so
+    // another tenant's file is simply not found.
+    const file = await getRepos().files.findById(tenantId, fileId);
 
     if (!file) {
       return NextResponse.json({ success: false, error: t('validation.fileNotFound', 'File not found') }, { status: 404 });
-    }
-
-    // Ensure file belongs to authenticated tenant (security check)
-    if (file.tenantId.toString() !== tenantId) {
-      return NextResponse.json(
-        { success: false, error: t('validation.fileNotYourTenant', 'Unauthorized: File does not belong to your tenant') },
-        { status: 403 }
-      );
     }
 
     // Delete from Cloudinary
@@ -230,7 +212,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Delete from database
-    await File.deleteOne({ _id: fileId });
+    await getRepos().files.delete(tenantId, fileId);
 
     // Create audit log for file deletion
     await createAuditLog(request, {

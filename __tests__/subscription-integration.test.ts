@@ -1,6 +1,6 @@
 // Set env vars before any imports
 process.env.JWT_SECRET = 'test-secret-for-subscription-tests-32chars!';
-process.env.NODE_ENV = 'test';
+(process.env as Record<string, string>).NODE_ENV = 'test';
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -10,10 +10,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // dynamic import inside beforeEach / tests.
 // ---------------------------------------------------------------------------
 
-vi.mock('@/lib/mongodb', () => ({
-  default: vi.fn().mockResolvedValue(undefined),
-}));
-
 vi.mock('@/lib/logger', () => ({
   logger: {
     error: vi.fn(),
@@ -22,25 +18,18 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
-vi.mock('@/models/Subscription', () => ({
-  default: {
-    findOne: vi.fn(),
-    findOneAndUpdate: vi.fn().mockResolvedValue(null),
-    findByIdAndUpdate: vi.fn().mockResolvedValue(null),
+const repos = vi.hoisted(() => ({
+  subscriptions: {
+    findByTenant: vi.fn(),
+    update: vi.fn().mockResolvedValue(null),
+  },
+  subscriptionPlans: {
+    findByTier: vi.fn().mockResolvedValue(null),
   },
 }));
 
-vi.mock('@/models/SubscriptionPlan', () => ({
-  default: {
-    find: vi.fn().mockReturnValue({ sort: vi.fn().mockResolvedValue([]) }),
-    findOne: vi.fn().mockResolvedValue(null),
-  },
-}));
-
-vi.mock('@/models/Tenant', () => ({
-  default: {
-    findByIdAndUpdate: vi.fn().mockResolvedValue(null),
-  },
+vi.mock('@/lib/db', () => ({
+  getRepos: () => repos,
 }));
 
 import { SubscriptionService, checkFeatureAccess } from '@/lib/subscription';
@@ -107,23 +96,13 @@ function makeSubscriptionDoc(overrides: Record<string, unknown> = {}) {
   };
 }
 
-async function getSubscriptionMock() {
-  const Subscription = (await import('@/models/Subscription')).default;
-  return Subscription;
-}
-
 // ---------------------------------------------------------------------------
 // Starter plan — enableLoyaltyProgram: false
 // ---------------------------------------------------------------------------
 describe('SubscriptionService.checkFeature — starter plan (loyalty disabled)', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
-    const Subscription = await getSubscriptionMock();
-    vi.mocked(Subscription.findOne).mockReturnValue({
-      populate: vi.fn().mockReturnValue({
-        lean: vi.fn().mockResolvedValue(makeSubscriptionDoc()),
-      }),
-    } as unknown as ReturnType<typeof Subscription.findOne>);
+    repos.subscriptions.findByTenant.mockResolvedValue(makeSubscriptionDoc());
   });
 
   it('returns false for enableLoyaltyProgram on a starter plan', async () => {
@@ -143,10 +122,7 @@ describe('SubscriptionService.checkFeature — starter plan (loyalty disabled)',
 describe('SubscriptionService.checkFeature — pro plan (loyalty enabled)', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
-    const Subscription = await getSubscriptionMock();
-    vi.mocked(Subscription.findOne).mockReturnValue({
-      populate: vi.fn().mockReturnValue({
-        lean: vi.fn().mockResolvedValue(
+    repos.subscriptions.findByTenant.mockResolvedValue(
           makeSubscriptionDoc({
             planId: {
               name: 'Pro',
@@ -161,9 +137,7 @@ describe('SubscriptionService.checkFeature — pro plan (loyalty enabled)', () =
               },
             },
           })
-        ),
-      }),
-    } as unknown as ReturnType<typeof Subscription.findOne>);
+        );
   });
 
   it('returns true for enableLoyaltyProgram on a pro plan', async () => {
@@ -183,12 +157,7 @@ describe('SubscriptionService.checkFeature — pro plan (loyalty enabled)', () =
 describe('checkFeatureAccess — starter plan', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
-    const Subscription = await getSubscriptionMock();
-    vi.mocked(Subscription.findOne).mockReturnValue({
-      populate: vi.fn().mockReturnValue({
-        lean: vi.fn().mockResolvedValue(makeSubscriptionDoc()),
-      }),
-    } as unknown as ReturnType<typeof Subscription.findOne>);
+    repos.subscriptions.findByTenant.mockResolvedValue(makeSubscriptionDoc());
   });
 
   it('throws when the feature is not available', async () => {
@@ -208,18 +177,13 @@ describe('checkFeatureAccess — starter plan', () => {
 describe('SubscriptionService.getSubscriptionStatus — expired subscription', () => {
   it('reports isExpired: true when endDate is in the past', async () => {
     vi.clearAllMocks();
-    const Subscription = await getSubscriptionMock();
     const pastDate = new Date(Date.now() - 24 * 60 * 60 * 1000); // yesterday
-    vi.mocked(Subscription.findOne).mockReturnValue({
-      populate: vi.fn().mockReturnValue({
-        lean: vi.fn().mockResolvedValue(
+    repos.subscriptions.findByTenant.mockResolvedValue(
           makeSubscriptionDoc({
             status: 'active',
             endDate: pastDate,
           })
-        ),
-      }),
-    } as unknown as ReturnType<typeof Subscription.findOne>);
+        );
 
     const status = await SubscriptionService.getSubscriptionStatus('tenant-1');
     expect(status).not.toBeNull();
@@ -228,19 +192,14 @@ describe('SubscriptionService.getSubscriptionStatus — expired subscription', (
 
   it('returns allowed: false for limits when subscription is expired', async () => {
     vi.clearAllMocks();
-    const Subscription = await getSubscriptionMock();
     const pastDate = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    vi.mocked(Subscription.findOne).mockReturnValue({
-      populate: vi.fn().mockReturnValue({
-        lean: vi.fn().mockResolvedValue(
+    repos.subscriptions.findByTenant.mockResolvedValue(
           makeSubscriptionDoc({
             status: 'active',
             isTrial: false,
             endDate: pastDate,
           })
-        ),
-      }),
-    } as unknown as ReturnType<typeof Subscription.findOne>);
+        );
 
     const result = await SubscriptionService.checkLimit('tenant-1', 'maxUsers', 1);
     expect(result.allowed).toBe(false);
@@ -254,12 +213,7 @@ describe('SubscriptionService.getSubscriptionStatus — expired subscription', (
 describe('SubscriptionService — no subscription found', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
-    const Subscription = await getSubscriptionMock();
-    vi.mocked(Subscription.findOne).mockReturnValue({
-      populate: vi.fn().mockReturnValue({
-        lean: vi.fn().mockResolvedValue(null),
-      }),
-    } as unknown as ReturnType<typeof Subscription.findOne>);
+    repos.subscriptions.findByTenant.mockResolvedValue(null);
   });
 
   it('getSubscriptionStatus returns null when no subscription exists', async () => {
@@ -290,14 +244,9 @@ describe('SubscriptionService — no subscription found', () => {
 describe('SubscriptionService — inactive subscription', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
-    const Subscription = await getSubscriptionMock();
-    vi.mocked(Subscription.findOne).mockReturnValue({
-      populate: vi.fn().mockReturnValue({
-        lean: vi.fn().mockResolvedValue(
+    repos.subscriptions.findByTenant.mockResolvedValue(
           makeSubscriptionDoc({ status: 'cancelled', isTrial: false })
-        ),
-      }),
-    } as unknown as ReturnType<typeof Subscription.findOne>);
+        );
   });
 
   it('checkFeature returns false when subscription is inactive', async () => {

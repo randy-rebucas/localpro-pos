@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Subscription, { SubscriptionStatus } from '@/models/Subscription';
+import { getRepos, type Patch, type SubscriptionFields, type SubscriptionStatus } from '@/lib/db';
 import { requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
@@ -23,16 +22,14 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const t = await getValidationTranslatorFromRequest(request);
     // Cross-tenant subscription lookup by id — super_admin only
     await requireRole(request, ['super_admin']);
     const { id } = await params;
 
-    const subscription = await Subscription.findById(id)
-      .populate('tenantId', 'slug name settings')
-      .populate('planId', 'name tier price features birCompliance isCustom')
-      .lean();
+    const subscription = await getRepos().subscriptions.findByIdAcrossTenants(id, {
+      populate: { tenant: 'slug name settings', plan: 'name tier price features birCompliance isCustom' },
+    });
 
     if (!subscription) {
       return NextResponse.json(
@@ -52,7 +49,6 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const t = await getValidationTranslatorFromRequest(request);
     // Cross-tenant subscription mutation by id — super_admin only
     await requireRole(request, ['super_admin']);
@@ -61,7 +57,8 @@ export async function PUT(
     const body = await request.json();
     const { status, billingCycle, autoRenew, planId } = body;
 
-    const subscription = await Subscription.findById(id);
+    const { subscriptions, subscriptionPlans } = getRepos();
+    const subscription = await subscriptions.findByIdAcrossTenants(id);
     if (!subscription) {
       return NextResponse.json(
         { success: false, error: t('validation.subscriptionNotFound', 'Subscription not found') },
@@ -70,7 +67,7 @@ export async function PUT(
     }
 
     const currentStatus = subscription.status;
-    const changes: any = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const changes: Patch<SubscriptionFields> = {};
 
     // Update status if provided, validating the transition is legal from the
     // subscription's current status before mutating.
@@ -122,8 +119,7 @@ export async function PUT(
     // Update plan if provided
     if (planId) {
       // Verify plan exists
-      const SubscriptionPlan = (await import('@/models/SubscriptionPlan')).default;
-      const plan = await SubscriptionPlan.findById(planId);
+      const plan = await subscriptionPlans.findById(planId);
       if (!plan || !plan.isActive) {
         return NextResponse.json(
           { success: false, error: t('validation.subscriptionPlanNotFoundOrInactive', 'Subscription plan not found or inactive') },
@@ -137,12 +133,11 @@ export async function PUT(
     // cancelling while the expiry cron suspends the same subscription) can't
     // silently clobber the other's change — whichever request loses the race
     // gets a 409 instead of a last-write-wins overwrite.
-    const updatedSubscription = await Subscription.findOneAndUpdate(
-      { _id: id, status: currentStatus },
-      changes,
-      { new: true }
-    ).populate('tenantId', 'slug name')
-     .populate('planId', 'name tier price features birCompliance isCustom');
+    const tenantId = subscription.tenantId as string;
+    const updatedSubscription = await subscriptions.update(tenantId, id, { set: changes }, {
+      ifStatus: currentStatus,
+      populate: { tenant: 'slug name', plan: 'name tier price features birCompliance isCustom' },
+    });
 
     if (!updatedSubscription) {
       return NextResponse.json(
@@ -158,10 +153,10 @@ export async function PUT(
     }
 
     await createAuditLog(request, {
-      tenantId: subscription.tenantId,
+      tenantId,
       action: AuditActions.UPDATE,
       entityType: 'subscription',
-      entityId: subscription._id.toString(),
+      entityId: subscription._id,
       changes,
     });
 
@@ -176,17 +171,12 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const t = await getValidationTranslatorFromRequest(request);
     // Cross-tenant subscription cancellation by id — super_admin only
     await requireRole(request, ['super_admin']);
     const { id } = await params;
 
-    const subscription = await Subscription.findOneAndUpdate(
-      { _id: id, isActive: true },
-      { isActive: false, status: 'cancelled', cancelledAt: new Date() },
-      { new: true }
-    );
+    const subscription = await getRepos().subscriptions.softDeleteAcrossTenants(id);
     if (!subscription) {
       return NextResponse.json(
         { success: false, error: t('validation.subscriptionNotFound', 'Subscription not found') },
@@ -198,7 +188,8 @@ export async function DELETE(
       tenantId: subscription.tenantId,
       action: AuditActions.DELETE,
       entityType: 'subscription',
-      entityId: subscription._id.toString(),
+      entityId: subscription._id,
+
       changes: { softDeleted: true },
     });
 

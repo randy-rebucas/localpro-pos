@@ -1,13 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
-import FeatureFlagOverride from '@/models/FeatureFlagOverride';
-import SuperAdminAction from '@/models/SuperAdminAction';
+import { getRepos } from '@/lib/db';
 import { requireRole } from '@/lib/auth';
 import { handleApiError } from '@/lib/error-handler';
 
-async function resolveTenant(slug: string) {
-  return Tenant.findOne({ slug }).select('_id slug name').lean() as Promise<{ _id: unknown; slug: string; name: string } | null>;
+function resolveTenant(slug: string) {
+  return getRepos().tenants.findBySlug(slug, { select: '_id slug name' });
 }
 
 // GET /api/super-admin/feature-flags/[tenantSlug]
@@ -16,7 +13,6 @@ export async function GET(
   { params }: { params: Promise<{ tenantSlug: string }> }
 ) {
   try {
-    await connectDB();
     await requireRole(request, ['super_admin']);
 
     const { tenantSlug } = await params;
@@ -25,9 +21,7 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
-    const overrides = await FeatureFlagOverride.find({ tenantId: tenant._id })
-      .sort({ createdAt: -1 })
-      .lean();
+    const overrides = await getRepos().featureFlagOverrides.list(String(tenant._id));
 
     return NextResponse.json({ success: true, data: overrides });
   } catch (error: unknown) {
@@ -45,7 +39,6 @@ export async function POST(
   { params }: { params: Promise<{ tenantSlug: string }> }
 ) {
   try {
-    await connectDB();
     const adminUser = await requireRole(request, ['super_admin']);
 
     const { tenantSlug } = await params;
@@ -61,21 +54,16 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'feature and enabled are required' }, { status: 400 });
     }
 
-    const override = await FeatureFlagOverride.findOneAndUpdate(
-      { tenantId: tenant._id, feature },
-      {
-        tenantId: tenant._id,
-        feature,
-        enabled,
-        reason: reason || undefined,
-        expiresAt: expiresAt ? new Date(expiresAt) : undefined,
-        grantedBy: adminUser.userId,
-      },
-      { upsert: true, new: true }
-    );
+    // Undefined reason/expiresAt keep the stored value, as before.
+    const override = await getRepos().featureFlagOverrides.upsert(String(tenant._id), feature, {
+      enabled,
+      reason: reason || undefined,
+      expiresAt: expiresAt ? new Date(expiresAt) : undefined,
+      grantedBy: adminUser.userId,
+    });
 
     const ip = request.headers.get('x-forwarded-for') || '';
-    await SuperAdminAction.create({
+    await getRepos().superAdminActions.create({
       adminUserId: adminUser.userId,
       action: 'feature_flag.override',
       targetType: 'Tenant',
@@ -101,7 +89,6 @@ export async function DELETE(
   { params }: { params: Promise<{ tenantSlug: string }> }
 ) {
   try {
-    await connectDB();
     const adminUser = await requireRole(request, ['super_admin']);
 
     const { tenantSlug } = await params;
@@ -115,10 +102,10 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: 'feature query param is required' }, { status: 400 });
     }
 
-    await FeatureFlagOverride.deleteOne({ tenantId: tenant._id, feature });
+    await getRepos().featureFlagOverrides.delete(String(tenant._id), feature);
 
     const ip = request.headers.get('x-forwarded-for') || '';
-    await SuperAdminAction.create({
+    await getRepos().superAdminActions.create({
       adminUserId: adminUser.userId,
       action: 'feature_flag.remove',
       targetType: 'Tenant',

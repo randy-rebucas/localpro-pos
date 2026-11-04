@@ -4,8 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
+import { getRepos } from '@/lib/db';
 import { fetchExchangeRates } from '@/lib/multi-currency';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
@@ -23,18 +22,17 @@ export async function GET(
     }
 
     const { slug } = await params;
-    await connectDB();
 
-    const tenant = await Tenant.findOne({ slug });
+    const tenant = await getRepos().tenants.findBySlug(slug, { select: 'settings.multiCurrency settings.currency' });
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant._id) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
-    const multiCurrency = tenant.settings.multiCurrency;
+    const multiCurrency = tenant.settings?.multiCurrency;
     if (!multiCurrency?.enabled) {
       return NextResponse.json({ success: false, error: 'Multi-currency not enabled' }, { status: 400 });
     }
@@ -66,24 +64,22 @@ export async function POST(
     const body = await request.json();
     const { action } = body;
 
-    await connectDB();
-
-    const tenant = await Tenant.findOne({ slug });
+    const tenant = await getRepos().tenants.findBySlug(slug, { select: 'settings.multiCurrency settings.currency' });
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant._id) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
-    if (!(await hasTenantPermission(user.role, tenant._id.toString(), 'settings.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenant._id, 'settings.manage'))) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
     if (action === 'fetch') {
       // Fetch fresh rates from API
-      const multiCurrency = tenant.settings.multiCurrency;
+      const multiCurrency = tenant.settings?.multiCurrency;
       if (!multiCurrency?.enabled) {
         return NextResponse.json({ success: false, error: 'Multi-currency not enabled' }, { status: 400 });
       }
@@ -91,7 +87,7 @@ export async function POST(
         return NextResponse.json({ success: false, error: 'No display currencies configured' }, { status: 400 });
       }
 
-      const baseCurrency = tenant.settings.currency;
+      const baseCurrency = tenant.settings?.currency;
       if (!baseCurrency) {
         return NextResponse.json({ success: false, error: 'Base currency not set in tenant settings' }, { status: 400 });
       }
@@ -110,24 +106,19 @@ export async function POST(
         );
       }
 
-      // Use toObject() so spreading a Mongoose subdocument works correctly
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const mcObj = typeof (multiCurrency as any).toObject === 'function' ? (multiCurrency as any).toObject() : { ...multiCurrency };
-      tenant.settings.multiCurrency = {
-        ...mcObj,
-        exchangeRates: rates,
-        lastUpdated: new Date(),
-      };
-
-      tenant.markModified('settings.multiCurrency');
-      await tenant.save();
+      const updated = await getRepos().tenants.update(tenant._id, {
+        set: { 'settings.multiCurrency': { ...multiCurrency, exchangeRates: rates, lastUpdated: new Date() } },
+      });
+      if (!updated) {
+        return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+      }
 
       await createAuditLog(request, {
         tenantId: tenant._id,
         userId: user.userId,
         action: AuditActions.UPDATE,
         entityType: 'exchange_rates',
-        entityId: tenant._id.toString(),
+        entityId: tenant._id,
         changes: { source: 'api', exchangeRates: rates },
       });
 
@@ -152,24 +143,22 @@ export async function POST(
         }
       }
 
-      const multiCurrency = tenant.settings.multiCurrency;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const mcObj = multiCurrency && typeof (multiCurrency as any).toObject === 'function' ? (multiCurrency as any).toObject() : { ...(multiCurrency || { enabled: false }) };
-      tenant.settings.multiCurrency = {
-        ...mcObj,
-        exchangeRates,
-        lastUpdated: new Date(),
-      };
-
-      tenant.markModified('settings.multiCurrency');
-      await tenant.save();
+      const multiCurrency = tenant.settings?.multiCurrency;
+      const updated = await getRepos().tenants.update(tenant._id, {
+        set: {
+          'settings.multiCurrency': { ...(multiCurrency || { enabled: false }), exchangeRates, lastUpdated: new Date() },
+        },
+      });
+      if (!updated) {
+        return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+      }
 
       await createAuditLog(request, {
         tenantId: tenant._id,
         userId: user.userId,
         action: AuditActions.UPDATE,
         entityType: 'exchange_rates',
-        entityId: tenant._id.toString(),
+        entityId: tenant._id,
         changes: { source: 'manual', exchangeRates },
       });
 

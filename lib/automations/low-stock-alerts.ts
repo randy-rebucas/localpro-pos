@@ -5,6 +5,7 @@
 
 import connectDB from '@/lib/mongodb';
 import Tenant from '@/models/Tenant';
+import { getRepos } from '@/lib/db';
 import { getLowStockProducts } from '@/lib/stock';
 import { sendEmail, sendSMS } from '@/lib/notifications';
 import { getTenantSettingsById } from '@/lib/tenant';
@@ -36,10 +37,15 @@ export async function sendLowStockAlerts(
     // Get tenants to process
     let tenants;
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).lean();
+      const tenant = await getRepos().tenants.findById(options.tenantId);
       tenants = tenant ? [tenant] : [];
     } else {
       // Get all active tenants with inventory enabled
+      // TODO(postgres-migration): Tenant has no `status` field (and Mongoose 8 passes
+      // unknown filter keys through), so this query matches NO tenants today and the
+      // automation only runs when options.tenantId is given. Left on the model on
+      // purpose: replacing it with tenants.listActive() would start running this
+      // automation for every tenant. Decide the intended scope before converting.
       tenants = await Tenant.find({
         status: 'active',
         'settings.enableInventory': true,

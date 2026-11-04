@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import mongoose from 'mongoose';
-import connectDB from '@/lib/mongodb';
-import Product from '@/models/Product';
-import Category from '@/models/Category';
+import { getRepos, type ProductFilter } from '@/lib/db';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -11,7 +9,7 @@ import { getValidationTranslatorFromRequest } from '@/lib/validation-translation
 import { checkRateLimit } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
 import { logger } from '@/lib/logger';
-import { updateStock, insertStockMovements, STOCK_SNAPSHOT_FIELDS, StockMovementInput, StockProductSnapshot } from '@/lib/stock';
+import { updateStock, insertStockMovements, STOCK_SNAPSHOT_FIELDS, StockMovementInput } from '@/lib/stock';
 
 const MAX_BULK_IDS = 100;
 
@@ -19,8 +17,6 @@ type BulkAction = 'update';
 
 export async function PUT(request: NextRequest) {
   try {
-    await connectDB();
-
     let tenantId: string;
     let userId: string;
     let userRole: string;
@@ -86,9 +82,8 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    const tenantObjectId = new mongoose.Types.ObjectId(tenantId);
-    const objectIds = validIds.map((id) => new mongoose.Types.ObjectId(id));
-    const filter = { _id: { $in: objectIds }, tenantId: tenantObjectId };
+    const { products } = getRepos();
+    const filter: ProductFilter = { ids: validIds };
 
     if (!updates || typeof updates !== 'object') {
       return NextResponse.json(
@@ -116,65 +111,35 @@ export async function PUT(request: NextRequest) {
     let modifiedCount = 0;
 
     if (updates.categoryId) {
-      const category = await Category.findOne({
-        _id: updates.categoryId,
-        tenantId,
-        isActive: { $ne: false },
-      }).lean();
+      const category = await getRepos().categories.findById(tenantId, updates.categoryId, { activeOnly: true });
 
       if (!category) {
         return NextResponse.json({ success: false, error: 'Category not found' }, { status: 404 });
       }
 
-      const result = await Product.updateMany(filter, {
-        $set: { categoryId: updates.categoryId, category: category.name },
-      });
-      modifiedCount = Math.max(modifiedCount, result.modifiedCount);
+      const changed = await products.updateMany(tenantId, filter, { categoryId: updates.categoryId, category: category.name });
+      modifiedCount = Math.max(modifiedCount, changed);
     }
 
     if (updates.trackInventory !== undefined) {
-      const result = await Product.updateMany(filter, {
-        $set: { trackInventory: updates.trackInventory },
-      });
-      modifiedCount = Math.max(modifiedCount, result.modifiedCount);
+      const changed = await products.updateMany(tenantId, filter, { trackInventory: updates.trackInventory });
+      modifiedCount = Math.max(modifiedCount, changed);
     }
 
     if (updates.lowStockThreshold !== undefined) {
-      const result = await Product.updateMany(filter, {
-        $set: { lowStockThreshold: updates.lowStockThreshold },
-      });
-      modifiedCount = Math.max(modifiedCount, result.modifiedCount);
+      const changed = await products.updateMany(tenantId, filter, { lowStockThreshold: updates.lowStockThreshold });
+      modifiedCount = Math.max(modifiedCount, changed);
     }
 
     if (updates.price) {
       const { mode, value } = updates.price;
       if (mode === 'set') {
-        const result = await Product.updateMany(filter, { $set: { price: value } });
-        modifiedCount = Math.max(modifiedCount, result.modifiedCount);
+        const changed = await products.updateMany(tenantId, filter, { price: value });
+        modifiedCount = Math.max(modifiedCount, changed);
       } else {
-        const multiplier = mode === 'percent' ? 1 + value / 100 : 1;
-        const addAmount = mode === 'add' ? value : 0;
-        const bulkOps = objectIds.map((id) => ({
-          updateOne: {
-            filter: { _id: id, tenantId: tenantObjectId },
-            update: [
-              {
-                $set: {
-                  price: {
-                    $max: [
-                      0,
-                      mode === 'percent'
-                        ? { $multiply: ['$price', multiplier] }
-                        : { $add: ['$price', addAmount] },
-                    ],
-                  },
-                },
-              },
-            ],
-          },
-        }));
-        const result = await Product.bulkWrite(bulkOps as Parameters<typeof Product.bulkWrite>[0]);
-        modifiedCount = Math.max(modifiedCount, result.modifiedCount);
+        // Per product: max(0, price × (1 + value/100)) or max(0, price + value)
+        const changed = await products.adjustPrices(tenantId, validIds, { mode: mode as 'percent' | 'add', value });
+        modifiedCount = Math.max(modifiedCount, changed);
       }
     }
 
@@ -184,9 +149,7 @@ export async function PUT(request: NextRequest) {
       // StockMovement record and the allowOutOfStockSales guard is honored consistently.
       // The batch read doubles as each product's snapshot (no per-product re-read),
       // and the movements are inserted together.
-      const productsForStock = await Product.find(filter)
-        .select(STOCK_SNAPSHOT_FIELDS)
-        .lean<Array<StockProductSnapshot & { _id: mongoose.Types.ObjectId }>>();
+      const productsForStock = await products.list(tenantId, filter, { select: STOCK_SNAPSHOT_FIELDS });
       const movements: StockMovementInput[] = [];
       let stockModified = 0;
       for (const p of productsForStock) {
@@ -195,7 +158,7 @@ export async function PUT(request: NextRequest) {
         const delta = mode === 'set' ? value - currentStock : value;
         if (delta === 0) continue;
         try {
-          await updateStock(p._id.toString(), tenantId, delta, 'adjustment', {
+          await updateStock(p._id, tenantId, delta, 'adjustment', {
             userId,
             reason: 'Bulk stock update',
             product: p,

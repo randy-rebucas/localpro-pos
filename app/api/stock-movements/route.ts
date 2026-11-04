@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import StockMovement from '@/models/StockMovement';
+import { getRepos, type StockMovementFilter, type StockMovementType } from '@/lib/db';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
@@ -8,7 +7,6 @@ import { getValidationTranslatorFromRequest } from '@/lib/validation-translation
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const t = await getValidationTranslatorFromRequest(request);
@@ -29,24 +27,17 @@ export async function GET(request: NextRequest) {
     const page = Math.max(1, parseInt(searchParams.get('page') || '1'));
     const skip = (page - 1) * limit;
 
-    const query: any = { tenantId }; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const filter: StockMovementFilter = {};
     if (productId) {
-      query.productId = productId;
+      filter.productId = productId;
     }
     if (type) {
-      query.type = type;
+      filter.type = type as StockMovementType;
     }
 
-    const movements = await StockMovement.find(query)
-      .sort({ createdAt: -1 })
-      .limit(limit)
-      .skip(skip)
-      .populate('productId', 'name sku')
-      .populate('userId', 'name email')
-      .populate('transactionId', 'receiptNumber')
-      .lean();
-
-    const total = await StockMovement.countDocuments(query);
+    const { stockMovements } = getRepos();
+    const movements = await stockMovements.listWithRefs(tenantId, filter, { page: { skip, limit } });
+    const total = await stockMovements.count(tenantId, filter);
 
     return NextResponse.json({
       success: true,

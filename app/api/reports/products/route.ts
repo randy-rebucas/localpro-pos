@@ -4,10 +4,8 @@ import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { getProductPerformance } from '@/lib/analytics';
-import Product from '@/models/Product'; // Ensure Product model is registered
-import Transaction from '@/models/Transaction'; // Ensure Transaction model is registered
-import Tenant from '@/models/Tenant';
-import mongoose from 'mongoose';
+import '@/models/Product'; // Ensure Product model is registered (lib/analytics populates it)
+import { getRepos } from '@/lib/db';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkFeatureAccess } from '@/lib/subscription';
 import { logger } from '@/lib/logger';
@@ -38,20 +36,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Ensure models are registered by checking mongoose.models
-    // This is necessary for populate to work in Next.js serverless functions
-    // Accessing the models ensures their registration code has executed
-    if (!mongoose.models.Product) {
-      // Force model registration by accessing the model's modelName property
-      // This ensures the Product module's registration code has run
-      const _productName = Product.modelName;
-    }
-    if (!mongoose.models.Transaction) {
-      // Force model registration by accessing the model's modelName property
-      const _transactionName = Transaction.modelName;
-    }
-
-    const tenantDoc = await Tenant.findById(tenantId).select('settings.timezone').lean();
+    const tenantDoc = await getRepos().tenants.findById(tenantId, { select: 'settings.timezone' });
     const searchParams = request.nextUrl.searchParams;
     const { startDate, endDate } = resolveTenantDateRange(
       searchParams.get('startDate'),

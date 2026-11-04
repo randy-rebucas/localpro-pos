@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import User from '@/models/User';
+import { getRepos, isDuplicateKeyError, type UserPatch } from '@/lib/db';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth, getRoleRank } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
@@ -13,7 +12,6 @@ import { checkRateLimit } from '@/lib/rate-limit';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await connectDB();
     const authUser = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
@@ -27,10 +25,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
-    const user = await User.findOne({ _id: id, tenantId })
-      .select('-password')
-      .lean();
-    
+    const user = await getRepos().users.findInTenant(tenantId, id);
+
     if (!user) {
       return NextResponse.json({ success: false, error: t('validation.userNotFound', 'User not found') }, { status: 404 });
     }
@@ -50,7 +46,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   let t: (key: string, fallback: string) => string;
   try {
-    await connectDB();
     const actingUser = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
@@ -73,7 +68,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const body = await request.json();
     const { email, password, name, role, isActive } = body;
 
-    const oldUser = await User.findOne({ _id: id, tenantId }).lean();
+    const { users } = getRepos();
+    const oldUser = await users.findInTenant(tenantId, id);
     if (!oldUser) {
       return NextResponse.json({ success: false, error: t('validation.userNotFound', 'User not found') }, { status: 404 });
     }
@@ -113,12 +109,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     // SECURITY: prevent a tenant from being left with no active owner/admin.
     if (isActive === false && oldUser.isActive !== false && ['owner', 'admin'].includes(oldUser.role)) {
-      const remainingActiveAdmins = await User.countDocuments({
-        tenantId,
-        _id: { $ne: id },
-        isActive: { $ne: false },
-        role: { $in: ['owner', 'admin'] },
-      });
+      const remainingActiveAdmins = await users.countOtherActiveAdmins(tenantId, id);
       if (remainingActiveAdmins === 0) {
         return NextResponse.json(
           { success: false, error: t('validation.cannotDeactivateLastAdmin', 'Cannot deactivate the last active owner/admin for this tenant') },
@@ -128,7 +119,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     // Build update object
-    const updateData: any = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const updateData: UserPatch = {};
 
     if (email !== undefined) {
       if (!validateEmail(email)) {
@@ -175,15 +166,14 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       updateData.password = password;
     }
 
-    const user = await User.findOneAndUpdate(
-      { _id: id, tenantId },
-      updateData,
-      { new: true, runValidators: true }
-    ).select('-password');
+    // users.update() hashes a changed password (the previous findOneAndUpdate
+    // skipped the pre-save hook and stored it unhashed).
+    const result = await users.update(id, updateData, { tenantId });
 
-    if (!user) {
+    if (!result) {
       return NextResponse.json({ success: false, error: 'User not found' }, { status: 404 });
     }
+    const user = result.after;
 
     // Revoke all existing tokens when password is changed or account is deactivated
     if (updateData.password || updateData.isActive === false) {
@@ -192,7 +182,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     // Track changes
     const changes: Record<string, any> = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
-    Object.keys(updateData).forEach(key => {
+    (Object.keys(updateData) as (keyof UserPatch)[]).forEach(key => {
       if (key !== 'password' && oldUser[key as keyof typeof oldUser] !== updateData[key]) {
         changes[key] = {
           old: oldUser[key as keyof typeof oldUser],
@@ -214,7 +204,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     
     return NextResponse.json({ success: true, data: user });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    if (error.code === 11000) {
+    if (isDuplicateKeyError(error)) {
       return NextResponse.json(
         { success: false, error: 'User with this email already exists' },
         { status: 400 }
@@ -233,7 +223,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   let t: (key: string, fallback: string) => string;
   try {
-    await connectDB();
     const actingUser = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
@@ -253,7 +242,8 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       return NextResponse.json({ success: false, error: t('validation.tooManyRequests', 'Too many requests') }, { status: 429 });
     }
 
-    const user = await User.findOne({ _id: id, tenantId }).lean();
+    const { users } = getRepos();
+    const user = await users.findInTenant(tenantId, id);
     if (!user) {
       return NextResponse.json({ success: false, error: t('validation.userNotFound', 'User not found') }, { status: 404 });
     }
@@ -272,12 +262,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
     // SECURITY: prevent a tenant from being left with no active owner/admin.
     if (user.isActive !== false && ['owner', 'admin'].includes(user.role)) {
-      const remainingActiveAdmins = await User.countDocuments({
-        tenantId,
-        _id: { $ne: id },
-        isActive: { $ne: false },
-        role: { $in: ['owner', 'admin'] },
-      });
+      const remainingActiveAdmins = await users.countOtherActiveAdmins(tenantId, id);
       if (remainingActiveAdmins === 0) {
         return NextResponse.json(
           { success: false, error: t('validation.cannotDeleteLastAdmin', 'Cannot delete the last active owner/admin for this tenant') },
@@ -287,7 +272,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     }
 
     // Hard delete - actually remove the user from the database
-    await User.findOneAndDelete({ _id: id, tenantId });
+    await users.delete(tenantId, id);
 
     await createAuditLog(request, {
       tenantId,

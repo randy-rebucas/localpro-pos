@@ -1,8 +1,6 @@
-import TaxRule from '@/models/TaxRule';
 import { cacheWrap, CacheKeys, TTL } from '@/lib/cache';
-import Tenant, { ITenantSettings } from '@/models/Tenant';
-import Product from '@/models/Product'; // eslint-disable-line @typescript-eslint/no-unused-vars
-import { ITenant } from '@/models/Tenant'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import { getRepos } from '@/lib/db';
+import type { ITenantSettings } from '@/types/tenant';
 
 /**
  * BIR (Bureau of Internal Revenue) Philippines discount rates
@@ -136,10 +134,7 @@ export async function calculateTax(
   // Try to get tax rules from TaxRule model first (read on every sale — cached
   // 60s, invalidated on TaxRule writes)
   const taxRules = await cacheWrap(CacheKeys.taxRules(String(tenantId)), TTL.DEFAULT, () =>
-    TaxRule.find({
-      tenantId,
-      isActive: true,
-    }).sort({ priority: -1 }).lean()
+    getRepos().taxRules.list(String(tenantId), { isActive: true })
   );
 
   // Only calculate tax on the taxable portion (excludes VAT-exempt items)
@@ -217,10 +212,7 @@ export async function getProductTaxRate(
   categoryId?: string,
   region?: TaxRegion
 ): Promise<number> {
-  const taxRules = await TaxRule.find({
-    tenantId,
-    isActive: true,
-  }).sort({ priority: -1 }).lean();
+  const taxRules = await getRepos().taxRules.list(tenantId, { isActive: true });
 
   if (taxRules.length > 0) {
     for (const rule of taxRules) {
@@ -251,7 +243,7 @@ export async function getProductTaxRate(
   }
 
   // Fall back to tenant settings
-  const tenant = await Tenant.findById(tenantId).lean();
+  const tenant = await getRepos().tenants.findById(tenantId);
   if (tenant?.settings?.taxEnabled && tenant.settings.taxRate) {
     return tenant.settings.taxRate;
   }

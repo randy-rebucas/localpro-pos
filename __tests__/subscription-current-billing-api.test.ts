@@ -1,5 +1,5 @@
 process.env.JWT_SECRET = 'test-secret-for-subscription-current-billing-tests-32chars!!';
-process.env.NODE_ENV = 'test';
+(process.env as Record<string, string>).NODE_ENV = 'test';
 process.env.MONGODB_URI = 'mongodb://test:test@localhost:27017/localpro-pos-test';
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -8,10 +8,6 @@ import { NextRequest } from 'next/server';
 // ---------------------------------------------------------------------------
 // Mocks
 // ---------------------------------------------------------------------------
-
-vi.mock('@/lib/mongodb', () => ({
-  default: vi.fn().mockResolvedValue(undefined),
-}));
 
 vi.mock('@/lib/rate-limit', () => ({
   checkRateLimit: vi.fn().mockReturnValue({ allowed: true, retryAfter: 0 }),
@@ -30,14 +26,12 @@ vi.mock('@/lib/api-tenant', () => ({
   requireTenantAccess: (...args: unknown[]) => mockRequireTenantAccess(...args),
 }));
 
-const mockSubscriptionFindOne = vi.fn();
-vi.mock('@/models/Subscription', () => ({
-  default: {
-    findOne: (...args: unknown[]) => mockSubscriptionFindOne(...args),
-  },
+const mockFindByTenant = vi.fn();
+vi.mock('@/lib/db', () => ({
+  getRepos: () => ({
+    subscriptions: { findByTenant: (...args: unknown[]) => mockFindByTenant(...args) },
+  }),
 }));
-
-vi.mock('@/models/SubscriptionPlan', () => ({}));
 
 import { GET as getCurrent } from '@/app/api/subscriptions/current/route';
 import { GET as getBillingHistory } from '@/app/api/subscriptions/billing-history/route';
@@ -76,26 +70,24 @@ beforeEach(() => {
 describe('GET /api/subscriptions/current', () => {
   it('scopes the lookup to the authenticated tenant', async () => {
     authAs(TENANT_A);
-    const populateMock = vi.fn().mockReturnValue({ lean: vi.fn().mockResolvedValue({ _id: 'sub-1', tenantId: TENANT_A }) });
-    mockSubscriptionFindOne.mockReturnValue({ populate: populateMock });
+    mockFindByTenant.mockResolvedValue({ _id: 'sub-1', tenantId: TENANT_A });
 
     const res = await getCurrent(createRequest('/api/subscriptions/current'));
     const { status, body } = await parseResponse(res);
 
     expect(status).toBe(200);
     expect(body.success).toBe(true);
-    expect(mockSubscriptionFindOne).toHaveBeenCalledWith({ tenantId: TENANT_A });
+    expect(mockFindByTenant).toHaveBeenCalledWith(TENANT_A, expect.objectContaining({ populate: expect.any(Object) }));
   });
 
   it('never leaks a different tenant\'s subscription', async () => {
     authAs(TENANT_B);
-    const populateMock = vi.fn().mockReturnValue({ lean: vi.fn().mockResolvedValue(null) });
-    mockSubscriptionFindOne.mockReturnValue({ populate: populateMock });
+    mockFindByTenant.mockResolvedValue(null);
 
     await getCurrent(createRequest('/api/subscriptions/current'));
 
-    expect(mockSubscriptionFindOne).not.toHaveBeenCalledWith({ tenantId: TENANT_A });
-    expect(mockSubscriptionFindOne).toHaveBeenCalledWith({ tenantId: TENANT_B });
+    expect(mockFindByTenant).not.toHaveBeenCalledWith(TENANT_A, expect.anything());
+    expect(mockFindByTenant).toHaveBeenCalledWith(TENANT_B, expect.anything());
   });
 
   it('returns 500 with a translated error when the tenant lookup throws', async () => {
@@ -116,25 +108,23 @@ describe('GET /api/subscriptions/current', () => {
 describe('GET /api/subscriptions/billing-history', () => {
   it('scopes the lookup to the authenticated tenant', async () => {
     authAs(TENANT_A);
-    mockSubscriptionFindOne.mockReturnValue({ lean: vi.fn().mockResolvedValue(null) });
+    mockFindByTenant.mockResolvedValue(null);
 
     const res = await getBillingHistory(createRequest('/api/subscriptions/billing-history'));
     const { status, body } = await parseResponse(res);
 
     expect(status).toBe(200);
     expect(body.data).toEqual([]);
-    expect(mockSubscriptionFindOne).toHaveBeenCalledWith({ tenantId: TENANT_A });
+    expect(mockFindByTenant).toHaveBeenCalledWith(TENANT_A);
   });
 
   it('formats billing entries with currency/status/date fallbacks', async () => {
     authAs(TENANT_A);
-    mockSubscriptionFindOne.mockReturnValue({
-      lean: vi.fn().mockResolvedValue({
-        billingHistory: [
-          { _id: 'b1', amount: 500, createdAt: '2026-01-01T00:00:00.000Z' },
-          { _id: 'b2', amount: 300, currency: 'USD', status: 'failed', date: '2026-02-01T00:00:00.000Z', transactionId: 'tx-2' },
-        ],
-      }),
+    mockFindByTenant.mockResolvedValue({
+      billingHistory: [
+        { _id: 'b1', amount: 500, createdAt: '2026-01-01T00:00:00.000Z' },
+        { _id: 'b2', amount: 300, currency: 'USD', status: 'failed', date: '2026-02-01T00:00:00.000Z', transactionId: 'tx-2' },
+      ],
     });
 
     const res = await getBillingHistory(createRequest('/api/subscriptions/billing-history'));
@@ -149,13 +139,14 @@ describe('GET /api/subscriptions/billing-history', () => {
 
   it('returns an empty list when the tenant has no subscription', async () => {
     authAs(TENANT_A);
-    mockSubscriptionFindOne.mockReturnValue({ lean: vi.fn().mockResolvedValue(null) });
+    mockFindByTenant.mockResolvedValue(null);
 
     const res = await getBillingHistory(createRequest('/api/subscriptions/billing-history'));
     const { status, body } = await parseResponse(res);
 
     expect(status).toBe(200);
     expect(body.success).toBe(true);
+
     expect(body.data).toEqual([]);
   });
 });

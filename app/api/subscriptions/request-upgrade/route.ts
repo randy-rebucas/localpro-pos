@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Subscription from '@/models/Subscription';
-import SubscriptionPlan from '@/models/SubscriptionPlan';
-import Tenant from '@/models/Tenant'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import { getRepos } from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
@@ -11,7 +8,6 @@ import { logger } from '@/lib/logger';
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     const t = await getValidationTranslatorFromRequest(request);
 
     // Require authentication for upgrade requests
@@ -43,7 +39,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify the requested plan exists and is active
-    const requestedPlanDoc = await SubscriptionPlan.findOne({ _id: planId, isActive: true });
+    const { subscriptionPlans, subscriptions } = getRepos();
+    const requestedPlanDoc = await subscriptionPlans.findById(planId, { activeOnly: true });
     if (!requestedPlanDoc) {
       return NextResponse.json(
         { success: false, error: t('validation.requestedPlanNotFound', 'Requested plan not found or not available') },
@@ -52,9 +49,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get current subscription
-    const currentSubscription = await Subscription.findOne({ tenantId })
-      .populate('planId', 'name tier')
-      .lean();
+    const currentSubscription = await subscriptions.findByTenant(tenantId);
 
     if (!currentSubscription) {
       return NextResponse.json(
@@ -64,7 +59,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if already on this plan
-    if (currentSubscription.planId._id.toString() === planId) {
+    if (currentSubscription.planId === planId) {
       return NextResponse.json(
         { success: false, error: t('validation.alreadyOnPlan', 'You are already on this plan') },
         { status: 400 }

@@ -3,9 +3,7 @@
  * Detect no-shows and automatically update status and send follow-up
  */
 
-import connectDB from '@/lib/mongodb';
-import Booking from '@/models/Booking';
-import Tenant from '@/models/Tenant';
+import { getRepos } from '@/lib/db';
 import type { ITenantSettings } from '@/models/Tenant';
 import { sendEmail, sendSMS } from '@/lib/notifications';
 import { getActiveTenants, type ActiveTenant } from '@/lib/tenant-active-query';
@@ -32,7 +30,7 @@ const TENANT_FIELDS = 'settings';
 export async function detectNoShows(
   options: NoShowDetectionOptions = {}
 ): Promise<AutomationResult> {
-  await connectDB();
+  const { bookings } = getRepos();
 
   const results: AutomationResult = {
     success: true,
@@ -50,9 +48,7 @@ export async function detectNoShows(
     // Get tenants to process
     let tenants: ActiveTenant[];
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId)
-        .select(`_id slug name ${TENANT_FIELDS}`)
-        .lean<ActiveTenant>();
+      const tenant = (await getRepos().tenants.findById(options.tenantId, { select: `_id slug name ${TENANT_FIELDS}` })) as ActiveTenant | null;
       tenants = tenant ? [tenant] : [];
     } else {
       tenants = await getActiveTenants(TENANT_FIELDS);
@@ -76,25 +72,20 @@ export async function detectNoShows(
         const gracePeriodEnd = new Date(now.getTime() - gracePeriodMinutes * 60 * 1000);
         const oldestStart = new Date(now.getTime() - maxAgeHours * 60 * 60 * 1000);
 
-        const potentialNoShows = await Booking.find({
-          tenantId: tenant._id,
-          startTime: { $gte: oldestStart, $lte: gracePeriodEnd },
-          status: { $in: ['pending', 'confirmed'] },
-        })
-          .select('customerEmail customerPhone serviceName startTime staffName')
-          .lean();
+        const potentialNoShows = await bookings.list(
+          String(tenant._id),
+          { startTime: { gte: oldestStart, lte: gracePeriodEnd }, status: ['pending', 'confirmed'] },
+          { select: 'customerEmail customerPhone serviceName startTime staffName' }
+        );
 
         if (potentialNoShows.length === 0) continue;
 
         // Mark all as no-show in one write. The status change is what makes the
         // follow-up at-most-once: next run no longer matches these bookings.
-        await Booking.updateMany(
-          {
-            tenantId: tenant._id,
-            _id: { $in: potentialNoShows.map((b) => b._id) },
-            status: { $in: ['pending', 'confirmed'] },
-          },
-          { $set: { status: 'no-show' } }
+        await bookings.updateMany(
+          String(tenant._id),
+          { ids: potentialNoShows.map((b) => b._id), status: ['pending', 'confirmed'] },
+          { status: 'no-show' }
         );
 
         for (const booking of potentialNoShows) {

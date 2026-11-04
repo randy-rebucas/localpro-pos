@@ -1,10 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import mongoose from 'mongoose';
-import connectDB from '@/lib/mongodb';
-import Subscription from '@/models/Subscription';
-import SubscriptionPlan from '@/models/SubscriptionPlan';
-import Tenant from '@/models/Tenant';
-import BillingEvent from '@/models/BillingEvent';
+import { getRepos, isDuplicateKeyError, runInTransaction, type BillingHistoryInput, type Subscription } from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
@@ -16,7 +11,6 @@ import { logger } from '@/lib/logger';
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     const t = await getValidationTranslatorFromRequest(request);
 
     // Require authentication
@@ -60,9 +54,10 @@ export async function POST(request: NextRequest) {
     // activation), don't re-attempt the PayPal capture — PayPal will reject a
     // second capture of the same order and the tenant would wrongly see
     // "Activation Failed" even though they're already upgraded.
-    const alreadyProcessed = await BillingEvent.findOne({ tenantId, transactionId: paypalOrderId }).lean();
+    const { subscriptions, subscriptionPlans, billingEvents } = getRepos();
+    const alreadyProcessed = await billingEvents.findByTransactionId(tenantId, paypalOrderId);
     if (alreadyProcessed) {
-      const subscription = await Subscription.findById(alreadyProcessed.subscriptionId).lean();
+      const subscription = await subscriptions.findById(tenantId, alreadyProcessed.subscriptionId);
       return NextResponse.json({
         success: true,
         message: t('subscription.alreadyActivated', 'Subscription activated successfully'),
@@ -71,7 +66,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get the subscription plan
-    const plan = await SubscriptionPlan.findOne({ _id: planId, isActive: true });
+    const plan = await subscriptionPlans.findById(planId, { activeOnly: true });
     if (!plan) {
       return NextResponse.json(
         { success: false, error: t('validation.subscriptionPlanNotFound', 'Subscription plan not found') },
@@ -138,7 +133,6 @@ export async function POST(request: NextRequest) {
     }
 
     const now = new Date();
-    let subscriptionData: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
     const nextBillingDate = new Date(now);
     if (billingCycle === 'yearly') {
@@ -148,7 +142,7 @@ export async function POST(request: NextRequest) {
     }
     const endDate = nextBillingDate;
 
-    const billingEntry = {
+    const billingEntry: BillingHistoryInput = {
       date: now,
       amount: expectedAmount,
       currency: plan.price.currency,
@@ -157,67 +151,67 @@ export async function POST(request: NextRequest) {
     };
 
     // Money has already been captured by PayPal at this point — the remaining
-    // writes (subscription, tenant backref, billing event) must all land together
+    // writes (subscription, billing event, coupon use) must all land together
     // or not at all, otherwise a tenant can end up charged with no matching
     // subscription/billing record.
-    const session = await mongoose.startSession();
-    let subscriptionId: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+    let subscription: Subscription;
     let wasTrial = false;
     try {
-      session.startTransaction();
+      subscription = await runInTransaction(async (tx) => {
+        const existingSubscription = await subscriptions.findByTenant(tenantId, { tx });
+        wasTrial = existingSubscription?.isTrial === true;
 
-      const existingSubscription = await Subscription.findOne({ tenantId }).session(session);
-      wasTrial = existingSubscription?.isTrial === true;
-
-      if (existingSubscription) {
-        // Update existing subscription (upgrade, re-activate, or trial conversion)
-        subscriptionData = {
-          planId: plan._id,
-          status: 'active',
-          billingCycle,
-          endDate,
-          nextBillingDate: endDate,
-          isTrial: false,
-          autoRenew: true,
-          $push: { billingHistory: billingEntry },
-        };
-
-        await Subscription.findByIdAndUpdate(existingSubscription._id, subscriptionData, { session });
-        subscriptionId = existingSubscription._id;
-      } else {
-        // Create brand-new subscription
-        subscriptionData = {
-          tenantId,
-          planId: plan._id,
-          status: 'active',
-          billingCycle,
-          startDate: now,
-          endDate,
-          nextBillingDate: endDate,
-          isTrial: false,
-          autoRenew: true,
-          usage: {
-            currentUsers: 1, // Admin user
-            currentBranches: 1,
-            currentProducts: 0,
-            currentTransactions: 0,
-            lastResetDate: now,
-          },
-          billingHistory: [billingEntry],
-        };
-
-        const [subscription] = await Subscription.create([subscriptionData], { session });
-        subscriptionId = subscription._id;
-
-        // Update tenant with subscription reference
-        await Tenant.findByIdAndUpdate(tenantId, { subscriptionId: subscription._id }, { session });
-      }
-
-      await BillingEvent.create(
-        [
-          {
+        let saved: Subscription;
+        if (existingSubscription) {
+          // Update existing subscription (upgrade, re-activate, or trial conversion)
+          saved = (await subscriptions.update(
             tenantId,
-            subscriptionId,
+            existingSubscription._id,
+            {
+              set: {
+                planId: plan._id,
+                status: 'active',
+                billingCycle,
+                endDate,
+                nextBillingDate: endDate,
+                isTrial: false,
+                autoRenew: true,
+              },
+              addBillingEntry: billingEntry,
+            },
+            { tx }
+          )) as Subscription;
+        } else {
+          // Create brand-new subscription. (Tenant has no subscriptionId path,
+          // so no tenant backref is written.)
+          saved = await subscriptions.create(
+            tenantId,
+            {
+              planId: plan._id,
+              status: 'active',
+              billingCycle,
+              startDate: now,
+              endDate,
+              nextBillingDate: endDate,
+              isTrial: false,
+              autoRenew: true,
+              usage: {
+                currentUsers: 1, // Admin user
+                currentBranches: 1,
+                currentProducts: 0,
+                currentTransactions: 0,
+                lastResetDate: now,
+              },
+              billingHistory: [billingEntry],
+            },
+            { tx }
+          );
+        }
+
+        await billingEvents.create(
+          tenantId,
+          {
+            subscriptionId: saved._id,
             type: wasTrial ? 'trial_converted' : 'plan_changed',
             amount: expectedAmount,
             currency: plan.price.currency,
@@ -226,27 +220,25 @@ export async function POST(request: NextRequest) {
               : `Plan activated/changed to ${plan.name} (${billingCycle}) via PayPal${coupon ? ` (coupon ${coupon.code})` : ''}`,
             transactionId: paypalOrderId,
           },
-        ],
-        { session }
-      );
+          { tx }
+        );
 
-      // Reserve the coupon's use in the same transaction as the charge it
-      // discounted — if the payment write rolls back, the use shouldn't be
-      // consumed either.
-      if (coupon) {
-        await incrementCouponUsage(coupon._id, session);
-      }
-
-      await session.commitTransaction();
+        // Reserve the coupon's use in the same transaction as the charge it
+        // discounted — if the payment write rolls back, the use shouldn't be
+        // consumed either.
+        if (coupon) {
+          await incrementCouponUsage(coupon._id, tx);
+        }
+        return saved;
+      });
     } catch (e) {
-      await session.abortTransaction();
       // A duplicate-key error on the transactionId index means a concurrent
       // request already recorded this exact payment — treat as already activated
       // rather than surfacing a false failure.
-      if (e instanceof Error && 'code' in e && (e as { code?: number }).code === 11000) {
-        const existing = await BillingEvent.findOne({ tenantId, transactionId: paypalOrderId }).lean();
+      if (isDuplicateKeyError(e)) {
+        const existing = await billingEvents.findByTransactionId(tenantId, paypalOrderId);
         if (existing) {
-          const subscription = await Subscription.findById(existing.subscriptionId).lean();
+          const subscription = await subscriptions.findById(tenantId, existing.subscriptionId);
           return NextResponse.json({
             success: true,
             message: t('subscription.alreadyActivated', 'Subscription activated successfully'),
@@ -255,8 +247,6 @@ export async function POST(request: NextRequest) {
         }
       }
       throw e;
-    } finally {
-      session.endSession();
     }
 
     await createAuditLog(request, {
@@ -264,9 +254,9 @@ export async function POST(request: NextRequest) {
       userId: user.userId,
       action: AuditActions.SUBSCRIPTION_ACTIVATE,
       entityType: 'subscription',
-      entityId: subscriptionId.toString(),
+      entityId: subscription._id,
       changes: {
-        planId: plan._id.toString(),
+        planId: plan._id,
         billingCycle,
         amount: expectedAmount,
         currency: plan.price.currency,
@@ -279,7 +269,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       message: t('subscription.activated', 'Subscription activated successfully'),
-      data: subscriptionData,
+      data: subscription,
     });
 
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any

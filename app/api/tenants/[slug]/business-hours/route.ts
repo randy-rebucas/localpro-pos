@@ -4,8 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
+import { getRepos } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 import { roleAtLeast } from '@/lib/permissions';
 import { logger } from '@/lib/logger';
@@ -21,20 +20,19 @@ export async function GET(
     }
 
     const { slug } = await params;
-    await connectDB();
 
-    const tenant = await Tenant.findOne({ slug });
+    const tenant = await getRepos().tenants.findBySlug(slug, { select: 'settings.businessHours' });
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant._id) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
     return NextResponse.json({
       success: true,
-      data: tenant.settings.businessHours || {},
+      data: tenant.settings?.businessHours || {},
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     logger.error('Error fetching business hours:', error);
@@ -60,30 +58,30 @@ export async function PUT(
     const body = await request.json();
     const { schedule, specialHours, timezone } = body;
 
-    await connectDB();
-
-    const tenant = await Tenant.findOne({ slug });
+    const tenant = await getRepos().tenants.findBySlug(slug, { select: 'settings.businessHours' });
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant._id) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
-    tenant.settings.businessHours = {
-      ...tenant.settings.businessHours,
+    const businessHours = {
+      ...tenant.settings?.businessHours,
       ...(timezone !== undefined && { timezone }),
       ...(schedule !== undefined && { schedule }),
       ...(specialHours !== undefined && { specialHours }),
     };
 
-    tenant.markModified('settings.businessHours');
-    await tenant.save();
+    const updated = await getRepos().tenants.update(tenant._id, { set: { 'settings.businessHours': businessHours } });
+    if (!updated) {
+      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+    }
 
     return NextResponse.json({
       success: true,
-      data: tenant.settings.businessHours,
+      data: updated.settings.businessHours,
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     logger.error('Error updating business hours:', error);

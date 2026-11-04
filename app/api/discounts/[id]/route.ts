@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Discount from '@/models/Discount';
+import { getRepos } from '@/lib/db';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -10,11 +9,10 @@ import { handleApiError } from '@/lib/error-handler';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await connectDB();
     const { tenantId } = await requireTenantAccess(request);
     const { id } = await params;
 
-    const discount = await Discount.findOne({ _id: id, tenantId }).lean();
+    const discount = await getRepos().discounts.findById(tenantId, id);
     if (!discount) {
       return NextResponse.json({ success: false, error: 'Discount not found' }, { status: 404 });
     }
@@ -27,7 +25,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await connectDB();
     const { tenantId, user } = await requireTenantAccess(request);
     const { id } = await params;
     const t = await getValidationTranslatorFromRequest(request);
@@ -42,7 +39,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
     }
 
-    const discount = await Discount.findOne({ _id: id, tenantId });
+    const discount = await getRepos().discounts.findById(tenantId, id);
     if (!discount) {
       return NextResponse.json({ success: false, error: t('validation.discountNotFound', 'Discount not found') }, { status: 404 });
     }
@@ -106,8 +103,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (body.usageLimit !== undefined) updates.usageLimit = body.usageLimit;
     if (body.isActive !== undefined) updates.isActive = body.isActive;
 
-    Object.assign(discount, updates);
-    await discount.save();
+    const result = await getRepos().discounts.update(tenantId, id, updates);
+    if (!result) {
+      return NextResponse.json({ success: false, error: t('validation.discountNotFound', 'Discount not found') }, { status: 404 });
+    }
 
     await createAuditLog(request, {
       tenantId,
@@ -117,7 +116,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       changes: updates,
     });
 
-    return NextResponse.json({ success: true, data: discount });
+    return NextResponse.json({ success: true, data: result.after });
   } catch (error) {
     return handleApiError(error, 'Failed to update discount');
   }
@@ -125,7 +124,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await connectDB();
     const { tenantId, user } = await requireTenantAccess(request);
     const { id } = await params;
     const t = await getValidationTranslatorFromRequest(request);
@@ -140,7 +138,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
     }
 
-    const discount = await Discount.findOne({ _id: id, tenantId });
+    const discount = await getRepos().discounts.findById(tenantId, id);
     if (!discount) {
       return NextResponse.json({ success: false, error: t('validation.discountNotFound', 'Discount not found') }, { status: 404 });
     }
@@ -154,7 +152,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       return NextResponse.json({ success: false, error: errorMsg }, { status: 400 });
     }
 
-    await discount.deleteOne();
+    await getRepos().discounts.delete(tenantId, id);
 
     await createAuditLog(request, {
       tenantId,

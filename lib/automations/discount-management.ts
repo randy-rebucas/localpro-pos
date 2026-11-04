@@ -4,8 +4,7 @@
  */
 
 import connectDB from '@/lib/mongodb';
-import Discount from '@/models/Discount';
-import Tenant from '@/models/Tenant';
+import { getRepos } from '@/lib/db';
 import type { ITenantSettings } from '@/models/Tenant';
 import { sendEmail } from '@/lib/notifications';
 import { getActiveTenants, type ActiveTenant } from '@/lib/tenant-active-query';
@@ -25,14 +24,6 @@ export interface DiscountManagementOptions {
 }
 
 const TENANT_FIELDS = 'settings.emailNotifications settings.email settings.companyName';
-
-/** usageLimit set and reached (usageLimit 0/null means unlimited, as in /api/discounts/validate). */
-const LIMIT_REACHED_EXPR = {
-  $and: [
-    { $gt: [{ $ifNull: ['$usageLimit', 0] }, 0] },
-    { $gte: [{ $ifNull: ['$usageCount', 0] }, '$usageLimit'] },
-  ],
-};
 
 /**
  * Automatically activate/deactivate discounts based on validity dates
@@ -54,9 +45,7 @@ export async function manageDiscountStatus(
     // Get tenants to process
     let tenants: ActiveTenant[];
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId)
-        .select(`_id slug name ${TENANT_FIELDS}`)
-        .lean<ActiveTenant>();
+      const tenant = (await getRepos().tenants.findById(options.tenantId, { select: `_id slug name ${TENANT_FIELDS}` })) as ActiveTenant | null;
       tenants = tenant ? [tenant] : [];
     } else {
       // Get all active tenants
@@ -84,50 +73,26 @@ export async function manageDiscountStatus(
         const tenantSettings = (tenant.settings ?? null) as ITenantSettings | null;
         const notify = !!(tenantSettings?.emailNotifications && tenantSettings?.email);
 
-        // Discounts that need activation: validFrom arrived during this window,
-        // still valid, not active, and not already used up
-        const activateFilter = {
-          tenantId: tenant._id,
-          isActive: false,
-          validFrom: { $gt: activationWindowStart, $lte: now },
-          validUntil: { $gte: now },
-          $expr: { $not: [LIMIT_REACHED_EXPR] },
-        };
+        const tenantId = String(tenant._id);
+        const discountRepo = getRepos().discounts;
 
-        // Discounts that need deactivation: still active but expired or used up
-        const deactivateFilter = {
-          tenantId: tenant._id,
-          isActive: true,
-          $or: [{ validUntil: { $lt: now } }, { $expr: LIMIT_REACHED_EXPR }],
-        };
+        // Only read the discounts when an email needs their details; otherwise
+        // the two bulk writes are the entire cost for this tenant.
+        // Activation: validFrom arrived during this window, still valid, not
+        // active, and not already used up
+        const activated = await discountRepo.activateDue(tenantId, {
+          now,
+          validFromAfter: activationWindowStart,
+          withDocs: notify,
+        });
+        totalActivated += activated.modified;
 
-        // Only read the documents when an email needs their details; otherwise
-        // the two updateMany calls below are the entire cost for this tenant.
-        const fields = 'code name validUntil usageLimit usageCount';
-        const [discountsToActivate, discountsToDeactivate] = notify
-          ? await Promise.all([
-              Discount.find(activateFilter).select(fields).lean(),
-              Discount.find(deactivateFilter).select(fields).lean(),
-            ])
-          : [null, null];
+        // Deactivation: still active but expired or used up
+        const deactivated = await discountRepo.deactivateDue(tenantId, { now, withDocs: notify });
+        totalDeactivated += deactivated.modified;
 
-        // Activate discounts (one write)
-        const activateRes = await Discount.updateMany(
-          discountsToActivate
-            ? { ...activateFilter, _id: { $in: discountsToActivate.map((d) => d._id) } }
-            : activateFilter,
-          { $set: { isActive: true } }
-        );
-        totalActivated += activateRes.modifiedCount ?? 0;
-
-        // Deactivate discounts (one write)
-        const deactivateRes = await Discount.updateMany(
-          discountsToDeactivate
-            ? { ...deactivateFilter, _id: { $in: discountsToDeactivate.map((d) => d._id) } }
-            : deactivateFilter,
-          { $set: { isActive: false } }
-        );
-        totalDeactivated += deactivateRes.modifiedCount ?? 0;
+        const discountsToActivate = notify ? activated.discounts : null;
+        const discountsToDeactivate = notify ? deactivated.discounts : null;
 
         if (notify && tenantSettings?.email) {
           // Send notification if enabled
@@ -160,14 +125,7 @@ export async function manageDiscountStatus(
           // Check for discounts approaching usage limits (#10 - Discount Usage Limit Alerts)
           // Only discounts used since the previous run (updatedAt is bumped by the
           // $inc in /api/transactions), so an untouched discount isn't re-alerted.
-          const activeDiscounts = await Discount.find({
-            tenantId: tenant._id,
-            isActive: true,
-            usageLimit: { $gt: 0 },
-            updatedAt: { $gt: windowStart },
-          })
-            .select('code name usageLimit usageCount')
-            .lean();
+          const activeDiscounts = await discountRepo.listLimitedUsedSince(tenantId, windowStart);
 
           for (const discount of activeDiscounts) {
             if (!discount.usageLimit) continue;

@@ -1,5 +1,4 @@
-import mongoose from 'mongoose';
-import Transaction from '@/models/Transaction';
+import { getRepos } from '@/lib/db';
 
 export interface DailySalesAggregate {
   startDate: Date;
@@ -27,26 +26,22 @@ export function startOfBusinessDay(date: Date): Date {
  * (persisted, once-per-day) reports so their totals stay consistent.
  */
 export async function getDailySalesAggregate(
-  tenantId: string | mongoose.Types.ObjectId,
+  tenantId: string,
   businessDate: Date
 ): Promise<DailySalesAggregate> {
   const startDate = startOfBusinessDay(businessDate);
   const endDate = new Date(startDate);
   endDate.setDate(endDate.getDate() + 1);
 
+  const { transactions } = getRepos();
+  const createdAt = { gte: startDate, lt: endDate };
   const [completed, voided] = await Promise.all([
-    Transaction.find({
+    transactions.list(
       tenantId,
-      status: 'completed',
-      createdAt: { $gte: startDate, $lt: endDate },
-    })
-      .select('subtotal total discountAmount taxAmount taxExemptAmount zeroRatedAmount')
-      .lean(),
-    Transaction.countDocuments({
-      tenantId,
-      status: { $in: ['cancelled', 'refunded'] },
-      createdAt: { $gte: startDate, $lt: endDate },
-    }),
+      { status: 'completed', createdAt },
+      { select: 'subtotal total discountAmount taxAmount taxExemptAmount zeroRatedAmount' }
+    ),
+    transactions.count(tenantId, { status: ['cancelled', 'refunded'], createdAt }),
   ]);
 
   let grossSales = 0;

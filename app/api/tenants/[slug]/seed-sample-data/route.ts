@@ -378,7 +378,7 @@ export async function POST(
 
     // ── Audit log ───────────────────────────────────────────────────────────
     await createAuditLog(request, {
-      tenantId,
+      tenantId: String(tenantId),
       action: AuditActions.UPDATE,
       entityType: 'tenant',
       entityId: tenantId.toString(),

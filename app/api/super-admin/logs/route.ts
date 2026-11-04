@@ -1,14 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import AuditLog from '@/models/AuditLog';
-import Tenant from '@/models/Tenant';
+import { getRepos, type AuditLogFilter } from '@/lib/db';
 import { requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { handleApiError } from '@/lib/error-handler';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     const user = await requireRole(request, ['super_admin']);
 
     const { searchParams } = new URL(request.url);
@@ -22,48 +19,46 @@ export async function GET(request: NextRequest) {
     const startDate = searchParams.get('startDate') || '';
     const endDate = searchParams.get('endDate') || '';
 
-    const query: Record<string, unknown> = {};
+    let scopedTenantId: string | null = null;
 
     // Resolve tenantSlug → tenantId if provided
     if (tenantSlug) {
-      const tenant = await Tenant.findOne({ slug: tenantSlug }).select('_id').lean();
+      const tenant = await getRepos().tenants.findBySlug(tenantSlug, { select: '_id' });
       if (tenant) {
-        query.tenantId = (tenant as { _id: unknown })._id;
+        scopedTenantId = tenant._id;
       } else {
         return NextResponse.json({ success: true, data: [], pagination: { page, limit, total: 0, pages: 0 } });
       }
     } else if (tenantId) {
-      query.tenantId = tenantId;
+      scopedTenantId = tenantId;
     }
     // If neither provided, no tenantId filter → returns all tenants' logs
 
-    if (action) query.action = { $regex: action, $options: 'i' };
-    if (entityType) query.entityType = entityType;
-    if (userId) query.userId = userId;
+    const filter: AuditLogFilter = {
+      ...(action && { actionContains: action }),
+      ...(entityType && { entityType }),
+      ...(userId && { userId }),
+    };
 
     if (startDate || endDate) {
-      const dateFilter: Record<string, Date> = {};
-      if (startDate) dateFilter.$gte = new Date(startDate);
+      filter.createdAt = {};
+      if (startDate) filter.createdAt.gte = new Date(startDate);
       if (endDate) {
         const end = new Date(endDate);
         end.setHours(23, 59, 59, 999);
-        dateFilter.$lte = end;
+        filter.createdAt.lte = end;
       }
-      query.createdAt = dateFilter;
     }
 
     const format = searchParams.get('format') || 'json';
     const csvLimit = format === 'csv' ? 5000 : limit;
 
+    const repo = getRepos().auditLogs;
     const [logs, total] = await Promise.all([
-      AuditLog.find(query)
-        .populate('tenantId', 'slug name')
-        .populate('userId', 'name email')
-        .sort({ createdAt: -1 })
-        .skip(format === 'csv' ? 0 : (page - 1) * limit)
-        .limit(csvLimit)
-        .lean(),
-      AuditLog.countDocuments(query),
+      repo.listWithRefs(scopedTenantId, filter, {
+        page: { skip: format === 'csv' ? 0 : (page - 1) * limit, limit: csvLimit },
+      }),
+      repo.count(scopedTenantId, filter),
     ]);
 
     if (format === 'csv') {
@@ -90,8 +85,7 @@ export async function GET(request: NextRequest) {
       // Bulk-exporting audit logs — potentially across every tenant — is
       // itself a sensitive action worth its own trail (mirrors the
       // tenant-scoped export at api/audit-logs/export/route.ts).
-      const Tenant = (await import('@/models/Tenant')).default;
-      const defaultTenant = await Tenant.findOne({ slug: 'default' }).select('_id').lean();
+      const defaultTenant = await getRepos().tenants.findBySlug('default', { select: '_id' });
       if (defaultTenant) {
         await createAuditLog(request, {
           tenantId: defaultTenant._id,

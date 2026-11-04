@@ -1,14 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Product from '@/models/Product';
+import { getRepos } from '@/lib/db';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
-
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId } = authResult;
@@ -23,24 +20,15 @@ export async function GET(request: NextRequest) {
     // Default to missing-barcode — only load products that still need to be completed
     const filter = searchParams.get('filter') ?? 'missing-barcode';
 
-    const query: Record<string, unknown> = { tenantId, isActive: { $ne: false } };
-    if (filter === 'missing-barcode') {
-      query.$or = [
-        { barcode: { $exists: false } },
-        { barcode: null },
-        { barcode: '' },
-        { barcode: /^\s*$/ },
-      ];
-    } else if (filter === 'missing-image') {
-      query.$or = [{ image: { $exists: false } }, { image: null }, { image: '' }];
-    }
     // filter === 'all' applies no extra condition
+    const missing = filter === 'missing-barcode' ? 'barcode' : filter === 'missing-image' ? 'image' : undefined;
+    const products = await getRepos().products.list(
+      tenantId,
+      { active: true, ...(missing && { missing }) },
+      { select: '_id', sort: 'updatedAt' }
+    );
 
-    const products = await Product.find(query, { _id: 1 })
-      .sort({ updatedAt: 1 })
-      .lean();
-
-    const productIds = products.map((p) => String(p._id));
+    const productIds = products.map((p) => p._id);
 
     return NextResponse.json({
       success: true,

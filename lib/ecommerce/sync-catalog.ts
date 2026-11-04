@@ -1,9 +1,4 @@
-import mongoose from 'mongoose';
-import connectDB from '@/lib/mongodb';
-import Product from '@/models/Product';
-import ProductChannelListing from '@/models/ProductChannelListing';
-import TenantEcommerceIntegration from '@/models/TenantEcommerceIntegration';
-import type { ITenantEcommerceIntegration } from '@/models/TenantEcommerceIntegration';
+import { getRepos, newId, type ChannelListingFields, type EcommerceIntegration, type ProductInput } from '@/lib/db';
 import { getWooCommerceCredentials } from '@/lib/ecommerce/integration-credentials';
 import { getShopifyAccessTokenForIntegration } from '@/lib/ecommerce/shopify-token';
 import { shopifyFetchAllCatalogProducts } from '@/lib/ecommerce/shopify-catalog';
@@ -15,7 +10,7 @@ type VariationOption = { size?: string; color?: string; type?: string };
 
 /** Only the fields catalog sync reads from a POS product */
 type CatalogProduct = {
-  _id: mongoose.Types.ObjectId;
+  _id: string;
   sku?: string;
   image?: string;
   hasVariations?: boolean;
@@ -35,7 +30,7 @@ const SKU_CHUNK = 500;
  * When several products match, the first returned wins (as findOne did).
  */
 async function loadSkuMatches(
-  tenantId: mongoose.Types.ObjectId,
+  tenantId: string,
   skus: string[]
 ): Promise<{ byVariationSku: Map<string, SkuMatch>; byDirectSku: Map<string, CatalogProduct> }> {
   const byVariationSku = new Map<string, SkuMatch>();
@@ -44,13 +39,11 @@ async function loadSkuMatches(
   for (let i = 0; i < skus.length; i += SKU_CHUNK) {
     const chunk = skus.slice(i, i + SKU_CHUNK);
     const wanted = new Set(chunk);
-    const products = await Product.find({
+    const products: CatalogProduct[] = await getRepos().products.list(
       tenantId,
-      isActive: true,
-      $or: [{ sku: { $in: chunk } }, { hasVariations: true, 'variations.sku': { $in: chunk } }],
-    })
-      .select('_id sku image hasVariations variations.sku variations.size variations.color variations.type')
-      .lean<CatalogProduct[]>();
+      { active: 'flagged', skuOrVariationSkuIn: chunk },
+      { select: '_id sku image hasVariations variations.sku variations.size variations.color variations.type' }
+    );
 
     for (const p of products) {
       if (p.hasVariations && p.variations) {
@@ -73,17 +66,15 @@ async function loadSkuMatches(
 }
 
 function buildProductFromVariant(
-  tenantId: mongoose.Types.ObjectId,
   v: NormalizedCatalogVariant,
   title: string,
   productImageUrl?: string | null
-) {
+): ProductInput & { _id: string } {
   const name = v.title || title;
   const stock = v.inventoryQuantity != null ? Math.max(0, Math.floor(v.inventoryQuantity)) : 0;
   const image = (v.imageUrl || productImageUrl || '').trim() || undefined;
   return {
-    _id: new mongoose.Types.ObjectId(),
-    tenantId,
+    _id: newId(),
     name: name.slice(0, 200),
     price: v.price,
     stock,
@@ -97,27 +88,12 @@ function buildProductFromVariant(
   };
 }
 
-/** Op indexes that failed in an unordered bulkWrite, or null if unknown */
-function failedWriteIndexes(err: unknown): number[] | null {
-  const writeErrors = (err as { writeErrors?: unknown })?.writeErrors;
-  if (!writeErrors) return null;
-  const list = Array.isArray(writeErrors) ? writeErrors : [writeErrors];
-  const indexes = list
-    .map((we) => {
-      const w = we as { index?: number; err?: { index?: number } };
-      return w.index ?? w.err?.index;
-    })
-    .filter((n): n is number => typeof n === 'number');
-  return indexes.length === list.length ? indexes : null;
-}
-
 export async function runCatalogSync(params: {
-  integration: ITenantEcommerceIntegration;
+  integration: EcommerceIntegration;
   autoCreateProducts: boolean;
 }): Promise<{ linked: number; created: number; skipped: number }> {
-  await connectDB();
   const { integration, autoCreateProducts } = params;
-  const tenantId = integration.tenantId as mongoose.Types.ObjectId;
+  const { tenantId } = integration;
   let linked = 0;
   let created = 0;
   let skipped = 0;
@@ -160,7 +136,7 @@ export async function runCatalogSync(params: {
       }
     }
     if (!match && autoCreateProducts) {
-      const doc = buildProductFromVariant(tenantId, v, cp.title, cp.imageUrl);
+      const doc = buildProductFromVariant(v, cp.title, cp.imageUrl);
       toCreate.push(doc);
       const product: CatalogProduct = { _id: doc._id, sku: doc.sku, image: doc.image, hasVariations: false };
       match = { product };
@@ -170,32 +146,25 @@ export async function runCatalogSync(params: {
   }
 
   // 3. Create the missing products in one write; variants whose product failed are skipped
-  const pendingIds = new Set(toCreate.map((d) => d._id.toString()));
+  const pendingIds = new Set(toCreate.map((d) => d._id));
   const createdIds = new Set<string>();
   if (toCreate.length) {
-    try {
-      const inserted = await Product.insertMany(toCreate, { ordered: false });
-      for (const d of inserted) createdIds.add(d._id.toString());
-    } catch (e) {
-      logger.error('sync catalog product create error', { err: e });
-      // Unordered insert: some may have landed — check which
-      const present = await Product.find({ tenantId, _id: { $in: toCreate.map((d) => d._id) } })
-        .select('_id')
-        .lean<{ _id: mongoose.Types.ObjectId }[]>();
-      for (const d of present) createdIds.add(d._id.toString());
-    }
+    // Unordered insert: returns the ids that landed even when some rows were rejected
+    const { insertedIds, error } = await getRepos().products.createMany(tenantId, toCreate);
+    if (error) logger.error('sync catalog product create error', { err: error });
+    for (const id of insertedIds) createdIds.add(id);
     created = createdIds.size;
   }
 
   // 4. Image back-fill and listing upserts, batched
   const imageUpdates = new Map<string, string>();
-  const listingOps = new Map<string, { op: Record<string, unknown>; variants: number }>();
+  const listingOps = new Map<string, { item: { externalVariantId: string; set: ChannelListingFields }; variants: number }>();
   for (const { v, channelImage, match } of resolved) {
     if (!match) {
       skipped += 1;
       continue;
     }
-    const pid = match.product._id.toString();
+    const pid = match.product._id;
     if (pendingIds.has(pid) && !createdIds.has(pid)) {
       skipped += 1;
       continue;
@@ -210,19 +179,14 @@ export async function runCatalogSync(params: {
     const prev = listingOps.get(v.externalVariantId);
     listingOps.set(v.externalVariantId, {
       variants: (prev?.variants ?? 0) + 1,
-      op: {
-        updateOne: {
-          filter: { tenantId, provider: integration.provider, externalVariantId: v.externalVariantId },
-          update: {
-            $set: {
-              productId: match.product._id,
-              externalProductId: v.externalProductId,
-              inventoryItemId: v.inventoryItemId,
-              sku: v.sku || undefined,
-              variation: match.variation,
-            },
-          },
-          upsert: true,
+      item: {
+        externalVariantId: v.externalVariantId,
+        set: {
+          productId: match.product._id,
+          externalProductId: v.externalProductId,
+          inventoryItemId: v.inventoryItemId,
+          sku: v.sku || undefined,
+          variation: match.variation,
         },
       },
     });
@@ -230,11 +194,9 @@ export async function runCatalogSync(params: {
 
   if (imageUpdates.size) {
     try {
-      await Product.bulkWrite(
-        [...imageUpdates].map(([pid, image]) => ({
-          updateOne: { filter: { _id: pid, tenantId }, update: { $set: { image } } },
-        })),
-        { ordered: false }
+      await getRepos().products.updateEach(
+        tenantId,
+        [...imageUpdates].map(([id, image]) => ({ id, set: { image } }))
       );
     } catch (e) {
       // Image back-fill is cosmetic — still link the listings
@@ -245,15 +207,15 @@ export async function runCatalogSync(params: {
   const ops = [...listingOps.values()];
   const totalVariants = ops.reduce((n, o) => n + o.variants, 0);
   if (ops.length) {
-    try {
-      await ProductChannelListing.bulkWrite(
-        ops.map((o) => o.op) as Parameters<typeof ProductChannelListing.bulkWrite>[0],
-        { ordered: false }
-      );
+    const { error, failedIndexes: failed } = await getRepos().channelListings.upsertManyByVariant(
+      tenantId,
+      integration.provider,
+      ops.map((o) => o.item)
+    );
+    if (!error) {
       linked = totalVariants;
-    } catch (e) {
-      const failed = failedWriteIndexes(e);
-      logger.error('sync catalog listing upsert error', { err: e, failed: failed?.length });
+    } else {
+      logger.error('sync catalog listing upsert error', { err: error, failed: failed?.length });
       const failedVariants = failed
         ? [...new Set(failed)].reduce((n, idx) => n + (ops[idx]?.variants ?? 0), 0)
         : totalVariants;
@@ -262,10 +224,10 @@ export async function runCatalogSync(params: {
     }
   }
 
-  await TenantEcommerceIntegration.updateOne(
-    { _id: integration._id },
-    { $set: { lastSyncAt: new Date(), lastError: undefined } }
-  );
+  await getRepos().ecommerceIntegrations.update(tenantId, integration.provider, {
+    lastSyncAt: new Date(),
+    lastError: undefined,
+  });
 
   return { linked, created, skipped };
 }

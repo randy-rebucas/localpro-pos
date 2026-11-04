@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import User from '@/models/User';
+import { getRepos } from '@/lib/db';
 import { generateToken } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { validateEmail } from '@/lib/validation';
-import bcrypt from 'bcryptjs';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
@@ -22,7 +20,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await connectDB();
     const body = await request.json();
     const { email, password, tenantSlug } = body;
     t = await getValidationTranslatorFromRequest(request);
@@ -43,9 +40,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Get tenant ID from slug
-    const Tenant = (await import('@/models/Tenant')).default;
-    const tenant = await Tenant.findOne({ slug: tenantSlug || 'default', isActive: true }).lean();
-    
+    const { tenants, users } = getRepos();
+    const tenant = await tenants.findBySlug(tenantSlug || 'default', { activeOnly: true });
+
     if (!tenant) {
       return NextResponse.json(
         { success: false, error: t('validation.tenantNotFoundOrInactive', 'Tenant not found or inactive') },
@@ -54,8 +51,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Find user with password field in the requested tenant
-    const user = await User.findOne({ email: email.toLowerCase(), tenantId: tenant._id })
-      .select('+password');
+    const user = await users.findByEmailForLogin(email, { tenantId: tenant._id });
 
     if (!user || !user.isActive) {
       await createAuditLog(request, {
@@ -80,10 +76,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify password using bcrypt directly (not the method to avoid 'this' context issues)
+    // Verify password against the stored hash
     let isPasswordValid = false;
     try {
-      isPasswordValid = await bcrypt.compare(password, user.password);
+      isPasswordValid = await users.verifyPassword(user, password);
     } catch (bcryptError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       logger.error('Bcrypt comparison error:', bcryptError);
       return NextResponse.json(
@@ -97,7 +93,7 @@ export async function POST(request: NextRequest) {
         tenantId: tenant._id,
         action: AuditActions.LOGIN,
         entityType: 'user',
-        entityId: user._id.toString(),
+        entityId: user._id,
         metadata: { success: false, reason: 'invalid_password' },
       });
       return NextResponse.json(
@@ -107,12 +103,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Update last login
-    await User.findByIdAndUpdate(user._id, { lastLogin: new Date() });
+    await users.touchLastLogin(user._id);
 
     // Generate token
     const token = generateToken({
-      userId: user._id.toString(),
-      tenantId: tenant._id.toString(),
+      userId: user._id,
+      tenantId: tenant._id,
       email: user.email,
       role: user.role,
     });
@@ -122,7 +118,7 @@ export async function POST(request: NextRequest) {
       tenantId: tenant._id,
       action: AuditActions.LOGIN,
       entityType: 'user',
-      entityId: user._id.toString(),
+      entityId: user._id,
       metadata: { success: true },
     });
 

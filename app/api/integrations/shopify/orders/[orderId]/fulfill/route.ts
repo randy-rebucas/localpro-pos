@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Transaction from '@/models/Transaction';
-import TenantEcommerceIntegration from '@/models/TenantEcommerceIntegration';
+import { getRepos } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { handleApiError } from '@/lib/error-handler';
@@ -34,24 +32,17 @@ export async function POST(
     const body = await request.json().catch(() => ({}));
     const { trackingNumber, trackingCompany } = body as { trackingNumber?: string; trackingCompany?: string };
 
-    await connectDB();
-
-    const integration = await TenantEcommerceIntegration.findOne({
-      tenantId: user.tenantId,
-      provider: 'shopify',
-      isActive: true,
-    });
+    const integration = await getRepos().ecommerceIntegrations.findActive(user.tenantId, 'shopify');
     if (!integration?.shopDomain) {
       return NextResponse.json({ success: false, error: t('validation.noActiveShopifyIntegration', 'No active Shopify integration') }, { status: 400 });
     }
 
     // Idempotency guard: if the local transaction already recorded a Shopify
     // fulfillment for this order, don't call Shopify again on a double-click/retry.
-    const existingTransaction = await Transaction.findOne({
-      tenantId: user.tenantId,
+    const existingTransaction = await getRepos().transactions.findOne(user.tenantId, {
       externalOrderId: orderId,
       salesChannel: 'shopify',
-    }).lean();
+    });
     if (existingTransaction?.shopifyFulfilledAt) {
       return NextResponse.json({
         success: true,
@@ -71,10 +62,7 @@ export async function POST(
     // Shopify fulfillment already succeeded at this point — the local sync below
     // is best-effort. A failure here must not report the fulfillment itself as failed.
     try {
-      await Transaction.updateOne(
-        { tenantId: user.tenantId, externalOrderId: orderId, salesChannel: 'shopify' },
-        { $set: { shopifyFulfilledAt: new Date(), shopifyFulfillmentId: fulfillmentId } }
-      );
+      await getRepos().transactions.markShopifyFulfilled(user.tenantId, orderId, fulfillmentId, new Date());
 
       await createAuditLog(request, {
         tenantId: user.tenantId,

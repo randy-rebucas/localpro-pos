@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
-import connectDB from '@/lib/mongodb';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
-import TenantEcommerceIntegration from '@/models/TenantEcommerceIntegration';
+import { getRepos } from '@/lib/db';
 import { encryptCredentialsPayload } from '@/lib/ecommerce/crypto';
 import { wooFetchJson, normalizeWooCommerceSiteUrl } from '@/lib/ecommerce/woocommerce-api';
 import { registerWooCommerceWebhooks } from '@/lib/ecommerce/register-woo-webhooks';
@@ -13,11 +12,9 @@ import { requireEcommerceProviderConnectAllowed } from '@/lib/ecommerce/tenant-i
 import { checkRateLimit } from '@/lib/rate-limit';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
-import mongoose from 'mongoose';
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     const t = await getValidationTranslatorFromRequest(request);
     const { tenantId, user } = await requireTenantAccess(request);
     if (!(await hasTenantPermission(user.role, tenantId, 'integrations.manage'))) {
@@ -53,28 +50,20 @@ export async function POST(request: NextRequest) {
     const credEnc = encryptCredentialsPayload({ consumerKey, consumerSecret });
     const whEnc = encryptCredentialsPayload({ secret: signingSecret });
 
-    const tenantObjectId = new mongoose.Types.ObjectId(tenantId);
-    const integration = await TenantEcommerceIntegration.findOneAndUpdate(
-      { tenantId: tenantObjectId, provider: 'woocommerce' },
-      {
-        $set: {
-          siteUrl: normalized,
-          credentialsEncrypted: credEnc,
-          webhookSecretEncrypted: whEnc,
-          isActive: true,
-          lastError: undefined,
-        },
-        $setOnInsert: { tenantId: tenantObjectId, provider: 'woocommerce' },
-      },
-      { upsert: true, new: true }
-    );
+    const integration = await getRepos().ecommerceIntegrations.upsert(tenantId, 'woocommerce', {
+      siteUrl: normalized,
+      credentialsEncrypted: credEnc,
+      webhookSecretEncrypted: whEnc,
+      isActive: true,
+      lastError: undefined,
+    });
 
     try {
       await registerWooCommerceWebhooks(integration, signingSecret, {
         publicAppBaseUrl: getPublicAppUrl(request),
       });
     } catch {
-      await integration.updateOne({ $set: { lastError: 'webhook_registration_failed' } });
+      await getRepos().ecommerceIntegrations.update(tenantId, 'woocommerce', { lastError: 'webhook_registration_failed' });
     }
 
     await createAuditLog(request, {
@@ -82,7 +71,7 @@ export async function POST(request: NextRequest) {
       userId: user.userId,
       action: AuditActions.UPDATE,
       entityType: 'ecommerce_integration',
-      entityId: integration._id.toString(),
+      entityId: integration._id,
       changes: { provider: 'woocommerce', siteUrl: normalized },
     });
 

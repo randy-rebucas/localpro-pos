@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
-import ZReading from '@/models/ZReading';
+import { getRepos, isDuplicateKeyError } from '@/lib/db';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
@@ -30,11 +29,7 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const limit = Math.min(parseInt(searchParams.get('limit') || '30', 10), 100);
 
-    const readings = await ZReading.find({ tenantId })
-      .sort({ businessDate: -1 })
-      .limit(limit)
-      .populate('generatedBy', 'name email')
-      .lean();
+    const readings = await getRepos().zReadings.list(tenantId, { limit });
 
     return NextResponse.json({ success: true, data: readings });
   } catch (error: unknown) {
@@ -73,14 +68,15 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}));
     const businessDate = startOfBusinessDay(body.date ? new Date(body.date) : new Date());
 
-    const existing = await ZReading.findOne({ tenantId, businessDate }).populate('generatedBy', 'name email').lean();
+    const { zReadings } = getRepos();
+    const existing = await zReadings.findByBusinessDate(tenantId, businessDate);
     if (existing) {
       await createAuditLog(request, {
         tenantId,
         userId: user.userId,
         action: AuditActions.Z_READING_VIEW,
         entityType: 'z_reading',
-        entityId: existing._id.toString(),
+        entityId: existing._id,
         metadata: { businessDate: businessDate.toISOString(), reprint: true },
       });
       return NextResponse.json({ success: true, data: existing, reprint: true });
@@ -88,7 +84,7 @@ export async function POST(request: NextRequest) {
 
     const [aggregate, tenant] = await Promise.all([
       getDailySalesAggregate(tenantId, businessDate),
-      Tenant.findById(tenantId).select('grandTotalSales').lean(),
+      getRepos().tenants.findById(tenantId, { select: 'grandTotalSales' }),
     ]);
 
     const endingGT = tenant?.grandTotalSales ?? 0;
@@ -96,8 +92,7 @@ export async function POST(request: NextRequest) {
 
     let zReading;
     try {
-      zReading = await ZReading.create({
-        tenantId,
+      zReading = await zReadings.create(tenantId, {
         businessDate,
         beginningGT,
         endingGT,
@@ -114,8 +109,8 @@ export async function POST(request: NextRequest) {
       });
     } catch (createErr: unknown) {
       // Unique index race: another request generated it first — return that one as a reprint.
-      if (createErr instanceof Error && 'code' in createErr && (createErr as { code?: number }).code === 11000) {
-        const race = await ZReading.findOne({ tenantId, businessDate }).populate('generatedBy', 'name email').lean();
+      if (isDuplicateKeyError(createErr)) {
+        const race = await zReadings.findByBusinessDate(tenantId, businessDate);
         if (race) {
           return NextResponse.json({ success: true, data: race, reprint: true });
         }

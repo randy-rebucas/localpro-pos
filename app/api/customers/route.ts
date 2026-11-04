@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import type { FilterQuery } from 'mongoose';
-import connectDB from '@/lib/mongodb';
-import Customer, { type ICustomer } from '@/models/Customer';
+import { getRepos, type CustomerFilter } from '@/lib/db';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -14,8 +12,6 @@ import { parseCreditLimitInput } from '@/lib/customer-credit';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
-
     // Require authentication to prevent unauthenticated customer enumeration
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
@@ -33,28 +29,21 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search');
     const isActive = searchParams.get('isActive');
 
-    const query: FilterQuery<ICustomer> = { tenantId };
+    const query: CustomerFilter = {};
     if (searchParams.has('isActive')) {
       query.isActive = isActive === 'true';
     }
+    // First name, last name, email or phone substring
     if (search) {
-      const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      query.$or = [
-        { firstName: { $regex: escapedSearch, $options: 'i' } },
-        { lastName: { $regex: escapedSearch, $options: 'i' } },
-        { email: { $regex: escapedSearch, $options: 'i' } },
-        { phone: { $regex: escapedSearch, $options: 'i' } },
-      ];
+      query.search = search;
     }
-    
-    const customers = await Customer.find(query)
-      .sort({ createdAt: -1 })
-      .limit(limit)
-      .skip(skip)
-      .lean();
-    
-    const total = await Customer.countDocuments(query);
-    
+
+    const { customers: customerRepo } = getRepos();
+    const [customers, total] = await Promise.all([
+      customerRepo.list(tenantId, query, { page: { skip, limit } }),
+      customerRepo.count(tenantId, query),
+    ]);
+
     return NextResponse.json({
       success: true,
       data: customers,
@@ -72,7 +61,6 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     // SECURITY: Validate tenant access for authenticated requests
     let tenantId: string;
     try {
@@ -130,9 +118,11 @@ export async function POST(request: NextRequest) {
       );
     }
     
+    const { customers } = getRepos();
+
     // Check email uniqueness if provided
     if (email) {
-      const existingCustomer = await Customer.findOne({ tenantId, email: email.toLowerCase() });
+      const existingCustomer = await customers.findOne(tenantId, { email });
       if (existingCustomer) {
         return NextResponse.json(
           { success: false, error: t('validation.emailAlreadyExists', 'Email already exists') },
@@ -155,8 +145,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const customer = await Customer.create({
-      tenantId,
+    const customer = await customers.create(tenantId, {
       firstName: firstName.trim(),
       lastName: lastName.trim(),
       email: email?.toLowerCase().trim(),
@@ -173,7 +162,8 @@ export async function POST(request: NextRequest) {
       tenantId,
       action: AuditActions.CREATE,
       entityType: 'customer',
-      entityId: customer._id.toString(),
+      entityId: customer._id,
+
       changes: { firstName, lastName, email, creditLimit: customer.creditLimit ?? null },
     });
 

@@ -3,11 +3,8 @@
  * Processes queued offline transactions and creates real Transaction records.
  */
 
-import connectDB from '@/lib/mongodb';
-import OfflineTransaction from '@/models/OfflineTransaction';
-import Transaction from '@/models/Transaction';
 import { SubscriptionService } from '@/lib/subscription';
-import Tenant from '@/models/Tenant';
+import { getRepos } from '@/lib/db';
 import { getActiveTenants } from '@/lib/tenant-active-query';
 import { generateReceiptNumber } from '@/lib/receipt';
 import { AutomationResult } from './types';
@@ -25,8 +22,6 @@ export interface OfflineSyncOptions {
 export async function syncOfflineTransactions(
   options: OfflineSyncOptions = {}
 ): Promise<AutomationResult> {
-  await connectDB();
-
   const maxRetries = options.maxRetries ?? 3;
 
   const results: AutomationResult = {
@@ -41,7 +36,7 @@ export async function syncOfflineTransactions(
     // Get tenants to process
     let tenantIds: string[];
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).select('_id').lean();
+      const tenant = await getRepos().tenants.findById(options.tenantId, { select: '_id' });
       if (!tenant) {
         results.message = `Tenant ${options.tenantId} not found`;
         return results;
@@ -53,29 +48,19 @@ export async function syncOfflineTransactions(
       tenantIds = tenants.map(t => t._id.toString());
     }
 
+    const { offlineTransactions, transactions } = getRepos();
+
     for (const tenantId of tenantIds) {
-      // Find pending offline transactions, ordered oldest-first
-      const pending = await OfflineTransaction.find({
-        tenantId,
-        syncStatus: { $in: ['pending', 'failed'] },
-        retryCount: { $lt: maxRetries },
-        isActive: true,
-      })
-        .sort({ offlineCreatedAt: 1 })
-        .limit(100) // Process in batches of 100
-        .lean();
+      // Find pending offline transactions, ordered oldest-first, in batches of 100
+      const pending = await offlineTransactions.listSyncable(tenantId, { maxRetries, limit: 100 });
 
       for (const offline of pending) {
-        const offlineId = offline._id.toString();
+        const offlineId = offline._id;
 
         // Atomically claim it (status guard) so overlapping runs can't both
         // create a Transaction for the same offline record. Same single write
         // as before, but race-safe; skip if another run already claimed it.
-        const claimed = await OfflineTransaction.findOneAndUpdate(
-          { _id: offline._id, tenantId: offline.tenantId, syncStatus: { $in: ['pending', 'failed'] } },
-          { $set: { syncStatus: 'processing' } },
-          { projection: { _id: 1 } }
-        ).lean();
+        const claimed = await offlineTransactions.claimForSync(tenantId, offlineId);
         if (!claimed) continue;
 
         try {
@@ -92,8 +77,7 @@ export async function syncOfflineTransactions(
           }));
 
           // Create the real transaction, using offline timestamp as the creation time
-          const transaction = await Transaction.create({
-            tenantId: offline.tenantId,
+          const transaction = await transactions.create(tenantId, {
             branchId: offline.branchId,
             items,
             subtotal: offline.subtotal,
@@ -114,16 +98,10 @@ export async function syncOfflineTransactions(
             isActive: true,
           });
 
-          await SubscriptionService.trackTransactionCreated(String(offline.tenantId));
+          await SubscriptionService.trackTransactionCreated(tenantId);
 
           // Mark offline transaction as synced
-          await OfflineTransaction.updateOne(
-            { _id: offline._id, tenantId: offline.tenantId },
-            {
-              $set: { syncStatus: 'synced', syncedTransactionId: transaction._id },
-              $unset: { syncError: 1 },
-            }
-          );
+          await offlineTransactions.markSynced(tenantId, offlineId, transaction._id);
 
           results.processed++;
         } catch (err: unknown) {
@@ -131,10 +109,11 @@ export async function syncOfflineTransactions(
           const nextRetry = (offline.retryCount ?? 0) + 1;
           const nextStatus = nextRetry >= maxRetries ? 'failed' : 'pending';
 
-          await OfflineTransaction.updateOne(
-            { _id: offline._id, tenantId: offline.tenantId },
-            { $set: { syncStatus: nextStatus, retryCount: nextRetry, syncError: message } }
-          );
+          await offlineTransactions.recordSyncFailure(tenantId, offlineId, {
+            status: nextStatus,
+            retryCount: nextRetry,
+            error: message,
+          });
 
           results.failed++;
           results.errors?.push(`OfflineTransaction ${offlineId}: ${message}`);

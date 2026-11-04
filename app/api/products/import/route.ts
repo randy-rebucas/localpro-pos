@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Product from '@/models/Product';
-import Category from '@/models/Category';
+import { getRepos, isDuplicateKeyError, type DuplicateKeyError } from '@/lib/db';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -42,28 +40,23 @@ async function resolveCategoryId(
     return { categoryId: cached, category: categoryName.trim() };
   }
 
-  let category = await Category.findOne({
-    tenantId,
-    name: { $regex: new RegExp(`^${categoryName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
-  });
+  const { categories } = getRepos();
+  let category = await categories.findByName(tenantId, categoryName);
 
   if (!category) {
-    category = await Category.create({
-      tenantId,
+    category = await categories.create(tenantId, {
       name: categoryName.trim(),
       isActive: true,
     });
   }
 
-  const id = category._id.toString();
+  const id = category._id;
   categoryCache.set(key, id);
   return { categoryId: id, category: category.name };
 }
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
-
     let tenantId: string;
     let userRole: string;
     try {
@@ -115,9 +108,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const existingProducts = await Product.find({ tenantId })
-      .select('sku barcode variations.sku')
-      .lean();
+    const { products } = getRepos();
+    const existingProducts = await products.list(tenantId, {}, { select: 'sku barcode variations.sku' });
 
     const tenantSkus = collectTenantSkus(existingProducts);
     const existingBarcodes = new Set(
@@ -148,7 +140,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const currentProductCount = await Product.countDocuments({ tenantId, isActive: true });
+    const currentProductCount = await products.count(tenantId, { active: 'flagged' });
     try {
       await checkSubscriptionLimit(
         tenantId.toString(),
@@ -181,8 +173,7 @@ export async function POST(request: NextRequest) {
         }
 
         const createProduct = () =>
-          Product.create({
-            tenantId,
+          products.create(tenantId, {
             name: item.data.name,
             description: item.data.description,
             price: item.data.price,
@@ -205,8 +196,7 @@ export async function POST(request: NextRequest) {
         try {
           product = await createProduct();
         } catch (err: unknown) {
-          const dup = err as { code?: number; keyPattern?: Record<string, unknown> };
-          if (dup.code === 11000 && !dup.keyPattern?.barcode) {
+          if (isDuplicateKeyError(err) && (err as DuplicateKeyError).field !== 'barcode') {
             sku = generateUniqueProductSKU(item.data.name, tenantSkus);
             item.data.sku = sku;
             product = await createProduct();
@@ -217,12 +207,12 @@ export async function POST(request: NextRequest) {
 
         tenantSkus.add(sku.toLowerCase());
 
-        created.push({ row: item.row, name: product.name, id: product._id.toString() });
+        created.push({ row: item.row, name: product.name, id: product._id });
       } catch (err: unknown) {
-        const error = err as { code?: number; keyPattern?: Record<string, unknown>; message?: string };
-        let message = error.message || 'Failed to create product';
-        if (error.code === 11000) {
-          if (error.keyPattern?.barcode) message = 'Barcode already exists';
+        let message = (err as { message?: string }).message || 'Failed to create product';
+        // isDuplicateKeyError also matches a DuplicateKeyError from the category repo
+        if (isDuplicateKeyError(err)) {
+          if ((err as DuplicateKeyError).field === 'barcode') message = 'Barcode already exists';
           else message = 'SKU already exists';
         }
         failed.push({ row: item.row, name: item.data.name, error: message });

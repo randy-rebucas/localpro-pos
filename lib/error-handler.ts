@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
+import { DuplicateKeyError, isDuplicateKeyError } from '@/lib/db/errors';
 
 export interface ApiError {
   success: false;
@@ -42,9 +43,10 @@ export function handleApiError(error: any, defaultMessage: string = 'An error oc
     );
   }
 
-  // Duplicate key errors
-  if (error.code === 11000) {
-    const field = Object.keys(error.keyPattern || {})[0] || 'field';
+  // Duplicate key errors (raw Mongo 11000, or DuplicateKeyError from lib/db which keeps the driver error as cause)
+  if (isDuplicateKeyError(error)) {
+    const field =
+      (error instanceof DuplicateKeyError ? error.field : Object.keys(error.keyPattern || {})[0]) || 'field';
     return NextResponse.json(
       {
         success: false,

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Address from '@/models/Address';
+import { getRepos } from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
@@ -13,7 +12,6 @@ import { getValidationTranslatorFromRequest } from '@/lib/validation-translation
 export async function POST(request: NextRequest) {
   let t: (key: string, fallback: string) => string;
   try {
-    await connectDB();
     t = await getValidationTranslatorFromRequest(request);
 
     const currentUser = await requireAuth(request);
@@ -28,11 +26,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Resolve tenant
-    const Tenant = (await import('@/models/Tenant')).default;
-    const tenant = await Tenant.findOne({
-      $or: [{ slug: tenantId }, ...(tenantId.match(/^[0-9a-fA-F]{24}$/) ? [{ _id: tenantId }] : [])],
-      isActive: true,
-    }).lean();
+    const { tenants, addresses } = getRepos();
+    const tenant = await tenants.findActiveBySlugOrId(tenantId);
 
     if (!tenant) {
       return NextResponse.json(
@@ -43,18 +38,13 @@ export async function POST(request: NextRequest) {
 
     // If this is the default address, unset previous default
     if (isDefault) {
-      await Address.updateMany(
-        { userId: currentUser.userId, tenantId: tenant._id, isDefault: true },
-        { $set: { isDefault: false } }
-      );
+      await addresses.clearDefault(tenant._id, currentUser.userId);
     }
 
     // If user has no addresses, make this the default
-    const existingCount = await Address.countDocuments({ userId: currentUser.userId, tenantId: tenant._id });
+    const existingCount = await addresses.countForUser(tenant._id, currentUser.userId);
 
-    const address = await Address.create({
-      userId: currentUser.userId,
-      tenantId: tenant._id,
+    const address = await addresses.create(tenant._id, currentUser.userId, {
       label: label || 'Home',
       street,
       city,
@@ -65,11 +55,11 @@ export async function POST(request: NextRequest) {
     });
 
     await createAuditLog(request, {
-      tenantId: tenant._id.toString(),
+      tenantId: tenant._id,
       userId: currentUser.userId,
       action: AuditActions.CREATE,
       entityType: 'address',
-      entityId: address._id.toString(),
+      entityId: address._id,
       metadata: { userId: currentUser.userId },
     });
 

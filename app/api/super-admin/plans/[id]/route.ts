@@ -1,15 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import SubscriptionPlan from '@/models/SubscriptionPlan';
-import Subscription from '@/models/Subscription';
 import { requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { handleApiError } from '@/lib/error-handler';
-import Tenant from '@/models/Tenant';
-import mongoose from 'mongoose';
+import { getRepos, type SubscriptionPlanPatch } from '@/lib/db';
 
-async function defaultTenantId(): Promise<mongoose.Types.ObjectId | undefined> {
-  const t = await Tenant.findOne({ slug: 'default' }).select('_id').lean();
+async function defaultTenantId(): Promise<string | undefined> {
+  const t = await getRepos().tenants.findBySlug('default', { select: '_id' });
   return t?._id;
 }
 
@@ -18,11 +14,10 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     await requireRole(request, ['super_admin']);
 
     const { id } = await params;
-    const plan = await SubscriptionPlan.findById(id).lean();
+    const plan = await getRepos().subscriptionPlans.findById(id);
     if (!plan) {
       return NextResponse.json({ success: false, error: 'Plan not found' }, { status: 404 });
     }
@@ -44,13 +39,13 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const user = await requireRole(request, ['super_admin']);
 
     const { id } = await params;
     const body = await request.json();
 
-    const existingPlan = await SubscriptionPlan.findById(id).lean();
+    const { subscriptionPlans } = getRepos();
+    const existingPlan = await subscriptionPlans.findById(id);
     if (!existingPlan) {
       return NextResponse.json({ success: false, error: 'Plan not found' }, { status: 404 });
     }
@@ -63,11 +58,7 @@ export async function PUT(
       return NextResponse.json({ success: false, error: 'Plan tier cannot be changed after creation' }, { status: 400 });
     }
 
-    const plan = await SubscriptionPlan.findByIdAndUpdate(
-      id,
-      { $set: body },
-      { new: true, runValidators: true }
-    );
+    const plan = await subscriptionPlans.update(id, body as SubscriptionPlanPatch);
     if (!plan) {
       return NextResponse.json({ success: false, error: 'Plan not found' }, { status: 404 });
     }
@@ -79,7 +70,7 @@ export async function PUT(
         userId: user.userId,
         action: AuditActions.UPDATE,
         entityType: 'subscription_plan',
-        entityId: plan._id.toString(),
+        entityId: plan._id,
         changes: body,
         metadata: { updatedBy: user.userId, role: 'super_admin' },
       });
@@ -102,41 +93,37 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const user = await requireRole(request, ['super_admin']);
 
     const { id } = await params;
-    const plan = await SubscriptionPlan.findById(id);
+    const { subscriptionPlans, subscriptions } = getRepos();
+    const plan = await subscriptionPlans.findById(id);
     if (!plan) {
       return NextResponse.json({ success: false, error: 'Plan not found' }, { status: 404 });
     }
 
     // Check for active/trial subscriptions referencing this plan
-    const activeCount = await Subscription.countDocuments({
-      planId: id,
-      status: { $in: ['active', 'trial'] },
-    });
+    const activeCount = await subscriptions.countActiveOnPlanAcrossTenants(id);
 
     const tenantId = await defaultTenantId();
 
     if (activeCount > 0) {
       // Soft-delete: mark inactive instead of hard delete
-      plan.isActive = false;
-      await plan.save();
+      const deactivated = await subscriptionPlans.update(id, { isActive: false });
       if (tenantId) {
         await createAuditLog(request, {
           tenantId,
           userId: user.userId,
           action: AuditActions.UPDATE,
           entityType: 'subscription_plan',
-          entityId: plan._id.toString(),
+          entityId: plan._id,
           changes: { isActive: { from: true, to: false } },
           metadata: { reason: 'delete_blocked_soft_deactivated', activeSubscriptions: activeCount, updatedBy: user.userId, role: 'super_admin' },
         });
       }
       return NextResponse.json({
         success: true,
-        data: plan,
+        data: deactivated,
         message: `Plan deactivated (${activeCount} active subscription(s) reference it). Hard delete blocked.`,
       });
     }
@@ -147,13 +134,14 @@ export async function DELETE(
         userId: user.userId,
         action: AuditActions.DELETE,
         entityType: 'subscription_plan',
-        entityId: plan._id.toString(),
+        entityId: plan._id,
         changes: { name: plan.name, tier: plan.tier },
         metadata: { deletedBy: user.userId, role: 'super_admin' },
       });
     }
 
-    await plan.deleteOne();
+    await subscriptionPlans.delete(id);
+
     return NextResponse.json({ success: true, message: 'Plan deleted' });
   } catch (error: unknown) {
     if (error instanceof Error && (error.message === 'Unauthorized' || error.message.includes('Forbidden'))) {

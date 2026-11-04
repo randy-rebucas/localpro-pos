@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import TenantEcommerceIntegration from '@/models/TenantEcommerceIntegration';
+import { getRepos } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { handleApiError } from '@/lib/error-handler';
@@ -21,13 +20,8 @@ export async function GET(request: NextRequest) {
     if (!rl.allowed) return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
 
     await requireEcommerceIntegrationFeature(user.tenantId);
-    await connectDB();
 
-    const integration = await TenantEcommerceIntegration.findOne({
-      tenantId: user.tenantId,
-      provider: 'shopify',
-      isActive: true,
-    });
+    const integration = await getRepos().ecommerceIntegrations.findActive(user.tenantId, 'shopify');
     if (!integration?.shopDomain) {
       return NextResponse.json({ success: false, error: 'No active Shopify integration' }, { status: 400 });
     }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
-import Customer from '@/models/Customer';
+import { getRepos } from '@/lib/db';
 import Transaction from '@/models/Transaction';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { handleApiError } from '@/lib/error-handler';
@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
 
     // Classify each customer
     const classifySegment = (c: {
-      _id: mongoose.Types.ObjectId;
+      _id: string;
       lastPurchaseDate?: Date;
       loyaltyPointsBalance?: number;
     }): string => {
@@ -81,10 +81,11 @@ export async function GET(request: NextRequest) {
     };
 
     // Fetch all active customers (for counts)
-    const allCustomers = await Customer.find(
-      { tenantId, isActive: true },
-      { _id: 1, firstName: 1, lastName: 1, email: 1, phone: 1, lastPurchaseDate: 1, loyaltyPointsBalance: 1, totalSpent: 1, tags: 1 }
-    ).lean();
+    const allCustomers = await getRepos().customers.list(
+      tenantId,
+      { isActive: true },
+      { select: '_id firstName lastName email phone lastPurchaseDate loyaltyPointsBalance totalSpent tags' }
+    );
 
     // Compute segment counts
     const counts: Record<string, number> = { all: 0, new: 0, regular: 0, vip: 0, at_risk: 0, lapsed: 0, prospect: 0 };

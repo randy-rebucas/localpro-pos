@@ -32,12 +32,9 @@ vi.mock('@/lib/tenant', () => ({
   getTenantAuthInfo: vi.fn().mockResolvedValue({ isActive: true }),
 }));
 
-// Mock the User model
-vi.mock('@/models/User', () => ({
-  default: {
-    findById: vi.fn(),
-  },
-}));
+// Mock the user repository (getCurrentUser's active-user lookup)
+const repos = vi.hoisted(() => ({ users: { findById: vi.fn() } }));
+vi.mock('@/lib/db', () => ({ getRepos: () => repos }));
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -101,12 +98,7 @@ describe('getCurrentUser — valid token', () => {
     vi.mocked(isTokenRevoked).mockResolvedValue(false);
     vi.mocked(isTokenIssuedBeforeRevocation).mockResolvedValue(false);
 
-    const User = (await import('@/models/User')).default;
-    vi.mocked(User.findById).mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        lean: vi.fn().mockResolvedValue({ isActive: true, tenantId: 'tenant-abc' }),
-      }),
-    } as unknown as ReturnType<typeof User.findById>);
+    repos.users.findById.mockResolvedValue({ isActive: true, tenantId: 'tenant-abc' });
   });
 
   afterEach(() => {
@@ -175,12 +167,7 @@ describe('getCurrentUser — deactivated user', () => {
     vi.mocked(isTokenRevoked).mockResolvedValue(false);
     vi.mocked(isTokenIssuedBeforeRevocation).mockResolvedValue(false);
 
-    const User = (await import('@/models/User')).default;
-    vi.mocked(User.findById).mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        lean: vi.fn().mockResolvedValue({ isActive: false, tenantId: 'tenant-abc' }),
-      }),
-    } as unknown as ReturnType<typeof User.findById>);
+    repos.users.findById.mockResolvedValue({ isActive: false, tenantId: 'tenant-abc' });
 
     const token = generateToken({ userId: 'u', tenantId: 'tenant-abc', email: 'e@e.com', role: 'manager' });
     const { NextRequest } = await import('next/server');
@@ -196,12 +183,7 @@ describe('getCurrentUser — deactivated user', () => {
     vi.mocked(isTokenRevoked).mockResolvedValue(false);
     vi.mocked(isTokenIssuedBeforeRevocation).mockResolvedValue(false);
 
-    const User = (await import('@/models/User')).default;
-    vi.mocked(User.findById).mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        lean: vi.fn().mockResolvedValue(null),
-      }),
-    } as unknown as ReturnType<typeof User.findById>);
+    repos.users.findById.mockResolvedValue(null);
 
     const token = generateToken({ userId: 'u', tenantId: 't', email: 'e@e.com', role: 'admin' });
     const { NextRequest } = await import('next/server');

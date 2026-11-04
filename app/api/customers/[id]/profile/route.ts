@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
-import Customer from '@/models/Customer';
 import Transaction from '@/models/Transaction';
-import LoyaltyTransaction from '@/models/LoyaltyTransaction';
+import { getRepos } from '@/lib/db';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { handleApiError } from '@/lib/error-handler';
 import mongoose from 'mongoose';
@@ -23,19 +22,17 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'Invalid customer ID' }, { status: 400 });
     }
 
-    const customer = await Customer.findOne({ _id: id, tenantId }).lean();
+    const customer = await getRepos().customers.findById(tenantId, id);
     if (!customer) {
       return NextResponse.json({ success: false, error: 'Customer not found' }, { status: 404 });
     }
 
     // Last 10 transactions
-    const recentTransactions = await Transaction.find(
-      { tenantId, customerId: id, status: 'completed' },
-      { _id: 1, receiptNumber: 1, total: 1, paymentMethod: 1, items: 1, createdAt: 1 }
-    )
-      .sort({ createdAt: -1 })
-      .limit(10)
-      .lean();
+    const recentTransactions = await getRepos().transactions.list(
+      tenantId,
+      { customerId: id, status: 'completed' },
+      { select: '_id receiptNumber total paymentMethod items createdAt', sort: '-createdAt', limit: 10 }
+    );
 
     // Total order count + lifetime value
     const [stats] = await Transaction.aggregate([
@@ -67,13 +64,10 @@ export async function GET(
     ]);
 
     // Loyalty history
-    const loyaltyHistory = await LoyaltyTransaction.find(
-      { tenantId, customerId: id },
-      { type: 1, points: 1, description: 1, createdAt: 1 }
-    )
-      .sort({ createdAt: -1 })
-      .limit(10)
-      .lean();
+    const loyaltyHistory = await getRepos().loyaltyTransactions.list(tenantId, id, {
+      page: { skip: 0, limit: 10 },
+      select: 'type points description createdAt',
+    });
 
     // RFM — compute segment
     const now = new Date();

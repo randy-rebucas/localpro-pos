@@ -1,5 +1,4 @@
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
+import { getRepos } from '@/lib/db';
 import type { ITenantSettings } from '@/types/tenant';
 
 export interface TenantEcommercePolicy {
@@ -12,8 +11,7 @@ export interface TenantEcommercePolicy {
  * Both flags must be explicitly true to allow **new** OAuth / Woo connect flows.
  */
 export async function getTenantEcommerceIntegrationPolicy(tenantId: string): Promise<TenantEcommercePolicy> {
-  await connectDB();
-  const tenant = await Tenant.findById(tenantId).select('settings.integrations').lean();
+  const tenant = await getRepos().tenants.findById(tenantId, { select: 'settings.integrations' });
   const ec = (tenant?.settings as ITenantSettings | undefined)?.integrations?.ecommerce;
   return {
     shopifyEnabled: ec?.shopifyEnabled === true,

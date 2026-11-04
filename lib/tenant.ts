@@ -1,6 +1,5 @@
-import connectDB from './mongodb';
-import Tenant from '@/models/Tenant';
-import { ITenantSettings } from '@/models/Tenant';
+import { getRepos } from '@/lib/db';
+import type { ITenantSettings } from '@/types/tenant';
 import { logger } from '@/lib/logger';
 import { cacheWrap, CacheKeys, TTL } from '@/lib/cache';
 
@@ -27,8 +26,7 @@ export async function getTenantSettingsById(tenantId: string): Promise<ITenantSe
     // Read on every checkout and many routes — cached 60s, invalidated on tenant writes.
     // The returned object is shared; treat it as read-only.
     return await cacheWrap(CacheKeys.tenantSettings(String(tenantId)), TTL.DEFAULT, async () => {
-      await connectDB();
-      const tenant = await Tenant.findById(tenantId).select('settings').lean();
+      const tenant = await getRepos().tenants.findById(tenantId, { select: 'settings' });
       return tenant?.settings || null;
     });
   } catch (error) {
@@ -45,15 +43,14 @@ export async function getTenantSettingsById(tenantId: string): Promise<ITenantSe
 export async function getTenantBySlug(slug: string): Promise<TenantInfo | null> {
   try {
     return await cacheWrap(CacheKeys.tenantBySlug(slug), TTL.DEFAULT, async () => {
-      await connectDB();
-      const tenant = await Tenant.findOne({ slug, isActive: true }).select('slug name domain subdomain settings').lean();
+      const tenant = await getRepos().tenants.findBySlug(slug, { activeOnly: true, select: 'slug name domain subdomain settings' });
 
       if (!tenant) {
         return null;
       }
 
       return {
-        _id: tenant._id.toString(),
+        _id: tenant._id,
         slug: tenant.slug,
         name: tenant.name,
         domain: tenant.domain,
@@ -82,18 +79,11 @@ export async function getTenantFromHost(host: string): Promise<TenantInfo | null
       // Misses are cached too — the platform's own host never matches a tenant
       // and would otherwise cost a read on every API request.
       return await cacheWrap(CacheKeys.tenantByHost(host), TTL.DEFAULT, async () => {
-        await connectDB();
-        const tenant = await Tenant.findOne({
-          $or: [
-            { subdomain: subdomain },
-            { domain: host }
-          ],
-          isActive: true
-        }).select('slug name domain subdomain settings').lean();
+        const tenant = await getRepos().tenants.findActiveByHost(subdomain, host, { select: 'slug name domain subdomain settings' });
 
         if (!tenant) return null;
         return {
-          _id: tenant._id.toString(),
+          _id: tenant._id,
           slug: tenant.slug,
           name: tenant.name,
           domain: tenant.domain,
@@ -116,9 +106,8 @@ export async function getTenantFromHost(host: string): Promise<TenantInfo | null
 export async function getTenantId(slug: string): Promise<string | null> {
   try {
     return await cacheWrap(CacheKeys.tenantIdBySlug(slug), TTL.DEFAULT, async () => {
-      await connectDB();
-      const tenant = await Tenant.findOne({ slug, isActive: true }).select('_id').lean();
-      return tenant ? tenant._id.toString() : null;
+      const tenant = await getRepos().tenants.findBySlug(slug, { activeOnly: true, select: '_id' });
+      return tenant ? tenant._id : null;
     });
   } catch (error) {
     logger.error('Error fetching tenant id:', error);
@@ -137,10 +126,7 @@ export interface TenantAuthInfo {
  */
 export async function getTenantAuthInfo(tenantId: string): Promise<TenantAuthInfo | null> {
   return cacheWrap(CacheKeys.tenantAuth(tenantId), TTL.DEFAULT, async () => {
-    await connectDB();
-    const tenant = await Tenant.findById(tenantId)
-      .select('isActive settings.rolePermissionOverrides')
-      .lean();
+    const tenant = await getRepos().tenants.findById(tenantId, { select: 'isActive settings.rolePermissionOverrides' });
     if (!tenant) return null;
     return {
       isActive: !!tenant.isActive,

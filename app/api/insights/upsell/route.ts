@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Transaction from '@/models/Transaction';
-import Product from '@/models/Product';
+import { getRepos } from '@/lib/db';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { handleApiError } from '@/lib/error-handler';
 import mongoose from 'mongoose';
@@ -11,6 +11,7 @@ const MAX_SUGGESTIONS = 5;
 
 export async function GET(request: NextRequest) {
   try {
+    // Transaction is not behind the repository layer yet
     await connectDB();
 
     const authResult = await requireTenantAccess(request);
@@ -72,20 +73,16 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: true, data: [] });
     }
 
-    const suggestedIds = coOccurrences.map((c) => c._id);
+    const suggestedIds = coOccurrences.map((c) => String(c._id));
     const scoreMap = new Map<string, number>(
       coOccurrences.map((c) => [String(c._id), c.score])
     );
 
-    const suggestedProducts = await Product.find(
-      {
-        _id: { $in: suggestedIds },
-        tenantId,
-        isActive: { $ne: false },
-        $or: [{ stock: { $gt: 0 } }, { allowOutOfStockSales: true }],
-      },
-      { _id: 1, name: 1, price: 1, stock: 1, image: 1, category: 1 }
-    ).lean();
+    const suggestedProducts = await getRepos().products.list(
+      tenantId,
+      { ids: suggestedIds, active: true, sellable: true },
+      { select: '_id name price stock image category' }
+    );
 
     const sorted = suggestedProducts
       .sort((a, b) => (scoreMap.get(String(b._id)) ?? 0) - (scoreMap.get(String(a._id)) ?? 0))

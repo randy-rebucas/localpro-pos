@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Invoice from '@/models/Invoice';
-import Transaction from '@/models/Transaction';
-import Customer from '@/models/Customer';
+import { getRepos } from '@/lib/db';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { generateInvoiceNumber } from '@/lib/receipt';
@@ -12,7 +9,6 @@ import { generateInvoiceNumber } from '@/lib/receipt';
  */
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     const tenantAccess = await requireTenantAccess(request);
     const { tenantId, user } = tenantAccess; // eslint-disable-line @typescript-eslint/no-unused-vars
     
@@ -27,10 +23,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get transaction
-    const transaction = await Transaction.findOne({
-      _id: transactionId,
-      tenantId,
-    }).lean();
+    const transaction = await getRepos().transactions.findById(tenantId, transactionId);
 
     if (!transaction) {
       return NextResponse.json(
@@ -42,10 +35,7 @@ export async function POST(request: NextRequest) {
     // Get customer info if customerId provided
     let customerInfo = null;
     if (customerId) {
-      const customer = await Customer.findOne({
-        _id: customerId,
-        tenantId,
-      }).lean();
+      const customer = await getRepos().customers.findById(tenantId, customerId);
 
       if (customer) {
         customerInfo = {
@@ -60,9 +50,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Convert transaction items to invoice items
-    const invoiceItems = transaction.items.map((item: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+    const invoiceItems = transaction.items.map((item) => ({
       name: item.name,
-      description: item.product?.name || '',
+      description: '',
       quantity: item.quantity,
       price: item.price,
       subtotal: item.subtotal,
@@ -78,8 +68,7 @@ export async function POST(request: NextRequest) {
     const invoiceNumber = await generateInvoiceNumber(tenantId);
 
     // Create invoice
-    const invoice = await Invoice.create({
-      tenantId,
+    const invoice = await getRepos().invoices.create(tenantId, {
       invoiceNumber,
       transactionId: transaction._id,
       customerId: customerId || undefined,
@@ -101,7 +90,7 @@ export async function POST(request: NextRequest) {
       userId: user.userId,
       action: AuditActions.INVOICE_CREATE,
       entityType: 'invoice',
-      entityId: invoice._id.toString(),
+      entityId: invoice._id,
       changes: {
         invoiceNumber,
         transactionId: transactionId.toString(),

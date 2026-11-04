@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Branch from '@/models/Branch';
-import Tenant from '@/models/Tenant';
+import { getRepos } from '@/lib/db';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
 import { getCurrentUser } from '@/lib/auth';
@@ -28,8 +26,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
     }
 
-    await connectDB();
-
     let tenantId: string | null = null;
 
     // Try authenticated path first
@@ -47,22 +43,20 @@ export async function GET(request: NextRequest) {
           { status: 400 }
         );
       }
-      const tenant = await Tenant.findOne({ slug, isActive: true }).lean();
+      const tenant = await getRepos().tenants.findBySlug(slug, { activeOnly: true, select: '_id' });
       if (!tenant) {
         return NextResponse.json({ success: false, error: 'Store not found' }, { status: 404 });
       }
-      tenantId = tenant._id.toString();
+      tenantId = tenant._id;
     }
 
-    const branches = await Branch.find({ tenantId, isActive: true })
-      .sort({ name: 1 })
-      .lean();
+    const branches = await getRepos().branches.listActive(tenantId);
 
     const stores = branches.map((b) => ({
-      id: b._id.toString(),
+      id: b._id,
       name: b.name,
-      tenantId: b.tenantId.toString(),
-      branchId: b._id.toString(),
+      tenantId: b.tenantId,
+      branchId: b._id,
       address: b.address
         ? [b.address.street, b.address.city, b.address.state]
             .filter(Boolean)

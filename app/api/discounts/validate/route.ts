@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Discount from '@/models/Discount';
+import { getRepos } from '@/lib/db';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
@@ -11,7 +10,6 @@ import { ensureLegalDiscounts, LEGAL_DISCOUNT_CODES } from '@/lib/discount-seeds
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     await requireAuth(request);
 
     // Rate limit: 20 attempts per minute per IP
@@ -60,11 +58,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const discount = await Discount.findOne({
-      tenantId,
-      code: upperCode,
-      isActive: true,
-    });
+    const discount = await getRepos().discounts.findByCode(tenantId, upperCode, { activeOnly: true });
 
     if (!discount) {
       return NextResponse.json(

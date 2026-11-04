@@ -1,5 +1,4 @@
-import Payment from '@/models/Payment';
-import type { Types } from 'mongoose';
+import { getRepos } from '@/lib/db';
 
 export function wouldExceedCreditLimit(
   currentBalance: number,
@@ -21,19 +20,16 @@ export function calculateOnAccountRefundAmount(
 }
 
 export async function getOnAccountTotalForTransaction(
-  tenantId: string | Types.ObjectId,
-  transactionId: string | Types.ObjectId,
+  tenantId: string,
+  transactionId: string,
   transactionTotal: number,
   paymentMethod: string
 ): Promise<number> {
-  const onAccountPayments = await Payment.find({
+  const onAccountPayments = await getRepos().payments.list(
     tenantId,
-    transactionId,
-    method: 'on_account',
-    status: 'completed',
-  })
-    .select('amount')
-    .lean();
+    { transactionId, method: 'on_account', status: 'completed' },
+    { select: 'amount' }
+  );
 
   if (onAccountPayments.length > 0) {
     return onAccountPayments.reduce((sum, payment) => sum + (payment.amount || 0), 0);

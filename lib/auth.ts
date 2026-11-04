@@ -1,7 +1,6 @@
 import { NextRequest } from 'next/server';
 import jwt from 'jsonwebtoken';
-import connectDB from './mongodb';
-import User from '@/models/User';
+import { getRepos } from '@/lib/db';
 import { isTokenRevoked, isTokenIssuedBeforeRevocation } from '@/lib/token-blacklist';
 import { logger } from '@/lib/logger';
 import { cacheWrap, CacheKeys, TTL } from '@/lib/cache';
@@ -76,10 +75,9 @@ type UserAuthInfo = { isActive: boolean; tenantId: string | null };
 
 function getUserAuthInfo(userId: string): Promise<UserAuthInfo | null> {
   return cacheWrap(CacheKeys.userAuth(userId), TTL.DEFAULT, async () => {
-    await connectDB();
-    const user = await User.findById(userId).select('isActive tenantId').lean();
+    const user = await getRepos().users.findById(userId, { select: 'isActive tenantId' });
     if (!user) return null;
-    return { isActive: !!user.isActive, tenantId: user.tenantId ? user.tenantId.toString() : null };
+    return { isActive: !!user.isActive, tenantId: user.tenantId ?? null };
   });
 }
 

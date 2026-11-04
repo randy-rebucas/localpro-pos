@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Prescription from '@/models/Prescription';
+import { getRepos, type PrescriptionFilter, type PrescriptionStatus } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { handleApiError } from '@/lib/error-handler';
@@ -14,25 +13,20 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
-    await connectDB();
-
     const { searchParams } = new URL(request.url);
     const page = Math.max(1, Number(searchParams.get('page') ?? '1'));
     const limit = Math.min(100, Math.max(1, Number(searchParams.get('limit') ?? '20')));
     const status = searchParams.get('status');
     const search = searchParams.get('search');
 
-    const filter: Record<string, unknown> = { tenantId: user.tenantId };
-    if (status) filter.status = status;
-    if (search) filter.$text = { $search: search };
+    const filter: PrescriptionFilter = {};
+    if (status) filter.status = status as PrescriptionStatus;
+    if (search) filter.search = search;
 
+    const repo = getRepos().prescriptions;
     const [prescriptions, total] = await Promise.all([
-      Prescription.find(filter)
-        .sort({ createdAt: -1 })
-        .skip((page - 1) * limit)
-        .limit(limit)
-        .lean(),
-      Prescription.countDocuments(filter),
+      repo.list(user.tenantId, filter, { page: { skip: (page - 1) * limit, limit } }),
+      repo.count(user.tenantId, filter),
     ]);
 
     return NextResponse.json({
@@ -61,8 +55,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
     }
 
-    await connectDB();
-
     const body = await request.json();
     const { patientName, patientAge, doctorName, doctorPRCNumber, doctorClinic, issuedDate, validUntil, items, notes, scannedCopy } = body;
 
@@ -72,21 +64,17 @@ export async function POST(request: NextRequest) {
 
     // Generate prescription number: RX-YYYY-NNNNNN
     const year = new Date().getFullYear();
-    const lastRx = await Prescription.findOne(
-      { tenantId: user.tenantId, prescriptionNumber: new RegExp(`^RX-${year}-`) },
-      { prescriptionNumber: 1 },
-      { sort: { prescriptionNumber: -1 } }
-    ).lean();
+    const { prescriptions } = getRepos();
+    const lastNumber = await prescriptions.findLastNumber(user.tenantId, year);
 
     let seq = 1;
-    if (lastRx) {
-      const parts = lastRx.prescriptionNumber.split('-');
+    if (lastNumber) {
+      const parts = lastNumber.split('-');
       seq = (parseInt(parts[2], 10) || 0) + 1;
     }
     const prescriptionNumber = `RX-${year}-${String(seq).padStart(6, '0')}`;
 
-    const prescription = await Prescription.create({
-      tenantId: user.tenantId,
+    const prescription = await prescriptions.create(user.tenantId, {
       prescriptionNumber,
       patientName,
       patientAge,
@@ -106,7 +94,7 @@ export async function POST(request: NextRequest) {
       userId: user.userId,
       action: AuditActions.PRESCRIPTION_CREATE,
       entityType: 'prescription',
-      entityId: prescription._id.toString(),
+      entityId: prescription._id,
       changes: { prescriptionNumber, patientName, doctorName },
     });
 

@@ -1,17 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import mongoose from 'mongoose';
-import connectDB from '@/lib/mongodb';
-import Subscription from '@/models/Subscription';
-import SubscriptionPlan from '@/models/SubscriptionPlan';
-import Tenant from '@/models/Tenant';
+import { getRepos, isDuplicateKeyError, type SubscriptionInput, type SubscriptionStatus } from '@/lib/db';
 import { requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
-
     // Cross-tenant subscription list — super_admin only
     await requireRole(request, ['super_admin']);
 
@@ -19,17 +13,10 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
 
-    const query: Record<string, unknown> = { isActive: { $ne: false } };
-
-    if (status) {
-      query.status = status;
-    }
-
-    const subscriptions = await Subscription.find(query)
-      .populate('tenantId', 'slug name')
-      .populate('planId', 'name tier price features birCompliance isCustom')
-      .sort({ createdAt: -1 })
-      .lean();
+    const { items: subscriptions } = await getRepos().subscriptions.listAcrossTenants(
+      { notDisabled: true, ...(status && { status: status as SubscriptionStatus }) },
+      { populate: { tenant: 'slug name', plan: 'name tier price features birCompliance isCustom' } }
+    );
 
     return NextResponse.json({ success: true, data: subscriptions });
   } catch (error: unknown) {
@@ -46,7 +33,6 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     const t = await getValidationTranslatorFromRequest(request);
 
     // Creating a subscription for an arbitrary tenantId — super_admin only
@@ -63,7 +49,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify tenant exists
-    const tenant = await Tenant.findById(tenantId);
+    const { tenants, subscriptions, subscriptionPlans } = getRepos();
+    const tenant = await tenants.findById(String(tenantId), { select: '_id' });
     if (!tenant) {
       return NextResponse.json(
         { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
@@ -72,10 +59,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if tenant already has an active subscription
-    const existingSubscription = await Subscription.findOne({
-      tenantId,
-      status: { $in: ['active', 'trial'] }
-    });
+    const existingSubscription = await subscriptions.findByTenant(tenant._id, { status: ['active', 'trial'] });
 
     if (existingSubscription) {
       return NextResponse.json(
@@ -85,7 +69,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify plan exists and is active
-    const plan = await SubscriptionPlan.findById(planId);
+    const plan = await subscriptionPlans.findById(planId);
     if (!plan || !plan.isActive) {
       return NextResponse.json(
         { success: false, error: t('validation.subscriptionPlanNotFoundOrInactive', 'Subscription plan not found or inactive') },
@@ -94,8 +78,7 @@ export async function POST(request: NextRequest) {
     }
 
     const now = new Date();
-    const subscriptionData: Record<string, unknown> = {
-      tenantId,
+    const subscriptionData: SubscriptionInput = {
       planId,
       status: isTrial ? 'trial' : 'active',
       billingCycle,
@@ -128,28 +111,16 @@ export async function POST(request: NextRequest) {
       subscriptionData.nextBillingDate = nextBilling;
     }
 
-    // Subscription create + tenant backref must land together, otherwise a
-    // failure between the two leaves an orphaned subscription with no
-    // tenant.subscriptionId pointing to it.
-    const session = await mongoose.startSession();
-    let subscription;
-    try {
-      session.startTransaction();
-      [subscription] = await Subscription.create([subscriptionData], { session });
-      await Tenant.findByIdAndUpdate(tenantId, { subscriptionId: subscription._id }, { session });
-      await session.commitTransaction();
-    } catch (e) {
-      await session.abortTransaction();
-      throw e;
-    } finally {
-      session.endSession();
-    }
+    // A single write, so no transaction. (Tenant has no subscriptionId path:
+    // the former tenant backref was dropped by Mongoose strict mode and never
+    // stored anything. The subscription is found by its own tenantId.)
+    const subscription = await subscriptions.create(tenant._id, subscriptionData);
 
     await createAuditLog(request, {
       tenantId,
       action: AuditActions.CREATE,
       entityType: 'subscription',
-      entityId: subscription._id.toString(),
+      entityId: subscription._id,
       changes: {
         planId: planId,
         status: subscription.status,
@@ -158,16 +129,16 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    const populatedSubscription = await Subscription.findById(subscription._id)
-      .populate('tenantId', 'slug name')
-      .populate('planId', 'name tier price features birCompliance isCustom');
+    const populatedSubscription = await subscriptions.findById(tenant._id, subscription._id, {
+      populate: { tenant: 'slug name', plan: 'name tier price features birCompliance isCustom' },
+    });
 
     return NextResponse.json({
       success: true,
       data: populatedSubscription
     }, { status: 201 });
   } catch (error: unknown) {
-    if ((error as Record<string, unknown>).code === 11000) {
+    if (isDuplicateKeyError(error)) {
       const t = await getValidationTranslatorFromRequest(request);
       return NextResponse.json(
         { success: false, error: t('validation.tenantAlreadyHasSubscription', 'Tenant already has a subscription') },

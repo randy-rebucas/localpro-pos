@@ -1,10 +1,5 @@
-import mongoose from 'mongoose';
-import connectDB from './mongodb';
-import Product from '@/models/Product';
-import ProductBundle from '@/models/ProductBundle';
-import StockMovement from '@/models/StockMovement';
+import { getRepos, type DbTx, type ProductStock, type StockMovementInput, type StockTarget } from '@/lib/db';
 import { logger } from '@/lib/logger';
-import { IProductVariation } from '@/models/Product'; // eslint-disable-line @typescript-eslint/no-unused-vars
 
 export interface StockUpdateOptions {
   transactionId?: string;
@@ -23,20 +18,7 @@ export interface StockUpdateOptions {
   movements?: StockMovementInput[];
 }
 
-export interface StockMovementInput {
-  productId: string;
-  tenantId: string;
-  branchId?: string;
-  variation?: { size?: string; color?: string; type?: string };
-  type: 'sale' | 'purchase' | 'adjustment' | 'return' | 'damage' | 'transfer';
-  quantity: number;
-  previousStock: number;
-  newStock: number;
-  reason?: string;
-  transactionId?: string;
-  userId?: string;
-  notes?: string;
-}
+export type { StockMovementInput };
 
 /** Fields stock logic needs from a Product */
 export const STOCK_SNAPSHOT_FIELDS =
@@ -110,11 +92,7 @@ export async function getProductStock(
     variation?: VariationOption;
   } = {}
 ): Promise<number> {
-  await connectDB();
-
-  const product = await Product.findOne({ _id: productId, tenantId })
-    .select(STOCK_SNAPSHOT_FIELDS)
-    .lean<StockProductSnapshot>();
+  const product = await getRepos().products.findById(tenantId, productId, { select: STOCK_SNAPSHOT_FIELDS });
   if (!product) {
     throw new Error('Product not found');
   }
@@ -132,20 +110,16 @@ export async function updateStock(
   quantity: number,
   type: 'sale' | 'purchase' | 'adjustment' | 'return' | 'damage' | 'transfer',
   options: StockUpdateOptions = {},
-  session?: mongoose.ClientSession
+  tx?: DbTx
 ): Promise<void> {
-  await connectDB();
+  const { products } = getRepos();
 
   // The snapshot only decides *which* stock field to change (master / variation /
-  // branch) — the change itself is an atomic conditional $inc, so a snapshot read
-  // earlier in the request (e.g. checkout's product batch) is safe to reuse.
+  // branch) — the change itself is an atomic conditional increment, so a snapshot
+  // read earlier in the request (e.g. checkout's product batch) is safe to reuse.
   let product = options.product;
   if (!product) {
-    const query = Product.findOne({ _id: productId, tenantId })
-      .select(STOCK_SNAPSHOT_FIELDS)
-      .lean<StockProductSnapshot>();
-    if (session) query.session(session);
-    product = (await query) ?? undefined;
+    product = (await products.findById(tenantId, productId, { select: STOCK_SNAPSHOT_FIELDS, tx })) ?? undefined;
   }
   if (!product) {
     throw new Error('Product not found');
@@ -159,11 +133,11 @@ export async function updateStock(
 
   // Refuse to go negative unless the product allows out-of-stock sales
   // (same rule the Product pre-validate hook enforces on save)
-  const stockGuard = quantity < 0 && product.allowOutOfStockSales !== true ? { $gte: -quantity } : undefined;
+  const allowNegative = product.allowOutOfStockSales === true;
+  const stockGuard = quantity < 0 && !allowNegative;
 
-  let filter: Record<string, unknown>;
-  let update: Record<string, unknown>;
-  let readNewStock: (doc: StockProductSnapshot) => number;
+  let target: StockTarget;
+  let readNewStock: (doc: ProductStock) => number;
   // True when the filter depends on the snapshot's shape (branch entry absent),
   // so a miss may mean "stale snapshot" rather than "insufficient stock"
   let usedSnapshotSensitiveFilter = false;
@@ -176,12 +150,7 @@ export async function updateStock(
       throw new Error('Product variation not found');
     }
     const variationId = String(variation._id);
-    filter = {
-      _id: productId,
-      tenantId,
-      variations: { $elemMatch: { _id: variation._id, ...(stockGuard ? { stock: stockGuard } : {}) } },
-    };
-    update = { $inc: { 'variations.$.stock': quantity } };
+    target = { kind: 'variation', variationId };
     readNewStock = (doc) => doc.variations?.find((v) => String(v._id) === variationId)?.stock ?? 0;
     insufficientMessage = (available) =>
       `Insufficient stock for variation. Available: ${available}, Requested: ${Math.abs(quantity)}`;
@@ -196,17 +165,11 @@ export async function updateStock(
       if (stockGuard) {
         throw new Error(`Insufficient stock at branch. Available: 0, Requested: ${Math.abs(quantity)}`);
       }
-      // Create new branch stock entry (filter fails if another request created it meanwhile)
+      // Create new branch stock entry (fails if another request created it meanwhile)
       usedSnapshotSensitiveFilter = true;
-      filter = { _id: productId, tenantId, 'branchStock.branchId': { $ne: branchId } };
-      update = { $push: { branchStock: { branchId, stock: quantity } } };
+      target = { kind: 'newBranch', branchId };
     } else {
-      filter = {
-        _id: productId,
-        tenantId,
-        branchStock: { $elemMatch: { branchId, ...(stockGuard ? { stock: stockGuard } : {}) } },
-      };
-      update = { $inc: { 'branchStock.$.stock': quantity } };
+      target = { kind: 'branch', branchId };
     }
     readNewStock = (doc) => doc.branchStock?.find((bs) => bs.branchId.toString() === branchId)?.stock ?? 0;
     insufficientMessage = (available) =>
@@ -214,32 +177,23 @@ export async function updateStock(
   }
   // Handle master stock
   else {
-    filter = { _id: productId, tenantId, ...(stockGuard ? { stock: stockGuard } : {}) };
-    update = { $inc: { stock: quantity } };
+    target = { kind: 'master' };
     readNewStock = (doc) => doc.stock || 0;
     insufficientMessage = (available) =>
       `Insufficient stock. Available: ${available}, Requested: ${Math.abs(quantity)}`;
   }
 
-  const updated = await Product.findOneAndUpdate(filter, update, {
-    new: true,
-    projection: { stock: 1, 'variations._id': 1, 'variations.stock': 1, branchStock: 1 },
-    ...(session ? { session } : {}),
-  }).lean<StockProductSnapshot>();
+  const updated = await products.adjustStock(tenantId, productId, target, quantity, { allowNegative, tx });
 
   if (!updated) {
     // The stock guard (or the branch-entry check) didn't match — re-read to explain why
-    const freshQuery = Product.findOne({ _id: productId, tenantId })
-      .select(STOCK_SNAPSHOT_FIELDS)
-      .lean<StockProductSnapshot>();
-    if (session) freshQuery.session(session);
-    const fresh = await freshQuery;
+    const fresh = await products.findById(tenantId, productId, { select: STOCK_SNAPSHOT_FIELDS, tx });
     if (!fresh) {
       throw new Error('Product not found');
     }
     if (usedSnapshotSensitiveFilter) {
       // The branch entry was created meanwhile — retry once with the fresh product
-      return updateStock(productId, tenantId, quantity, type, { ...options, product: fresh }, session);
+      return updateStock(productId, tenantId, quantity, type, { ...options, product: fresh }, tx);
     }
     throw new Error(insufficientMessage(computeProductStock(fresh, options)));
   }
@@ -268,22 +222,16 @@ export async function updateStock(
   if (options.movements) {
     // Caller batches the inserts (see insertStockMovements)
     options.movements.push(movementData);
-  } else if (session) {
-    await StockMovement.create([movementData], { session });
   } else {
-    await StockMovement.create(movementData);
+    await getRepos().stockMovements.createMany([movementData], { tx });
   }
 }
 
 /**
  * Insert stock movements collected via `options.movements` in a single write.
  */
-export async function insertStockMovements(
-  movements: StockMovementInput[],
-  session?: mongoose.ClientSession
-): Promise<void> {
-  if (movements.length === 0) return;
-  await StockMovement.insertMany(movements, session ? { session } : {});
+export async function insertStockMovements(movements: StockMovementInput[], tx?: DbTx): Promise<void> {
+  await getRepos().stockMovements.createMany(movements, { tx });
 }
 
 /**
@@ -295,7 +243,7 @@ export async function updateBundleStock(
   quantity: number,
   type: 'sale' | 'purchase' | 'adjustment' | 'return' | 'damage' | 'transfer',
   options: StockUpdateOptions = {},
-  session?: mongoose.ClientSession,
+  tx?: DbTx,
   /** Bundle and its products already loaded by the caller — skips the reads */
   preloaded?: {
     bundle?: {
@@ -306,15 +254,10 @@ export async function updateBundleStock(
     products?: Map<string, StockProductSnapshot>;
   }
 ): Promise<void> {
-  await connectDB();
-
   let bundle = preloaded?.bundle;
   if (!bundle) {
-    const bundleQuery = ProductBundle.findOne({ _id: bundleId, tenantId })
-      .select('name trackInventory items')
-      .lean();
-    if (session) bundleQuery.session(session);
-    bundle = (await bundleQuery) ?? undefined;
+    bundle =
+      ((await getRepos().bundles.findById(tenantId, bundleId, { select: 'name trackInventory items', tx })) as NonNullable<typeof preloaded>['bundle']) ?? undefined;
   }
   if (!bundle) {
     throw new Error('Bundle not found');
@@ -339,50 +282,9 @@ export async function updateBundleStock(
         reason: options.reason || `Bundle ${type}: ${bundle.name}`,
         notes: options.notes || `Part of bundle: ${bundle.name}`,
       },
-      session
+      tx
     );
   }
-}
-
-/**
- * Get stock movements for a product
- */
-export async function getStockMovements(
-  productId: string,
-  tenantId: string,
-  options: {
-    branchId?: string;
-    variation?: {
-      size?: string;
-      color?: string;
-      type?: string;
-    };
-    limit?: number;
-  } = {}
-) {
-  await connectDB();
-
-  const query: any = { productId, tenantId }; // eslint-disable-line @typescript-eslint/no-explicit-any
-  
-  if (options.branchId) {
-    query.branchId = options.branchId;
-  }
-
-  if (options.variation) {
-    const variationQuery: any = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
-    if (options.variation.size) variationQuery['variation.size'] = options.variation.size;
-    if (options.variation.color) variationQuery['variation.color'] = options.variation.color;
-    if (options.variation.type) variationQuery['variation.type'] = options.variation.type;
-    Object.assign(query, variationQuery);
-  }
-
-  return StockMovement.find(query)
-    .sort({ createdAt: -1 })
-    .limit(options.limit || 50)
-    .populate('userId', 'name email')
-    .populate('transactionId', 'receiptNumber total')
-    .populate('branchId', 'name code')
-    .lean();
 }
 
 /**
@@ -393,9 +295,7 @@ export async function checkLowStock(
   tenantId: string,
   threshold?: number
 ): Promise<boolean> {
-  await connectDB();
-
-  const product = await Product.findOne({ _id: productId, tenantId });
+  const product = await getRepos().products.findById(tenantId, productId);
   if (!product) {
     return false;
   }
@@ -418,31 +318,14 @@ export async function getLowStockProducts(
   branchId?: string,
   threshold?: number
 ): Promise<any[]> { // eslint-disable-line @typescript-eslint/no-explicit-any
-  await connectDB();
-
   // Pre-filter in the database so only candidates are read (this runs on an
   // inventory-page poll and in cron jobs). The filter is a superset of the exact
   // per-product check below, which still decides the final result.
-  const thresholdExpr = threshold
-    ? threshold
-    : { $cond: [{ $gt: [{ $ifNull: ['$lowStockThreshold', 0] }, 0] }, '$lowStockThreshold', 10] };
-  const candidates: Record<string, unknown>[] = [
-    // Variation products: checked per variation below
-    { hasVariations: true },
-    { $expr: { $lte: [{ $ifNull: ['$stock', 0] }, thresholdExpr] } },
-  ];
-  if (branchId) {
-    candidates.push({ 'branchStock.branchId': branchId });
-  }
-
-  const products = await Product.find({
-    tenantId,
-    trackInventory: true,
-    isActive: { $ne: false },
-    $or: candidates,
-  })
-    .select('name sku price reorderQuantity stock lowStockThreshold hasVariations variations.stock branchStock')
-    .lean();
+  const products = await getRepos().products.listLowStockCandidates(tenantId, {
+    branchId,
+    threshold,
+    select: 'name sku price reorderQuantity stock lowStockThreshold hasVariations variations.stock branchStock',
+  });
 
   const lowStockProducts = [];
 

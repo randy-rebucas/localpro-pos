@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Invoice from '@/models/Invoice';
-import Transaction from '@/models/Transaction';
-import Customer from '@/models/Customer';
+import { getRepos, type InvoiceFilter, type InvoiceStatus } from '@/lib/db';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -10,7 +7,6 @@ import { generateInvoiceNumber } from '@/lib/receipt';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     let tenantId: string;
     try {
       const tenantAccess = await requireTenantAccess(request);
@@ -32,34 +28,28 @@ export async function GET(request: NextRequest) {
     const customerId = searchParams.get('customerId');
     const overdue = searchParams.get('overdue') === 'true';
 
-    const query: any = { tenantId, isActive: { $ne: false } }; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const filter: InvoiceFilter = { notDisabled: true };
 
     if (status) {
-      query.status = status;
+      filter.status = status as InvoiceStatus;
     }
-    
+
     if (customerId) {
-      query.customerId = customerId;
+      filter.customerId = customerId;
     }
-    
+
     if (overdue) {
-      query.status = { $in: ['sent', 'draft'] };
-      query.dueDate = { $lt: new Date() };
+      filter.status = ['sent', 'draft'];
+      filter.dueDate = { lt: new Date() };
     }
 
-    const invoices = await Invoice.find(query)
-      .sort({ createdAt: -1 })
-      .limit(limit)
-      .skip(skip)
-      .populate('transactionId', 'receiptNumber total')
-      .populate('customerId', 'name email phone')
-      .lean();
-
-    const total = await Invoice.countDocuments(query);
+    const { invoices: invoiceRepo } = getRepos();
+    const invoices = await invoiceRepo.listWithRefs(tenantId, filter, { page: { skip, limit } });
+    const total = await invoiceRepo.count(tenantId, filter);
 
     return NextResponse.json({
       success: true,
-      data: invoices || [],
+      data: invoices,
       pagination: {
         total,
         page,
@@ -74,7 +64,6 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     const tenantAccess = await requireTenantAccess(request);
     const { tenantId, user } = tenantAccess;
     if (!(await hasTenantPermission(user.role, tenantId, 'invoices.manage'))) {
@@ -113,10 +102,7 @@ export async function POST(request: NextRequest) {
 
     // If transactionId provided, verify it exists and belongs to tenant
     if (transactionId) {
-      const transaction = await Transaction.findOne({
-        _id: transactionId,
-        tenantId,
-      });
+      const transaction = await getRepos().transactions.findById(tenantId, transactionId, { select: '_id' });
 
       if (!transaction) {
         return NextResponse.json(
@@ -129,10 +115,7 @@ export async function POST(request: NextRequest) {
     // If customerId provided, get customer info
     let finalCustomerInfo = customerInfo;
     if (customerId && !customerInfo) {
-      const customer = await Customer.findOne({
-        _id: customerId,
-        tenantId,
-      }).lean();
+      const customer = await getRepos().customers.findById(tenantId, customerId);
 
       if (customer) {
         finalCustomerInfo = {
@@ -150,8 +133,7 @@ export async function POST(request: NextRequest) {
     const invoiceNumber = await generateInvoiceNumber(tenantId);
 
     // Create invoice
-    const invoice = await Invoice.create({
-      tenantId,
+    const invoice = await getRepos().invoices.create(tenantId, {
       invoiceNumber,
       transactionId: transactionId || undefined,
       customerId: customerId || undefined,
@@ -173,7 +155,7 @@ export async function POST(request: NextRequest) {
       userId: user.userId,
       action: AuditActions.INVOICE_CREATE,
       entityType: 'invoice',
-      entityId: invoice._id.toString(),
+      entityId: invoice._id,
       changes: {
         invoiceNumber,
         customerId: customerId?.toString(),

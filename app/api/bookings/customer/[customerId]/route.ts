@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Booking from '@/models/Booking';
+import { getRepos, type BookingFilter, type BookingStatus } from '@/lib/db';
 import { requireCustomerAuth } from '@/lib/auth-customer';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { requireBookingSchedulingAccess } from '@/lib/booking-scheduling-access';
@@ -18,7 +17,6 @@ export async function GET(
   { params }: { params: Promise<{ customerId: string }> }
 ) {
   try {
-    await connectDB();
     const t = await getValidationTranslatorFromRequest(request);
     
     // Verify customer authentication
@@ -46,34 +44,23 @@ export async function GET(
     const endDate = searchParams.get('endDate');
 
     // Build query
-    const query: any = { // eslint-disable-line @typescript-eslint/no-explicit-any
-      tenantId: customer.tenantId,
-      $or: [
-        { customerEmail: customer.email },
-        { customerPhone: customer.phone },
-      ],
-    };
+    const query: BookingFilter = { customerContact: { email: customer.email, phone: customer.phone } };
 
     // Add status filter
     if (status) {
-      query.status = status;
+      query.status = status as BookingStatus;
     }
 
     // Add date range filter
     if (startDate || endDate) {
-      query.startTime = {};
-      if (startDate) {
-        query.startTime.$gte = new Date(startDate);
-      }
-      if (endDate) {
-        query.startTime.$lte = new Date(endDate);
-      }
+      query.startTime = {
+        ...(startDate && { gte: new Date(startDate) }),
+        ...(endDate && { lte: new Date(endDate) }),
+      };
     }
 
-    const bookings = await Booking.find(query)
-      .populate('staffId', 'name email')
-      .sort({ startTime: -1 }) // Most recent first
-      .lean();
+    // Most recent first
+    const bookings = await getRepos().bookings.list(customer.tenantId, query, { populateStaff: true, sort: '-startTime' });
 
     return NextResponse.json({
       success: true,

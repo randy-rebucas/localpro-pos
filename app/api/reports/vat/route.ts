@@ -4,7 +4,7 @@ import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { getVATReport } from '@/lib/analytics';
-import Tenant from '@/models/Tenant';
+import { getRepos } from '@/lib/db';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkFeatureAccess } from '@/lib/subscription';
 import { logger } from '@/lib/logger';
@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const tenant = await Tenant.findById(tenantId).lean();
+    const tenant = await getRepos().tenants.findById(tenantId);
     if (!tenant) {
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }

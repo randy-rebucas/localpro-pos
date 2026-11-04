@@ -1,14 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Product from '@/models/Product';
+import { getRepos } from '@/lib/db';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
-
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId } = authResult;
@@ -28,21 +25,10 @@ export async function GET(request: NextRequest) {
     // indexes. A case-insensitive regex can't use tight index bounds and walks
     // every key for the tenant, so it's only the fallback.
     const trimmedCode = code.trim();
-    let product = await Product.findOne({
-      tenantId,
-      isActive: { $ne: false },
-      $or: [{ barcode: trimmedCode }, { sku: trimmedCode }],
-    }).lean();
+    const { products } = getRepos();
+    let product = await products.findOne(tenantId, { active: true, code: trimmedCode });
     if (!product) {
-      const escapedCode = trimmedCode.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      product = await Product.findOne({
-        tenantId,
-        isActive: { $ne: false },
-        $or: [
-          { barcode: { $regex: `^${escapedCode}$`, $options: 'i' } },
-          { sku: { $regex: `^${escapedCode}$`, $options: 'i' } },
-        ],
-      }).lean();
+      product = await products.findOne(tenantId, { active: true, code: trimmedCode, codeInsensitive: true });
     }
 
     if (!product) {

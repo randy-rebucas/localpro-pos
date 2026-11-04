@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Booking from '@/models/Booking';
+import { getRepos } from '@/lib/db';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
@@ -18,7 +17,6 @@ import { logger } from '@/lib/logger';
  */
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     const user = await getCurrentUser(request);
     const t = await getValidationTranslatorFromRequest(request);
     if (!user) {
@@ -62,15 +60,12 @@ export async function POST(request: NextRequest) {
     // 1. Are in the reminder window
     // 2. Are pending or confirmed
     // 3. Haven't had a reminder sent yet
-    const bookingsToRemind = await Booking.find({
-      tenantId,
-      startTime: {
-        $gte: reminderWindowStart,
-        $lte: reminderWindowEnd,
-      },
-      status: { $in: ['pending', 'confirmed'] },
-      reminderSent: { $ne: true },
-    }).lean();
+    const { bookings } = getRepos();
+    const bookingsToRemind = await bookings.list(tenantId, {
+      startTime: { gte: reminderWindowStart, lte: reminderWindowEnd },
+      status: ['pending', 'confirmed'],
+      reminderNotSent: true,
+    });
 
     const tenantSettings = await getTenantSettingsById(tenantId);
     const results = {
@@ -95,7 +90,7 @@ export async function POST(request: NextRequest) {
         }, tenantSettings || undefined);
 
         // Mark reminder as sent
-        await Booking.findByIdAndUpdate(booking._id, { reminderSent: true });
+        await bookings.updateMany(tenantId, { ids: [booking._id] }, { reminderSent: true });
         results.sent++;
         results.details.push({
           bookingId: booking._id.toString(),

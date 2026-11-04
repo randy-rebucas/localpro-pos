@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import mongoose from 'mongoose';
-import connectDB from '@/lib/mongodb';
-import Product from '@/models/Product';
+import { getRepos } from '@/lib/db';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
-import { updateStock, insertStockMovements, STOCK_SNAPSHOT_FIELDS, StockMovementInput, StockProductSnapshot } from '@/lib/stock';
+import { updateStock, insertStockMovements, STOCK_SNAPSHOT_FIELDS, StockMovementInput } from '@/lib/stock';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
@@ -24,8 +23,6 @@ interface RestockItem {
  */
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
-
     let tenantId: string;
     let userId: string;
     try {
@@ -95,10 +92,12 @@ export async function POST(request: NextRequest) {
 
     // One batched read for all products, one conditional $inc each, and one
     // insert for all stock movements (new stock is taken from the movement).
-    const snapshots = await Product.find({ _id: { $in: validItems.map((i) => i.productId) }, tenantId })
-      .select(STOCK_SNAPSHOT_FIELDS)
-      .lean<Array<StockProductSnapshot & { _id: mongoose.Types.ObjectId }>>();
-    const snapshotById = new Map(snapshots.map((p) => [String(p._id), p]));
+    const snapshots = await getRepos().products.list(
+      tenantId,
+      { ids: validItems.map((i) => i.productId) },
+      { select: STOCK_SNAPSHOT_FIELDS }
+    );
+    const snapshotById = new Map(snapshots.map((p) => [p._id, p]));
     const movements: StockMovementInput[] = [];
 
     for (const item of validItems) {

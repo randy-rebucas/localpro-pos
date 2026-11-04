@@ -1,15 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
-import Subscription from '@/models/Subscription';
-import BillingEvent from '@/models/BillingEvent';
-import SuperAdminAction from '@/models/SuperAdminAction';
+import { getRepos, type BillingEventType } from '@/lib/db';
 import { requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { handleApiError } from '@/lib/error-handler';
 
-async function resolveTenant(slug: string) {
-  return Tenant.findOne({ slug }).select('_id slug name').lean() as Promise<{ _id: unknown; slug: string; name: string } | null>;
+function resolveTenant(slug: string) {
+  return getRepos().tenants.findBySlug(slug, { select: '_id slug name' });
 }
 
 // GET /api/super-admin/billing/[tenantSlug] — billing event history
@@ -18,7 +14,6 @@ export async function GET(
   { params }: { params: Promise<{ tenantSlug: string }> }
 ) {
   try {
-    await connectDB();
     await requireRole(request, ['super_admin']);
 
     const { tenantSlug } = await params;
@@ -31,14 +26,10 @@ export async function GET(
     const page = Math.max(1, parseInt(searchParams.get('page') || '1'));
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '20')));
 
-    const [events, total] = await Promise.all([
-      BillingEvent.find({ tenantId: tenant._id })
-        .sort({ createdAt: -1 })
-        .skip((page - 1) * limit)
-        .limit(limit)
-        .lean(),
-      BillingEvent.countDocuments({ tenantId: tenant._id }),
-    ]);
+    const { items: events, total } = await getRepos().billingEvents.list(tenant._id, {
+      skip: (page - 1) * limit,
+      limit,
+    });
 
     return NextResponse.json({
       success: true,
@@ -60,7 +51,7 @@ export async function POST(
   { params }: { params: Promise<{ tenantSlug: string }> }
 ) {
   try {
-    await connectDB();
+    // SuperAdminAction is not behind the repository layer yet
     const adminUser = await requireRole(request, ['super_admin']);
 
     const { tenantSlug } = await params;
@@ -69,7 +60,7 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
-    const subscription = await Subscription.findOne({ tenantId: tenant._id }).lean();
+    const subscription = await getRepos().subscriptions.findByTenant(tenant._id);
     if (!subscription) {
       return NextResponse.json({ success: false, error: 'No subscription found for this tenant' }, { status: 404 });
     }
@@ -88,10 +79,9 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'amount is required' }, { status: 400 });
     }
 
-    const event = await BillingEvent.create({
-      tenantId: tenant._id,
-      subscriptionId: (subscription as { _id: unknown })._id,
-      type,
+    const event = await getRepos().billingEvents.create(tenant._id, {
+      subscriptionId: subscription._id,
+      type: type as BillingEventType,
       amount: Number(amount),
       currency: 'PHP',
       description,
@@ -102,21 +92,22 @@ export async function POST(
     });
 
     await createAuditLog(request, {
-      tenantId: tenant._id as string,
+      tenantId: tenant._id,
       userId: adminUser.userId,
       action: AuditActions.CREATE,
       entityType: 'billing_event',
-      entityId: event._id.toString(),
+      entityId: event._id,
       changes: { type, amount, transactionId, invoiceUrl },
       metadata: { recordedBy: adminUser.userId, role: 'super_admin' },
     });
 
     const ip = request.headers.get('x-forwarded-for') || '';
-    await SuperAdminAction.create({
+    await getRepos().superAdminActions.create({
       adminUserId: adminUser.userId,
       action: 'billing.record',
       targetType: 'Subscription',
-      targetId: String((subscription as { _id: unknown })._id),
+      targetId: subscription._id,
+
       description: `Recorded billing event "${type}" (${amount}) for tenant ${tenantSlug}`,
       ipAddress: ip,
       userAgent: request.headers.get('user-agent') || '',

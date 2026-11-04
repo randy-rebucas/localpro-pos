@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import mongoose from 'mongoose';
-import connectDB from '@/lib/mongodb';
-import Booking from '@/models/Booking';
-import User from '@/models/User';
+import { getRepos, runInTransaction, type BookingFields, type BookingWithStaff, type Patch } from '@/lib/db';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
@@ -32,7 +29,6 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const user = await getCurrentUser(request);
     const t = await getValidationTranslatorFromRequest(request);
     if (!user) {
@@ -51,9 +47,7 @@ export async function GET(
     }
 
     const { id } = await params;
-    const booking = await Booking.findOne({ _id: id, tenantId })
-      .populate('staffId', 'name email')
-      .lean();
+    const booking = await getRepos().bookings.findById(tenantId, id, { populateStaff: true });
 
     if (!booking) {
       return NextResponse.json(
@@ -81,7 +75,6 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const user = await getCurrentUser(request);
     const t = await getValidationTranslatorFromRequest(request);
     if (!user) {
@@ -112,7 +105,8 @@ export async function PUT(
     }
 
     const { id } = await params;
-    const existingBooking = await Booking.findOne({ _id: id, tenantId });
+    const { bookings } = getRepos();
+    const existingBooking = await bookings.findById(tenantId, id);
 
     if (!existingBooking) {
       return NextResponse.json(
@@ -182,7 +176,7 @@ export async function PUT(
 
     // Verify staff exists if provided
     if (staffId) {
-      const staff = await User.findOne({ _id: staffId, tenantId, isActive: true });
+      const staff = await getRepos().users.findInTenant(tenantId, staffId, { activeOnly: true });
       if (!staff) {
         return NextResponse.json(
           { success: false, error: t('validation.staffNotFound', 'Staff member not found or inactive') },
@@ -192,12 +186,10 @@ export async function PUT(
     }
 
     // Build the update and apply it inside a transaction so the conflict
-    // check and the write happen back-to-back: findByIdAndUpdate would skip
-    // the model's pre('save') overlap re-check entirely (that hook only runs
-    // on .save()/.create()), which let concurrent reschedules double-book
-    // the same staff member. Using existingBooking.save() here means the
-    // overlap check always runs immediately before the write commits.
-    const updateData: any = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
+    // check and the write happen back-to-back. bookings.update() re-checks
+    // staff overlap immediately before the write commits, which is what stops
+    // concurrent reschedules from double-booking the same staff member.
+    const updateData: Patch<BookingFields> = {};
     if (customerName !== undefined) updateData.customerName = customerName;
     if (customerEmail !== undefined) updateData.customerEmail = customerEmail;
     if (customerPhone !== undefined) updateData.customerPhone = customerPhone;
@@ -210,24 +202,23 @@ export async function PUT(
     if (notes !== undefined) updateData.notes = notes;
     if (status !== undefined) updateData.status = status;
 
-    const session = await mongoose.startSession();
-    let updatedBooking;
+    let updatedBooking: BookingWithStaff | null;
     try {
-      await session.withTransaction(async () => {
+      await runInTransaction(async (tx) => {
         if (startTime || duration) {
-          const conflictingBookings = await Booking.find({
+          const conflictingBookings = await bookings.list(
             tenantId,
-            _id: { $ne: id },
-            status: { $in: ['pending', 'confirmed'] },
-            startTime: { $lt: newEndTime },
-            endTime: { $gt: newStartTime },
-          }).session(session);
+            {
+              excludeId: id,
+              status: ['pending', 'confirmed'],
+              overlaps: { start: newStartTime, end: newEndTime },
+            },
+            { tx }
+          );
 
           const checkStaffId = staffId || existingBooking.staffId;
           if (checkStaffId) {
-            const staffConflicts = conflictingBookings.filter(
-              (booking) => booking.staffId?.toString() === checkStaffId.toString()
-            );
+            const staffConflicts = conflictingBookings.filter((booking) => booking.staffId === String(checkStaffId));
             if (staffConflicts.length > 0) {
               throw new BookingConflictError(
                 t('validation.staffBookingConflict', 'Staff member already has a booking at this time'),
@@ -237,13 +228,11 @@ export async function PUT(
           }
         }
 
-        existingBooking.set(updateData);
-        // Re-checked by the model's pre('save') hook too (staff overlap),
-        // using this same session/snapshot.
-        await existingBooking.save({ session });
+        // Re-checks staff overlap too, in this same transaction
+        await bookings.update(tenantId, id, updateData, { tx });
       });
 
-      updatedBooking = await Booking.findById(id).populate('staffId', 'name email');
+      updatedBooking = await bookings.findById(tenantId, id, { populateStaff: true });
     } catch (txError) {
       if (txError instanceof BookingConflictError) {
         return NextResponse.json(
@@ -252,8 +241,6 @@ export async function PUT(
         );
       }
       throw txError;
-    } finally {
-      await session.endSession();
     }
 
     // Send notifications based on status changes
@@ -272,7 +259,7 @@ export async function PUT(
             notes: updatedBooking!.notes,
             bookingId: id,
           }, tenantSettings || undefined);
-          await Booking.findByIdAndUpdate(id, { confirmationSent: true });
+          await bookings.updateMany(tenantId, { ids: [id] }, { confirmationSent: true });
         } else if (status === 'cancelled') {
           await sendBookingCancellation({
             customerName: updatedBooking!.customerName,
@@ -320,7 +307,6 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const user = await getCurrentUser(request);
     const t = await getValidationTranslatorFromRequest(request);
     if (!user) {
@@ -344,7 +330,8 @@ export async function DELETE(
     }
 
     const { id } = await params;
-    const booking = await Booking.findOne({ _id: id, tenantId });
+    const { bookings } = getRepos();
+    const booking = await bookings.findById(tenantId, id);
 
     if (!booking) {
       return NextResponse.json(
@@ -372,9 +359,7 @@ export async function DELETE(
       }
     }
 
-    booking.isActive = false;
-    booking.status = 'cancelled';
-    await booking.save();
+    await bookings.update(tenantId, id, { isActive: false, status: 'cancelled' });
 
     await createAuditLog(request, {
       tenantId,

@@ -1,7 +1,6 @@
 import { NextRequest } from 'next/server';
 import jwt from 'jsonwebtoken';
-import connectDB from './mongodb';
-import Customer from '@/models/Customer';
+import { getRepos } from '@/lib/db';
 import { logger } from '@/lib/logger';
 
 export interface CustomerJWTPayload {
@@ -66,13 +65,13 @@ export async function getCurrentCustomer(request: NextRequest): Promise<{
       return null;
     }
 
-    // Verify customer still exists and is active
-    await connectDB();
-    const customer = await Customer.findById(payload.customerId)
-      .select('isActive tenantId')
-      .lean();
-    
-    if (!customer || !customer.isActive || customer.tenantId.toString() !== payload.tenantId) {
+    // Verify customer still exists and is active. Looked up within the token's
+    // tenant, so a customer of another tenant is not found.
+    const customer = await getRepos().customers.findById(payload.tenantId, payload.customerId, {
+      select: 'isActive',
+    });
+
+    if (!customer || !customer.isActive) {
       return null;
     }
 

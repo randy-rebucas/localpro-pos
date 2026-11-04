@@ -1,19 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
-import User from '@/models/User';
+import { getRepos } from '@/lib/db';
 import { requireRole } from '@/lib/auth';
 import { handleApiError } from '@/lib/error-handler';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     await requireRole(request, ['super_admin']);
 
+    const { tenants, users } = getRepos();
     const [totalTenants, activeTenants, totalUsers] = await Promise.all([
-      Tenant.estimatedDocumentCount(), // metadata only — no collection scan
-      Tenant.countDocuments({ isActive: true }),
-      User.countDocuments({ role: { $ne: 'super_admin' } }),
+      tenants.countAll(), // estimatedDocumentCount: metadata only, no collection scan
+      tenants.countFlaggedActive(),
+      users.countAllExceptSuperAdmins(),
     ]);
 
     return NextResponse.json({

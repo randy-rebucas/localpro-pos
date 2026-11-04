@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
+import { getRepos } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { handleApiError } from '@/lib/error-handler';
@@ -18,12 +17,11 @@ export async function GET(
     if (!user) return NextResponse.json({ success: false, error: t('validation.unauthorized', 'Unauthorized') }, { status: 401 });
 
     const { slug } = await params;
-    await connectDB();
 
-    const tenant = await Tenant.findOne({ slug, isActive: true }).lean();
+    const tenant = await getRepos().tenants.findBySlug(slug, { activeOnly: true, select: 'settings.retailCompliance' });
     if (!tenant) return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
 
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant._id) {
       return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden') }, { status: 403 });
     }
 
@@ -50,12 +48,11 @@ export async function PUT(
     if (!rl.allowed) return NextResponse.json({ success: false, error: t('validation.tooManyRequests', 'Too many requests') }, { status: 429 });
 
     const { slug } = await params;
-    await connectDB();
 
-    const tenant = await Tenant.findOne({ slug });
+    const tenant = await getRepos().tenants.findBySlug(slug, { select: 'settings.retailCompliance' });
     if (!tenant) return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
 
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant._id) {
       return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden') }, { status: 403 });
     }
 
@@ -63,19 +60,21 @@ export async function PUT(
     const stringFields = ['dtiBusinessNameRegistration', 'btiAccreditation'];
     const boolFields = ['priceTaggingCompliant', 'weightsAndMeasuresCompliant', 'productLabelsCompliant'];
 
-    if (!tenant.settings.retailCompliance) tenant.settings.retailCompliance = {} as never;
-    const rc = tenant.settings.retailCompliance as Record<string, unknown>;
+    const rc: Record<string, unknown> = { ...tenant.settings?.retailCompliance };
 
     for (const f of stringFields) { if (body[f] !== undefined) rc[f] = body[f] || undefined; }
     for (const f of boolFields) { if (body[f] !== undefined) rc[f] = body[f]; }
 
-    tenant.markModified('settings');
-    await tenant.save();
+    // Fields cleared above (undefined) are dropped, as save() did
+    const updated = await getRepos().tenants.update(tenant._id, {
+      set: { 'settings.retailCompliance': Object.fromEntries(Object.entries(rc).filter(([, v]) => v !== undefined)) },
+    });
+    if (!updated) return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
 
     await createAuditLog(request, {
       tenantId: tenant._id, userId: user.userId,
       action: AuditActions.UPDATE, entityType: 'retail_compliance',
-      entityId: tenant._id.toString(), changes: body,
+      entityId: tenant._id, changes: body,
     });
 
     return NextResponse.json({ success: true });

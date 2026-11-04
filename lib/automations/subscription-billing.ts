@@ -10,12 +10,7 @@
  *   +30d      still unpaid -> apply the plan's flat reactivation fee
  */
 
-import connectDB from '@/lib/mongodb';
-import Subscription from '@/models/Subscription';
-import SubscriptionPlan, { ISubscriptionPlan } from '@/models/SubscriptionPlan';
-import Tenant from '@/models/Tenant';
-import Invoice from '@/models/Invoice';
-import BillingEvent from '@/models/BillingEvent';
+import { getRepos, type SubscriptionPlan } from '@/lib/db';
 import { generateInvoiceNumber } from '@/lib/receipt';
 import { sendEmail } from '@/lib/notifications';
 import { getTenantSettingsById } from '@/lib/tenant';
@@ -80,7 +75,7 @@ async function notifyAdmin(subject: string, message: string): Promise<void> {
 export async function processSubscriptionBilling(
   options?: BillingOptions
 ): Promise<SubscriptionBillingResult> {
-  await connectDB();
+  const { subscriptions, subscriptionPlans, billingEvents, invoices } = getRepos();
 
   const now = new Date();
   const errors: string[] = [];
@@ -95,19 +90,17 @@ export async function processSubscriptionBilling(
 
   const tenantFilter = options?.tenantId ? { tenantId: options.tenantId } : {};
 
-  const plans = await SubscriptionPlan.find().lean();
-  const planMap = new Map<string, ISubscriptionPlan>(
-    plans.map((p) => [String(p._id), p as unknown as ISubscriptionPlan])
-  );
+  const plans = await subscriptionPlans.list();
+  const planMap = new Map<string, SubscriptionPlan>(plans.map((p) => [p._id, p]));
 
   try {
     // 1. Generate invoice 3 days before due date
     const upcomingDue = new Date(now.getTime() + 3 * DAY_MS);
-    const dueSoonSubs = await Subscription.find({
+    const dueSoonSubs = await subscriptions.findAcrossTenants({
       ...tenantFilter,
       status: 'active',
       autoRenew: true,
-      nextBillingDate: { $lte: upcomingDue, $gte: now },
+      nextBillingDate: { lte: upcomingDue, gte: now },
     });
 
     for (const sub of dueSoonSubs) {
@@ -117,29 +110,27 @@ export async function processSubscriptionBilling(
           continue; // already generated for this billing cycle
         }
 
-        const plan = planMap.get(String(sub.planId));
+        const plan = planMap.get(sub.planId);
         if (!plan) continue;
 
-        const tenantId = String(sub.tenantId);
-        const tenant = await Tenant.findById(tenantId).select('name').lean();
+        const tenantId = sub.tenantId;
+        const tenant = await getRepos().tenants.findById(tenantId, { select: 'name' });
         const invoiceNumber = await generateInvoiceNumber(tenantId);
         const amount = plan.price.monthly;
 
-        const invoice = await Invoice.create({
-          tenantId,
+        const invoice = await invoices.create(tenantId, {
           invoiceNumber,
           items: [{ name: `${plan.name} subscription`, quantity: 1, price: amount, subtotal: amount }],
           subtotal: amount,
           taxAmount: 0,
           total: amount,
-          dueDate: sub.nextBillingDate,
+          dueDate: sub.nextBillingDate!,
           paymentTerms: 'Due on receipt',
           status: 'sent',
           notes: 'Auto-generated subscription billing invoice',
         });
 
-        await BillingEvent.create({
-          tenantId,
+        await billingEvents.create(tenantId, {
           subscriptionId: sub._id,
           type: 'invoice_generated',
           amount,
@@ -148,8 +139,7 @@ export async function processSubscriptionBilling(
           invoiceUrl: `/invoices/${invoice._id}`,
         });
 
-        sub.lastInvoiceGeneratedAt = now;
-        await sub.save();
+        await subscriptions.update(tenantId, sub._id, { set: { lastInvoiceGeneratedAt: now } });
 
         await notifyTenant(tenantId, tenant?.name || 'your business', 'email_invoice_generated', {
           invoiceNumber,
@@ -165,11 +155,11 @@ export async function processSubscriptionBilling(
     }
 
     // 2. Flag overdue + start grace period (due date passed, unpaid)
-    const overdueSubs = await Subscription.find({
+    const overdueSubs = await subscriptions.findAcrossTenants({
       ...tenantFilter,
       status: 'active',
       autoRenew: true,
-      nextBillingDate: { $lte: now },
+      nextBillingDate: { lte: now },
       paymentOverdue: false,
     });
 
@@ -177,11 +167,12 @@ export async function processSubscriptionBilling(
       try {
         sub.paymentOverdue = true;
         sub.gracePeriodEndDate = new Date(sub.nextBillingDate!.getTime() + GRACE_PERIOD_DAYS * DAY_MS);
-        await sub.save();
+        await subscriptions.update(sub.tenantId, sub._id, {
+          set: { paymentOverdue: true, gracePeriodEndDate: sub.gracePeriodEndDate },
+        });
 
-        const plan = planMap.get(String(sub.planId));
-        await BillingEvent.create({
-          tenantId: sub.tenantId,
+        const plan = planMap.get(sub.planId);
+        await billingEvents.create(sub.tenantId, {
           subscriptionId: sub._id,
           type: 'payment_overdue',
           amount: plan?.price.monthly || 0,
@@ -189,8 +180,8 @@ export async function processSubscriptionBilling(
           description: `Payment overdue, grace period until ${sub.gracePeriodEndDate.toDateString()}`,
         });
 
-        const tenant = await Tenant.findById(sub.tenantId).select('name').lean();
-        await notifyTenant(String(sub.tenantId), tenant?.name || 'your business', 'email_payment_reminder', {
+        const tenant = await getRepos().tenants.findById(sub.tenantId, { select: 'name' });
+        await notifyTenant(sub.tenantId, tenant?.name || 'your business', 'email_payment_reminder', {
           invoiceNumber: `SUB-${String(sub._id).slice(-8).toUpperCase()}`,
           amount: plan?.price.monthly || 0,
           dueDate: sub.nextBillingDate!.toDateString(),
@@ -216,21 +207,21 @@ export async function processSubscriptionBilling(
 
     // 3. Redirect/reminder window: grace period passed but not yet at deactivation threshold
     const reminderWindowStart = new Date(now.getTime() - DEACTIVATION_BUFFER_DAYS * DAY_MS);
-    const remindSubs = await Subscription.find({
+    const remindSubs = await subscriptions.findAcrossTenants({
       ...tenantFilter,
       status: 'active',
       paymentOverdue: true,
-      gracePeriodEndDate: { $lte: now, $gte: reminderWindowStart },
-      deactivatedAt: { $exists: false },
+      gracePeriodEndDate: { lte: now, gte: reminderWindowStart },
+      unset: ['deactivatedAt'],
     });
 
     for (const sub of remindSubs) {
       try {
-        const plan = planMap.get(String(sub.planId));
-        const tenant = await Tenant.findById(sub.tenantId).select('name').lean();
+        const plan = planMap.get(sub.planId);
+        const tenant = await getRepos().tenants.findById(sub.tenantId, { select: 'name' });
         const deactivationDate = new Date(sub.gracePeriodEndDate!.getTime() + DEACTIVATION_BUFFER_DAYS * DAY_MS);
 
-        await notifyTenant(String(sub.tenantId), tenant?.name || 'your business', 'email_payment_overdue_final_notice', {
+        await notifyTenant(sub.tenantId, tenant?.name || 'your business', 'email_payment_overdue_final_notice', {
           invoiceNumber: `SUB-${String(sub._id).slice(-8).toUpperCase()}`,
           amount: plan?.price.monthly || 0,
           deactivationDate: deactivationDate.toDateString(),
@@ -255,26 +246,24 @@ export async function processSubscriptionBilling(
 
     // 4. Deactivate accounts still unpaid after grace period + buffer (10 days past due)
     const deactivationCutoff = new Date(now.getTime() - DEACTIVATION_BUFFER_DAYS * DAY_MS);
-    const toDeactivate = await Subscription.find({
+    const toDeactivate = await subscriptions.findAcrossTenants({
       ...tenantFilter,
       status: 'active',
       paymentOverdue: true,
-      gracePeriodEndDate: { $lte: deactivationCutoff },
-      deactivatedAt: { $exists: false },
+      gracePeriodEndDate: { lte: deactivationCutoff },
+      unset: ['deactivatedAt'],
     });
 
     for (const sub of toDeactivate) {
       try {
-        sub.status = 'suspended';
-        sub.suspendedAt = now;
-        sub.deactivatedAt = now;
-        await sub.save();
+        await subscriptions.update(sub.tenantId, sub._id, {
+          set: { status: 'suspended', suspendedAt: now, deactivatedAt: now },
+        });
 
-        await Tenant.findByIdAndUpdate(sub.tenantId, { isActive: false });
+        await getRepos().tenants.update(sub.tenantId, { set: { isActive: false } });
 
-        const plan = planMap.get(String(sub.planId));
-        await BillingEvent.create({
-          tenantId: sub.tenantId,
+        const plan = planMap.get(sub.planId);
+        await billingEvents.create(sub.tenantId, {
           subscriptionId: sub._id,
           type: 'account_deactivated',
           amount: plan?.price.monthly || 0,
@@ -282,8 +271,8 @@ export async function processSubscriptionBilling(
           description: 'Account deactivated after 10 days of non-payment',
         });
 
-        const tenant = await Tenant.findById(sub.tenantId).select('name').lean();
-        await notifyTenant(String(sub.tenantId), tenant?.name || 'your business', 'email_account_deactivated', {
+        const tenant = await getRepos().tenants.findById(sub.tenantId, { select: 'name' });
+        await notifyTenant(sub.tenantId, tenant?.name || 'your business', 'email_account_deactivated', {
           invoiceNumber: `SUB-${String(sub._id).slice(-8).toUpperCase()}`,
           amount: plan?.price.monthly || 0,
         });
@@ -307,31 +296,31 @@ export async function processSubscriptionBilling(
 
     // 5. Late fee (15 days past due)
     const lateFeeCutoff = new Date(now.getTime() - LATE_FEE_DAYS * DAY_MS);
-    const toLateFee = await Subscription.find({
+    const toLateFee = await subscriptions.findAcrossTenants({
       ...tenantFilter,
       paymentOverdue: true,
-      nextBillingDate: { $lte: lateFeeCutoff },
-      lateFeeAppliedAt: { $exists: false },
+      nextBillingDate: { lte: lateFeeCutoff },
+      unset: ['lateFeeAppliedAt'],
     });
 
     for (const sub of toLateFee) {
       try {
-        const plan = planMap.get(String(sub.planId));
+        const plan = planMap.get(sub.planId);
         if (!plan) continue;
 
         const lateFeeAmount = plan.price.monthly * LATE_FEE_PERCENT;
         sub.outstandingBalance = (sub.outstandingBalance || 0) + lateFeeAmount;
-        sub.lateFeeAppliedAt = now;
-        sub.billingHistory.push({
-          date: now,
-          amount: lateFeeAmount,
-          currency: plan.price.currency || 'PHP',
-          status: 'pending',
+        await subscriptions.update(sub.tenantId, sub._id, {
+          set: { outstandingBalance: sub.outstandingBalance, lateFeeAppliedAt: now },
+          addBillingEntry: {
+            date: now,
+            amount: lateFeeAmount,
+            currency: plan.price.currency || 'PHP',
+            status: 'pending',
+          },
         });
-        await sub.save();
 
-        await BillingEvent.create({
-          tenantId: sub.tenantId,
+        await billingEvents.create(sub.tenantId, {
           subscriptionId: sub._id,
           type: 'late_fee_applied',
           amount: lateFeeAmount,
@@ -340,7 +329,7 @@ export async function processSubscriptionBilling(
         });
 
         try {
-          const tenant = await Tenant.findById(sub.tenantId).select('name').lean();
+          const tenant = await getRepos().tenants.findById(sub.tenantId, { select: 'name' });
           await notifyAdmin(
             `[Billing] Late fee applied: ${tenant?.name || sub.tenantId}`,
             `Tenant: ${tenant?.name || sub.tenantId} (${sub.tenantId})\nSubscription: ${sub._id}\nLate fee: ${lateFeeAmount} ${plan.price.currency || 'PHP'}\nOutstanding balance: ${sub.outstandingBalance} ${plan.price.currency || 'PHP'}`
@@ -359,25 +348,25 @@ export async function processSubscriptionBilling(
 
     // 6. Reactivation fee (30 days past due)
     const reactivationCutoff = new Date(now.getTime() - REACTIVATION_FEE_DAYS * DAY_MS);
-    const toReactivationFee = await Subscription.find({
+    const toReactivationFee = await subscriptions.findAcrossTenants({
       ...tenantFilter,
       paymentOverdue: true,
-      nextBillingDate: { $lte: reactivationCutoff },
-      reactivationFeeAppliedAt: { $exists: false },
+      nextBillingDate: { lte: reactivationCutoff },
+      unset: ['reactivationFeeAppliedAt'],
     });
 
     for (const sub of toReactivationFee) {
       try {
-        const plan = planMap.get(String(sub.planId));
+        const plan = planMap.get(sub.planId);
         if (!plan) continue;
 
         const fee = plan.reactivationFee || 0;
         sub.outstandingBalance = (sub.outstandingBalance || 0) + fee;
-        sub.reactivationFeeAppliedAt = now;
-        await sub.save();
+        await subscriptions.update(sub.tenantId, sub._id, {
+          set: { outstandingBalance: sub.outstandingBalance, reactivationFeeAppliedAt: now },
+        });
 
-        await BillingEvent.create({
-          tenantId: sub.tenantId,
+        await billingEvents.create(sub.tenantId, {
           subscriptionId: sub._id,
           type: 'reactivation_fee_applied',
           amount: fee,
@@ -386,9 +375,10 @@ export async function processSubscriptionBilling(
         });
 
         try {
-          const tenant = await Tenant.findById(sub.tenantId).select('name').lean();
+          const tenant = await getRepos().tenants.findById(sub.tenantId, { select: 'name' });
           await notifyAdmin(
             `[Billing] Reactivation fee applied: ${tenant?.name || sub.tenantId}`,
+
             `Tenant: ${tenant?.name || sub.tenantId} (${sub.tenantId})\nSubscription: ${sub._id}\nReactivation fee: ${fee} ${plan.price.currency || 'PHP'}\nOutstanding balance: ${sub.outstandingBalance} ${plan.price.currency || 'PHP'}`
           );
         } catch (adminError) {

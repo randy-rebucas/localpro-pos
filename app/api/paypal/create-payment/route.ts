@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import SubscriptionPlan from '@/models/SubscriptionPlan';
+import { getRepos } from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { getTenantSlugFromRequest } from '@/lib/api-tenant';
@@ -11,8 +10,6 @@ import { logger } from '@/lib/logger';
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
-
     // Require authentication
     const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
@@ -43,7 +40,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Get the subscription plan
-    const plan = await SubscriptionPlan.findOne({ _id: planId, isActive: true });
+    const plan = await getRepos().subscriptionPlans.findById(planId, { activeOnly: true });
+
     if (!plan) {
       return NextResponse.json(
         { success: false, error: 'Subscription plan not found' },

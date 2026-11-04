@@ -1,10 +1,3 @@
-import mongoose from 'mongoose';
-import connectDB from '@/lib/mongodb';
-import Transaction from '@/models/Transaction';
-import Payment from '@/models/Payment';
-import Customer from '@/models/Customer';
-import Product from '@/models/Product';
-import ProductChannelListing from '@/models/ProductChannelListing';
 import { generateReceiptNumber } from '@/lib/receipt';
 import {
   updateStock,
@@ -13,6 +6,7 @@ import {
   type StockMovementInput,
   type StockProductSnapshot,
 } from '@/lib/stock';
+import { getRepos, isDuplicateKeyError, newId, runInTransaction } from '@/lib/db';
 import type { NormalizedPaidOrder } from '@/lib/ecommerce/types';
 import { STOCK_REASON_CHANNEL_SALE } from '@/lib/ecommerce/constants';
 import { SubscriptionService } from '@/lib/subscription';
@@ -26,23 +20,21 @@ export async function importPaidChannelOrder(
   tenantId: string,
   order: NormalizedPaidOrder
 ): Promise<{ ok: true; transactionId: string } | { ok: false; duplicate?: boolean; reason: string }> {
-  await connectDB();
   const key = channelSyncKey(order);
-  const existing = await Transaction.findOne({ tenantId, channelSyncKey: key }).lean();
+  const existing = await getRepos().transactions.findByChannelSyncKey(tenantId, key);
   if (existing) {
     return { ok: false, duplicate: true, reason: 'already_imported' };
   }
 
-  const listings = await ProductChannelListing.find({
-    tenantId,
+  const listings = await getRepos().channelListings.list(tenantId, {
     provider: order.provider,
-    externalVariantId: { $in: order.lines.map((l) => l.externalVariantId) },
-  }).lean();
+    externalVariantIds: order.lines.map((l) => l.externalVariantId),
+  });
 
   const listingByVariant = new Map(listings.map((l) => [l.externalVariantId, l]));
 
   type BuiltItem = {
-    productId: mongoose.Types.ObjectId;
+    productId: string;
     name: string;
     price: number;
     quantity: number;
@@ -55,7 +47,7 @@ export async function importPaidChannelOrder(
     const list = listingByVariant.get(line.externalVariantId);
     if (!list?.productId) continue;
     items.push({
-      productId: list.productId as mongoose.Types.ObjectId,
+      productId: list.productId,
       name: line.name,
       price: line.unitPrice,
       quantity: line.quantity,
@@ -69,14 +61,14 @@ export async function importPaidChannelOrder(
   }
 
   // Auto-link or create customer from order snapshot
-  let customerId: mongoose.Types.ObjectId | undefined;
+  let customerId: string | undefined;
   const cs = order.customerSnapshot;
   if (cs?.email) {
     try {
-      let cust = await Customer.findOne({ tenantId, email: cs.email });
+      const { customers } = getRepos();
+      let cust = await customers.findOne(tenantId, { email: cs.email });
       if (!cust) {
-        cust = await Customer.create({
-          tenantId,
+        cust = await customers.create(tenantId, {
           firstName: cs.firstName || '',
           lastName: cs.lastName || '',
           email: cs.email,
@@ -85,65 +77,62 @@ export async function importPaidChannelOrder(
           shopifyCustomerId: cs.shopifyCustomerId,
         });
       } else if (cs.shopifyCustomerId && !cust.shopifyCustomerId) {
-        cust.shopifyCustomerId = cs.shopifyCustomerId;
-        await cust.save();
+        await customers.update(tenantId, cust._id, { shopifyCustomerId: cs.shopifyCustomerId });
       }
-      customerId = cust._id as mongoose.Types.ObjectId;
+      customerId = cust._id;
+
     } catch (err) {
       logger.warn('importPaidChannelOrder: customer auto-link failed', { err });
     }
   }
 
-  const session = await mongoose.startSession();
-  let transactionId = '';
+  let transactionId: string;
 
   try {
-    session.startTransaction();
+    // The callback is retried on transient errors, so everything it builds
+    // (ids, movements, snapshots) is created per attempt, inside it.
+    transactionId = await runInTransaction(async (tx) => {
+      const { products, transactions, payments } = getRepos();
+      const syncNote = `channelSyncKey:${key}`;
+      // Pre-generated so stock movements carry the transaction id at insert time
+      // (no follow-up updateMany over the tenant's movements to back-fill it).
+      const txnId = newId();
 
-    const syncNote = `channelSyncKey:${key}`;
-    // Pre-generated so stock movements carry the transaction id at insert time
-    // (no follow-up updateMany over the tenant's movements to back-fill it).
-    const txnId = new mongoose.Types.ObjectId();
+      // One snapshot read for all lines instead of one per updateStock call
+      const productIds = [...new Set(items.map((i) => i.productId.toString()))];
+      const snapshots = await products.list(tenantId, { ids: productIds }, { select: STOCK_SNAPSHOT_FIELDS, tx });
+      const snapshotById = new Map<string, StockProductSnapshot>(snapshots.map((p) => [p._id, p]));
 
-    // One snapshot read for all lines instead of one per updateStock call
-    const productIds = [...new Set(items.map((i) => i.productId.toString()))];
-    const snapshots = await Product.find({ _id: { $in: productIds }, tenantId })
-      .select(STOCK_SNAPSHOT_FIELDS)
-      .session(session)
-      .lean<(StockProductSnapshot & { _id: mongoose.Types.ObjectId })[]>();
-    const snapshotById = new Map(snapshots.map((p) => [p._id.toString(), p]));
+      const movements: StockMovementInput[] = [];
+      for (const item of items) {
+        const productId = item.productId.toString();
+        await updateStock(
+          productId,
+          tenantId,
+          -item.quantity,
+          'sale',
+          {
+            reason: STOCK_REASON_CHANNEL_SALE,
+            notes: syncNote,
+            variation: item.variation,
+            transactionId: txnId,
+            product: snapshotById.get(productId),
+            movements,
+          },
+          tx
+        );
+      }
+      await insertStockMovements(movements, tx);
 
-    const movements: StockMovementInput[] = [];
-    for (const item of items) {
-      const productId = item.productId.toString();
-      await updateStock(
-        productId,
+      const receiptNumber = await generateReceiptNumber(tenantId);
+      const subtotal = items.reduce((s, i) => s + i.subtotal, 0);
+      const taxAmount = order.taxTotal > 0 ? order.taxTotal : Math.max(0, order.total - subtotal);
+      const total = order.total > 0 ? order.total : subtotal + taxAmount;
+
+      const txn = await transactions.create(
         tenantId,
-        -item.quantity,
-        'sale',
-        {
-          reason: STOCK_REASON_CHANNEL_SALE,
-          notes: syncNote,
-          variation: item.variation,
-          transactionId: txnId.toString(),
-          product: snapshotById.get(productId),
-          movements,
-        },
-        session
-      );
-    }
-    await insertStockMovements(movements, session);
-
-    const receiptNumber = await generateReceiptNumber(tenantId);
-    const subtotal = items.reduce((s, i) => s + i.subtotal, 0);
-    const taxAmount = order.taxTotal > 0 ? order.taxTotal : Math.max(0, order.total - subtotal);
-    const total = order.total > 0 ? order.total : subtotal + taxAmount;
-
-    const [txn] = await Transaction.create(
-      [
         {
           _id: txnId,
-          tenantId,
           items: items.map((i) => ({
             product: i.productId,
             name: i.name,
@@ -166,15 +155,12 @@ export async function importPaidChannelOrder(
           channelImportedAt: new Date(),
           ...(customerId ? { customerId } : {}),
         },
-      ],
-      { session }
-    );
-    transactionId = txn._id.toString();
+        { tx }
+      );
 
-    await Payment.create(
-      [
+      await payments.create(
+        tenantId,
         {
-          tenantId,
           transactionId: txn._id,
           method: 'digital',
           amount: total,
@@ -186,30 +172,26 @@ export async function importPaidChannelOrder(
           },
           processedAt: new Date(),
         },
-      ],
-      { session }
-    );
+        { tx }
+      );
 
-    await session.commitTransaction();
+      return txn._id;
+    });
   } catch (e: unknown) {
-    await session.abortTransaction();
-    const msg = e instanceof Error ? e.message : String(e);
-    if (msg.includes('E11000') || msg.includes('duplicate')) {
+    if (isDuplicateKeyError(e)) {
       return { ok: false, duplicate: true, reason: 'duplicate_key' };
     }
+    const msg = e instanceof Error ? e.message : String(e);
     logger.error('importPaidChannelOrder', e);
     return { ok: false, reason: msg };
-  } finally {
-    session.endSession();
   }
 
   try {
     await SubscriptionService.recordTransaction(tenantId, () =>
-      Transaction.countDocuments({
-        tenantId,
+      getRepos().transactions.count(tenantId, {
         createdAt: {
-          $gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
-          $lt: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1),
+          gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+          lt: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1),
         },
       })
     );

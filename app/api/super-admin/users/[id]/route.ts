@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import User from '@/models/User';
+import { getRepos } from '@/lib/db';
 import { requireRole } from '@/lib/auth';
 import { createAuditLog } from '@/lib/audit';
 import { handleApiError } from '@/lib/error-handler';
@@ -12,14 +11,14 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     await requireRole(request, ['super_admin']);
 
     const { id } = await params;
     const body = await request.json();
     const { action, role } = body;
 
-    const user = await User.findById(id);
+    const userRepo = getRepos().users;
+    const user = await userRepo.findById(id);
     if (!user) {
       return NextResponse.json({ success: false, error: 'User not found' }, { status: 404 });
     }
@@ -36,8 +35,7 @@ export async function PUT(
 
     switch (action) {
       case 'deactivate':
-        user.isActive = false;
-        await user.save();
+        await userRepo.update(id, { isActive: false });
         if (tenantId) {
           await createAuditLog(request, {
             tenantId,
@@ -50,8 +48,7 @@ export async function PUT(
         break;
 
       case 'activate':
-        user.isActive = true;
-        await user.save();
+        await userRepo.update(id, { isActive: true });
         if (tenantId) {
           await createAuditLog(request, {
             tenantId,
@@ -71,8 +68,7 @@ export async function PUT(
           );
         }
         const previousRole = user.role;
-        user.role = role;
-        await user.save();
+        await userRepo.update(id, { role });
         if (tenantId) {
           await createAuditLog(request, {
             tenantId,
@@ -89,10 +85,7 @@ export async function PUT(
         return NextResponse.json({ success: false, error: `Unknown action: ${action}` }, { status: 400 });
     }
 
-    const updated = await User.findById(id)
-      .populate('tenantId', 'slug name')
-      .select('name email role isActive lastLogin createdAt tenantId')
-      .lean();
+    const updated = await userRepo.findByIdWithTenant(id);
 
     return NextResponse.json({ success: true, data: updated });
   } catch (error: unknown) {

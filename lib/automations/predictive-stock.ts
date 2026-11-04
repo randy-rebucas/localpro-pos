@@ -4,9 +4,9 @@
  */
 
 import connectDB from '@/lib/mongodb';
-import Product from '@/models/Product';
 import Transaction from '@/models/Transaction';
 import Tenant from '@/models/Tenant';
+import { getRepos } from '@/lib/db';
 import { sendEmail } from '@/lib/notifications';
 import { getTenantSettingsById } from '@/lib/tenant';
 import { AutomationResult } from './types';
@@ -42,9 +42,14 @@ export async function predictStockNeeds(
     // Get tenants to process
     let tenants;
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).lean();
+      const tenant = await getRepos().tenants.findById(options.tenantId);
       tenants = tenant ? [tenant] : [];
     } else {
+      // TODO(postgres-migration): Tenant has no `status` field (and Mongoose 8 passes
+      // unknown filter keys through), so this query matches NO tenants today and the
+      // automation only runs when options.tenantId is given. Left on the model on
+      // purpose: replacing it with tenants.listActive() would start running this
+      // automation for every tenant. Decide the intended scope before converting.
       tenants = await Tenant.find({ status: 'active' }).lean();
     }
 
@@ -62,15 +67,14 @@ export async function predictStockNeeds(
         const tenantSettings = await getTenantSettingsById(tenantId);
 
         // Get all products with inventory tracking
-        const products = await Product.find({
-          tenantId,
-          trackInventory: true,
-        }).lean();
+        const products = await getRepos().products.list(tenantId, { trackInventory: true });
 
         const predictions: any[] = []; // eslint-disable-line @typescript-eslint/no-explicit-any
 
         for (const product of products) {
           try {
+            // Aggregate pipelines are not cast, so the hex id needs an ObjectId
+            const productObjectId = new mongoose.Types.ObjectId(product._id);
             // Get sales history for this product
             const salesHistory = await Transaction.aggregate([
               {
@@ -78,7 +82,7 @@ export async function predictStockNeeds(
                   tenantId: new mongoose.Types.ObjectId(tenantId),
                   createdAt: { $gte: analysisStartDate },
                   status: 'completed',
-                  'items.product': product._id,
+                  'items.product': productObjectId,
                 },
               },
               {
@@ -86,7 +90,7 @@ export async function predictStockNeeds(
               },
               {
                 $match: {
-                  'items.product': product._id,
+                  'items.product': productObjectId,
                 },
               },
               {

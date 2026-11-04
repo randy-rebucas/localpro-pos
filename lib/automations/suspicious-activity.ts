@@ -16,9 +16,7 @@
 import mongoose from 'mongoose';
 import connectDB from '@/lib/mongodb';
 import Transaction from '@/models/Transaction';
-import CashDrawerSession from '@/models/CashDrawerSession';
-import AuditLog from '@/models/AuditLog';
-import Tenant from '@/models/Tenant';
+import { getRepos } from '@/lib/db';
 import type { ITenantSettings } from '@/models/Tenant';
 import { sendEmail } from '@/lib/notifications';
 import { getActiveTenants, type ActiveTenant } from '@/lib/tenant-active-query';
@@ -42,11 +40,6 @@ interface TxCounts {
   voidsToday: number;
   voidsBeforeWindow: number;
   largeDiscountsInWindow: number;
-}
-
-interface LoginCounts {
-  failedToday: number;
-  failedBeforeWindow: number;
 }
 
 /** Threshold crossed during this window (count reached it now, but not before the window). */
@@ -82,9 +75,7 @@ export async function detectSuspiciousActivity(
     // Get tenants to process
     let tenants: ActiveTenant[];
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId)
-        .select(`_id slug name ${TENANT_FIELDS}`)
-        .lean<ActiveTenant>();
+      const tenant = (await getRepos().tenants.findById(options.tenantId, { select: `_id slug name ${TENANT_FIELDS}` })) as ActiveTenant | null;
       tenants = tenant ? [tenant] : [];
     } else {
       tenants = await getActiveTenants(TENANT_FIELDS);
@@ -162,41 +153,20 @@ export async function detectSuspiciousActivity(
           suspiciousActivities.push(`Large discounts detected: ${largeDiscounts} transactions with discounts >= $${discountThreshold} in the last ${windowMinutes} minutes`);
         }
 
-        // Check for failed login attempts (one aggregate for today + before-window counts)
-        const [logins] = await AuditLog.aggregate<LoginCounts>([
-          {
-            $match: {
-              tenantId: tenantObjectId,
-              // AuditActions.LOGIN is stored lowercase ('login'); the previous
-              // 'LOGIN' literal never matched any audit log.
-              action: 'login',
-              'metadata.success': false,
-              createdAt: { $gte: today },
-            },
-          },
-          {
-            $group: {
-              _id: null,
-              failedToday: { $sum: 1 },
-              failedBeforeWindow: { $sum: { $cond: [beforeWindow('$createdAt'), 1, 0] } },
-            },
-          },
-        ]);
+        // Check for failed login attempts (today and before-window counts in one read)
+        const logins = await getRepos().auditLogs.failedLoginCounts(String(tenant._id), { since: today, windowStart });
 
-        const failedLogins = logins?.failedToday ?? 0;
-        if (crossed(failedLogins, logins?.failedBeforeWindow ?? 0, failedLoginThreshold)) {
+        const failedLogins = logins.failedToday;
+        if (crossed(failedLogins, logins.failedBeforeWindow, failedLoginThreshold)) {
           suspiciousActivities.push(`Multiple failed login attempts: ${failedLogins} failed logins today (threshold: ${failedLoginThreshold})`);
         }
 
         // Check for cash drawer discrepancies (drawers closed since the previous run)
-        const drawersWithDiscrepancies = await CashDrawerSession.countDocuments({
-          tenantId: tenantObjectId,
-          closingTime: { $gte: windowStart },
-          $or: [
-            { shortage: { $gte: 50 } },
-            { overage: { $gte: 100 } },
-          ],
-        });
+        const drawersWithDiscrepancies = await getRepos().cashDrawerSessions.countDiscrepanciesSince(
+          String(tenant._id),
+          windowStart,
+          { shortage: 50, overage: 100 }
+        );
 
         if (drawersWithDiscrepancies > 0) {
           suspiciousActivities.push(`Cash drawer discrepancies: ${drawersWithDiscrepancies} drawers with significant shortages/overages`);

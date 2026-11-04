@@ -1,8 +1,7 @@
 import { ReactNode } from 'react';
 import { getTenantBySlug } from '@/lib/tenant';
 import { notFound } from 'next/navigation';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
+import { getRepos, isDuplicateKeyError } from '@/lib/db';
 import { cacheDel, CacheKeys } from '@/lib/cache';
 import { logger } from '@/lib/logger';
 
@@ -15,10 +14,9 @@ export async function generateStaticParams() {
 }
 
 async function ensureDefaultTenant() {
-  await connectDB();
   try {
     // Create default tenant if it doesn't exist
-    await Tenant.create({
+    await getRepos().tenants.create({
       slug: 'default',
       name: 'Default Store',
       settings: {
@@ -34,7 +32,7 @@ async function ensureDefaultTenant() {
     // or another parallel process already created it
     // This can happen during build/prerendering when multiple pages are generated in parallel
     // It's safe to ignore this error and continue
-    if (error.code !== 11000) {
+    if (!isDuplicateKeyError(error)) {
       // Re-throw if it's a different error
       throw error;
     }

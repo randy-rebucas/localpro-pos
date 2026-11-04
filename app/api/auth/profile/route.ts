@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { getCurrentUser } from '@/lib/auth';
-import connectDB from '@/lib/mongodb';
-import User from '@/models/User';
+import { getRepos, isDuplicateKeyError } from '@/lib/db';
 import { validateEmail, validatePassword } from '@/lib/validation';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { revokeAllUserTokens } from '@/lib/token-blacklist';
@@ -19,10 +18,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Not authenticated' }, { status: 401 });
     }
 
-    await connectDB();
-    let user = await User.findById(currentUser.userId)
-      .select('-password')
-      .lean();
+    const { users, tenants } = getRepos();
+    let user = await users.findById(currentUser.userId);
 
     if (!user || !user.isActive) {
       return NextResponse.json({ success: false, error: 'User not found or inactive' }, { status: 401 });
@@ -31,8 +28,8 @@ export async function GET(request: NextRequest) {
     // Generate QR token if it doesn't exist
     if (!user.qrToken) {
       const newQrToken = crypto.randomBytes(32).toString('hex');
-      await User.findByIdAndUpdate(currentUser.userId, { qrToken: newQrToken });
-      user = await User.findById(currentUser.userId).select('-password').lean();
+      await users.setQrToken(currentUser.userId, newQrToken);
+      user = await users.findById(currentUser.userId);
       
       if (!user) {
         return NextResponse.json({ success: false, error: 'User not found' }, { status: 404 });
@@ -40,8 +37,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Get tenant slug and name
-    const Tenant = (await import('@/models/Tenant')).default;
-    const tenant = await Tenant.findById(user.tenantId).select('slug name').lean();
+    const tenant = user.tenantId ? await tenants.findById(user.tenantId, { select: 'slug name' }) : null;
     const tenantSlug = tenant?.slug || null;
     const tenantName = tenant?.name || null;
 
@@ -55,7 +51,7 @@ export async function GET(request: NextRequest) {
         createdAt: user.createdAt,
         lastLogin: user.lastLogin,
         qrToken: user.qrToken || null,
-        tenantId: user.tenantId?.toString() || null,
+        tenantId: user.tenantId || null,
         tenantSlug,
         tenantName,
       },
@@ -77,21 +73,19 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Not authenticated' }, { status: 401 });
     }
 
-    await connectDB();
     const body = await request.json();
     const { email, password, name, currentPassword } = body;
 
     // Get translation function
     t = await getValidationTranslatorFromRequest(request);
 
-    // Fetch as a document (with password) so password changes go through the
-    // pre('save') hash hook — findByIdAndUpdate skips document middleware and
-    // would otherwise write the new password in plaintext.
-    const userDoc = await User.findById(currentUser.userId).select('+password');
-    if (!userDoc || !userDoc.isActive) {
+    // Loaded with the password hash so the current password can be verified;
+    // users.update() hashes a new password itself.
+    const { users } = getRepos();
+    const oldUser = await users.findByIdForLogin(currentUser.userId);
+    if (!oldUser || !oldUser.isActive) {
       return NextResponse.json({ success: false, error: 'User not found' }, { status: 404 });
     }
-    const oldUser = userDoc.toObject();
 
     // Build update object
     const updateData: Record<string, unknown> = {};
@@ -128,7 +122,7 @@ export async function PUT(request: NextRequest) {
         );
       }
 
-      const isPasswordValid = await userDoc.comparePassword(currentPassword);
+      const isPasswordValid = await users.verifyPassword(oldUser, currentPassword);
       if (!isPasswordValid) {
         return NextResponse.json(
           { success: false, error: t('validation.currentPasswordIncorrect', 'Current password is incorrect') },
@@ -155,11 +149,11 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    // Assign through the document instance and save() so the pre('save')
-    // hash hook runs for password changes.
-    Object.assign(userDoc, updateData);
-    await userDoc.save();
-    const user = userDoc.toObject();
+    const result = await users.update(currentUser.userId, updateData);
+    if (!result) {
+      return NextResponse.json({ success: false, error: 'User not found' }, { status: 404 });
+    }
+    const user = result.after;
 
     // Revoke all existing tokens when password is changed
     if (updateData.password) {
@@ -202,7 +196,7 @@ export async function PUT(request: NextRequest) {
       }
     });
   } catch (error: unknown) {
-    if ((error as Record<string, unknown>).code === 11000) {
+    if (isDuplicateKeyError(error)) {
       return NextResponse.json(
         { success: false, error: 'User with this email already exists' },
         { status: 400 }

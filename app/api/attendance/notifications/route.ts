@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Attendance from '@/models/Attendance';
-import User from '@/models/User'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import { getRepos } from '@/lib/db';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { sendEmail } from '@/lib/notifications'; // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -13,7 +11,6 @@ import { logger } from '@/lib/logger';
  */
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const t = await getValidationTranslatorFromRequest(request);
@@ -23,8 +20,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Get tenant settings for notification defaults
-    const Tenant = (await import('@/models/Tenant')).default;
-    const tenant = await Tenant.findById(tenantId).select('settings').lean();
+    const tenant = await getRepos().tenants.findById(tenantId, { select: 'settings' });
     
     const searchParams = request.nextUrl.searchParams;
     const attendanceSettings = tenant?.settings?.attendanceNotifications || {};
@@ -35,12 +31,7 @@ export async function GET(request: NextRequest) {
     ); // Default 12 hours
 
     // Get all active sessions (clocked in but not out)
-    const activeSessions = await Attendance.find({
-      tenantId,
-      clockOut: null,
-    })
-      .populate('userId', 'name email')
-      .lean();
+    const activeSessions = await getRepos().attendance.list(tenantId, { open: true }, { populateUser: true });
 
     const now = new Date();
     const notifications: any[] = []; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -70,12 +61,11 @@ export async function GET(request: NextRequest) {
     const todayEnd = new Date();
     todayEnd.setHours(23, 59, 59, 999);
 
-    const todayAttendances = await Attendance.find({
+    const todayAttendances = await getRepos().attendance.list(
       tenantId,
-      clockIn: { $gte: todayStart, $lte: todayEnd },
-    })
-      .populate('userId', 'name email')
-      .lean();
+      { clockIn: { gte: todayStart, lte: todayEnd } },
+      { populateUser: true }
+    );
 
     // Parse expected start time (HH:MM format)
     const [expectedHour, expectedMinute] = expectedStartTime.split(':').map(Number);
@@ -133,7 +123,6 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const t = await getValidationTranslatorFromRequest(request);

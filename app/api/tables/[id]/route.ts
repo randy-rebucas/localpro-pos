@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Table from '@/models/Table';
+import { getRepos } from '@/lib/db';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -13,13 +12,12 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId } = authResult;
     const { id } = await params;
 
-    const table = await Table.findOne({ _id: id, tenantId }).lean();
+    const table = await getRepos().tables.findById(tenantId, id);
     if (!table) {
       return NextResponse.json({ success: false, error: 'Table not found' }, { status: 404 });
     }
@@ -35,7 +33,6 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId, user } = authResult;
@@ -70,11 +67,6 @@ export async function PATCH(
       return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
     }
 
-    const table = await Table.findOne({ _id: id, tenantId });
-    if (!table) {
-      return NextResponse.json({ success: false, error: 'Table not found' }, { status: 404 });
-    }
-
     // Input validation
     if (name !== undefined && name !== null) {
       if (typeof name !== 'string' || !name.trim()) {
@@ -101,29 +93,32 @@ export async function PATCH(
       }
     }
 
-    const oldData = table.toObject() as unknown as Record<string, unknown>;
+    const result = await getRepos().tables.update(tenantId, id, {
+      name,
+      capacity,
+      status,
+      isActive,
+      currentOrderId: currentOrderId === undefined ? undefined : currentOrderId || null,
+    });
+    if (!result) {
+      return NextResponse.json({ success: false, error: 'Table not found' }, { status: 404 });
+    }
+    const table = result.after;
 
-    if (name !== undefined) table.name = name;
-    if (capacity !== undefined) table.capacity = capacity;
-    if (status !== undefined) table.status = status;
-    if (isActive !== undefined) table.isActive = isActive;
-    if (currentOrderId !== undefined) table.currentOrderId = currentOrderId || undefined;
-
-    // The POS re-sends status on every table select — skip the write and the
-    // audit log when nothing actually changed
-    const changedPaths = table.modifiedPaths();
+    // The POS re-sends status on every table select — the repo skips the write
+    // when nothing actually changed; skip the audit log too
+    const changedPaths = result.changed;
     if (changedPaths.length === 0) {
       return NextResponse.json({ success: true, data: table });
     }
 
-    await table.save();
-
-    const newData = table.toObject() as unknown as Record<string, unknown>;
+    const oldData = result.before as unknown as Record<string, unknown>;
+    const newData = result.after as unknown as Record<string, unknown>;
     await createAuditLog(request, {
       tenantId,
       action: AuditActions.UPDATE,
       entityType: 'table',
-      entityId: table._id.toString(),
+      entityId: table._id,
       // Only the changed fields, not both full documents
       changes: {
         before: Object.fromEntries(changedPaths.map((p) => [p, oldData[p]])),
@@ -142,7 +137,6 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId, user } = authResult;
@@ -158,19 +152,17 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
     }
 
-    const table = await Table.findOne({ _id: id, tenantId });
-    if (!table) {
+    const result = await getRepos().tables.update(tenantId, id, { isActive: false });
+    if (!result) {
       return NextResponse.json({ success: false, error: 'Table not found' }, { status: 404 });
     }
-
-    table.isActive = false;
-    await table.save();
+    const table = result.after;
 
     await createAuditLog(request, {
       tenantId,
       action: AuditActions.DELETE,
       entityType: 'table',
-      entityId: table._id.toString(),
+      entityId: table._id,
       changes: { name: table.name },
     });
 

@@ -4,9 +4,9 @@
  */
 
 import connectDB from '@/lib/mongodb';
-import Customer from '@/models/Customer';
 import Transaction from '@/models/Transaction';
 import Tenant from '@/models/Tenant';
+import { getRepos } from '@/lib/db';
 import { AutomationResult } from './types';
 import mongoose from 'mongoose';
 
@@ -37,9 +37,14 @@ export async function calculateCustomerLifetimeValue(
     // Get tenants to process
     let tenants;
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).lean();
+      const tenant = await getRepos().tenants.findById(options.tenantId);
       tenants = tenant ? [tenant] : [];
     } else {
+      // TODO(postgres-migration): Tenant has no `status` field (and Mongoose 8 passes
+      // unknown filter keys through), so this query matches NO tenants today and the
+      // automation only runs when options.tenantId is given. Left on the model on
+      // purpose: replacing it with tenants.listActive() would start running this
+      // automation for every tenant. Decide the intended scope before converting.
       tenants = await Tenant.find({ status: 'active' }).lean();
     }
 
@@ -56,7 +61,7 @@ export async function calculateCustomerLifetimeValue(
         const tenantId = tenant._id.toString();
 
         // Get all customers
-        const customers = await Customer.find({ tenantId }).lean();
+        const customers = await getRepos().customers.list(tenantId);
 
         for (const customer of customers) {
           try {
@@ -108,12 +113,13 @@ export async function calculateCustomerLifetimeValue(
 
             if (updateCustomers) {
               // Update customer record
-              await Customer.findByIdAndUpdate(customer._id, {
+              await getRepos().customers.update(tenantId, customer._id, {
                 totalSpent: clvData.totalSpent,
                 lastPurchaseDate: clvData.lastPurchase ? new Date(clvData.lastPurchase) : undefined,
                 // Store CLV in notes or custom field (if model supports it)
                 notes: customer.notes || '',
               });
+
             }
 
             totalUpdated++;

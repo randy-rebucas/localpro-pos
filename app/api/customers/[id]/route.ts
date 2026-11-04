@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Customer from '@/models/Customer';
+import { getRepos, type Customer, type CustomerFields, type Patch } from '@/lib/db';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -14,7 +13,6 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const { id } = await params;
 
     // Require authentication to prevent unauthenticated customer lookups
@@ -26,7 +24,7 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'Tenant not found or access denied' }, { status: 403 });
     }
 
-    const customer = await Customer.findOne({ _id: id, tenantId, isActive: { $ne: false } }).lean();
+    const customer = await getRepos().customers.findOne(tenantId, { ids: [id], notDisabled: true });
 
     if (!customer) {
       return NextResponse.json({ success: false, error: 'Customer not found' }, { status: 404 });
@@ -43,7 +41,6 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const { id } = await params;
     // SECURITY: Validate tenant access for authenticated requests
     let tenantId: string;
@@ -74,26 +71,23 @@ export async function PATCH(
       return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
     }
 
-    const customer = await Customer.findOne({ _id: id, tenantId });
+    const { customers } = getRepos();
+    const customer = await customers.findById(tenantId, id);
 
     if (!customer) {
       return NextResponse.json({ success: false, error: t('validation.customerNotFound', 'Customer not found') }, { status: 404 });
     }
 
     const body = await request.json();
-    const oldData = {
-      firstName: customer.firstName,
-      lastName: customer.lastName,
-      email: customer.email,
-      creditLimit: customer.creditLimit ?? null,
-    };
-    
-    if (body.firstName !== undefined) customer.firstName = body.firstName.trim();
-    if (body.lastName !== undefined) customer.lastName = body.lastName.trim();
+    // `null` clears a field (what assigning undefined to the document did)
+    const patch: Patch<CustomerFields> = {};
+
+    if (body.firstName !== undefined) patch.firstName = body.firstName.trim();
+    if (body.lastName !== undefined) patch.lastName = body.lastName.trim();
     if (body.email !== undefined) {
       const email = body.email.toLowerCase().trim();
       if (email && email !== customer.email) {
-        const existingCustomer = await Customer.findOne({ tenantId, email, _id: { $ne: id } });
+        const existingCustomer = await customers.findOne(tenantId, { email, excludeId: id });
         if (existingCustomer) {
           return NextResponse.json(
             { success: false, error: t('validation.emailAlreadyExists', 'Email already exists') },
@@ -101,14 +95,14 @@ export async function PATCH(
           );
         }
       }
-      customer.email = email;
+      patch.email = email;
     }
-    if (body.phone !== undefined) customer.phone = body.phone?.trim();
-    if (body.addresses !== undefined) customer.addresses = body.addresses;
-    if (body.dateOfBirth !== undefined) customer.dateOfBirth = body.dateOfBirth ? new Date(body.dateOfBirth) : undefined;
-    if (body.notes !== undefined) customer.notes = body.notes?.trim();
-    if (body.tags !== undefined) customer.tags = body.tags;
-    if (body.isActive !== undefined) customer.isActive = body.isActive;
+    if (body.phone !== undefined) patch.phone = body.phone?.trim() ?? null;
+    if (body.addresses !== undefined) patch.addresses = body.addresses;
+    if (body.dateOfBirth !== undefined) patch.dateOfBirth = body.dateOfBirth ? new Date(body.dateOfBirth) : null;
+    if (body.notes !== undefined) patch.notes = body.notes?.trim() ?? null;
+    if (body.tags !== undefined) patch.tags = body.tags;
+    if (body.isActive !== undefined) patch.isActive = body.isActive;
     if (body.creditLimit !== undefined) {
       const cl = parseCreditLimitInput(body.creditLimit);
       if (cl === undefined) {
@@ -118,32 +112,31 @@ export async function PATCH(
           { success: false, error: t('validation.creditLimitInvalid', 'Credit limit must be a non-negative number or empty to clear') },
           { status: 400 }
         );
-      } else if (cl === null) {
-        customer.set('creditLimit', undefined);
       } else {
-        customer.creditLimit = cl;
+        patch.creditLimit = cl;
       }
     }
 
-    await customer.save();
-    
+    const result = await customers.update(tenantId, id, patch);
+    if (!result) {
+      return NextResponse.json({ success: false, error: t('validation.customerNotFound', 'Customer not found') }, { status: 404 });
+    }
+    const summary = (c: Customer) => ({
+      firstName: c.firstName,
+      lastName: c.lastName,
+      email: c.email,
+      creditLimit: c.creditLimit ?? null,
+    });
+
     await createAuditLog(request, {
       tenantId,
       action: AuditActions.UPDATE,
       entityType: 'customer',
-      entityId: customer._id.toString(),
-      changes: {
-        old: oldData,
-        new: {
-          firstName: customer.firstName,
-          lastName: customer.lastName,
-          email: customer.email,
-          creditLimit: customer.creditLimit ?? null,
-        },
-      },
+      entityId: id,
+      changes: { old: summary(result.before), new: summary(result.after) },
     });
-    
-    return NextResponse.json({ success: true, data: customer });
+
+    return NextResponse.json({ success: true, data: result.after });
   } catch (error) {
     return handleApiError(error, 'Failed to update customer');
   }
@@ -154,7 +147,6 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const { id } = await params;
     // SECURITY: Validate tenant access for authenticated requests
     let tenantId: string;
@@ -186,15 +178,13 @@ export async function DELETE(
     }
 
     // Soft delete - set isActive to false
-    const customer = await Customer.findOne({ _id: id, tenantId });
-    
-    if (!customer) {
+    const result = await getRepos().customers.update(tenantId, id, { isActive: false });
+
+    if (!result) {
       return NextResponse.json({ success: false, error: t('validation.customerNotFound', 'Customer not found') }, { status: 404 });
     }
-    
-    customer.isActive = false;
-    await customer.save();
-    
+    const customer = result.after;
+
     await createAuditLog(request, {
       tenantId,
       action: AuditActions.DELETE,

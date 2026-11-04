@@ -4,7 +4,7 @@ import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { getCashDrawerReports } from '@/lib/analytics';
-import Tenant from '@/models/Tenant';
+import { getRepos } from '@/lib/db';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkFeatureAccess } from '@/lib/subscription';
 import { logger } from '@/lib/logger';
@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const tenantDoc = await Tenant.findById(tenantId).select('settings.timezone').lean();
+    const tenantDoc = await getRepos().tenants.findById(tenantId, { select: 'settings.timezone' });
     const searchParams = request.nextUrl.searchParams;
     const { startDate, endDate } = resolveTenantDateRange(
       searchParams.get('startDate'),

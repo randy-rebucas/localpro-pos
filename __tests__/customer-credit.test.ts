@@ -1,6 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const repos = vi.hoisted(() => ({ payments: { list: vi.fn() } }));
+vi.mock('@/lib/db', () => ({ getRepos: () => repos }));
+
 import {
   calculateOnAccountRefundAmount,
+  getOnAccountTotalForTransaction,
   wouldExceedCreditLimit,
   parseCreditLimitInput,
 } from '@/lib/customer-credit';
@@ -45,5 +50,29 @@ describe('parseCreditLimitInput', () => {
   it('returns NaN for invalid values', () => {
     expect(Number.isNaN(parseCreditLimitInput('abc') as number)).toBe(true);
     expect(Number.isNaN(parseCreditLimitInput(-5) as number)).toBe(true);
+  });
+});
+
+describe('getOnAccountTotalForTransaction', () => {
+  beforeEach(() => {
+    repos.payments.list.mockReset();
+  });
+
+  it('sums the completed on-account payments of the transaction', async () => {
+    repos.payments.list.mockResolvedValue([{ amount: 30 }, { amount: 20.5 }]);
+
+    await expect(getOnAccountTotalForTransaction('t1', 'tx1', 100, 'cash')).resolves.toBe(50.5);
+    expect(repos.payments.list).toHaveBeenCalledWith(
+      't1',
+      { transactionId: 'tx1', method: 'on_account', status: 'completed' },
+      { select: 'amount' }
+    );
+  });
+
+  it('falls back to the transaction total for an on-account sale without payment rows', async () => {
+    repos.payments.list.mockResolvedValue([]);
+
+    await expect(getOnAccountTotalForTransaction('t1', 'tx1', 100, 'on_account')).resolves.toBe(100);
+    await expect(getOnAccountTotalForTransaction('t1', 'tx1', 100, 'cash')).resolves.toBe(0);
   });
 });

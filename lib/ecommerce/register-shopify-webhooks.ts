@@ -1,13 +1,13 @@
 import { getPublicAppUrl } from '@/lib/ecommerce/public-url';
 import { shopifyRegisterWebhook } from '@/lib/ecommerce/shopify-api';
-import type { ITenantEcommerceIntegration } from '@/models/TenantEcommerceIntegration';
+import type { EcommerceIntegration } from '@/lib/db';
 import { getShopifyAccessTokenForIntegration } from '@/lib/ecommerce/shopify-token';
 import { logger } from '@/lib/logger';
 
 const TOPICS = ['orders/paid', 'orders/updated', 'refunds/create', 'products/update'] as const;
 
 export async function registerShopifyWebhooksForIntegration(
-  integration: ITenantEcommerceIntegration,
+  integration: EcommerceIntegration,
   options?: { publicAppBaseUrl?: string }
 ): Promise<void> {
   const shop = integration.shopDomain;

@@ -50,15 +50,13 @@ vi.mock('@/lib/permissions-server', () => ({
   hasTenantPermission: (...args: unknown[]) => mockHasTenantPermission(...args),
 }));
 
-const mockTenantFindOne = vi.fn();
-const mockTenantFindOneAndUpdate = vi.fn();
-
-vi.mock('@/models/Tenant', () => ({
-  default: {
-    findOne: (...args: unknown[]) => mockTenantFindOne(...args),
-    findOneAndUpdate: (...args: unknown[]) => mockTenantFindOneAndUpdate(...args),
-  },
+const repos = vi.hoisted(() => ({ tenants: { findBySlug: vi.fn(), update: vi.fn() } }));
+vi.mock('@/lib/db', () => ({
+  getRepos: () => repos,
+  isDuplicateKeyError: (e: any) => e?.code === 11000 || e?.name === 'DuplicateKeyError', // eslint-disable-line @typescript-eslint/no-explicit-any
 }));
+const mockTenantFindBySlug = repos.tenants.findBySlug;
+const mockTenantUpdate = repos.tenants.update;
 
 import { GET, PUT } from '@/app/api/tenants/[slug]/settings/route';
 
@@ -85,17 +83,9 @@ function authAs(tenantId: string, role: string = 'owner', userId: string = 'user
   mockGetCurrentUser.mockResolvedValue({ userId, tenantId, email: 'test@example.com', role });
 }
 
-/** findOne(...) chain supporting both `.lean()` and `.select(...).lean()`. */
-function findOneChain(value: Record<string, unknown> | null) {
-  return {
-    select: vi.fn().mockReturnValue({ lean: vi.fn().mockResolvedValue(value) }),
-    lean: vi.fn().mockResolvedValue(value),
-  };
-}
-
-/** PUT reads the existing tenant via `Tenant.findOne({ slug }).select(...).lean()`. */
+/** PUT reads the existing tenant via `tenants.findBySlug(slug, { select })`. */
 function mockExistingTenant(tenant: Record<string, unknown> | null) {
-  mockTenantFindOne.mockReturnValue(findOneChain(tenant));
+  mockTenantFindBySlug.mockResolvedValue(tenant);
 }
 
 beforeEach(() => {
@@ -109,18 +99,18 @@ beforeEach(() => {
 
 describe('GET /api/tenants/:slug/settings', () => {
   it('returns settings for an existing active tenant', async () => {
-    mockTenantFindOne.mockReturnValue(findOneChain({ _id: TENANT_A_ID, slug: SLUG, settings: { companyName: 'Acme' } }));
+    mockTenantFindBySlug.mockResolvedValue({ _id: TENANT_A_ID, slug: SLUG, settings: { companyName: 'Acme' } });
 
     const res = await GET(createRequest(`/api/tenants/${SLUG}/settings`), { params: Promise.resolve({ slug: SLUG }) });
     const { status, body } = await parseResponse(res);
 
     expect(status).toBe(200);
     expect(body.data).toEqual({ companyName: 'Acme' });
-    expect(mockTenantFindOne).toHaveBeenCalledWith({ slug: SLUG, isActive: true });
+    expect(mockTenantFindBySlug).toHaveBeenCalledWith(SLUG, expect.objectContaining({ activeOnly: true }));
   });
 
   it('404s for a tenant that does not exist or is inactive', async () => {
-    mockTenantFindOne.mockReturnValue(findOneChain(null));
+    mockTenantFindBySlug.mockResolvedValue(null);
 
     const res = await GET(createRequest(`/api/tenants/unknown/settings`), { params: Promise.resolve({ slug: 'unknown' }) });
     const { status } = await parseResponse(res);
@@ -155,12 +145,12 @@ describe('PUT /api/tenants/:slug/settings', () => {
     const { status } = await parseResponse(res);
 
     expect(status).toBe(403);
-    expect(mockTenantFindOneAndUpdate).not.toHaveBeenCalled();
+    expect(mockTenantUpdate).not.toHaveBeenCalled();
   });
 
   it('rejects a request from a user belonging to a different tenant', async () => {
     authAs(TENANT_B_ID, 'owner');
-    mockExistingTenant({ _id: { toString: () => TENANT_A_ID }, slug: SLUG, settings: {} });
+    mockExistingTenant({ _id: TENANT_A_ID, slug: SLUG, settings: {} });
 
     const res = await PUT(createRequest(`/api/tenants/${SLUG}/settings`, 'PUT', { companyName: 'New Name' }), {
       params: Promise.resolve({ slug: SLUG }),
@@ -168,17 +158,17 @@ describe('PUT /api/tenants/:slug/settings', () => {
     const { status } = await parseResponse(res);
 
     expect(status).toBe(403);
-    expect(mockTenantFindOneAndUpdate).not.toHaveBeenCalled();
+    expect(mockTenantUpdate).not.toHaveBeenCalled();
   });
 
   it('$sets only the submitted keys, leaving other settings untouched (per-tab save)', async () => {
     authAs(TENANT_A_ID, 'owner');
     mockExistingTenant({
-      _id: { toString: () => TENANT_A_ID },
+      _id: TENANT_A_ID,
       slug: SLUG,
       settings: { companyName: 'Old Name', primaryColor: '#111111' },
     });
-    mockTenantFindOneAndUpdate.mockResolvedValue({
+    mockTenantUpdate.mockResolvedValue({
       _id: TENANT_A_ID,
       settings: { companyName: 'Old Name', primaryColor: '#111111' },
     });
@@ -189,17 +179,14 @@ describe('PUT /api/tenants/:slug/settings', () => {
     const { status } = await parseResponse(res);
 
     expect(status).toBe(200);
-    expect(mockTenantFindOneAndUpdate).toHaveBeenCalledWith(
-      { slug: SLUG },
-      { $set: { 'settings.primaryColor': '#222222' } },
-      { new: true, runValidators: true }
-    );
+    expect(mockTenantFindBySlug).toHaveBeenCalledWith(SLUG, { select: '_id settings' });
+    expect(mockTenantUpdate).toHaveBeenCalledWith(TENANT_A_ID, { set: { 'settings.primaryColor': '#222222' } });
   });
 
   it('skips the write when every submitted value is unchanged', async () => {
     authAs(TENANT_A_ID, 'owner');
     mockExistingTenant({
-      _id: { toString: () => TENANT_A_ID },
+      _id: TENANT_A_ID,
       slug: SLUG,
       settings: { companyName: 'Same', primaryColor: '#111111' },
     });
@@ -212,12 +199,38 @@ describe('PUT /api/tenants/:slug/settings', () => {
 
     expect(status).toBe(200);
     expect(body.data).toEqual({ companyName: 'Same', primaryColor: '#111111' });
-    expect(mockTenantFindOneAndUpdate).not.toHaveBeenCalled();
+    expect(mockTenantUpdate).not.toHaveBeenCalled();
+  });
+
+  it('404s when the tenant does not exist', async () => {
+    authAs(TENANT_A_ID, 'owner');
+    mockExistingTenant(null);
+
+    const res = await PUT(createRequest(`/api/tenants/${SLUG}/settings`, 'PUT', { primaryColor: '#222222' }), {
+      params: Promise.resolve({ slug: SLUG }),
+    });
+    const { status } = await parseResponse(res);
+
+    expect(status).toBe(404);
+    expect(mockTenantUpdate).not.toHaveBeenCalled();
+  });
+
+  it('404s when the tenant disappears before the write (update returns null)', async () => {
+    authAs(TENANT_A_ID, 'owner');
+    mockExistingTenant({ _id: TENANT_A_ID, slug: SLUG, settings: {} });
+    mockTenantUpdate.mockResolvedValue(null);
+
+    const res = await PUT(createRequest(`/api/tenants/${SLUG}/settings`, 'PUT', { primaryColor: '#222222' }), {
+      params: Promise.resolve({ slug: SLUG }),
+    });
+    const { status } = await parseResponse(res);
+
+    expect(status).toBe(404);
   });
 
   it('rejects an invalid hex color', async () => {
     authAs(TENANT_A_ID, 'owner');
-    mockExistingTenant({ _id: { toString: () => TENANT_A_ID }, slug: SLUG, settings: {} });
+    mockExistingTenant({ _id: TENANT_A_ID, slug: SLUG, settings: {} });
 
     const res = await PUT(createRequest(`/api/tenants/${SLUG}/settings`, 'PUT', { primaryColor: 'not-a-color' }), {
       params: Promise.resolve({ slug: SLUG }),
@@ -225,12 +238,12 @@ describe('PUT /api/tenants/:slug/settings', () => {
     const { status } = await parseResponse(res);
 
     expect(status).toBe(400);
-    expect(mockTenantFindOneAndUpdate).not.toHaveBeenCalled();
+    expect(mockTenantUpdate).not.toHaveBeenCalled();
   });
 
   it('rejects a tax rate outside 0-100', async () => {
     authAs(TENANT_A_ID, 'owner');
-    mockExistingTenant({ _id: { toString: () => TENANT_A_ID }, slug: SLUG, settings: {} });
+    mockExistingTenant({ _id: TENANT_A_ID, slug: SLUG, settings: {} });
 
     const res = await PUT(createRequest(`/api/tenants/${SLUG}/settings`, 'PUT', { taxRate: 150 }), {
       params: Promise.resolve({ slug: SLUG }),
@@ -238,12 +251,12 @@ describe('PUT /api/tenants/:slug/settings', () => {
     const { status } = await parseResponse(res);
 
     expect(status).toBe(400);
-    expect(mockTenantFindOneAndUpdate).not.toHaveBeenCalled();
+    expect(mockTenantUpdate).not.toHaveBeenCalled();
   });
 
   it('rejects a currency code that is not 3 characters', async () => {
     authAs(TENANT_A_ID, 'owner');
-    mockExistingTenant({ _id: { toString: () => TENANT_A_ID }, slug: SLUG, settings: {} });
+    mockExistingTenant({ _id: TENANT_A_ID, slug: SLUG, settings: {} });
 
     const res = await PUT(createRequest(`/api/tenants/${SLUG}/settings`, 'PUT', { currency: 'US' }), {
       params: Promise.resolve({ slug: SLUG }),
@@ -251,6 +264,6 @@ describe('PUT /api/tenants/:slug/settings', () => {
     const { status } = await parseResponse(res);
 
     expect(status).toBe(400);
-    expect(mockTenantFindOneAndUpdate).not.toHaveBeenCalled();
+    expect(mockTenantUpdate).not.toHaveBeenCalled();
   });
 });

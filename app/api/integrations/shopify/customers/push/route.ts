@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Customer from '@/models/Customer';
-import TenantEcommerceIntegration from '@/models/TenantEcommerceIntegration';
+import { getRepos } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { handleApiError } from '@/lib/error-handler';
@@ -26,11 +24,9 @@ export async function POST(request: NextRequest) {
     const { customerId } = await request.json() as { customerId: string };
     if (!customerId) return NextResponse.json({ success: false, error: 'customerId required' }, { status: 400 });
 
-    await connectDB();
-
     const [customer, integration] = await Promise.all([
-      Customer.findOne({ _id: customerId, tenantId: user.tenantId }),
-      TenantEcommerceIntegration.findOne({ tenantId: user.tenantId, provider: 'shopify', isActive: true }),
+      getRepos().customers.findById(user.tenantId, customerId),
+      getRepos().ecommerceIntegrations.findActive(user.tenantId, 'shopify'),
     ]);
 
     if (!customer) return NextResponse.json({ success: false, error: 'Customer not found' }, { status: 404 });
@@ -42,8 +38,7 @@ export async function POST(request: NextRequest) {
     const { shopifyCustomerId } = await shopifyUpsertCustomer(integration.shopDomain, accessToken, customer);
 
     if (!customer.shopifyCustomerId) {
-      customer.shopifyCustomerId = shopifyCustomerId;
-      await customer.save();
+      await getRepos().customers.update(user.tenantId, customer._id, { shopifyCustomerId });
     }
 
     return NextResponse.json({ success: true, data: { shopifyCustomerId } });

@@ -1,10 +1,12 @@
-import connectDB from '@/lib/mongodb';
-import Subscription from '@/models/Subscription';
-import SubscriptionPlan from '@/models/SubscriptionPlan';
-import Tenant from '@/models/Tenant';
+import {
+  getRepos,
+  isDuplicateKeyError,
+  type Subscription,
+  type SubscriptionInput,
+  type SubscriptionPlan,
+} from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { cacheWrap, CacheKeys, TTL } from '@/lib/cache';
-import mongoose from 'mongoose'; // eslint-disable-line @typescript-eslint/no-unused-vars
 
 export interface SubscriptionLimits {
   maxUsers: number;
@@ -91,11 +93,10 @@ export class SubscriptionService {
 
   private static async loadSubscriptionStatus(tenantId: string): Promise<SubscriptionStatus | null> {
     {
-      await connectDB();
-
-      const subscription = await Subscription.findOne({ tenantId })
-        .populate('planId', 'name tier price features birCompliance pharmacyCompliance')
-        .lean();
+      const { subscriptions, subscriptionPlans } = getRepos();
+      const subscription = await subscriptions.findByTenant(tenantId, {
+        populate: { plan: 'name tier price features birCompliance pharmacyCompliance' },
+      });
 
       if (!subscription) {
         return null;
@@ -111,11 +112,11 @@ export class SubscriptionService {
 
       // Handle orphaned planId (plan was deleted/recreated)
       if (!plan || !plan.features) {
-        const fallbackPlan = await SubscriptionPlan.findOne({ tier: 'starter', isActive: true }).lean();
+        const fallbackPlan = await subscriptionPlans.findByTier('starter', { activeOnly: true });
         if (fallbackPlan) {
           // Reassign subscription to the current starter plan
-          await Subscription.findByIdAndUpdate(subscription._id, { planId: fallbackPlan._id });
-          plan = fallbackPlan as PopulatedPlan;
+          await subscriptions.update(tenantId, subscription._id, { set: { planId: fallbackPlan._id } });
+          plan = fallbackPlan;
         } else {
           // Subscription exists but plan data is unavailable — return a safe fallback
           // so onboarding is not blocked by a null status.
@@ -345,15 +346,12 @@ export class SubscriptionService {
    * sale. Returns null when the counter hasn't been seeded for this month yet.
    */
   static async getMonthlyTransactionCount(tenantId: string): Promise<number | null> {
-    await connectDB();
-    const sub = await cacheWrap(`${CacheKeys.subscriptionStatus(String(tenantId))}:usage`, TTL.SHORT, () =>
-      Subscription.findOne({ tenantId })
-        .select('usage.currentTransactions usage.lastResetDate')
-        .lean()
+    const usage = await cacheWrap(`${CacheKeys.subscriptionStatus(String(tenantId))}:usage`, TTL.SHORT, () =>
+      getRepos().subscriptions.findUsage(String(tenantId))
     );
-    const lastReset = sub?.usage?.lastResetDate ? new Date(sub.usage.lastResetDate) : null;
+    const lastReset = usage?.lastResetDate ? new Date(usage.lastResetDate) : null;
     if (!lastReset || lastReset < startOfMonth()) return null;
-    return sub!.usage.currentTransactions ?? 0;
+    return usage!.currentTransactions ?? 0;
   }
 
   /**
@@ -362,17 +360,10 @@ export class SubscriptionService {
    * re-seeded from a single countDocuments (also covers pre-existing data).
    */
   static async recordTransaction(tenantId: string, countThisMonth: () => Promise<number>): Promise<void> {
-    await connectDB();
-    const monthStart = startOfMonth();
-    const res = await Subscription.updateOne(
-      { tenantId, 'usage.lastResetDate': { $gte: monthStart } },
-      { $inc: { 'usage.currentTransactions': 1 } }
-    );
-    if (res.matchedCount === 0) {
-      await Subscription.updateOne(
-        { tenantId },
-        { $set: { 'usage.currentTransactions': await countThisMonth(), 'usage.lastResetDate': new Date() } }
-      );
+    const { subscriptions } = getRepos();
+    const counted = await subscriptions.incrementTransactionsSince(tenantId, startOfMonth());
+    if (!counted) {
+      await subscriptions.setUsage(tenantId, { currentTransactions: await countThisMonth(), lastResetDate: new Date() });
     }
   }
 
@@ -383,14 +374,12 @@ export class SubscriptionService {
    */
   static async trackTransactionCreated(tenantId: string): Promise<void> {
     try {
-      const { default: Transaction } = await import('@/models/Transaction');
       await this.recordTransaction(String(tenantId), () => {
         const now = new Date();
-        return Transaction.countDocuments({
-          tenantId,
+        return getRepos().transactions.count(tenantId, {
           createdAt: {
-            $gte: new Date(now.getFullYear(), now.getMonth(), 1),
-            $lt: new Date(now.getFullYear(), now.getMonth() + 1, 1),
+            gte: new Date(now.getFullYear(), now.getMonth(), 1),
+            lt: new Date(now.getFullYear(), now.getMonth() + 1, 1),
           },
         });
       });
@@ -412,28 +401,12 @@ export class SubscriptionService {
     }>
   ): Promise<void> {
     try {
-      await connectDB();
-
-      const updateObj: Record<string, number> = {};
-
-      if (updates.users !== undefined) {
-        updateObj['usage.currentUsers'] = updates.users;
-      }
-      if (updates.branches !== undefined) {
-        updateObj['usage.currentBranches'] = updates.branches;
-      }
-      if (updates.products !== undefined) {
-        updateObj['usage.currentProducts'] = updates.products;
-      }
-      if (updates.transactions !== undefined) {
-        updateObj['usage.currentTransactions'] = updates.transactions;
-      }
-
-      await Subscription.findOneAndUpdate(
-        { tenantId },
-        updateObj,
-        { upsert: false }
-      );
+      await getRepos().subscriptions.setUsage(tenantId, {
+        currentUsers: updates.users,
+        currentBranches: updates.branches,
+        currentProducts: updates.products,
+        currentTransactions: updates.transactions,
+      });
     } catch (error) {
       logger.error('Error updating subscription usage:', error);
     }
@@ -442,10 +415,9 @@ export class SubscriptionService {
   /**
    * Get all subscription plans
    */
-  static async getPlans(): Promise<Record<string, unknown>[]> {
+  static async getPlans(): Promise<SubscriptionPlan[]> {
     try {
-      await connectDB();
-      return await SubscriptionPlan.find({ isActive: true }).sort({ 'price.monthly': 1 }).lean();
+      return await getRepos().subscriptionPlans.list({ activeOnly: true });
     } catch (error) {
       logger.error('Error getting subscription plans:', error);
       return [];
@@ -463,35 +435,18 @@ export class SubscriptionService {
       billingCycle?: 'monthly' | 'yearly';
       startDate?: Date;
     } = {}
-  ): Promise<unknown> {
+  ): Promise<Subscription> {
     try {
-      await connectDB();
-
       const { isTrial = true, billingCycle = 'monthly', startDate = new Date() } = options;
 
       // Check if tenant already has a subscription
-      const existingSubscription = await Subscription.findOne({
-        tenantId,
-        status: { $in: ['active', 'trial'] }
-      });
+      const existingSubscription = await getRepos().subscriptions.findByTenant(tenantId, { status: ['active', 'trial'] });
 
       if (existingSubscription) {
         throw new Error('Tenant already has an active subscription');
       }
 
-      const subscriptionData: {
-        tenantId: string;
-        planId: string;
-        status: string;
-        billingCycle: string;
-        startDate: Date;
-        isTrial: boolean;
-        autoRenew: boolean;
-        usage: Record<string, unknown>;
-        trialEndDate?: Date;
-        nextBillingDate?: Date;
-      } = {
-        tenantId,
+      const subscriptionData: SubscriptionInput = {
         planId,
         status: isTrial ? 'trial' : 'active',
         billingCycle,
@@ -523,12 +478,11 @@ export class SubscriptionService {
         subscriptionData.nextBillingDate = nextBilling;
       }
 
-      const subscription = await Subscription.create(subscriptionData);
+      const subscription = await getRepos().subscriptions.create(tenantId, subscriptionData);
 
-      // Update tenant with subscription reference
-      await Tenant.findByIdAndUpdate(tenantId, {
-        subscriptionId: subscription._id
-      });
+      // No tenant backref write: models/Tenant.ts has no subscriptionId path,
+      // so the former Tenant.findByIdAndUpdate(tenantId, { subscriptionId })
+      // was stripped by Mongoose strict mode and never stored anything.
 
       return subscription;
     } catch (error) {
@@ -542,21 +496,17 @@ export class SubscriptionService {
    * Returns the existing subscription if one is already active/trial.
    */
   static async ensureTrialSubscription(tenantId: string): Promise<{
-    subscription: InstanceType<typeof Subscription>;
+    subscription: Subscription;
     created: boolean;
   }> {
-    await connectDB();
-
-    const existing = await Subscription.findOne({
-      tenantId,
-      status: { $in: ['active', 'trial'] },
-    });
+    const { subscriptions, subscriptionPlans } = getRepos();
+    const existing = await subscriptions.findByTenant(tenantId, { status: ['active', 'trial'] });
 
     if (existing) {
-      return { subscription: existing, created: false };
+      return { subscription: existing as Subscription, created: false };
     }
 
-    const starterPlan = await SubscriptionPlan.findOne({ tier: 'starter', isActive: true });
+    const starterPlan = await subscriptionPlans.findByTier('starter', { activeOnly: true });
     if (!starterPlan) {
       throw new Error('Starter plan not available');
     }
@@ -566,8 +516,7 @@ export class SubscriptionService {
     trialEndDate.setDate(trialEndDate.getDate() + 14);
 
     try {
-      const subscription = await Subscription.create({
-        tenantId,
+      const subscription = await subscriptions.create(tenantId, {
         planId: starterPlan._id,
         status: 'trial',
         billingCycle: 'monthly',
@@ -585,16 +534,17 @@ export class SubscriptionService {
         },
       });
 
-      await Tenant.findByIdAndUpdate(tenantId, {
-        subscriptionId: subscription._id,
-      });
+      // No tenant backref write: models/Tenant.ts has no subscriptionId path,
+      // so the former Tenant.findByIdAndUpdate(tenantId, { subscriptionId })
+      // was stripped by Mongoose strict mode and never stored anything.
 
       return { subscription, created: true };
     } catch (error: unknown) {
-      if ((error as { code?: number }).code === 11000) {
-        const raced = await Subscription.findOne({ tenantId });
+      if (isDuplicateKeyError(error)) {
+        const raced = await subscriptions.findByTenant(tenantId);
         if (raced) {
-          return { subscription: raced, created: false };
+          return { subscription: raced as Subscription, created: false };
+
         }
       }
       throw error;

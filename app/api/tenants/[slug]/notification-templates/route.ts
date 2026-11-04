@@ -4,8 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
+import { getRepos } from '@/lib/db';
 import { validateNotificationTemplate } from '@/lib/notification-templates';
 import { getCurrentUser } from '@/lib/auth';
 import { logger } from '@/lib/logger';
@@ -23,20 +22,19 @@ export async function GET(
     }
 
     const { slug } = await params;
-    await connectDB();
 
-    const tenant = await Tenant.findOne({ slug });
+    const tenant = await getRepos().tenants.findBySlug(slug, { select: 'settings.notificationTemplates' });
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant._id) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
     return NextResponse.json({
       success: true,
-      data: tenant.settings.notificationTemplates || {},
+      data: tenant.settings?.notificationTemplates || {},
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     logger.error('Error fetching notification templates:', error);
@@ -77,14 +75,12 @@ export async function PUT(
       return NextResponse.json({ success: false, error: validation.error }, { status: 400 });
     }
 
-    await connectDB();
-
-    const tenant = await Tenant.findOne({ slug });
+    const tenant = await getRepos().tenants.findBySlug(slug, { select: 'settings.notificationTemplates' });
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant._id) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
@@ -94,12 +90,9 @@ export async function PUT(
     // Atomic $set on the specific dot-path avoids clobbering concurrent edits to
     // other template categories (a full read-modify-write of the whole
     // notificationTemplates object + tenant.save() could lose them).
-    await Tenant.updateOne(
-      { _id: tenant._id },
-      { $set: { [`settings.notificationTemplates.${type}.${key}`]: value } }
-    );
-
-    const updatedTenant = await Tenant.findOne({ _id: tenant._id }).select('settings.notificationTemplates').lean();
+    const updatedTenant = await getRepos().tenants.update(tenant._id, {
+      set: { [`settings.notificationTemplates.${type}.${key}`]: value },
+    });
     const templates = updatedTenant?.settings?.notificationTemplates || {};
 
     await createAuditLog(request, {

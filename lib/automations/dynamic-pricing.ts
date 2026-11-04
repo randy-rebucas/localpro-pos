@@ -4,9 +4,8 @@
  */
 
 import connectDB from '@/lib/mongodb';
-import Product from '@/models/Product';
-import Transaction from '@/models/Transaction';
 import Tenant from '@/models/Tenant';
+import { getRepos } from '@/lib/db';
 import { getTenantSettingsById } from '@/lib/tenant';
 import { AutomationResult } from './types';
 import mongoose from 'mongoose'; // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -39,9 +38,14 @@ export async function applyDynamicPricing(
     // Get tenants to process
     let tenants;
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).lean();
+      const tenant = await getRepos().tenants.findById(options.tenantId);
       tenants = tenant ? [tenant] : [];
     } else {
+      // TODO(postgres-migration): Tenant has no `status` field (and Mongoose 8 passes
+      // unknown filter keys through), so this query matches NO tenants today and the
+      // automation only runs when options.tenantId is given. Left on the model on
+      // purpose: replacing it with tenants.listActive() would start running this
+      // automation for every tenant. Decide the intended scope before converting.
       tenants = await Tenant.find({ status: 'active' }).lean();
     }
 
@@ -59,7 +63,7 @@ export async function applyDynamicPricing(
         const tenantSettings = await getTenantSettingsById(tenantId); // eslint-disable-line @typescript-eslint/no-unused-vars
 
         // Get products
-        const products = await Product.find({ tenantId }).lean();
+        const products = await getRepos().products.list(tenantId);
 
         for (const product of products) {
           try {
@@ -83,10 +87,9 @@ export async function applyDynamicPricing(
             // Demand-based pricing (increase price if high demand)
             if (options.enableDemandBased) {
               const last7Days = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-              const recentSales = await Transaction.countDocuments({
-                tenantId,
-                'items.product': product._id,
-                createdAt: { $gte: last7Days },
+              const recentSales = await getRepos().transactions.count(tenantId, {
+                productId: product._id,
+                createdAt: { gte: last7Days },
                 status: 'completed',
               });
 
@@ -99,9 +102,9 @@ export async function applyDynamicPricing(
 
             // Update product price if changed
             if (priceChanged && newPrice !== product.price) {
-              await Product.findByIdAndUpdate(product._id, {
-                price: Math.round(newPrice * 100) / 100, // Round to 2 decimals
-              });
+              await getRepos().products.updateEach(tenantId, [
+                { id: product._id, set: { price: Math.round(newPrice * 100) / 100 } }, // Round to 2 decimals
+              ]);
               totalUpdated++;
             }
           } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
