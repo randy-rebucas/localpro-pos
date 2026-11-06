@@ -310,11 +310,11 @@ export function initializeCronJobs() {
     timezone: 'UTC',
   });
 
-  // 18. Audit Log Cleanup - Weekly on Sunday at 4 AM
-  const auditCleanupJob = cron.schedule('0 4 * * 0', async () => {
+  // 18. Audit Log Cleanup - Daily at 4 AM, so logs are archived before their 90-day TTL
+  const auditCleanupJob = cron.schedule('0 4 * * *', async () => {
     logger.info('🧹 Running audit log cleanup automation...');
     try {
-      const result = await cleanupAuditLogs({ retentionYears: 2 });
+      const result = await cleanupAuditLogs();
       logger.info('✅ Audit log cleanup:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       logger.error('❌ Audit log cleanup error:' + error.message);

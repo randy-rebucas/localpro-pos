@@ -51,7 +51,7 @@ Rules for new indexes:
 
 ## Retention
 
-- **AuditLog:** there is no TTL. `lib/automations/audit-log-cleanup.ts` runs daily and moves logs older than 90 days into `ArchivedAuditLog` using `$merge`. `/api/audit-logs/export` reads both collections.
+- **AuditLog:** live logs expire after 90 days through a TTL index. `lib/automations/audit-log-cleanup.ts` runs daily and moves logs older than 89 days into `ArchivedAuditLog` using `$merge`, so the TTL only removes a log the job failed to archive. It must stay daily, and within a day of the TTL. `/api/audit-logs/export` reads both collections.
 - **TTL indexes:**
   - `PosSession`: 1h idle, on `updatedAt`
   - `OfflineTransaction`: 30 days after sync
