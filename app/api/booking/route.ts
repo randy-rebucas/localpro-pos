@@ -42,6 +42,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // tenantId is client-supplied, so it must match the session's tenant
+    if (tenant._id.toString() !== currentUser.tenantId) {
+      return NextResponse.json(
+        { success: false, error: t('validation.forbidden', 'You can only create bookings in your own tenant') },
+        { status: 403 }
+      );
+    }
+
     // Get user details for customer info
     const User = (await import('@/models/User')).default;
     const user = await User.findById(currentUser.userId).lean();
@@ -177,9 +185,19 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // tenantId is client-supplied, so it must match the session's tenant — for
+    // self-lookups too: emails aren't verified at registration, so a matching
+    // email in another tenant doesn't prove these bookings are the caller's.
+    if (tenant._id.toString() !== currentUser.tenantId) {
+      return NextResponse.json(
+        { success: false, error: t('validation.forbidden', 'You can only view bookings in your own tenant') },
+        { status: 403 }
+      );
+    }
+
     // Get user email to match bookings
     const User = (await import('@/models/User')).default;
-    const user = await User.findById(userId).lean();
+    const user = await User.findOne({ _id: userId, tenantId: tenant._id }).lean();
     if (!user) {
       return NextResponse.json(
         { success: false, error: t('validation.userNotFound', 'User not found') },
@@ -199,6 +217,7 @@ export async function GET(request: NextRequest) {
 
     const bookings = await Booking.find(filter)
       .sort({ startTime: -1 })
+      .limit(200)
       .lean();
 
     return NextResponse.json({ success: true, data: bookings });
