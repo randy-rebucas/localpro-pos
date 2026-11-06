@@ -21,11 +21,12 @@ export interface IPayment extends Document {
   transactionId: mongoose.Types.ObjectId; // Reference to Order/Ticket
   method: 'cash' | 'card' | 'digital' | 'check' | 'other' | 'on_account';
   amount: number;
-  status: 'pending' | 'completed' | 'failed' | 'refunded';
+  status: 'pending' | 'completed' | 'failed' | 'partially_refunded' | 'refunded';
   details?: IPaymentDetails;
   processedBy?: mongoose.Types.ObjectId; // Staff reference
   processedAt?: Date;
   refundedAt?: Date;
+  refundedAmount?: number; // Running total refunded against this payment
   refundReason?: string;
   isActive: boolean;
   createdAt: Date;
@@ -68,7 +69,7 @@ const PaymentSchema: Schema = new Schema(
     },
     status: {
       type: String,
-      enum: ['pending', 'completed', 'failed', 'refunded'],
+      enum: ['pending', 'completed', 'failed', 'partially_refunded', 'refunded'],
       default: 'pending',
     },
     details: {
@@ -83,6 +84,10 @@ const PaymentSchema: Schema = new Schema(
     },
     refundedAt: {
       type: Date,
+    },
+    refundedAmount: {
+      type: Number,
+      min: 0,
     },
     refundReason: {
       type: String,

@@ -3,6 +3,7 @@
  * Automatically close cash drawers at end of business day
  */
 
+import { REFUND_RECEIPT_PREFIX, SALE_AND_REFUND_STATUSES } from '@/lib/refund-plan';
 import mongoose, { type AnyBulkWriteOperation } from 'mongoose';
 import connectDB from '@/lib/mongodb';
 import CashDrawerSession, { type ICashDrawerSession } from '@/models/CashDrawerSession';
@@ -104,7 +105,8 @@ export async function autoCloseCashDrawers(
           status: 'open',
         })
           .select('userId openingTime openingAmount notes')
-          .populate('userId', 'name email')
+          // A deleted cashier populates to null; keep the id so their sales still count
+          .populate({ path: 'userId', select: 'name email', transform: (doc, id) => doc ?? id })
           .lean();
 
         if (openSessions.length === 0) continue;
@@ -129,8 +131,21 @@ export async function autoCloseCashDrawers(
           .filter((b): b is { key: string; userId: mongoose.Types.ObjectId; opening: Date } => !!b.userId);
         const salesBySession = new Map<string, SalesTotals>();
         if (sessionBranches.length > 0) {
+          // Refund records subtract; same rule as isRefundRecord and the manual close
+          const refundSign = {
+            $cond: [
+              {
+                $and: [
+                  { $eq: ['$status', 'refunded'] },
+                  { $regexMatch: { input: { $ifNull: ['$receiptNumber', ''] }, regex: `^${REFUND_RECEIPT_PREFIX}` } },
+                ],
+              },
+              -1,
+              1,
+            ],
+          };
           const centsOf = (field: string) => ({
-            $sum: { $round: [{ $multiply: [{ $ifNull: [field, 0] }, 100] }, 0] },
+            $sum: { $multiply: [refundSign, { $round: [{ $multiply: [{ $ifNull: [field, 0] }, 100] }, 0] }] },
           });
           const facet: Record<string, mongoose.PipelineStage.FacetPipelineStage[]> = {};
           for (const b of sessionBranches) {
@@ -151,7 +166,7 @@ export async function autoCloseCashDrawers(
               $match: {
                 tenantId: tenantObjectId,
                 paymentMethod: 'cash',
-                status: 'completed',
+                status: { $in: SALE_AND_REFUND_STATUSES },
                 createdAt: { $lte: sessionEnd },
                 $or: sessionBranches.map((b) => ({ userId: b.userId, createdAt: { $gte: b.opening } })),
               },

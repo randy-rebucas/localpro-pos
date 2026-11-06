@@ -93,6 +93,7 @@ export interface SalesJournalEntry {
   total: number;
   paymentMethod: string;
   status: string;
+  entryType: 'sale' | 'refund' | 'void';
 }
 
 export interface SalesJournalData {
@@ -119,6 +120,10 @@ export interface XReadingData {
   discountTotal: number;
   transactionCount: number;
   voidCount: number;
+  refundCount: number;
+  refundTotal: number;
+  refundVatAmount: number;
+  netSales: number;
   currentGrandTotal: number;
   currentGrandTotalTransactionCount: number;
 }
@@ -136,6 +141,9 @@ export interface ZReadingRecord {
   discountTotal: number;
   transactionCount: number;
   voidCount: number;
+  // Missing on readings generated before refunds were tracked
+  refundTotal?: number;
+  netSales?: number;
   generatedBy?: { name?: string; email?: string } | string;
   generatedAt: string;
 }

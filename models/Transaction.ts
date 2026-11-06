@@ -14,6 +14,7 @@ export interface ITransactionItem {
   subtotal: number;
   modifiers?: ITransactionItemModifier[];
   prescriptionId?: mongoose.Types.ObjectId; // Pharmacy: links Rx item to prescription
+  refundedQuantity?: number; // How much of this line earlier refunds have taken
 }
 
 export interface ISplitPayment {
@@ -44,6 +45,8 @@ export interface ITransaction extends Document {
   cashReceived?: number;
   change?: number;
   status: 'completed' | 'cancelled' | 'refunded';
+  refundCount?: number; // Refunds issued against this sale; also guards concurrent refunds
+  refundedAmount?: number; // Running total refunded against this sale
   customerId?: mongoose.Types.ObjectId;
   loyaltyPointsEarned?: number;
   loyaltyPointsRedeemed?: number;
@@ -113,6 +116,10 @@ const TransactionItemSchema: Schema = new Schema({
   prescriptionId: {
     type: Schema.Types.ObjectId,
     ref: 'Prescription',
+  },
+  refundedQuantity: {
+    type: Number,
+    min: 0,
   },
 });
 
@@ -213,6 +220,14 @@ const TransactionSchema: Schema = new Schema(
       type: String,
       enum: ['completed', 'cancelled', 'refunded'],
       default: 'completed',
+    },
+    refundCount: {
+      type: Number,
+      min: 0,
+    },
+    refundedAmount: {
+      type: Number,
+      min: 0,
     },
     customerId: {
       type: Schema.Types.ObjectId,

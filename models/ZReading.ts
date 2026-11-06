@@ -19,6 +19,10 @@ export interface IZReading extends Document {
   discountTotal: number;
   transactionCount: number;
   voidCount: number;
+  refundCount: number;
+  refundTotal: number;
+  refundVatAmount: number;
+  netSales: number; // Can be negative on a day when refunds exceed sales
   generatedBy: mongoose.Types.ObjectId;
   generatedAt: Date;
   createdAt: Date;
@@ -89,6 +93,25 @@ const ZReadingSchema: Schema = new Schema(
       type: Number,
       default: 0,
       min: 0,
+    },
+    refundCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    refundTotal: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    refundVatAmount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    netSales: {
+      type: Number,
+      default: 0,
     },
     generatedBy: {
       type: Schema.Types.ObjectId,

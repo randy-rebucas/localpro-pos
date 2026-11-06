@@ -251,6 +251,7 @@ describe('autoCloseCashDrawers', () => {
 
     const match = (calls(Transaction.aggregate)[0][0] as Array<{ $match?: { $or: Array<{ userId: unknown }> } }>)[0].$match!;
     expect(String(match.$or[0].userId)).toBe(String(cashier._id)); // per-cashier, like manual close
+    expect((match as unknown as { status: unknown }).status).toEqual({ $in: ['completed', 'refunded'] }); // refunds come out of the drawer
     const ops = calls(CashDrawerSession.bulkWrite)[0][0] as Array<{ updateOne: { filter: Record<string, unknown>; update: { $set: Record<string, unknown> } } }>;
     expect(ops[0].updateOne.filter.status).toBe('open');
     expect(ops[0].updateOne.update.$set.expectedAmount).toBe(300.5); // 100 + 250.50 - 50

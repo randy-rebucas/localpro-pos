@@ -1,3 +1,4 @@
+import { isRefundRecord, SALE_AND_REFUND_STATUSES } from '@/lib/refund-plan';
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import CashDrawerSession from '@/models/CashDrawerSession';
@@ -167,8 +168,8 @@ export async function POST(request: NextRequest) {
           userId: sessionUserId,
           paymentMethod: 'cash',
           createdAt: { $gte: openSession.openingTime, $lte: sessionEnd },
-          status: 'completed',
-        }).select('total taxAmount discountAmount').lean(),
+          status: { $in: SALE_AND_REFUND_STATUSES },
+        }).select('total taxAmount discountAmount status receiptNumber').lean(),
         Expense.find({
           tenantId,
           paymentMethod: 'cash',
@@ -177,9 +178,13 @@ export async function POST(request: NextRequest) {
       ]);
 
       // Use integer math (cents) to avoid floating point errors
-      const cashSalesCents = cashTransactions.reduce((sum, t) => sum + Math.round((t.total || 0) * 100), 0);
-      const totalVATCents = cashTransactions.reduce((sum, t) => sum + Math.round((t.taxAmount || 0) * 100), 0);
-      const totalDiscountsCents = cashTransactions.reduce((sum, t) => sum + Math.round((t.discountAmount || 0) * 100), 0);
+      // A sale stays counted even if refunded later; its refund comes out of the
+      // drawer of whoever paid it, in the session it was paid.
+      const netCents = (field: 'total' | 'taxAmount' | 'discountAmount') =>
+        cashTransactions.reduce((sum, t) => sum + (isRefundRecord(t) ? -1 : 1) * Math.round((t[field] || 0) * 100), 0);
+      const cashSalesCents = netCents('total');
+      const totalVATCents = netCents('taxAmount');
+      const totalDiscountsCents = netCents('discountAmount');
       const cashExpensesCents = cashExpenses.reduce((sum, e) => sum + Math.round((e.amount || 0) * 100), 0);
 
       const openingCents = Math.round(openSession.openingAmount * 100);

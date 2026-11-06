@@ -2,6 +2,7 @@
  * Analytics and Reporting Utilities
  */
 
+import { isRefundRecord, NET_SALE_TOTAL, SALE_AND_REFUND_STATUSES } from '@/lib/refund-plan';
 import mongoose from 'mongoose';
 import Transaction from '@/models/Transaction';
 import Expense from '@/models/Expense';
@@ -128,7 +129,7 @@ export async function getSalesReport(
     {
       $facet: {
         byMethod: [
-          { $group: { _id: '$paymentMethod', sales: { $sum: '$total' }, count: { $sum: 1 } } },
+          { $group: { _id: '$paymentMethod', sales: { $sum: NET_SALE_TOTAL }, count: { $sum: 1 } } },
         ],
         // Sales by day only for detailed (daily/weekly) reports
         ...(period === 'daily' || period === 'weekly'
@@ -137,7 +138,7 @@ export async function getSalesReport(
               {
                 $group: {
                   _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
-                  sales: { $sum: '$total' },
+                  sales: { $sum: NET_SALE_TOTAL },
                   transactions: { $sum: 1 },
                 },
               },
@@ -199,12 +200,13 @@ export async function getProductPerformance(
   }>([
     { $match: completedSalesMatch(toObjectId(tenantId), startDate, endDate) },
     { $unwind: '$items' },
+    { $set: { keptQuantity: { $subtract: ['$items.quantity', { $ifNull: ['$items.refundedQuantity', 0] }] } } },
     {
       $group: {
         _id: '$items.product',
         itemName: { $first: '$items.name' },
-        totalRevenue: { $sum: '$items.subtotal' },
-        quantitySold: { $sum: '$items.quantity' },
+        totalRevenue: { $sum: { $multiply: ['$items.price', '$keptQuantity'] } },
+        quantitySold: { $sum: '$keptQuantity' },
       },
     },
     { $sort: { totalRevenue: -1 } },
@@ -236,7 +238,7 @@ export async function getVATReport(
 ): Promise<VATReport> {
   const [totals] = await Transaction.aggregate<{ totalSales: number }>([
     { $match: completedSalesMatch(toObjectId(tenantId), startDate, endDate) },
-    { $group: { _id: null, totalSales: { $sum: '$total' } } },
+    { $group: { _id: null, totalSales: { $sum: NET_SALE_TOTAL } } },
   ]);
 
   const vatRate = settings.taxEnabled && settings.taxRate ? settings.taxRate / 100 : 0;
@@ -278,7 +280,7 @@ export async function getProfitLossSummary(
   const [byMethod, expenseByName] = await Promise.all([
     Transaction.aggregate<{ _id: string | null; sales: number }>([
       { $match: completedSalesMatch(tenantObjectId, startDate, endDate) },
-      { $group: { _id: '$paymentMethod', sales: { $sum: '$total' } } },
+      { $group: { _id: '$paymentMethod', sales: { $sum: NET_SALE_TOTAL } } },
     ]),
     // Use expense name as category since Expense model doesn't have a category field
     Expense.aggregate<{ _id: string | null; amount: number }>([
@@ -353,9 +355,9 @@ export async function getCashDrawerReports(
       tenantId,
       paymentMethod: 'cash',
       createdAt: { $gte: spanStart, $lte: spanEnd },
-      status: 'completed',
+      status: { $in: SALE_AND_REFUND_STATUSES },
       isActive: { $ne: false },
-    }).select('total createdAt').lean(),
+    }).select('total createdAt status receiptNumber').lean(),
     Expense.find({
       tenantId,
       paymentMethod: 'cash',
@@ -374,7 +376,7 @@ export async function getCashDrawerReports(
 
     const cashSales = cashTransactions
       .filter((t) => inSession(t.createdAt))
-      .reduce((sum, t) => sum + t.total, 0);
+      .reduce((sum, t) => sum + (isRefundRecord(t) ? -t.total : t.total), 0);
     const cashExpensesTotal = cashExpenses
       .filter((e) => inSession(e.date))
       .reduce((sum, e) => sum + e.amount, 0);
@@ -406,6 +408,9 @@ function toObjectId(id: string): mongoose.Types.ObjectId {
   return new mongoose.Types.ObjectId(String(id));
 }
 
+// Sales analytics report what was kept: a fully refunded sale leaves, a partly
+// refunded one counts net, both on the sale's date. Accounting reports (journal,
+// readings, CAS) instead show the refund on its own date.
 function completedSalesMatch(tenantId: mongoose.Types.ObjectId, start: Date, end: Date) {
   return {
     tenantId,

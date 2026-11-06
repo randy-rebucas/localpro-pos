@@ -94,6 +94,23 @@ Bundle analytics reads `items[].product`, where checkout stores a bundle line's 
 
 Lists that clients load in full (`/api/bookings`, `/api/bookings/customer/[customerId]`, `/api/expenses`) stop at `LIST_SAFETY_CAP` rows and set `truncated: true`. They keep the newest rows, so upcoming bookings are never dropped.
 
+## Refunds
+
+A sale can be refunded in parts. Refunded quantities live on each line (`items[].refundedQuantity`), and `lib/refund-plan.ts` works out what's left. `refundCount` guards the atomic claim, so concurrent refunds can't both spend the same quantity.
+
+- The sale stays `completed` until everything is refunded, because reports filter on that status.
+- The original Payment becomes `partially_refunded`, with a running `refundedAmount`, until it's fully covered.
+- Each refund pays the lines' share of the sale total, so discounts, tax and loyalty redemptions come back in proportion. The last refund pays exactly what's left, so a sale's refunds always add up to its total. Lines don't record tax exemption, so in a basket mixing exempt and taxable items the split between partial refunds is approximate, though the overall total is exact.
+- A sale with any refund against it can't be voided.
+- Refund records store their share of discount, tax, exempt and zero-rated amounts. The sales journal keeps each sale as recorded and shows each refund as a negative line on the refund's date, so totals net out without changing a past period. Voids stay listed at zero. Refunds made before these fields existed show their total with no tax split.
+- Refund receipts are `REF-<receipt>`, then `REF-<receipt>-2` and so on. `isRefundRecord` in `lib/refund-plan.ts` is the one rule for telling a refund record from a refunded sale, which share the `refunded` status.
+- Cash drawers count a sale even if it's refunded later, and take each refund from the drawer of the user who processed it, in the session it was paid. A cash refund belongs to the tenant's open drawer, whoever processes it; `Payment.processedBy` and the audit log record who did. With no drawer open it comes out of none.
+- X and Z readings keep sale figures as sold, so gross sales reconcile with the Grand Total, which never goes down. Refunds paid that day are reported beside them with net sales. Stored Z readings are never recalculated, so ones from before this show no refunds.
+- The CAS report shows a refund as a credit on its own date.
+- Sales analytics (`lib/analytics.ts`, `/api/transactions/stats`) report what was kept, on the sale's date: a fully refunded sale leaves, a partly refunded one counts net. Accounting reports show the refund on its own date instead, so the two can differ for a period.
+- Refunding a bundle line returns its component products. Manual lines are refunded by their line id, as the POS sends it.
+- A sale partially refunded before this tracking existed returns 409 instead of risking a double payout, because nothing records which items that refund covered.
+
 ## Cron (`vercel.json`)
 
 Only `vercel.json` schedules jobs; `lib/cron.ts` is never initialized. If you self-host with `lib/cron.ts`, its intervals don't match the time windows below. For example, suspicious-activity would need `windowMinutes: 15`.

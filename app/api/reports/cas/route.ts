@@ -4,11 +4,13 @@
  * Gated by birCompliance.casReporting subscription feature.
  */
 
+import { isRefundRecord, SALE_AND_REFUND_STATUSES } from '@/lib/refund-plan';
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
+import { REPORT_MAX_TIME_MS } from '@/lib/query-utils';
 import Transaction from '@/models/Transaction';
 import Tenant from '@/models/Tenant';
 import { checkBirFeatureAccess } from '@/lib/subscription';
@@ -64,16 +66,19 @@ export async function GET(request: NextRequest) {
 
     const transactions = await Transaction.find({
       tenantId,
-      status: 'completed',
+      status: { $in: SALE_AND_REFUND_STATUSES },
       createdAt: { $gte: startDate, $lte: endDate },
     })
+      .select('createdAt receiptNumber paymentMethod status subtotal total taxAmount taxExemptAmount')
       .sort({ createdAt: 1 })
+      .maxTimeMS(REPORT_MAX_TIME_MS)
       .lean();
 
     type TransactionDoc = {
       createdAt: Date;
       receiptNumber?: string;
       paymentMethod?: string;
+      status?: string;
       subtotal?: number;
       total?: number;
       taxAmount?: number;
@@ -88,17 +93,21 @@ export async function GET(request: NextRequest) {
       const vatableSales = subtotal - taxExemptAmount - taxAmount > 0
         ? subtotal - taxExemptAmount - taxAmount
         : 0;
+      const total = txn.total ?? 0;
+      // A refund is a credit on its own date, so past periods don't change
+      const isRefund = isRefundRecord(txn);
+      const sign = isRefund ? -1 : 1;
 
       return {
         date: new Date(txn.createdAt).toISOString().split('T')[0],
         receiptNumber: txn.receiptNumber || '',
-        description: `Sales - ${txn.paymentMethod || 'unknown'}`,
-        debit: txn.total ?? 0,
-        credit: 0,
-        vatableSales,
-        vatAmount: taxAmount,
-        vatExemptSales: taxExemptAmount,
-        total: txn.total ?? 0,
+        description: `${isRefund ? 'Refund' : 'Sales'} - ${txn.paymentMethod || 'unknown'}`,
+        debit: isRefund ? 0 : total,
+        credit: isRefund ? total : 0,
+        vatableSales: sign * vatableSales,
+        vatAmount: sign * taxAmount,
+        vatExemptSales: sign * taxExemptAmount,
+        total: sign * total,
       };
     });
 

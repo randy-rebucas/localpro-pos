@@ -229,7 +229,7 @@ describe('getCashDrawerReports', () => {
 
     // The single query spans from the earliest open to the latest close
     const txFilter = TransactionMock.find.mock.calls[0][0];
-    expect(txFilter).toMatchObject({ tenantId: TENANT, paymentMethod: 'cash', status: 'completed' });
+    expect(txFilter).toMatchObject({ tenantId: TENANT, paymentMethod: 'cash', status: { $in: ['completed', 'refunded'] } });
     expect(txFilter.createdAt.$gte).toEqual(s1Open);
     expect(txFilter.createdAt.$lte).toEqual(s2Close);
     const expFilter = ExpenseMock.find.mock.calls[0][0];
