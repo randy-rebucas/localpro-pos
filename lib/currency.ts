@@ -119,7 +119,7 @@ export function parseCurrency(
  */
 export function getDefaultTenantSettings(): ITenantSettings {
   return {
-    currency: 'USD',
+    currency: 'PHP',
     currencyPosition: 'before',
     dateFormat: 'MM/DD/YYYY',
     timeFormat: '12h',

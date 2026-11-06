@@ -8,6 +8,7 @@ import bcrypt from 'bcryptjs';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
+import { turnstileFailedResponse, verifyTurnstile } from '@/lib/turnstile';
 
 export async function POST(request: NextRequest) {
   let t: (key: string, fallback: string) => string;
@@ -24,8 +25,12 @@ export async function POST(request: NextRequest) {
 
     await connectDB();
     const body = await request.json();
-    const { email, password, tenantSlug } = body;
+    const { email, password, tenantSlug, turnstileToken } = body;
     t = await getValidationTranslatorFromRequest(request);
+
+    if (!(await verifyTurnstile(turnstileToken, { action: 'login', ip, onOutage: 'allow' }))) {
+      return turnstileFailedResponse(t('validation.securityCheckFailed', 'Security check failed. Please try again.'));
+    }
 
     // Validation
     if (!email || !password) {

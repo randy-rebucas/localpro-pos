@@ -129,13 +129,14 @@ export async function detectLocation(): Promise<DetectedLocation> {
   const locale = navigator.language || navigator.languages?.[0] || 'en-US';
   const localeParts = locale.split('-');
   const languageCode = localeParts[0].toLowerCase();
-  const countryCode = localeParts[1]?.toUpperCase() || '';
+  // Most browsers in the Philippines report en-US, so trust the timezone over the locale there.
+  const countryCode = timezone === 'Asia/Manila' ? 'PH' : localeParts[1]?.toUpperCase() || '';
   
   // Determine language
   const language: 'en' | 'es' = languageCode === 'es' ? 'es' : 'en';
   
   // Get currency from country code
-  const currency = countryCurrencyMap[countryCode] || 'USD';
+  const currency = countryCurrencyMap[countryCode] || 'PHP';
   
   // Get currency symbol (will be auto-detected by currency utility)
   const currencyPosition = currencyPositionMap[countryCode] || 'before';

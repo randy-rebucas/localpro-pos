@@ -602,6 +602,9 @@
     "payment": "Pago"
   },
   "login": {
+    "tillSignOn": "Apertura de caja",
+
+    "securityCheckFailed": "No se pudo cargar la verificación de seguridad. Revise su conexión y recargue la página.",
     "title": "Inicio de Sesión del Personal",
     "subtitle": "Elija su método de inicio de sesión",
     "email": "Correo Electrónico",
@@ -2061,6 +2064,8 @@
     "notificationsArrayRequired": "Se requiere el arreglo de notificaciones",
     "failedToGetCurrentAttendance": "Error al obtener asistencia actual",
     "emailPasswordRequired": "El correo electrónico y la contraseña son obligatorios",
+
+    "securityCheckFailed": "La verificación de seguridad falló. Inténtelo de nuevo.",
     "tenantNotFoundOrInactive": "Inquilino no encontrado o inactivo",
     "accountNoAccessToStore": "Esta cuenta no tiene acceso a esta tienda. Por favor inicie sesión en la tienda correcta o contacte a su administrador.",
     "invalidCredentials": "Credenciales inválidas",

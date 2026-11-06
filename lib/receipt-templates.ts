@@ -75,7 +75,7 @@ export const DEFAULT_RECEIPT_TEMPLATE: ReceiptTemplate = {
 <body>
   <div class="header">
     {{#if storeName}}<h2>{{storeName}}</h2>{{/if}}
-    {{#if logo}}<img src="{{logo}}" alt="Logo" style="max-width: 100px; max-height: 60px;" />{{/if}}
+    {{#if logo}}<img src="{{logo}}" alt="Logo" style="max-width: 100px; max-height: 60px;" onerror="this.remove()" />{{/if}}
     <p>Receipt #{{receiptNumber}}</p>
     <p>{{date}} {{time}}</p>
     {{#if address}}<p>{{address}}</p>{{/if}}

@@ -6,16 +6,16 @@
     "version": "1.0.0",
     "contact": {
       "name": "1POS Support",
-      "url": "https://1pos.app"
+      "url": "https://www.1pos.solutions"
     },
     "license": {
       "name": "Proprietary",
-      "url": "https://1pos.app/license"
+      "url": "https://www.1pos.solutions/license"
     }
   },
   "servers": [
     {
-      "url": "https://1pos.app",
+      "url": "https://www.1pos.solutions",
       "description": "Production environment"
     },
     {
@@ -46,6 +46,10 @@
                     "type": "string",
                     "format": "password",
                     "example": "SecurePassword123!"
+                  },
+                  "turnstileToken": {
+                    "type": "string",
+                    "description": "Cloudflare Turnstile token. Required when Turnstile is enabled on the server, which returns 403 with code TURNSTILE_FAILED without it. Non-browser clients should use /api/auth/mobile-login."
                   }
                 }
               }

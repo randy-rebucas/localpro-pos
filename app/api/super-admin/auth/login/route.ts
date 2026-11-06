@@ -4,6 +4,7 @@ import User from '@/models/User';
 import { generateToken } from '@/lib/auth';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
+import { turnstileFailedResponse, verifyTurnstile } from '@/lib/turnstile';
 import bcrypt from 'bcryptjs';
 
 export async function POST(request: NextRequest) {
@@ -20,7 +21,11 @@ export async function POST(request: NextRequest) {
 
     await connectDB();
     const body = await request.json();
-    const { email, password } = body;
+    const { email, password, turnstileToken } = body;
+
+    if (!(await verifyTurnstile(turnstileToken, { action: 'super_admin_login', ip, onOutage: 'allow' }))) {
+      return turnstileFailedResponse('Security check failed. Please try again.');
+    }
 
     if (!email || !password) {
       return NextResponse.json(

@@ -6,8 +6,6 @@
 /** Cron / background automation jobs shipped today (booking reminders, low stock, receipts, etc.). */
 export const CORE_AUTOMATION_WORKFLOWS = 7;
 
-export const BUSINESS_TYPE_COUNT = 2;
-
 /** UI locales in app dictionaries (en, es). */
 export const SUPPORTED_UI_LANGUAGES = 2;
 

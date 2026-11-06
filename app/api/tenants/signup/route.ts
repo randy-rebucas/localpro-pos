@@ -9,6 +9,7 @@ import { applyBusinessTypeDefaults, isBusinessTypeOpenForSignup } from '@/lib/bu
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { SubscriptionService } from '@/lib/subscription';
 import { logger } from '@/lib/logger';
+import { turnstileFailedResponse, verifyTurnstile } from '@/lib/turnstile';
 
 /**
  * Public endpoint for tenant signup
@@ -45,11 +46,16 @@ export async function POST(request: NextRequest) {
       language,
       phone,
       email: contactEmail,
+      turnstileToken,
     } = body;
 
     // Get translation function based on selected language
     const lang = (language === 'es' ? 'es' : 'en') as 'en' | 'es';
     t = await getValidationTranslator(lang);
+
+    if (!(await verifyTurnstile(turnstileToken, { action: 'signup', ip, onOutage: 'block' }))) {
+      return turnstileFailedResponse(t('validation.securityCheckFailed', 'Security check failed. Please try again.'));
+    }
 
     // Reject business types that are closed to new sign-ups
     if (!isBusinessTypeOpenForSignup(businessType)) {

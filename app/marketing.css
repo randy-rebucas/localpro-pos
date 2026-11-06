@@ -1,0 +1,122 @@
+/* Public marketing pages only. Imported from app/page.tsx. */
+
+.mk-root {
+  font-family: var(--mk-font-body), system-ui, sans-serif;
+  color: var(--color-ink);
+  background: var(--color-paper);
+  overflow-x: clip;
+}
+
+.mk-root h1,
+.mk-root h2 {
+  font-family: var(--mk-font-display), sans-serif;
+  font-weight: 800;
+  letter-spacing: -0.005em;
+  line-height: 0.92;
+  text-transform: uppercase;
+}
+
+.mk-root h3 {
+  letter-spacing: -0.01em;
+}
+
+/* Saw-tooth edge of torn thermal paper. Box shadows get masked, so use drop-shadow on a parent. */
+.mk-tear-b {
+  mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% / 14px 100%;
+}
+
+.mk-tear-t {
+  mask: conic-gradient(from 135deg at top, #0000, #000 1deg 89deg, #0000 90deg) 50% / 14px 100%;
+}
+
+/* Dotted leader between a label and its value, as on a printed receipt. */
+.mk-leader {
+  flex: 1;
+  min-width: 1rem;
+  border-bottom: 2px dotted currentColor;
+  opacity: 0.35;
+  transform: translateY(-0.3em);
+}
+
+.mk-led-glow {
+  text-shadow: 0 0 10px rgb(95 227 200 / 0.55);
+}
+
+/* Scanner beam sweeping a target */
+@keyframes mk-sweep {
+  0%, 100% { top: 8%; }
+  50% { top: 92%; }
+}
+
+.mk-sweep {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: #ff3b2f;
+  box-shadow: 0 0 14px 3px rgb(255 59 47 / 0.65);
+  animation: mk-sweep 3.2s ease-in-out infinite;
+}
+
+/* Hero scanner firing once per scanned item */
+@keyframes mk-beam {
+  0% { opacity: 0; }
+  20%, 60% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.mk-beam {
+  animation: mk-beam 0.7s ease-out both;
+}
+
+/* Data moving along the cloud sync lines */
+@keyframes mk-flow {
+  to { stroke-dashoffset: -28; }
+}
+
+.mk-flow {
+  stroke-dasharray: 4 10;
+  animation: mk-flow 1.1s linear infinite;
+}
+
+.mk-flow-reverse {
+  animation-direction: reverse;
+}
+
+/* Paper feeding out of the printer on load */
+@keyframes mk-feed {
+  from { transform: translateY(-34%); }
+  to { transform: translateY(0); }
+}
+
+.mk-feed {
+  animation: mk-feed 1.6s steps(14) 0.2s both;
+}
+
+@keyframes mk-stamp {
+  from { opacity: 0; transform: rotate(-11deg) scale(1.7); }
+  to { opacity: 0.9; transform: rotate(-11deg) scale(1); }
+}
+
+.mk-stamp {
+  animation: mk-stamp 0.28s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mk-sweep,
+  .mk-flow,
+  .mk-feed,
+  .mk-beam,
+  .mk-stamp {
+    animation: none;
+  }
+
+  .mk-sweep {
+    top: 50%;
+  }
+
+  .mk-stamp {
+    opacity: 0.9;
+    transform: rotate(-11deg);
+  }
+}

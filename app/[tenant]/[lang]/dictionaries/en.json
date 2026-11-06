@@ -602,6 +602,9 @@
     "payment": "Payment"
   },
   "login": {
+    "tillSignOn": "Till sign-on",
+
+    "securityCheckFailed": "The security check didn’t load. Check your connection and reload the page.",
     "title": "Staff Login",
     "subtitle": "Choose your login method",
     "email": "Email",
@@ -2061,6 +2064,8 @@
     "notificationsArrayRequired": "Notifications array is required",
     "failedToGetCurrentAttendance": "Failed to get current attendance",
     "emailPasswordRequired": "Email and password are required",
+
+    "securityCheckFailed": "Security check failed. Please try again.",
     "tenantNotFoundOrInactive": "Tenant not found or inactive",
     "accountNoAccessToStore": "This account does not have access to this store. Please log in to the correct store or contact your administrator.",
     "invalidCredentials": "Invalid credentials",

@@ -421,6 +421,10 @@ The system supports multiple business types with industry-specific configuration
    
    # Tenant Configuration
    DEFAULT_TENANT_SLUG=default
+
+   # Cloudflare Turnstile (optional, enforced only when both are set; see docs/turnstile.md)
+   NEXT_PUBLIC_TURNSTILE_SITE_KEY=
+   TURNSTILE_SECRET_KEY=
    ```
 
 4. **Start MongoDB (if using local installation):**

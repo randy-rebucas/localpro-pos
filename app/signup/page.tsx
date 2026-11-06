@@ -1,17 +1,102 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { detectLocation } from '@/lib/location-detection';
+import { ArrowRight, CircleAlert, LoaderCircle } from 'lucide-react';
 import { getDictionaryClient } from '@/app/[tenant]/[lang]/dictionaries-client';
-import { validatePassword as validatePasswordLib } from '@/lib/validation';
-import { isBusinessTypeOpenForSignup } from '@/lib/business-types';
+import { Barcode, LineTag, ReceiptRow, type Translate } from '@/components/marketing/primitives';
+import PublicShell from '@/components/marketing/PublicShell';
+import TurnstileWidget, { TURNSTILE_SITE_KEY, type TurnstileHandle } from '@/components/TurnstileWidget';
 import PasswordInput from '@/components/ui/PasswordInput';
+import { usePublicCopy } from '@/hooks/usePublicCopy';
+import { isBusinessTypeOpenForSignup } from '@/lib/business-types';
+import { detectLocation } from '@/lib/location-detection';
+import { validatePassword as validatePasswordLib } from '@/lib/validation';
+
+const CURRENCIES = [
+  ['USD', 'US Dollar'],
+  ['EUR', 'Euro'],
+  ['GBP', 'British Pound'],
+  ['CAD', 'Canadian Dollar'],
+  ['AUD', 'Australian Dollar'],
+  ['MXN', 'Mexican Peso'],
+  ['PHP', 'Philippine Peso'],
+  ['JPY', 'Japanese Yen'],
+  ['CNY', 'Chinese Yuan'],
+  ['INR', 'Indian Rupee'],
+  ['SGD', 'Singapore Dollar'],
+  ['HKD', 'Hong Kong Dollar'],
+  ['THB', 'Thai Baht'],
+  ['IDR', 'Indonesian Rupiah'],
+  ['MYR', 'Malaysian Ringgit'],
+  ['BRL', 'Brazilian Real'],
+  ['ZAR', 'South African Rand'],
+];
+
+const INPUT = 'w-full border-2 border-ink/25 bg-paper-white px-4 py-3 text-ink placeholder:text-ink/45 focus:border-ink focus:outline-none disabled:opacity-60';
+
+function Field({ id, label, required, hint, children }: { id: string; label: string; required?: boolean; hint?: string; children: ReactNode }) {
+  return (
+    <div>
+      <label htmlFor={id} className="mb-1.5 block text-sm font-semibold">
+        {label}
+        {required && (
+          <span className="text-stamp" aria-hidden="true">
+            {' '}
+            *
+          </span>
+        )}
+      </label>
+      {children}
+      {hint && <p className="mt-1.5 font-receipt text-xs text-ink/65">{hint}</p>}
+    </div>
+  );
+}
+
+type SlipDetails = {
+  name: string;
+  companyName: string;
+  slug: string;
+  businessLabel: string;
+  currency: string;
+  adminName: string;
+};
+
+/** The store as a receipt. It fills in as the form is typed, and never shows the password. */
+function StoreSlip({ details, t, children }: { details: SlipDetails; t: Translate; children?: ReactNode }) {
+  const pending = <span className="text-ink/40">—</span>;
+  const clipped = (value: string) => (value ? <span className="inline-block max-w-36 truncate align-bottom">{value}</span> : pending);
+
+  return (
+    <div className="drop-shadow-[0_14px_16px_rgb(0_0_0/0.35)]">
+      <div className="mk-tear-b relative bg-paper-white px-6 pb-9 pt-6 font-receipt text-xs leading-relaxed text-ink">
+        <p className="break-words text-center text-base font-semibold uppercase leading-snug">{details.name || t('slipPlaceholder', 'Your store name')}</p>
+        {details.companyName && <p className="break-words text-center">{details.companyName}</p>}
+        <div className="my-3 border-t border-dashed border-ink/40" />
+        <div className="space-y-1">
+          <ReceiptRow label={t('slipLink', 'Store link')} value={details.slug ? clipped(`/${details.slug}`) : pending} />
+          <ReceiptRow label={t('slipType', 'Type')} value={clipped(details.businessLabel)} />
+          <ReceiptRow label={t('slipCurrency', 'Currency')} value={details.currency} />
+          <ReceiptRow label={t('slipOwner', 'Owner')} value={clipped(details.adminName)} />
+        </div>
+        <div className="my-3 border-t border-dashed border-ink/40" />
+        <ReceiptRow label={t('slipTrial', '14-day trial')} value={`${details.currency} 0.00`} />
+        <div className="mt-1 text-sm">
+          <ReceiptRow label={t('slipDue', 'Due today')} value={`${details.currency} 0.00`} strong />
+        </div>
+        <Barcode className="mx-auto mt-4 h-9 w-44" />
+        {children}
+      </div>
+    </div>
+  );
+}
 
 export default function SignupPage() {
   const router = useRouter();
-  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const { lang, t, shellT } = usePublicCopy('signup');
+  // Password rules are translated in the app dictionary, which this page otherwise doesn't need.
+  const [appDict, setAppDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [formData, setFormData] = useState({
     // Store info
     slug: '',
@@ -23,24 +108,23 @@ export default function SignupPage() {
     adminPassword: '',
     adminName: '',
     // Optional
-    currency: 'USD',
+    currency: 'PHP',
     language: 'en',
     phone: '',
     email: '',
   });
-  const [businessTypes, setBusinessTypes] = useState<any[]>([]); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const [businessTypes, setBusinessTypes] = useState<{ type: string }[]>([]);
   const [loadingBusinessTypes, setLoadingBusinessTypes] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
   const [passwordErrors, setPasswordErrors] = useState<string[]>([]);
-  const [phonePlaceholder, setPhonePlaceholder] = useState('+1 (555) 123-4567');
+  const [phonePlaceholder, setPhonePlaceholder] = useState('+63 912 345 6789');
   const [detectingLocation, setDetectingLocation] = useState(true);
 
-  // Load dictionary
   useEffect(() => {
-    getDictionaryClient(formData.language as 'en' | 'es' || 'en').then(setDict);
-  }, [formData.language]);
+    getDictionaryClient(lang).then(setAppDict);
+  }, [lang]);
 
   // Load business types
   useEffect(() => {
@@ -49,7 +133,7 @@ export default function SignupPage() {
         const res = await fetch('/api/business-types');
         const data = await res.json();
         if (data.success) {
-          setBusinessTypes(data.data.filter((t: { type: string }) => isBusinessTypeOpenForSignup(t.type)));
+          setBusinessTypes(data.data.filter((type: { type: string }) => isBusinessTypeOpenForSignup(type.type)));
         }
       } catch (err) {
         console.error('Failed to load business types:', err);
@@ -66,7 +150,7 @@ export default function SignupPage() {
       try {
         const detected = await detectLocation();
         if (detected) {
-          setFormData(prev => ({
+          setFormData((prev) => ({
             ...prev,
             currency: detected.currency,
             language: detected.language,
@@ -86,19 +170,21 @@ export default function SignupPage() {
     detectUserLocation();
   }, []);
 
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const turnstile = useRef<TurnstileHandle>(null);
+
   const validatePassword = (password: string) => {
-    if (!dict) return [];
-    const t = (key: string, fallback: string) => {
+    if (!appDict) return [];
+    const translate = (key: string, fallback: string) => {
       const keys = key.split('.');
-      let value: any = dict; // eslint-disable-line @typescript-eslint/no-explicit-any
+      let value: any = appDict; // eslint-disable-line @typescript-eslint/no-explicit-any
       for (const k of keys) {
         value = value?.[k];
         if (value === undefined) break;
       }
       return value || fallback;
     };
-    const result = validatePasswordLib(password, t);
-    return result.errors;
+    return validatePasswordLib(password, translate).errors;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -115,7 +201,7 @@ export default function SignupPage() {
 
     // Validate slug format
     if (!/^[a-z0-9-]+$/.test(formData.slug)) {
-      setError(dict?.signup?.storeIdentifierFormatError || 'Store identifier can only contain lowercase letters, numbers, and hyphens');
+      setError(t('slugFormatError', 'Your store link can only use lowercase letters, numbers and hyphens.'));
       return;
     }
 
@@ -125,7 +211,7 @@ export default function SignupPage() {
       const res = await fetch('/api/tenants/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({ ...formData, turnstileToken }),
       });
 
       const data = await res.json();
@@ -137,334 +223,249 @@ export default function SignupPage() {
           router.push(`/${data.data.tenant.slug}/${formData.language}/login`);
         }, 3000);
       } else {
-        setError(data.error || dict?.signup?.failedToCreateStore || 'Failed to create store. Please try again.');
+        turnstile.current?.reset();
+        setError(data.error || t('createFailed', 'We could not create your store. Please try again.'));
       }
     } catch (err: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      setError(err.message || dict?.signup?.errorOccurred || 'An error occurred. Please try again.');
+      turnstile.current?.reset();
+      setError(err.message || t('genericError', 'Something went wrong. Please try again.'));
     } finally {
       setLoading(false);
     }
   };
 
+  const update = (field: keyof typeof formData) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    setFormData({ ...formData, [field]: e.target.value });
+
+  const typeCopy: Record<string, { name: string; desc: string }> = {
+    retail: { name: t('typeRetail', 'Retail'), desc: t('typeRetailDesc', 'Shelves, barcodes and stock per branch') },
+    general: { name: t('typeGeneral', 'General'), desc: t('typeGeneralDesc', 'A flexible setup for anything else') },
+  };
+
+  const slip: SlipDetails = {
+    name: formData.name,
+    companyName: formData.companyName,
+    slug: formData.slug,
+    businessLabel: typeCopy[formData.businessType]?.name ?? '',
+    currency: formData.currency,
+    adminName: formData.adminName,
+  };
+
   if (success) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-brand-soft via-white to-slate-100 flex items-center justify-center px-4 py-12">
-        <div className="max-w-md w-full bg-white border border-gray-300 p-8 text-center">
-          <div className="mb-6">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-green-500 border border-green-600 mb-4">
-              <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
+      <PublicShell t={shellT}>
+        <section aria-labelledby="signup-success-heading" className="bg-brand-navy-deep px-4 py-16 text-paper-white lg:py-24">
+          <div className="mx-auto max-w-md">
+            <h1 id="signup-success-heading" className="text-center text-6xl sm:text-7xl">
+              {t('successHeading', 'You’re open')}
+            </h1>
+            <p className="mb-8 mt-4 text-center leading-relaxed text-paper/85">
+              {t('successMessage', 'Your store is ready. We’ll take you to the login page in a moment. Use your admin email and password.')}
+            </p>
+            <div className="relative">
+              <StoreSlip details={slip} t={t} />
+              <span className="mk-stamp absolute right-5 top-14 border-[3px] border-stamp px-2 py-0.5 font-display text-3xl font-extrabold uppercase text-stamp" aria-hidden="true">
+                {t('openedStamp', 'Opened')}
+              </span>
             </div>
+            <Link
+              href={`/${formData.slug}/${formData.language}/login`}
+              className="group mt-8 flex items-center justify-center gap-2 bg-paper-white px-6 py-4 font-semibold text-ink hover:bg-brand-soft"
+            >
+              {t('goToLogin', 'Go to login')}
+              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" aria-hidden="true" />
+            </Link>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-3">{dict?.signup?.storeCreatedSuccessfully || 'Store Created Successfully!'}</h1>
-          <p className="text-gray-600 mb-6">
-            {dict?.signup?.storeCreatedMessage || 'Your store has been created. You will be redirected to the login page shortly.'}
-          </p>
-          <p className="text-sm text-gray-500 mb-6">
-            {dict?.signup?.useAdminToLogin || 'Please use your admin email and password to login.'}
-          </p>
-          <Link
-            href={`/${formData.slug}/${formData.language}/login`}
-            className="inline-block w-full bg-brand text-white px-4 py-3 hover:bg-brand-hover font-medium transition-colors border border-brand-hover"
-          >
-            {dict?.signup?.goToLogin || 'Go to Login'}
-          </Link>
-        </div>
-      </div>
+        </section>
+      </PublicShell>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-brand-soft via-white to-slate-100 flex items-center justify-center px-4 py-12">
-      <div className="max-w-2xl w-full bg-white border border-gray-300 p-6 sm:p-8">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-brand border border-brand-hover mb-4">
-            <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-            </svg>
-          </div>
-          <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-2">{dict?.signup?.createYourStore || 'Create Your Store'}</h1>
-          <p className="text-gray-600 text-sm sm:text-base">{dict?.signup?.signupSubtitle || 'Sign up to get started with your POS system'}</p>
-        </div>
-
-        {error && (
-          <div className="mb-6 p-4 bg-red-50 border-2 border-red-300 text-red-700 text-sm flex items-start gap-2">
-            <svg className="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span>{error}</span>
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Store Information */}
-          <div className="border-b border-gray-200 pb-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">{dict?.signup?.storeInformation || 'Store Information'}</h2>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="slug" className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict?.signup?.storeIdentifier || 'Store Identifier'} <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  id="slug"
-                  required
-                  value={formData.slug}
-                  onChange={(e) => setFormData({ ...formData, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') })}
-                  className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand bg-white transition-all"
-                  placeholder={dict?.signup?.storeIdentifierPlaceholder || 'my-store'}
-                  pattern="[a-z0-9-]+"
-                />
-                <p className="mt-1 text-xs text-gray-500">{dict?.signup?.lowercaseLettersOnly || 'Lowercase letters, numbers, and hyphens only'}</p>
-              </div>
-
-              <div>
-                <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict?.signup?.storeName || 'Store Name'} <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  id="name"
-                  required
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand bg-white transition-all"
-                  placeholder={dict?.signup?.storeNamePlaceholder || 'My Store'}
-                />
+    <PublicShell t={shellT}>
+      <div className="lg:grid lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+        <aside className="bg-brand-navy-deep px-4 py-12 text-paper-white sm:px-6 lg:px-8 lg:py-14">
+          <div className="lg:sticky lg:top-24 lg:ml-auto lg:max-w-md">
+            <LineTag no="00" className="text-[#8fe3d0]">
+              {t('tag', '14-day free trial')}
+            </LineTag>
+            <h1 className="mt-4 text-6xl sm:text-7xl">{t('heading', 'Open your store')}</h1>
+            <p className="mt-4 leading-relaxed text-paper/85">{t('subheading', 'No credit card needed. Fill in the form and watch your store print.')}</p>
+            <div className="mt-8 hidden lg:block" aria-hidden="true">
+              <div className="h-3 bg-[#0b1820]" />
+              <div className="mx-4">
+                <StoreSlip details={slip} t={t} />
               </div>
             </div>
+          </div>
+        </aside>
 
-            <div className="mt-4">
-              <label htmlFor="companyName" className="block text-sm font-medium text-gray-700 mb-1">
-                {dict?.signup?.companyNameOptional || 'Company Name (Optional)'}
-              </label>
-              <input
-                type="text"
-                id="companyName"
-                value={formData.companyName}
-                onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
-                className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand bg-white transition-all"
-                placeholder={dict?.signup?.companyNamePlaceholder || 'My Company Inc.'}
-              />
-            </div>
+        <div className="bg-paper px-4 py-12 sm:px-6 lg:px-12 lg:py-14">
+          <form onSubmit={handleSubmit} className="max-w-2xl space-y-10">
+            {error && (
+              <div role="alert" className="flex items-start gap-3 border-l-4 border-stamp bg-paper-white p-4 text-sm">
+                <CircleAlert className="mt-0.5 h-5 w-5 shrink-0 text-stamp" strokeWidth={1.75} aria-hidden="true" />
+                <span>{error}</span>
+              </div>
+            )}
 
-            <div className="mt-4">
-              <label htmlFor="businessType" className="block text-sm font-medium text-gray-700 mb-1">
-                {dict?.signup?.businessType || 'Business Type'} <span className="text-red-500">*</span>
-              </label>
-              {loadingBusinessTypes ? (
-                <div className="w-full px-4 py-3 border-2 border-gray-300 bg-gray-50 flex items-center gap-2">
-                  <div className="w-5 h-5 border-2 border-gray-400 border-t-transparent animate-spin"></div>
-                  <span className="text-sm text-gray-600">Loading business types...</span>
-                </div>
-              ) : (
-                <select
-                  id="businessType"
-                  required
-                  value={formData.businessType}
-                  onChange={(e) => setFormData({ ...formData, businessType: e.target.value as any })} // eslint-disable-line @typescript-eslint/no-explicit-any
-                  className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand bg-white transition-all"
-                >
-                  {businessTypes.map((type) => (
-                    <option key={type.type} value={type.type}>
-                      {type.name}
-                    </option>
-                  ))}
-                </select>
-              )}
-              {formData.businessType && !loadingBusinessTypes && (
-                <p className="mt-1 text-xs text-gray-600">
-                  {businessTypes.find((t) => t.type === formData.businessType)?.description || ''}
+            <fieldset className="space-y-5">
+              <legend className="w-full">
+                <LineTag no="01">{t('sectionStore', 'Your store')}</LineTag>
+              </legend>
+              <div className="grid gap-5 md:grid-cols-2">
+                <Field id="name" label={t('storeName', 'Store name')} required>
+                  <input type="text" id="name" required value={formData.name} onChange={update('name')} className={INPUT} placeholder={t('storeNamePlaceholder', 'My Store')} />
+                </Field>
+                <Field id="slug" label={t('storeLink', 'Store link')} required hint={t('storeLinkHint', 'Lowercase letters, numbers and hyphens')}>
+                  <input
+                    type="text"
+                    id="slug"
+                    required
+                    value={formData.slug}
+                    onChange={(e) => setFormData({ ...formData, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') })}
+                    className={INPUT}
+                    placeholder={t('storeLinkPlaceholder', 'my-store')}
+                    pattern="[a-z0-9-]+"
+                  />
+                </Field>
+              </div>
+              <Field id="companyName" label={t('companyName', 'Company name (optional)')}>
+                <input type="text" id="companyName" value={formData.companyName} onChange={update('companyName')} className={INPUT} placeholder={t('companyNamePlaceholder', 'My Company Inc.')} />
+              </Field>
+
+              <div>
+                <p className="mb-1.5 text-sm font-semibold" id="business-type-label">
+                  {t('businessType', 'Business type')}
+                  <span className="text-stamp" aria-hidden="true">
+                    {' '}
+                    *
+                  </span>
                 </p>
-              )}
-            </div>
-          </div>
-
-          {/* Admin Account */}
-          <div className="border-b border-gray-200 pb-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">{dict?.signup?.adminAccount || 'Admin Account'}</h2>
-            
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="adminName" className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict?.signup?.yourName || 'Your Name'} <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  id="adminName"
-                  required
-                  value={formData.adminName}
-                  onChange={(e) => setFormData({ ...formData, adminName: e.target.value })}
-                  className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand bg-white transition-all"
-                  placeholder={dict?.signup?.namePlaceholder || 'John Doe'}
-                />
+                {loadingBusinessTypes ? (
+                  <p className="flex items-center gap-2 py-3 font-receipt text-xs">
+                    <LoaderCircle className="h-4 w-4 motion-safe:animate-spin" aria-hidden="true" />
+                    {t('loadingTypes', 'Loading business types…')}
+                  </p>
+                ) : (
+                  <div className="grid gap-3 sm:grid-cols-2" role="radiogroup" aria-labelledby="business-type-label">
+                    {businessTypes.map(({ type }) => (
+                      <label key={type} className="cursor-pointer">
+                        <input type="radio" name="businessType" value={type} checked={formData.businessType === type} onChange={update('businessType')} className="peer sr-only" />
+                        <span className="block h-full border-2 border-ink/25 bg-paper-white p-4 peer-checked:border-ink peer-checked:bg-ink peer-checked:text-paper-white peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-brand">
+                          <span className="block font-display text-2xl font-extrabold uppercase leading-none">{typeCopy[type]?.name ?? type}</span>
+                          <span className="mt-1.5 block text-sm leading-snug opacity-80">{typeCopy[type]?.desc}</span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                )}
               </div>
+            </fieldset>
 
-              <div>
-                <label htmlFor="adminEmail" className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict?.signup?.adminEmail || 'Admin Email'} <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="email"
-                  id="adminEmail"
-                  required
-                  value={formData.adminEmail}
-                  onChange={(e) => setFormData({ ...formData, adminEmail: e.target.value })}
-                  className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand bg-white transition-all"
-                  placeholder={dict?.signup?.adminEmailPlaceholder || 'admin@example.com'}
-                />
-              </div>
-
-              <div>
-                <label htmlFor="adminPassword" className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict?.signup?.adminPassword || 'Admin Password'} <span className="text-red-500">*</span>
-                </label>
+            <fieldset className="space-y-5">
+              <legend className="w-full">
+                <LineTag no="02">{t('sectionAdmin', 'Your admin account')}</LineTag>
+              </legend>
+              <Field id="adminName" label={t('yourName', 'Your name')} required>
+                <input type="text" id="adminName" required value={formData.adminName} onChange={update('adminName')} className={INPUT} placeholder={t('namePlaceholder', 'Juan Dela Cruz')} />
+              </Field>
+              <Field id="adminEmail" label={t('adminEmail', 'Admin email')} required>
+                <input type="email" id="adminEmail" required value={formData.adminEmail} onChange={update('adminEmail')} className={INPUT} placeholder={t('adminEmailPlaceholder', 'admin@example.com')} />
+              </Field>
+              <Field id="adminPassword" label={t('adminPassword', 'Admin password')} required>
                 <PasswordInput
                   id="adminPassword"
                   required
                   value={formData.adminPassword}
                   onChange={(e) => {
                     setFormData({ ...formData, adminPassword: e.target.value });
-                    if (e.target.value) {
-                      setPasswordErrors(validatePassword(e.target.value));
-                    } else {
-                      setPasswordErrors([]);
-                    }
+                    setPasswordErrors(e.target.value ? validatePassword(e.target.value) : []);
                   }}
-                  className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand bg-white transition-all"
-                  placeholder={dict?.signup?.createStrongPassword || 'Create a strong password'}
+                  className={INPUT}
+                  placeholder={t('passwordPlaceholder', 'Create a strong password')}
                 />
                 {passwordErrors.length > 0 && (
-                  <ul className="mt-2 text-xs text-red-600 space-y-1">
-                    {passwordErrors.map((err, idx) => (
-                      <li key={idx}>• {err}</li>
+                  <ul className="mt-2 space-y-1 font-receipt text-xs text-stamp">
+                    {passwordErrors.map((message) => (
+                      <li key={message}>{message}</li>
                     ))}
                   </ul>
                 )}
-              </div>
-            </div>
-          </div>
+              </Field>
+            </fieldset>
 
-          {/* Optional Settings */}
-          <div>
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">{dict?.signup?.optionalSettings || 'Optional Settings'}</h2>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="currency" className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict?.signup?.currency || 'Currency'}
-                </label>
-                <select
-                  id="currency"
-                  value={formData.currency}
-                  onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
-                  className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand bg-white transition-all"
-                  disabled={detectingLocation}
-                >
-                  <option value="USD">USD - US Dollar</option>
-                  <option value="EUR">EUR - Euro</option>
-                  <option value="GBP">GBP - British Pound</option>
-                  <option value="CAD">CAD - Canadian Dollar</option>
-                  <option value="AUD">AUD - Australian Dollar</option>
-                  <option value="MXN">MXN - Mexican Peso</option>
-                  <option value="PHP">PHP - Philippine Peso</option>
-                  <option value="JPY">JPY - Japanese Yen</option>
-                  <option value="CNY">CNY - Chinese Yuan</option>
-                  <option value="INR">INR - Indian Rupee</option>
-                  <option value="SGD">SGD - Singapore Dollar</option>
-                  <option value="HKD">HKD - Hong Kong Dollar</option>
-                  <option value="THB">THB - Thai Baht</option>
-                  <option value="IDR">IDR - Indonesian Rupiah</option>
-                  <option value="MYR">MYR - Malaysian Ringgit</option>
-                  <option value="BRL">BRL - Brazilian Real</option>
-                  <option value="ZAR">ZAR - South African Rand</option>
-                </select>
-                {detectingLocation && (
-                  <p className="mt-1 text-xs text-gray-500">{dict?.signup?.detectingLocation || 'Detecting your location...'}</p>
+            <fieldset className="space-y-5">
+              <legend className="w-full">
+                <LineTag no="03">{t('sectionOptional', 'Optional details')}</LineTag>
+              </legend>
+              <div className="grid gap-5 md:grid-cols-2">
+                <Field id="currency" label={t('currency', 'Currency')} hint={detectingLocation ? t('detectingLocation', 'Detecting your location…') : undefined}>
+                  <select id="currency" value={formData.currency} onChange={update('currency')} className={INPUT} disabled={detectingLocation}>
+                    {CURRENCIES.map(([code, name]) => (
+                      <option key={code} value={code}>
+                        {code} - {name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field id="language" label={t('storeLanguage', 'Store language')}>
+                  <select id="language" value={formData.language} onChange={update('language')} className={INPUT}>
+                    <option value="en">English</option>
+                    <option value="es">Español</option>
+                  </select>
+                </Field>
+                <Field id="phone" label={t('phone', 'Phone number')}>
+                  <input type="tel" id="phone" value={formData.phone} onChange={update('phone')} className={INPUT} placeholder={phonePlaceholder} />
+                </Field>
+                <Field id="email" label={t('contactEmail', 'Contact email')}>
+                  <input type="email" id="email" value={formData.email} onChange={update('email')} className={INPUT} placeholder={t('contactEmailPlaceholder', 'contact@example.com')} />
+                </Field>
+              </div>
+            </fieldset>
+
+            <TurnstileWidget
+              ref={turnstile}
+              action="signup"
+              language={lang}
+              errorMessage={t('securityCheckFailed', 'The security check didn’t load. Check your connection and reload the page.')}
+              onToken={setTurnstileToken}
+            />
+
+            <div>
+              <button
+                type="submit"
+                disabled={loading || (Boolean(TURNSTILE_SITE_KEY) && !turnstileToken)}
+                className="group flex w-full items-center justify-center gap-2 bg-ink px-6 py-4 text-lg font-semibold text-paper-white hover:bg-brand-navy disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {loading ? (
+                  <>
+                    <LoaderCircle className="h-5 w-5 motion-safe:animate-spin" aria-hidden="true" />
+                    {t('creatingStore', 'Opening your store…')}
+                  </>
+                ) : (
+                  <>
+                    {t('createStore', 'Open my store')}
+                    <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" aria-hidden="true" />
+                  </>
                 )}
-              </div>
-
-              <div>
-                <label htmlFor="language" className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict?.signup?.language || 'Language'}
-                </label>
-                <select
-                  id="language"
-                  value={formData.language}
-                  onChange={(e) => setFormData({ ...formData, language: e.target.value })}
-                  className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand bg-white transition-all"
-                >
-                  <option value="en">English</option>
-                  <option value="es">Español</option>
-                </select>
-              </div>
+              </button>
+              <p className="mt-4 flex flex-wrap items-center gap-x-1 text-sm text-ink/75">
+                {t('alreadyHaveStore', 'Already have a store?')}
+                <Link href="/stores" className="flex items-center font-semibold text-ink underline underline-offset-4">
+                  {t('findStore', 'Find it and sign in')}
+                </Link>
+              </p>
+              <p className="flex flex-wrap items-center gap-x-1 text-xs text-ink/65">
+                {t('privacyNotice', 'By creating an account, you agree to our')}
+                <Link href="/privacy" className="flex items-center underline underline-offset-4">
+                  {t('privacyLink', 'Privacy Policy')}
+                </Link>
+              </p>
             </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-              <div>
-                <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict?.signup?.phoneNumber || 'Phone Number'}
-                </label>
-                <input
-                  type="tel"
-                  id="phone"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand bg-white transition-all"
-                  placeholder={phonePlaceholder}
-                />
-              </div>
-
-              <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict?.signup?.contactEmail || 'Contact Email'}
-                </label>
-                <input
-                  type="email"
-                  id="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand bg-white transition-all"
-                  placeholder={dict?.signup?.contactEmailPlaceholder || 'contact@example.com'}
-                />
-              </div>
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-brand text-white px-4 py-4 hover:bg-brand-hover font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-lg border border-brand-hover flex items-center justify-center gap-2"
-          >
-            {loading ? (
-              <>
-                <div className="w-5 h-5 border-2 border-white border-t-transparent animate-spin"></div>
-                <span>{dict?.signup?.creatingStore || 'Creating Store...'}</span>
-              </>
-            ) : (
-              dict?.signup?.createStore || 'Create Store'
-            )}
-          </button>
-
-          <p className="text-center text-sm text-gray-600">
-            {dict?.signup?.alreadyHaveStore || 'Already have a store?'}{' '}
-            <Link href="/" className="text-brand hover:text-brand-hover font-medium">
-              {dict?.signup?.selectStoreToLogin || 'Select a store to login'}
-            </Link>
-          </p>
-
-          <p className="text-center text-xs text-gray-400">
-            By creating an account, you agree to our{' '}
-            <Link href="/privacy" className="underline hover:text-gray-600 transition-colors">
-              Privacy Policy
-            </Link>
-            .
-          </p>
-        </form>
+          </form>
+        </div>
       </div>
-    </div>
+    </PublicShell>
   );
 }
-

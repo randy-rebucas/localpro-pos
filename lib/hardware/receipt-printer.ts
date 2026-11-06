@@ -604,7 +604,7 @@ class ReceiptPrinterService {
 </head>
 <body>
   <div class="header center">
-    ${data.logo ? `<img src="${data.logo}" alt="Logo" style="max-width:100px;max-height:60px;display:block;margin:0 auto 4px;" />` : ''}
+    ${data.logo ? `<img src="${data.logo}" alt="Logo" onerror="this.remove()" style="max-width:100px;max-height:60px;display:block;margin:0 auto 4px;" />` : ''}
     ${data.storeName ? `<h2>${data.storeName}</h2>` : ''}
     ${data.businessStyle ? `<div>${data.businessStyle}</div>` : ''}
     ${data.address ? `<div>${data.address}</div>` : ''}

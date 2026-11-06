@@ -1,11 +1,13 @@
 'use client';
 
-import Link from 'next/link';
-import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
+import { useEffect, useMemo, useState } from 'react';
+import { ArrowRight, Coins, MapPin, ScanBarcode, X } from 'lucide-react';
+import { Barcode, LineTag, type Translate } from '@/components/marketing/primitives';
+import PublicShell from '@/components/marketing/PublicShell';
+import { usePublicCopy } from '@/hooks/usePublicCopy';
 import { normalizeImageUrl } from '@/lib/image-utils';
-import LanguageSwitcher from '@/components/LanguageSwitcher';
-import { getDictionaryClient } from '@/app/[lang]/dictionaries-client';
 
 interface Tenant {
   slug: string;
@@ -15,188 +17,113 @@ interface Tenant {
     logo?: string;
     businessType?: string;
     primaryColor?: string;
-    secondaryColor?: string;
     currency?: string;
-    language?: string;
     address?: {
       city?: string;
-      state?: string;
       country?: string;
     };
   };
 }
 
-const BUSINESS_TYPE_META: Record<string, { icon: string; label: string; gradient: string }> = {
-  Retail: { icon: '🏪', label: 'Retail', gradient: 'from-brand to-brand-navy' },
-  Restaurant: { icon: '🍕', label: 'Restaurant', gradient: 'from-orange-500 to-red-500' },
-  Laundry: { icon: '👔', label: 'Laundry', gradient: 'from-cyan-500 to-brand-navy' },
-  Service: { icon: '💼', label: 'Service', gradient: 'from-purple-500 to-violet-600' },
-  General: { icon: '🔧', label: 'General', gradient: 'from-gray-500 to-slate-600' },
-};
+const ALL_TYPES = 'all';
 
-const DEFAULT_META = { icon: '🏬', label: 'Store', gradient: 'from-brand to-brand-navy' };
+/** Signup stores lowercase types and older tenants use capitalized ones, so compare one form. */
+const typeOf = (tenant: Tenant) => (tenant.settings?.businessType || 'general').toLowerCase();
 
-function StoreCard({ tenant, preferredLang, dict }: { tenant: Tenant; preferredLang: string; dict: any }) { // eslint-disable-line @typescript-eslint/no-explicit-any
-  const displayName = tenant.settings?.companyName || tenant.name;
-  const businessType = tenant.settings?.businessType || 'General';
-  const meta = BUSINESS_TYPE_META[businessType] ?? DEFAULT_META;
-  const city = tenant.settings?.address?.city;
-  const country = tenant.settings?.address?.country;
-  const location = [city, country].filter(Boolean).join(', ');
-  const currency = tenant.settings?.currency;
-  const primaryColor = tenant.settings?.primaryColor;
-  const logo = tenant.settings?.logo;
+function typeLabel(type: string, t: Translate) {
+  if (type === 'retail') return t('typeRetail', 'Retail');
+  if (type === 'general') return t('typeGeneral', 'General');
+  return type.charAt(0).toUpperCase() + type.slice(1);
+}
 
-  const initials = displayName
+/** Shows the store's logo, or its initials when there is none or it fails to load. */
+function StoreLogo({ logo, name, color }: { logo?: string; name: string; color?: string }) {
+  const [failed, setFailed] = useState(false);
+
+  if (logo && !failed) {
+    return <Image src={normalizeImageUrl(logo)} alt="" width={44} height={44} className="h-11 w-11 object-contain" onError={() => setFailed(true)} />;
+  }
+
+  const initials = name
     .split(' ')
-    .map((w) => w[0])
+    .map((word) => word[0])
     .join('')
     .slice(0, 2)
     .toUpperCase();
 
   return (
-    <Link
-      href={`/${tenant.slug}/${preferredLang}`}
-      className="group relative flex flex-col bg-white border border-gray-200 overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200 hover:border-brand"
+    <span
+      className="flex h-11 w-11 items-center justify-center bg-ink font-receipt text-sm font-semibold text-paper-white"
+      style={color ? { backgroundColor: color } : undefined}
+      aria-hidden="true"
     >
-      {/* Top accent bar */}
-      <div
-        className={`h-1 w-full bg-gradient-to-r ${meta.gradient}`}
-        style={primaryColor ? { background: primaryColor } : {}}
-      />
+      {initials}
+    </span>
+  );
+}
 
-      {/* Card Header */}
-      <div
-        className={`relative flex items-center justify-between px-5 py-5 bg-gradient-to-br ${meta.gradient} text-white overflow-hidden`}
-        style={primaryColor ? { background: `linear-gradient(135deg, ${primaryColor}ee, ${primaryColor}99)` } : {}}
-      >
-        <div className="absolute -top-6 -right-6 w-24 h-24 bg-white/10" style={{ transform: 'rotate(15deg)' }} />
-        <div className="absolute -bottom-4 -left-4 w-16 h-16 bg-black/10" style={{ transform: 'rotate(15deg)' }} />
+function StoreTag({ tenant, lang, t }: { tenant: Tenant; lang: string; t: Translate }) {
+  const displayName = tenant.settings?.companyName || tenant.name;
+  const { logo, primaryColor, currency, address } = tenant.settings ?? {};
+  const location = [address?.city, address?.country].filter(Boolean).join(', ');
 
-        <div className="flex items-center gap-3 relative z-10">
-          {logo ? (
-            <Image
-              src={normalizeImageUrl(logo)}
-              alt={displayName}
-              width={48}
-              height={48}
-              className="object-contain bg-white/20 backdrop-blur-sm p-1 shadow"
-            />
-          ) : (
-            <div className="w-12 h-12 bg-white/25 backdrop-blur-sm flex items-center justify-center text-lg font-extrabold text-white shadow">
-              {initials}
-            </div>
-          )}
-          <div>
-            <h3 className="font-bold text-white text-base leading-tight line-clamp-2">
-              {displayName}
-            </h3>
-            <p className="text-white/70 text-xs mt-0.5">@{tenant.slug}</p>
+  return (
+    <Link href={`/${tenant.slug}/${lang}`} className="group block h-full drop-shadow-[0_10px_12px_rgb(0_0_0/0.3)]">
+      <article className="mk-tear-b flex h-full min-h-[17rem] flex-col bg-paper-white px-5 pb-8 pt-5 text-ink transition-colors group-hover:bg-white">
+        <div className="flex items-start justify-between gap-3">
+          <StoreLogo logo={logo} name={displayName} color={primaryColor} />
+          <span className="font-receipt text-[11px] uppercase tracking-[0.12em] text-ink/70">{typeLabel(typeOf(tenant), t)}</span>
+        </div>
+
+        <h2 className="mt-4 line-clamp-2 break-words text-3xl">{displayName}</h2>
+        <p className="mt-1 truncate font-receipt text-xs text-ink/60">/{tenant.slug}</p>
+
+        {(location || currency) && (
+          <div className="mt-3 space-y-1 border-t border-dashed border-ink/40 pt-3 font-receipt text-xs">
+            {location && (
+              <p className="flex items-center gap-2">
+                <MapPin className="h-3.5 w-3.5 shrink-0 text-brand-hover" strokeWidth={1.75} aria-hidden="true" />
+                <span className="truncate">{location}</span>
+              </p>
+            )}
+            {currency && (
+              <p className="flex items-center gap-2">
+                <Coins className="h-3.5 w-3.5 shrink-0 text-brand-hover" strokeWidth={1.75} aria-hidden="true" />
+                {currency}
+              </p>
+            )}
           </div>
-        </div>
+        )}
 
-        <span className="relative z-10 flex items-center gap-1 bg-black/20 text-white text-xs font-semibold px-2 py-1 border border-white/20 flex-shrink-0">
-          <span>{meta.icon}</span>
-          <span className="hidden sm:inline">{meta.label}</span>
-        </span>
-      </div>
-
-      {/* Card Body */}
-      <div className="flex flex-col flex-1 px-5 py-4 gap-3">
-        <div className="space-y-2">
-          {location && (
-            <div className="flex items-center gap-2 text-sm text-gray-600">
-              <svg className="w-4 h-4 flex-shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-              <span className="truncate">{location}</span>
-            </div>
-          )}
-          {currency && (
-            <div className="flex items-center gap-2 text-sm text-gray-600">
-              <svg className="w-4 h-4 flex-shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <span>{currency}</span>
-            </div>
-          )}
+        <div className="mt-auto flex items-end justify-between gap-3 pt-5">
+          <Barcode className="h-7 w-20 text-ink" />
+          <span className="flex items-center gap-1.5 text-sm font-semibold">
+            {t('enterStore', 'Enter store')}
+            <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" aria-hidden="true" />
+          </span>
         </div>
-
-        <div className="mt-auto pt-3 border-t border-gray-100">
-          <div className="flex items-center justify-between text-sm font-semibold text-brand group-hover:text-brand-hover">
-            <span>{dict?.stores?.enterStore || 'Enter Store'}</span>
-            <svg className="w-4 h-4 transform group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </div>
-        </div>
-      </div>
+      </article>
     </Link>
   );
 }
 
-function SkeletonCard() {
-  return (
-    <div className="flex flex-col bg-white border border-gray-200 overflow-hidden animate-pulse">
-      <div className="h-1 bg-gray-200" />
-      <div className="h-24 bg-gray-200" />
-      <div className="p-5 space-y-3">
-        <div className="h-4 bg-gray-200 w-3/4" />
-        <div className="h-3 bg-gray-100 w-1/2" />
-        <div className="h-3 bg-gray-100 w-1/3 mt-4" />
-      </div>
-    </div>
-  );
-}
+const GRID = 'grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4';
 
 export default function StoresPage() {
+  const { lang, t, shellT } = usePublicCopy('stores');
   const [tenants, setTenants] = useState<Tenant[]>([]);
-  const [filtered, setFiltered] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [typeFilter, setTypeFilter] = useState<string>('All');
-  const [preferredLang, setPreferredLang] = useState<'en' | 'es'>('en');
-  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
-  const searchRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    getDictionaryClient(preferredLang).then(setDict);
-  }, [preferredLang]);
-
-  // Read stored language preference so StoreCard links respect it
-  useEffect(() => {
-    const stored = localStorage.getItem('preferred_lang');
-    if (stored === 'en' || stored === 'es') setPreferredLang(stored as 'en' | 'es');
-    // Re-sync whenever LanguageSwitcher updates localStorage
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === 'preferred_lang' && (e.newValue === 'en' || e.newValue === 'es')) {
-        setPreferredLang(e.newValue);
-      }
-    };
-    const onCustom = (e: Event) => {
-      const lang = (e as CustomEvent<string>).detail;
-      if (lang === 'en' || lang === 'es') setPreferredLang(lang);
-    };
-    window.addEventListener('storage', onStorage);
-    window.addEventListener('preferred_lang_change', onCustom);
-    return () => {
-      window.removeEventListener('storage', onStorage);
-      window.removeEventListener('preferred_lang_change', onCustom);
-    };
-  }, []);
+  const [typeFilter, setTypeFilter] = useState(ALL_TYPES);
 
   useEffect(() => {
     async function fetchTenants() {
       try {
         const res = await fetch('/api/tenants');
         const data = await res.json();
-        if (data.success && data.data) {
-          setTenants(data.data);
-          setFiltered(data.data);
-        }
+        if (data.success && data.data) setTenants(data.data);
       } catch {
-        // silent
+        // The empty state covers a failed load.
       } finally {
         setLoading(false);
       }
@@ -204,193 +131,158 @@ export default function StoresPage() {
     fetchTenants();
   }, []);
 
-  useEffect(() => {
-    let result = tenants;
-    if (typeFilter !== 'All') {
-      result = result.filter((t) => (t.settings?.businessType || 'General') === typeFilter);
-    }
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      result = result.filter(
-        (t) =>
-          (t.settings?.companyName || t.name).toLowerCase().includes(q) ||
-          t.slug.toLowerCase().includes(q) ||
-          (t.settings?.address?.city || '').toLowerCase().includes(q)
+  const filtered = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return tenants.filter((tenant) => {
+      if (typeFilter !== ALL_TYPES && typeOf(tenant) !== typeFilter) return false;
+      if (!query) return true;
+      return [tenant.settings?.companyName || tenant.name, tenant.slug, tenant.settings?.address?.city || ''].some((value) =>
+        value.toLowerCase().includes(query),
       );
-    }
-    setFiltered(result);
-  }, [search, typeFilter, tenants]);
+    });
+  }, [tenants, search, typeFilter]);
 
-  const availableTypes = [
-    'All',
-    ...Array.from(new Set(tenants.map((t) => t.settings?.businessType || 'General'))),
-  ];
+  const types = [...new Set(tenants.map(typeOf))];
+  const hasFilters = Boolean(search) || typeFilter !== ALL_TYPES;
+
+  const resultCount =
+    filtered.length !== tenants.length
+      ? t('storesFiltered', '{filtered} of {total} stores').replace('{filtered}', String(filtered.length)).replace('{total}', String(tenants.length))
+      : (tenants.length === 1 ? t('storesAvailable', '{count} store available') : t('storesAvailablePlural', '{count} stores available')).replace(
+          '{count}',
+          String(tenants.length),
+        );
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
-          <Link href="/" className="flex items-center gap-2 font-bold text-lg text-gray-900 hover:opacity-90 transition-opacity">
-            <img
-              src="/brand/1pos-logo.png"
-              alt="1Pos"
-              width={36}
-              height={36}
-              className="h-9 w-9 object-contain"
-              decoding="async"
-              fetchPriority="high"
-            />
-          </Link>
-          <div className="flex items-center gap-3">
-            <LanguageSwitcher />
-            <Link href="/signup" className="inline-flex items-center bg-brand text-white px-4 py-1.5 text-sm font-semibold hover:bg-brand-hover transition-colors">
-              {dict?.stores?.createStore || 'Create Store'}
-            </Link>
-          </div>
-        </div>
-      </header>
-
-      {/* Hero */}
-      <section className="relative bg-gradient-to-br from-brand via-brand-navy to-brand-navy-deep text-white py-14 px-4 overflow-hidden">
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute top-10 left-10 w-64 h-64 bg-brand-muted/25 blur-3xl animate-pulse" style={{ animationDuration: '4s' }} />
-          <div className="absolute bottom-0 right-0 w-80 h-80 bg-brand-navy/45 blur-3xl animate-pulse" style={{ animationDelay: '2s', animationDuration: '5s' }} />
-        </div>
-        <div className="relative max-w-7xl mx-auto text-center z-10">
-          <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-md border border-white/30 px-4 py-1.5 text-sm font-semibold mb-4">
-            🏪 {dict?.stores?.storeDirectory || 'Store Directory'}
-          </div>
-          <h1 className="text-4xl md:text-5xl font-bold mb-3">{dict?.stores?.selectYourStore || 'Select Your Store'}</h1>
-          <p className="text-white/80 text-lg max-w-xl mx-auto">
-            {dict?.stores?.storeDirectoryDesc || 'Choose from our network of stores to sign in and manage your business'}
-          </p>
-          <div className="flex justify-center gap-10 mt-8">
-            <div className="text-center">
-              <div className="text-3xl font-bold tabular-nums">{loading ? '—' : tenants.length}</div>
-              <div className="text-white/70 text-sm mt-0.5">{dict?.stores?.activeStores || 'Active Stores'}</div>
+    <PublicShell t={shellT}>
+      <section aria-labelledby="stores-heading" className="bg-brand text-ink">
+        <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8 lg:py-16">
+          <div className="grid gap-8 lg:grid-cols-12 lg:items-end">
+            <div className="lg:col-span-8">
+              <LineTag no="00">{t('storeDirectory', 'Store directory')}</LineTag>
+              <h1 id="stores-heading" className="mt-4 text-6xl sm:text-7xl lg:text-8xl">
+                {t('selectYourStore', 'Select your store')}
+              </h1>
+              <p className="mt-4 max-w-lg text-lg leading-relaxed">{t('storeDirectoryDesc', 'Find your store to sign in and get back to the counter.')}</p>
             </div>
-            <div className="w-px bg-white/20" />
-            <div className="text-center">
-              <div className="text-3xl font-bold tabular-nums">{availableTypes.length > 1 ? availableTypes.length - 1 : '—'}</div>
-              <div className="text-white/70 text-sm mt-0.5">{dict?.stores?.businessTypes || 'Business Types'}</div>
-            </div>
+            {!loading && tenants.length > 0 && (
+              <div className="w-fit border-4 border-[#0b1820] bg-[#04100f] px-4 py-3 text-right lg:col-span-4 lg:justify-self-end">
+                <p className="font-receipt text-[11px] text-[#8fe3d0]/80">{t('activeStores', 'Active stores')}</p>
+                <p className="mk-led-glow font-led text-5xl leading-tight text-[#7df0d6]">{tenants.length}</p>
+              </div>
+            )}
           </div>
-        </div>
-      </section>
 
-      {/* Search + Filters */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-8 pb-4">
-        <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
-          <div className="relative flex-1">
-            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
+          <div className="relative mt-8">
+            <ScanBarcode className="pointer-events-none absolute left-4 top-1/2 h-6 w-6 -translate-y-1/2 text-brand-hover" strokeWidth={1.75} aria-hidden="true" />
             <input
-              ref={searchRef}
-              type="text"
-              placeholder={dict?.stores?.searchPlaceholder || 'Search by store name, slug, or city'}
+              type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-8 py-2.5 border border-gray-300 text-sm text-gray-900 placeholder-gray-400 focus:border-brand focus:outline-none transition-colors bg-white"
+              placeholder={t('searchPlaceholder', 'Search by store name, link or city')}
+              aria-label={t('searchPlaceholder', 'Search by store name, link or city')}
+              className="peer w-full border-2 border-ink bg-paper-white py-4 pl-14 pr-12 font-receipt text-ink placeholder:text-ink/55 focus:outline-none [&::-webkit-search-cancel-button]:hidden"
             />
+            {/* The scanner beam lights up while the search has focus. */}
+            <span className="pointer-events-none absolute inset-x-0 bottom-0 h-0.5 bg-[#ff3b2f] opacity-0 shadow-[0_0_12px_2px_rgb(255_59_47/0.6)] transition-opacity peer-focus:opacity-100" aria-hidden="true" />
             {search && (
               <button
+                type="button"
                 onClick={() => setSearch('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-sm"
-                aria-label="Clear search"
+                aria-label={t('clearSearch', 'Clear search')}
+                className="absolute right-1 top-1/2 flex -translate-y-1/2 items-center justify-center text-ink/60 hover:text-ink"
               >
-                ×
+                <X className="h-5 w-5" aria-hidden="true" />
               </button>
             )}
           </div>
-          {availableTypes.length > 2 && (
-            <div className="flex gap-1.5 flex-wrap">
-              {availableTypes.map((type) => (
+
+          {types.length > 1 && (
+            <div className="mt-4 flex flex-wrap gap-2" role="group" aria-label={t('filterLabel', 'Filter by business type')}>
+              {[ALL_TYPES, ...types].map((type) => (
                 <button
                   key={type}
+                  type="button"
                   onClick={() => setTypeFilter(type)}
-                  className={`px-3 py-2 text-xs font-semibold border transition-all ${
-                    typeFilter === type
-                      ? 'bg-brand border-brand text-white'
-                      : 'bg-white border-gray-300 text-gray-600 hover:border-brand hover:text-brand'
-                  }`}
+                  aria-pressed={typeFilter === type}
+                  className={`border-2 border-ink px-3 font-receipt text-xs ${typeFilter === type ? 'bg-ink text-paper-white' : 'bg-paper-white text-ink hover:bg-paper'}`}
                 >
-                  {type === 'All' ? (dict?.stores?.allTypes || 'All Types') : `${BUSINESS_TYPE_META[type]?.icon ?? ''} ${type}`}
+                  {type === ALL_TYPES ? t('allTypes', 'All types') : typeLabel(type, t)}
                 </button>
               ))}
             </div>
           )}
         </div>
-      </div>
+      </section>
 
-      {/* Results count */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 pb-3">
-        {!loading && (
-          <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">
-            {filtered.length === tenants.length
-              ? (tenants.length !== 1
-                  ? (dict?.stores?.storesAvailablePlural || '{count} stores available').replace('{count}', String(tenants.length))
-                  : (dict?.stores?.storesAvailable || '{count} store available').replace('{count}', String(tenants.length)))
-              : (dict?.stores?.storesFiltered || '{filtered} of {total} stores').replace('{filtered}', String(filtered.length)).replace('{total}', String(tenants.length))}
-          </p>
-        )}
-      </div>
-
-      {/* Grid */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 pb-16">
-        {loading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {Array.from({ length: 8 }).map((_, i) => <SkeletonCard key={i} />)}
-          </div>
-        ) : filtered.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {filtered.map((tenant) => (
-              <StoreCard key={tenant.slug} tenant={tenant} preferredLang={preferredLang} dict={dict} />
-            ))}
-          </div>
-        ) : (
-          <div className="flex flex-col items-center justify-center py-24 text-center">
-            <div className="text-5xl mb-4">🔍</div>
-            <h3 className="text-lg font-bold text-gray-900 mb-2">{dict?.stores?.noStoresFound || 'No stores found'}</h3>
-            <p className="text-gray-500 text-sm mb-6 max-w-sm">
-              {tenants.length === 0
-                ? (dict?.stores?.noStoresYet || 'No stores are available yet. Be the first to create one!')
-                : (dict?.stores?.tryAdjusting || 'Try adjusting your search or filter.')}
-            </p>
-            <div className="flex gap-2">
-              {(search || typeFilter !== 'All') && (
-                <button
-                  onClick={() => { setSearch(''); setTypeFilter('All'); }}
-                  className="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-semibold hover:border-brand transition-colors"
-                >
-                  {dict?.stores?.clearFilters || 'Clear filters'}
-                </button>
-              )}
-              <Link href="/signup" className="px-4 py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover transition-colors">
-                {dict?.stores?.createAStore || 'Create a Store'}
-              </Link>
+      <section aria-label={t('resultsLabel', 'Stores')} className="min-h-[28rem] bg-brand-navy-deep py-10 text-paper-white lg:py-14">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          {loading ? (
+            <div className={GRID} aria-hidden="true">
+              {Array.from({ length: 8 }, (_, i) => (
+                <div key={i} className="h-[17rem] bg-paper-white/10 motion-safe:animate-pulse" />
+              ))}
             </div>
-          </div>
-        )}
-      </div>
+          ) : filtered.length > 0 ? (
+            <>
+              <p className="mb-6 font-receipt text-xs text-paper/70" aria-live="polite">
+                {resultCount}
+              </p>
+              <div className={GRID}>
+                {filtered.map((tenant) => (
+                  <StoreTag key={tenant.slug} tenant={tenant} lang={lang} t={t} />
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="mx-auto max-w-sm drop-shadow-[0_10px_12px_rgb(0_0_0/0.3)]">
+              <div className="mk-tear-b relative bg-paper-white px-6 pb-10 pt-8 text-center text-ink" aria-live="polite">
+                <span className="mk-stamp inline-block border-[3px] border-stamp px-3 py-0.5 font-display text-3xl font-extrabold uppercase text-stamp">
+                  {t('voidStamp', 'Void')}
+                </span>
+                <h2 className="mt-5 text-4xl">{t('noStoresFound', 'No stores found')}</h2>
+                <p className="mt-2 leading-relaxed text-ink/75">
+                  {tenants.length === 0 ? t('noStoresYet', 'No stores are available yet. Be the first to open one.') : t('tryAdjusting', 'Try a different search or filter.')}
+                </p>
+                <div className="mt-6 flex flex-col gap-2">
+                  {hasFilters && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSearch('');
+                        setTypeFilter(ALL_TYPES);
+                      }}
+                      className="border-2 border-ink px-4 text-sm font-semibold hover:bg-ink/5"
+                    >
+                      {t('clearFilters', 'Clear filters')}
+                    </button>
+                  )}
+                  <Link href="/signup" className="flex items-center justify-center bg-ink px-4 text-sm font-semibold text-paper-white hover:bg-brand-navy">
+                    {t('createAStore', 'Create a store')}
+                  </Link>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
 
-      {/* Footer CTA */}
       {!loading && tenants.length > 0 && (
-        <div className="border-t border-gray-200 bg-white py-10 px-4">
-          <div className="max-w-xl mx-auto text-center">
-            <h3 className="text-base font-bold text-gray-900 mb-1">{dict?.stores?.dontSeeYourStore || "Don't see your store?"}</h3>
-            <p className="text-gray-500 text-sm mb-5">{dict?.stores?.getStartedDesc || 'Get started and create your own store in minutes.'}</p>
-            <Link
-              href="/signup"
-              className="inline-flex items-center gap-2 bg-brand text-white px-7 py-2.5 text-sm font-bold hover:bg-brand-hover transition-colors"
-            >
-              <span>{dict?.stores?.createYourStore || 'Create Your Store'}</span>
-              <span>→</span>
+        <section aria-labelledby="stores-cta-heading" className="bg-paper py-14">
+          <div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 sm:px-6 md:flex-row md:items-center md:justify-between lg:px-8">
+            <div>
+              <h2 id="stores-cta-heading" className="text-4xl sm:text-5xl">
+                {t('dontSeeYourStore', 'Don’t see your store?')}
+              </h2>
+              <p className="mt-2 text-ink/75">{t('getStartedDesc', 'Open your own in minutes, free for 14 days.')}</p>
+            </div>
+            <Link href="/signup" className="group flex shrink-0 items-center justify-center gap-2 bg-ink px-7 py-4 font-semibold text-paper-white hover:bg-brand-navy">
+              {t('createYourStore', 'Create your store')}
+              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" aria-hidden="true" />
             </Link>
           </div>
-        </div>
+        </section>
       )}
-    </div>
+    </PublicShell>
   );
 }

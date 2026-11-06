@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import PasswordInput from '@/components/ui/PasswordInput';
+import TurnstileWidget, { TURNSTILE_SITE_KEY, type TurnstileHandle } from '@/components/TurnstileWidget';
 
 export default function SuperAdminLoginPage() {
   const router = useRouter();
@@ -11,6 +12,8 @@ export default function SuperAdminLoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(true);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const turnstile = useRef<TurnstileHandle>(null);
 
   useEffect(() => {
     // Redirect if already logged in as super_admin
@@ -33,13 +36,17 @@ export default function SuperAdminLoginPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, turnstileToken }),
       });
       const data = await res.json();
 
       if (data.success) {
         router.push('/super-admin/dashboard');
-      } else if (res.status === 429) {
+        return;
+      }
+
+      turnstile.current?.reset();
+      if (res.status === 429) {
         const retryAfter = res.headers.get('Retry-After');
         const mins = retryAfter ? Math.ceil(Number(retryAfter) / 60) : 15;
         setError(`Too many login attempts. Please try again in ${mins} minute${mins !== 1 ? 's' : ''}.`);
@@ -47,6 +54,7 @@ export default function SuperAdminLoginPage() {
         setError(data.error || 'Login failed');
       }
     } catch {
+      turnstile.current?.reset();
       setError('Login failed. Please try again.');
     } finally {
       setLoading(false);
@@ -99,6 +107,14 @@ export default function SuperAdminLoginPage() {
               />
             </div>
 
+            <TurnstileWidget
+              ref={turnstile}
+              action="super_admin_login"
+              language="en"
+              errorMessage="The security check didn’t load. Check your connection and reload the page."
+              onToken={setTurnstileToken}
+            />
+
             {error && (
               <div className="bg-red-50 border border-red-300 text-red-800 text-sm p-3">
                 {error}
@@ -107,7 +123,7 @@ export default function SuperAdminLoginPage() {
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || (Boolean(TURNSTILE_SITE_KEY) && !turnstileToken)}
               className="w-full py-2.5 bg-brand text-white font-semibold hover:bg-brand-hover disabled:opacity-50 transition-colors text-sm"
             >
               {loading ? 'Signing in...' : 'Sign In'}

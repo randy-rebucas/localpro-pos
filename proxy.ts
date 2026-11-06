@@ -226,7 +226,7 @@ const PUBLIC_API_PATHS = new Set([
   '/api/super-admin/auth/login',
   '/api/stores/retail',
   '/api/stores',        // pre-login ?slug= mode; auth enforced inside route
-  '/api/public/',
+  '/api/public', // covers everything under it; the matcher adds the trailing slash
 ]);
 
 /** Automation routes are protected by CRON_SECRET, not JWT */
@@ -359,6 +359,9 @@ export function proxy(request: NextRequest) {
     pathname === '/signup' ||
     pathname === '/stores' ||
     pathname === '/privacy' ||
+    pathname === '/pricing' ||
+    pathname === '/about' ||
+    pathname === '/contact' ||
     pathname.startsWith('/super-admin')
   ) {
     return pageNext(request);

@@ -50,6 +50,11 @@ self.addEventListener('activate', function (event) {
 self.addEventListener('fetch', function (event) {
   var url = new URL(event.request.url);
 
+  // Cloudflare requires Turnstile's script to load straight from its own URL, uncached.
+  if (url.hostname === 'challenges.cloudflare.com') {
+    return;
+  }
+
   // Skip non-GET requests (POST transactions go through normally)
   if (event.request.method !== 'GET') {
     return;
@@ -91,6 +96,12 @@ self.addEventListener('fetch', function (event) {
           });
         })
     );
+    return;
+  }
+
+  // Dev chunks keep their URLs between edits, so a cached copy can be older than
+  // the page's HTML and fail hydration. Production chunk names are hashed.
+  if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') {
     return;
   }
 

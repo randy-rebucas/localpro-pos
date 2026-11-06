@@ -23,6 +23,15 @@
   --color-brand-soft: #e8f5f5;
   --color-brand-navy: #1e3a4c;
   --color-brand-navy-deep: #152a38;
+  /* Public marketing pages: thermal paper, ink, rubber stamp. Fonts are set in app/page.tsx. */
+  --color-paper: #f4efe4;
+  --color-paper-white: #fdfbf6;
+  --color-ink: #10202b;
+  --color-stamp: #c8402c;
+  --font-display: var(--mk-font-display);
+  --font-receipt: var(--mk-font-receipt);
+  --font-led: var(--mk-font-led);
+  --font-body: var(--mk-font-body);
 }
 
 body {
