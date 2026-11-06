@@ -54,7 +54,8 @@ const SuperAdminActionSchema: Schema = new Schema(
 );
 
 SuperAdminActionSchema.index({ adminUserId: 1, createdAt: -1 });
-SuperAdminActionSchema.index({ createdAt: -1 });
+// Kept for 10 years (3,660 days), matching the production index. Also serves newest-first sorts.
+SuperAdminActionSchema.index({ createdAt: 1 }, { expireAfterSeconds: 3660 * 24 * 60 * 60 });
 SuperAdminActionSchema.index({ targetType: 1, targetId: 1 });
 
 const SuperAdminAction: Model<ISuperAdminAction> =
