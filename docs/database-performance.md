@@ -59,6 +59,11 @@ Rules for new indexes:
   - `FeatureFlagOverride`: at `expiresAt`
   - `CustomerOTP`
   - `RevokedToken`
+  - `Attendance`: 5 years after clock-in
+  - `Booking`: 5 years after the booking ends
+  - `ArchivedAuditLog`: 10 years
+  - `SuperAdminAction`: 10 years
+- **Counter:** receipt counters must never expire, because that would reuse receipt numbers. Production has an `expiresAt_1` TTL on this collection, but no counter has that field, so it deletes nothing. It isn't declared in the schema and can be dropped.
 
 ## Hot paths
 

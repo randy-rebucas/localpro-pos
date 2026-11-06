@@ -69,8 +69,10 @@ const ArchivedAuditLogSchema: Schema = new Schema(
   }
 );
 
-// Write-mostly cold storage: keep a single index to minimise insert cost
+// Write-mostly cold storage: keep indexes few to minimise insert cost
 ArchivedAuditLogSchema.index({ tenantId: 1, createdAt: -1 });
+// Archived logs are kept for 10 years (3,660 days), matching the production index.
+ArchivedAuditLogSchema.index({ createdAt: 1 }, { expireAfterSeconds: 3660 * 24 * 60 * 60 });
 
 const ArchivedAuditLog: Model<IArchivedAuditLog> =
   mongoose.models.ArchivedAuditLog ||

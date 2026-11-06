@@ -4,9 +4,11 @@ import { REPORT_MAX_TIME_MS } from '@/lib/query-utils';
 import connectDB from '@/lib/mongodb';
 import Transaction from '@/models/Transaction';
 import Expense from '@/models/Expense';
+import Tenant from '@/models/Tenant';
 import { requireTenantAccess, TenantAccessViolationError, handleTenantAccessViolation } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { getTenantDayBoundaries, DEFAULT_TENANT_TIMEZONE } from '@/lib/timezone';
 import mongoose from 'mongoose';
 
 export async function GET(request: NextRequest) {
@@ -42,13 +44,17 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const period = searchParams.get('period') || 'today'; // today, week, month, all
 
+    // Days and hours follow the store's clock, not the server's (Vercel runs UTC)
+    const tenantDoc = await Tenant.findById(tenantId).select('settings.timezone').lean();
+    const timezone = tenantDoc?.settings?.timezone || DEFAULT_TENANT_TIMEZONE;
+    const localDate = { date: '$createdAt', timezone };
+
     let startDate: Date;
     const endDate = new Date();
 
     switch (period) {
       case 'today':
-        startDate = new Date();
-        startDate.setHours(0, 0, 0, 0);
+        startDate = getTenantDayBoundaries(undefined, timezone).start;
         break;
       case 'week':
         startDate = new Date();
@@ -75,23 +81,15 @@ export async function GET(request: NextRequest) {
     if (period === 'today') {
       // Group by hour for today
       timeSeriesGroup = {
-        $hour: '$createdAt'
+        $hour: localDate
       };
       dateFormat = 'hour';
-    } else if (period === 'week' || period === 'month') {
-      // Group by day for week/month
-      timeSeriesGroup = {
-        year: { $year: '$createdAt' },
-        month: { $month: '$createdAt' },
-        day: { $dayOfMonth: '$createdAt' }
-      };
-      dateFormat = 'day';
     } else {
-      // Group by day for all time
+      // Group by day for week, month and all time
       timeSeriesGroup = {
-        year: { $year: '$createdAt' },
-        month: { $month: '$createdAt' },
-        day: { $dayOfMonth: '$createdAt' }
+        year: { $year: localDate },
+        month: { $month: localDate },
+        day: { $dayOfMonth: localDate }
       };
       dateFormat = 'day';
     }

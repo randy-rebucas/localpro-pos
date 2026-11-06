@@ -111,6 +111,8 @@ AttendanceSchema.index(
 );
 // Tenant-wide active session scan (automations: auto-clockout, break detection, cash-count reminders)
 AttendanceSchema.index({ tenantId: 1, clockOut: 1 }, { partialFilterExpression: { clockOut: null } });
+// Kept for 5 years (1,830 days) after clock-in, matching the production index.
+AttendanceSchema.index({ clockIn: 1 }, { expireAfterSeconds: 1830 * 24 * 60 * 60 });
 
 const Attendance: Model<IAttendance> = mongoose.models.Attendance || mongoose.model<IAttendance>('Attendance', AttendanceSchema);
 

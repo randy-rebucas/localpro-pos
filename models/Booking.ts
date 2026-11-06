@@ -113,6 +113,8 @@ BookingSchema.index({ tenantId: 1, status: 1, startTime: 1 });
 // Customer booking history (email lookup sorted by most recent; phone for $or matches)
 BookingSchema.index({ tenantId: 1, customerEmail: 1, startTime: -1 });
 BookingSchema.index({ tenantId: 1, customerPhone: 1 });
+// Kept for 5 years (1,830 days) after the booking ends, matching the production index.
+BookingSchema.index({ endTime: 1 }, { expireAfterSeconds: 1830 * 24 * 60 * 60 });
 
 // Virtual to check if booking is in the past
 BookingSchema.virtual('isPast').get(function(this: IBooking) {
