@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { INTERACTIVE_MAX_TIME_MS } from '@/lib/query-utils';
 import connectDB from '@/lib/mongodb';
 import Transaction from '@/models/Transaction';
 import Product from '@/models/Product';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { handleApiError } from '@/lib/error-handler';
+import { cacheWrap, TTL } from '@/lib/cache';
 import mongoose from 'mongoose';
 
 const HISTORY_DAYS = 90;
@@ -40,10 +42,13 @@ export async function GET(request: NextRequest) {
     since.setDate(since.getDate() - HISTORY_DAYS);
 
     // Find transactions that contain at least one cart product
-    const coOccurrences = await Transaction.aggregate([
+    // Aggregates aren't cast by Mongoose, so tenantId has to be an ObjectId here.
+    // Scores change slowly, so reuse them; stock is still checked live below.
+    const cacheKey = `upsell:${tenantId}:${cartProductIds.map(String).sort().join(',')}`;
+    const coOccurrences = await cacheWrap(cacheKey, TTL.LONG, () => Transaction.aggregate<{ _id: mongoose.Types.ObjectId; score: number }>([
       {
         $match: {
-          tenantId,
+          tenantId: new mongoose.Types.ObjectId(tenantId),
           status: 'completed',
           createdAt: { $gte: since },
           'items.product': { $in: cartProductIds },
@@ -66,7 +71,7 @@ export async function GET(request: NextRequest) {
       },
       { $sort: { score: -1 } },
       { $limit: MAX_SUGGESTIONS * 2 }, // fetch extras to filter out-of-stock
-    ]);
+    ]).option({ maxTimeMS: INTERACTIVE_MAX_TIME_MS }).exec());
 
     if (coOccurrences.length === 0) {
       return NextResponse.json({ success: true, data: [] });

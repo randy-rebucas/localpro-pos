@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { escapeRegex } from '@/lib/query-utils';
 import mongoose from 'mongoose';
 import connectDB from '@/lib/mongodb';
 import Tenant from '@/models/Tenant';
@@ -28,8 +29,8 @@ export async function GET(request: NextRequest) {
     const query: Record<string, unknown> = {};
     if (search) {
       query.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { slug: { $regex: search, $options: 'i' } },
+        { name: { $regex: escapeRegex(search), $options: 'i' } },
+        { slug: { $regex: escapeRegex(search), $options: 'i' } },
       ];
     }
     if (activeFilter === 'true') query.isActive = true;

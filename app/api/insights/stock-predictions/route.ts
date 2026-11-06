@@ -6,6 +6,7 @@ import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { handleApiError } from '@/lib/error-handler';
 import { checkFeatureAccess } from '@/lib/subscription';
+import mongoose from 'mongoose';
 
 // Days of history to compute velocity from
 const VELOCITY_WINDOW_DAYS = 30;
@@ -42,12 +43,16 @@ export async function GET(request: NextRequest) {
     // Aggregate sales quantity per product over the window, scoped to the
     // selected branch when provided so it matches the other branch-scoped
     // panels on the inventory page (LowStockAlerts, RealTimeStockTracker).
+    // Aggregates aren't cast by Mongoose, so ids have to be ObjectIds here
+    if (branchId && !mongoose.Types.ObjectId.isValid(branchId)) {
+      return NextResponse.json({ success: true, data: [] });
+    }
     const salesMatch: Record<string, unknown> = {
-      tenantId,
+      tenantId: new mongoose.Types.ObjectId(tenantId),
       type: 'sale',
       createdAt: { $gte: since },
     };
-    if (branchId) salesMatch.branchId = branchId;
+    if (branchId) salesMatch.branchId = new mongoose.Types.ObjectId(branchId);
 
     const salesByProduct = await StockMovement.aggregate([
       { $match: salesMatch },

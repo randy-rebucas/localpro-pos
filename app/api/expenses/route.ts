@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { LIST_SAFETY_CAP } from '@/lib/query-utils';
 import connectDB from '@/lib/mongodb';
 import Expense from '@/models/Expense';
 import { requireTenantAccess } from '@/lib/api-tenant';
@@ -35,9 +36,14 @@ export async function GET(request: NextRequest) {
     const expenses = await Expense.find(query)
       .populate('userId', 'name email')
       .sort({ date: -1 })
+      .limit(LIST_SAFETY_CAP + 1)
       .lean();
 
-    return NextResponse.json({ success: true, data: expenses });
+    return NextResponse.json({
+      success: true,
+      data: expenses.slice(0, LIST_SAFETY_CAP),
+      truncated: expenses.length > LIST_SAFETY_CAP,
+    });
   } catch (error) {
     return handleApiError(error, 'Failed to fetch expenses');
   }

@@ -1,6 +1,6 @@
 # Database cost & performance
 
-MongoDB Atlas (Flex/Serverless) bills per document and index key read and written. These are the mechanisms that keep the count down. Please keep them in mind when adding routes, models or cron jobs.
+How Atlas charges depends on the cluster tier, so check the tier before treating read counts as cost: Flex bills in ops/sec bands, and dedicated tiers bill mainly for cluster size. Atlas Serverless, which billed per read, has been retired. These mechanisms keep database load down. Please keep them in mind when adding routes, models or cron jobs.
 
 ## In-process cache (`lib/cache.ts`)
 
@@ -76,6 +76,23 @@ Rules for new indexes:
   - The customer display polls every 2s.
   - Subscription status refreshes every 30 min.
   - `/api/auth/me` runs on mount, on focus (at most once a minute), and on navigation only while signed out.
+
+## Query limits
+
+`lib/query-utils.ts` holds the shared helpers:
+- `escapeRegex`: use it on any user input that goes into a `$regex`.
+- `REPORT_MAX_TIME_MS` (30s): report and dashboard queries. BIR exports get a time limit and a projection but no row cap, because they must be complete.
+- `INTERACTIVE_MAX_TIME_MS` (3s): non-critical POS reads such as upsell suggestions.
+
+Super-admin top tenants and platform transaction stats are cached for 10 minutes per instance (`platform:top-tenants`, `platform:tx-stats:<range>`), because they scan all transactions.
+
+Upsell co-occurrence scores are cached for 5 minutes per tenant and cart (`upsell:<tenantId>:<productIds>`). Stock is still checked live.
+
+**Aggregates aren't cast.** Mongoose casts `find` filters but not `aggregate` pipelines, and `requireTenantAccess` returns `tenantId` as a string. An uncast id in `$match` returns no rows and no error, so wrap ids in `new mongoose.Types.ObjectId()`.
+
+Bundle analytics reads `items[].product`, where checkout stores a bundle line's id. `bundleId` isn't in the transaction item schema.
+
+Lists that clients load in full (`/api/bookings`, `/api/bookings/customer/[customerId]`, `/api/expenses`) stop at `LIST_SAFETY_CAP` rows and set `truncated: true`. They keep the newest rows, so upcoming bookings are never dropped.
 
 ## Cron (`vercel.json`)
 

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { escapeRegex } from '@/lib/query-utils';
 import connectDB from '@/lib/mongodb';
 import Product from '@/models/Product';
 import Tenant from '@/models/Tenant';
@@ -41,6 +42,7 @@ export async function GET(request: NextRequest) {
     const filter: Record<string, any> = { // eslint-disable-line @typescript-eslint/no-explicit-any
       tenantId: tenant._id,
       productType: 'service',
+      isActive: { $ne: false },
     };
 
     if (categoryId) {
@@ -48,15 +50,17 @@ export async function GET(request: NextRequest) {
     }
 
     if (search) {
+      const pattern = escapeRegex(search);
       filter.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } },
+        { name: { $regex: pattern, $options: 'i' } },
+        { description: { $regex: pattern, $options: 'i' } },
       ];
     }
 
     const services = await Product.find(filter)
       .select('name description price image category categoryId')
       .sort({ name: 1 })
+      .limit(200)
       .lean();
 
     return NextResponse.json({ success: true, data: services });

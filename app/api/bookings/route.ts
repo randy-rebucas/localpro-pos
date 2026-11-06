@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { LIST_SAFETY_CAP } from '@/lib/query-utils';
 import mongoose from 'mongoose';
 import connectDB from '@/lib/mongodb';
 import Booking from '@/models/Booking';
@@ -85,12 +86,16 @@ export async function GET(request: NextRequest) {
       query.staffId = staffId;
     }
 
-    const bookings = await Booking.find(query)
+    // Newest first so the cap only ever drops the oldest bookings, never upcoming
+    // ones, then back to the ascending order clients expect
+    const newest = await Booking.find(query)
       .populate('staffId', 'name email')
-      .sort({ startTime: 1 })
+      .sort({ startTime: -1 })
+      .limit(LIST_SAFETY_CAP + 1)
       .lean();
+    const bookings = newest.slice(0, LIST_SAFETY_CAP).reverse();
 
-    return NextResponse.json({ success: true, data: bookings });
+    return NextResponse.json({ success: true, data: bookings, truncated: newest.length > LIST_SAFETY_CAP });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     logger.error('Get bookings error:', error);
     const t = await getValidationTranslatorFromRequest(request);

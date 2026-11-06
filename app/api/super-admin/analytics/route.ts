@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { cacheWrap } from '@/lib/cache';
+import { REPORT_MAX_TIME_MS } from '@/lib/query-utils';
 import connectDB from '@/lib/mongodb';
 import Subscription from '@/models/Subscription';
 import '@/models/SubscriptionPlan';
@@ -6,6 +8,8 @@ import Transaction from '@/models/Transaction';
 import Tenant from '@/models/Tenant';
 import { requireRole } from '@/lib/auth';
 import { handleApiError } from '@/lib/error-handler';
+
+const PLATFORM_STATS_TTL_MS = 10 * 60 * 1000;
 
 export async function GET(request: NextRequest) {
   try {
@@ -60,7 +64,10 @@ export async function GET(request: NextRequest) {
     const inRange = (from: Date, to?: Date) => ({
       $cond: [{ $and: [{ $gte: ['$createdAt', from] }, ...(to ? [{ $lte: ['$createdAt', to] }] : [])] }, 1, 0],
     });
-    const [txStats] = await Transaction.aggregate<{
+    // Keyed on the requested range rather than the computed dates, which move
+    // with the clock and would never repeat
+    const txStatsKey = `platform:tx-stats:${searchParams.get('rangeStart') ?? ''}:${searchParams.get('rangeEnd') ?? ''}`;
+    const [txStats] = await cacheWrap(txStatsKey, PLATFORM_STATS_TTL_MS, () => Transaction.aggregate<{
       txLast30: number; txLast90: number; txTotal: number; txInRange: number; txPrevRange: number;
       revenueInRange: number; revenuePrevRange: number;
     }>([
@@ -77,7 +84,7 @@ export async function GET(request: NextRequest) {
           revenuePrevRange: { $sum: { $multiply: [inRange(prevStart, prevEnd), '$total'] } },
         },
       },
-    ]);
+    ]).option({ maxTimeMS: REPORT_MAX_TIME_MS }).exec());
     const txLast30 = txStats?.txLast30 ?? 0;
     const txLast90 = txStats?.txLast90 ?? 0;
     const txTotal = txStats?.txTotal ?? 0;
@@ -124,7 +131,8 @@ export async function GET(request: NextRequest) {
     ]);
 
     // ── Top 10 tenants by transaction volume ─────────────────────────────
-    const topTenants = await Transaction.aggregate([
+    // All-time scan of every tenant's sales, so reuse it between page loads
+    const topTenants = await cacheWrap('platform:top-tenants', PLATFORM_STATS_TTL_MS, () => Transaction.aggregate([
       { $match: { status: 'completed' } },
       { $group: { _id: '$tenantId', txCount: { $sum: 1 }, revenue: { $sum: '$total' } } },
       { $sort: { txCount: -1 } },
@@ -141,7 +149,7 @@ export async function GET(request: NextRequest) {
           revenue: 1,
         },
       },
-    ]);
+    ]).option({ maxTimeMS: REPORT_MAX_TIME_MS }).exec());
 
     // ── Subscription status breakdown ─────────────────────────────────────
     const statusBreakdown = await Subscription.aggregate([

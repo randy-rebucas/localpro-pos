@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { escapeRegex } from '@/lib/query-utils';
 import connectDB from '@/lib/mongodb';
 import SuperAdminAction from '@/models/SuperAdminAction';
 import User from '@/models/User';
@@ -21,7 +22,7 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(200, Math.max(1, parseInt(searchParams.get('limit') || '50')));
 
     const query: Record<string, unknown> = {};
-    if (action) query.action = { $regex: action, $options: 'i' };
+    if (action) query.action = { $regex: escapeRegex(action), $options: 'i' };
     if (targetType) query.targetType = targetType;
     if (adminId) query.adminUserId = adminId;
     if (startDate || endDate) {
