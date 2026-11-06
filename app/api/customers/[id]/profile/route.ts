@@ -39,7 +39,7 @@ export async function GET(
 
     // Total order count + lifetime value
     const [stats] = await Transaction.aggregate([
-      { $match: { tenantId, customerId: new mongoose.Types.ObjectId(id), status: 'completed' } },
+      { $match: { tenantId: new mongoose.Types.ObjectId(tenantId), customerId: new mongoose.Types.ObjectId(id), status: 'completed' } },
       {
         $group: {
           _id: null,
@@ -52,7 +52,7 @@ export async function GET(
 
     // Top 5 products by quantity bought
     const topProducts = await Transaction.aggregate([
-      { $match: { tenantId, customerId: new mongoose.Types.ObjectId(id), status: 'completed' } },
+      { $match: { tenantId: new mongoose.Types.ObjectId(tenantId), customerId: new mongoose.Types.ObjectId(id), status: 'completed' } },
       { $unwind: '$items' },
       {
         $group: {

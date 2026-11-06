@@ -1,8 +1,8 @@
 /**
  * Automatic Audit Log Archiving
- * Moves audit logs older than the retention window (default 90 days) from the
- * live AuditLog collection to ArchivedAuditLog. AuditLog has no TTL index —
- * this job is what keeps the live collection small, so it runs daily.
+ * Moves audit logs older than the retention window (default 89 days) from the
+ * live AuditLog collection to ArchivedAuditLog. AuditLog's TTL deletes logs at 90
+ * days, so this must run daily and archive first, or history is lost.
  * When archive=false, logs are deleted directly without archiving.
  */
 
@@ -11,9 +11,12 @@ import AuditLog from '@/models/AuditLog';
 import ArchivedAuditLog from '@/models/ArchivedAuditLog';
 import { AutomationResult } from './types';
 
+/** A day inside AuditLog's 90-day TTL, so a daily run reaches every log before it expires. */
+const ARCHIVE_AFTER_DAYS = 89;
+
 export interface AuditLogCleanupOptions {
   tenantId?: string;
-  retentionDays?: number; // Days to keep logs in the live collection (default: 90)
+  retentionDays?: number; // Days to keep logs in the live collection (default: 89)
   /** @deprecated use retentionDays */
   retentionYears?: number;
   archive?: boolean; // Copy to ArchivedAuditLog before deleting (default: true)
@@ -33,7 +36,7 @@ export async function cleanupAuditLogs(
   await connectDB();
 
   const retentionDays = options.retentionDays
-    ?? (options.retentionYears != null ? options.retentionYears * 365 : 90);
+    ?? (options.retentionYears != null ? options.retentionYears * 365 : ARCHIVE_AFTER_DAYS);
   const archive = options.archive ?? true;
   const batchSize = options.batchSize ?? 1000;
   const maxBatches = options.maxBatches ?? 50;

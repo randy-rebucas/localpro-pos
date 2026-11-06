@@ -1,4 +1,6 @@
+import { NET_SALE_TOTAL } from '@/lib/refund-plan';
 import { NextRequest, NextResponse } from 'next/server';
+import { REPORT_MAX_TIME_MS } from '@/lib/query-utils';
 import connectDB from '@/lib/mongodb';
 import Transaction from '@/models/Transaction';
 import Expense from '@/models/Expense';
@@ -104,9 +106,9 @@ export async function GET(request: NextRequest) {
             {
               $group: {
                 _id: null,
-                totalSales: { $sum: '$total' },
+                totalSales: { $sum: NET_SALE_TOTAL },
                 totalTransactions: { $sum: 1 },
-                averageTransaction: { $avg: '$total' },
+                averageTransaction: { $avg: NET_SALE_TOTAL },
               },
             },
           ],
@@ -114,7 +116,7 @@ export async function GET(request: NextRequest) {
             {
               $group: {
                 _id: '$paymentMethod',
-                total: { $sum: '$total' },
+                total: { $sum: NET_SALE_TOTAL },
                 count: { $sum: 1 },
               },
             },
@@ -123,7 +125,7 @@ export async function GET(request: NextRequest) {
             {
               $group: {
                 _id: timeSeriesGroup,
-                sales: { $sum: '$total' },
+                sales: { $sum: NET_SALE_TOTAL },
                 transactions: { $sum: 1 },
               },
             },
@@ -131,7 +133,7 @@ export async function GET(request: NextRequest) {
           ],
         },
       },
-    ]);
+    ]).option({ maxTimeMS: REPORT_MAX_TIME_MS });
 
     const stats = facetResult.stats;
     const paymentMethodStats = facetResult.paymentMethodStats;

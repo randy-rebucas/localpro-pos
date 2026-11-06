@@ -3,14 +3,17 @@
 import Currency from '@/components/Currency';
 import { formatDateTime } from '@/lib/formatting';
 import { getDefaultTenantSettings } from '@/lib/currency';
+import { saleLineKey } from '@/lib/refund-plan';
 import type { TranslationDict } from '@/types/dictionary';
 import type { ITenantSettings } from '@/types/tenant';
 
 export interface RefundTransactionItem {
-  product: string | { toString(): string };
+  _id?: string;
+  product?: unknown;
   name: string;
   price: number;
   quantity: number;
+  refundedQuantity?: number;
 }
 
 export interface RefundTransaction {
@@ -164,8 +167,9 @@ export default function PosRefundModal({
                 </label>
                 <div className="space-y-3 max-h-64 overflow-y-auto border border-gray-300 p-3">
                   {refundTransaction.items.map((item) => {
-                    const productId = item.product.toString();
-                    const maxQty = item.quantity;
+                    const productId = saleLineKey(item);
+                    if (!productId) return null;
+                    const maxQty = item.quantity - (item.refundedQuantity ?? 0);
                     const refundItem = refundItems.find((ri) => ri.productId === productId);
                     const currentQty: number = refundItem?.refundQty || 0;
 

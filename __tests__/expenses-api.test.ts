@@ -103,7 +103,8 @@ describe('GET /api/expenses', () => {
   it('scopes the query to the authenticated tenant and excludes soft-deleted rows', async () => {
     authAs(TENANT_A);
     const leanMock = vi.fn().mockResolvedValue([{ _id: 'e1', tenantId: TENANT_A }]);
-    const sortMock = vi.fn().mockReturnValue({ lean: leanMock });
+    const limitMock = vi.fn().mockReturnValue({ lean: leanMock });
+    const sortMock = vi.fn().mockReturnValue({ limit: limitMock });
     const populateMock = vi.fn().mockReturnValue({ sort: sortMock });
     mockExpenseFind.mockReturnValue({ populate: populateMock });
 

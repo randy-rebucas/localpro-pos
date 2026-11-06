@@ -109,6 +109,10 @@ export async function POST(request: NextRequest) {
         discountTotal: aggregate.discountTotal,
         transactionCount: aggregate.transactionCount,
         voidCount: aggregate.voidCount,
+        refundCount: aggregate.refundCount,
+        refundTotal: aggregate.refundTotal,
+        refundVatAmount: aggregate.refundVatAmount,
+        netSales: aggregate.netSales,
         generatedBy: user.userId,
         generatedAt: new Date(),
       });

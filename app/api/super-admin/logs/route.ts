@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { escapeRegex } from '@/lib/query-utils';
 import connectDB from '@/lib/mongodb';
 import AuditLog from '@/models/AuditLog';
 import Tenant from '@/models/Tenant';
@@ -37,7 +38,7 @@ export async function GET(request: NextRequest) {
     }
     // If neither provided, no tenantId filter → returns all tenants' logs
 
-    if (action) query.action = { $regex: action, $options: 'i' };
+    if (action) query.action = { $regex: escapeRegex(action), $options: 'i' };
     if (entityType) query.entityType = entityType;
     if (userId) query.userId = userId;
 

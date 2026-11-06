@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
+import { planRefund, refundAmountFor, RefundPlanError, saleLineKey } from '@/lib/refund-plan';
 
 interface RefundItem {
   productId: string;
@@ -8,25 +9,24 @@ interface RefundItem {
   refundReason: string;
 }
 
-interface RefundData {
-  items: RefundItem[];
-  refundMethod: string;
-  notes: string;
-}
-
 interface TransactionItem {
-  productId: string;
+  productId?: string;
   name: string;
   price: number;
   quantity: number;
-  product?: string;
+  refundedQuantity?: number;
+  product?: unknown;
+  _id?: string;
 }
+
+const isLineFor = (item: TransactionItem, productId: string) => saleLineKey(item) === productId;
 
 interface RefundTransaction {
   _id?: string;
   id?: string;
   items: TransactionItem[];
-  discountAmount?: number;
+  subtotal?: number;
+  refundedAmount?: number;
   receiptNumber?: string;
   createdAt?: string;
   total?: number;
@@ -90,30 +90,26 @@ export function useRefund() {
   }, []);
 
   const calculateRefundAmount = useCallback((originalTransaction: RefundTransaction | null) => {
-    if (!originalTransaction || !refundItems.length) return 0;
+    const selectedItems = refundItems.filter((item) => item.refundQty > 0);
+    if (!originalTransaction || !selectedItems.length) return 0;
 
-    let amount = 0;
-    refundItems.forEach(refundItem => {
-      const originalItem = originalTransaction.items.find(
-        (item: TransactionItem) => item.productId === refundItem.productId
+    // Same maths as the server, so the amount shown is the amount refunded
+    try {
+      const plan = planRefund(
+        originalTransaction.items.map((item) => ({ ...item, product: saleLineKey(item) })),
+        selectedItems.map((item) => ({ productId: item.productId, quantity: item.refundQty }))
       );
-      if (originalItem) {
-        amount += originalItem.price * refundItem.refundQty;
-      }
-    });
-
-    // Apply original discount proportionally
-    if (originalTransaction.discountAmount && originalTransaction.items.length > 0) {
-      const discountRatio = refundItems.reduce((sum: number, ri) => {
-        const originalItem = originalTransaction.items.find(
-          (item: TransactionItem) => item.productId === ri.productId
-        );
-        return sum + (originalItem ? ri.refundQty : 0);
-      }, 0) / originalTransaction.items.reduce((sum: number, item: TransactionItem) => sum + item.quantity, 0);
-      amount -= (originalTransaction.discountAmount * discountRatio);
+      return refundAmountFor({
+        linesValue: plan.subtotal,
+        saleSubtotal: originalTransaction.subtotal ?? 0,
+        saleTotal: originalTransaction.total ?? 0,
+        alreadyRefunded: originalTransaction.refundedAmount,
+        isFullRefund: plan.isFullRefund,
+      });
+    } catch (error) {
+      if (error instanceof RefundPlanError) return 0;
+      throw error;
     }
-
-    return Math.max(0, amount);
   }, [refundItems]);
 
   const validateRefund = useCallback((originalTransaction: RefundTransaction | null): string[] => {
@@ -123,7 +119,9 @@ export function useRefund() {
       errors.push('No transaction selected for refund');
     }
 
-    if (!refundItems.length) {
+    // A line set to 0 is simply left out of the refund
+    const selectedItems = refundItems.filter((item) => item.refundQty > 0);
+    if (!selectedItems.length) {
       errors.push('No items selected for refund');
     }
 
@@ -132,15 +130,12 @@ export function useRefund() {
     }
 
     // Validate quantities
-    refundItems.forEach(refundItem => {
+    selectedItems.forEach(refundItem => {
       const originalItem = originalTransaction?.items.find(
-        (item: TransactionItem) => item.productId === refundItem.productId
+        (item: TransactionItem) => isLineFor(item, refundItem.productId)
       );
       if (originalItem && refundItem.refundQty > originalItem.quantity) {
         errors.push(`Cannot refund more than ${originalItem.quantity} units of ${originalItem.name}`);
-      }
-      if (refundItem.refundQty <= 0) {
-        errors.push('Refund quantity must be greater than 0');
       }
     });
 
@@ -159,31 +154,25 @@ export function useRefund() {
 
       setRefunding(true);
       try {
-        const refundAmount = calculateRefundAmount(originalTransaction);
-        const refundData: RefundData = {
-          items: refundItems,
-          refundMethod,
-          notes: refundNotes
-        };
-
         if (!originalTransaction) {
           return { success: false, error: 'No transaction selected for refund' };
         }
-        const response = await fetchWithTimeout('/api/refunds', {
+        const selectedItems = refundItems.filter((item) => item.refundQty > 0);
+        const transactionId = originalTransaction._id || originalTransaction.id;
+        const response = await fetchWithTimeout(`/api/transactions/${transactionId}/refund`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            originalTransactionId: originalTransaction.id,
-            amount: refundAmount,
-            ...refundData
+            items: selectedItems.map((item) => ({ productId: item.productId, quantity: item.refundQty })),
+            reason: selectedItems[0]?.refundReason,
+            notes: refundNotes,
           })
         });
 
-        if (!response.ok) {
-          throw new Error(`Refund failed: ${response.status}`);
-        }
-
         const result = await response.json();
+        if (!response.ok || !result.success) {
+          throw new Error(result.error || `Refund failed: ${response.status}`);
+        }
 
         // Reset refund state
         setRefundItems([]);
@@ -199,7 +188,7 @@ export function useRefund() {
         setRefunding(false);
       }
     },
-    [validateRefund, calculateRefundAmount, refundItems, refundMethod, refundNotes]
+    [validateRefund, refundItems, refundNotes]
   );
 
   const clearRefund = useCallback(() => {

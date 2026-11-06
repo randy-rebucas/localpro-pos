@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { LIST_SAFETY_CAP } from '@/lib/query-utils';
 import connectDB from '@/lib/mongodb';
 import Booking from '@/models/Booking';
 import { requireCustomerAuth } from '@/lib/auth-customer';
@@ -45,13 +46,16 @@ export async function GET(
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
 
+    // Login proves the phone number only. A customer's email is never verified, and
+    // a missing value would match every booking without one.
+    if (!customer.phone) {
+      return NextResponse.json({ success: true, data: [], truncated: false });
+    }
+
     // Build query
     const query: any = { // eslint-disable-line @typescript-eslint/no-explicit-any
       tenantId: customer.tenantId,
-      $or: [
-        { customerEmail: customer.email },
-        { customerPhone: customer.phone },
-      ],
+      customerPhone: customer.phone,
     };
 
     // Add status filter
@@ -73,11 +77,13 @@ export async function GET(
     const bookings = await Booking.find(query)
       .populate('staffId', 'name email')
       .sort({ startTime: -1 }) // Most recent first
+      .limit(LIST_SAFETY_CAP + 1)
       .lean();
 
     return NextResponse.json({
       success: true,
-      data: bookings,
+      data: bookings.slice(0, LIST_SAFETY_CAP),
+      truncated: bookings.length > LIST_SAFETY_CAP,
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     logger.error('Get customer bookings error:', error);

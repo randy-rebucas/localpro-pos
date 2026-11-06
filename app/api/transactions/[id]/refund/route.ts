@@ -1,14 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { planRefund, refundAmountFor, refundedPortion, REFUND_RECEIPT_PREFIX, RefundPlanError, type RefundErrorCode, type RefundPlan } from '@/lib/refund-plan';
 import connectDB from '@/lib/mongodb';
 import Transaction from '@/models/Transaction';
 import Payment from '@/models/Payment';
 import Product from '@/models/Product';
 import Customer from '@/models/Customer';
+import ProductBundle from '@/models/ProductBundle';
+import CashDrawerSession from '@/models/CashDrawerSession';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth, getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
-import { updateStock, insertStockMovements, STOCK_SNAPSHOT_FIELDS, StockMovementInput, StockProductSnapshot } from '@/lib/stock';
+import { updateStock, updateBundleStock, insertStockMovements, STOCK_SNAPSHOT_FIELDS, StockMovementInput, StockProductSnapshot } from '@/lib/stock';
 import { SubscriptionService } from '@/lib/subscription';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkRateLimit } from '@/lib/rate-limit';
@@ -63,59 +66,52 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const currentUser = await getCurrentUser(request);
     const { items, reason, notes } = body;
 
-    // If no items specified, refund all items (full refund)
-    const itemsToRefund = items || transaction.items.map((item: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
-      productId: item.product.toString(),
-      quantity: item.quantity,
-    }));
+    // Works from what earlier refunds left, so a sale can be refunded in parts
+    let plan: RefundPlan;
+    try {
+      plan = planRefund(transaction.items, items);
+    } catch (planError: unknown) {
+      if (!(planError instanceof RefundPlanError)) throw planError;
+      const refundPlanErrors: Record<RefundErrorCode, string> = {
+        invalid_quantity: t('validation.invalidRefundQuantity', 'Refund quantity must be a positive whole number'),
+        item_not_found: t('validation.itemNotFoundInTransaction', 'Item {productId} not found in transaction').replace('{productId}', planError.productId ?? ''),
+        exceeds_remaining: t('validation.cannotRefundMoreThanPurchased', 'Cannot refund more than purchased'),
+        nothing_to_refund: t('validation.nothingToRefund', 'Nothing left to refund on this transaction'),
+      };
+      return NextResponse.json({ success: false, error: refundPlanErrors[planError.code] }, { status: 400 });
+    }
+    const refundItems = plan.allocations;
+    const { isFullRefund } = plan;
+    const refundAmount = refundAmountFor({
+      linesValue: plan.subtotal,
+      saleSubtotal: transaction.subtotal,
+      saleTotal: transaction.total,
+      alreadyRefunded: transaction.refundedAmount,
+      isFullRefund,
+    });
 
-    // Validate items to refund
-    const refundItems: { productId: string; quantity: number; price: number; subtotal: number }[] = [];
-    let refundAmount = 0;
+    // The refund's own share of each figure, so the sales journal can reverse it
+    const portionOf = (saleAmount?: number) =>
+      refundedPortion(saleAmount ?? 0, transaction.total, transaction.refundedAmount ?? 0, refundAmount);
 
-    for (const refundItem of itemsToRefund) {
-      const originalItem = transaction.items.find(
-        (item: any) => item.product.toString() === refundItem.productId // eslint-disable-line @typescript-eslint/no-explicit-any
+    const refundCount = transaction.refundCount ?? 0;
+    const baseRefundReceipt = `${REFUND_RECEIPT_PREFIX}${transaction.receiptNumber || transaction._id.toString().slice(-8)}`;
+    const refundReceiptNumber = refundCount === 0 ? baseRefundReceipt : `${baseRefundReceipt}-${refundCount + 1}`;
+
+    // Partial refunds made before per-line tracking left no record of what they
+    // covered, so another refund here could pay the same items back twice.
+    if (refundCount === 0 && await Transaction.exists({ tenantId, receiptNumber: baseRefundReceipt })) {
+      return NextResponse.json(
+        { success: false, error: t('validation.legacyPartialRefund', 'This sale has an earlier partial refund with no item record. Process any further refund manually.') },
+        { status: 409 }
       );
-
-      if (!originalItem) {
-        const errorMsg = t('validation.itemNotFoundInTransaction', 'Item {productId} not found in transaction').replace('{productId}', refundItem.productId);
-        return NextResponse.json(
-          { success: false, error: errorMsg },
-          { status: 400 }
-        );
-      }
-
-      if (refundItem.quantity > originalItem.quantity) {
-        return NextResponse.json(
-          { success: false, error: t('validation.cannotRefundMoreThanPurchased', 'Cannot refund more than purchased quantity') },
-          { status: 400 }
-        );
-      }
-
-      refundItems.push({
-        productId: refundItem.productId,
-        quantity: refundItem.quantity,
-        price: originalItem.price,
-        subtotal: originalItem.price * refundItem.quantity,
-      });
-
-      refundAmount += originalItem.price * refundItem.quantity;
     }
 
-    // Calculate proportional discount refund if applicable
-    if (transaction.discountAmount && transaction.discountAmount > 0 && transaction.subtotal > 0) {
-      const discountRatio = refundAmount / transaction.subtotal;
-      const refundDiscount = Math.round(transaction.discountAmount * discountRatio * 100) / 100;
-      refundAmount = Math.round((refundAmount - refundDiscount) * 100) / 100;
-    }
-
-    // Mark original transaction as refunded if full refund
-    const isFullRefund = refundItems.length === transaction.items.length &&
-      refundItems.every((item: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-        const original = transaction.items.find((i: any) => i.product.toString() === item.productId); // eslint-disable-line @typescript-eslint/no-explicit-any
-        return original && item.quantity === original.quantity;
-      });
+    // A tenant has one open drawer at a time, and cash comes out of it whoever
+    // processes the refund. Payment.processedBy and the audit log record who did.
+    const openDrawer = transaction.paymentMethod === 'cash'
+      ? await CashDrawerSession.findOne({ tenantId, status: 'open' }).select('userId').lean()
+      : null;
 
     let refundTransaction: any; // eslint-disable-line @typescript-eslint/no-explicit-any
     let refundPayment: any = null; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -128,8 +124,18 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         // Atomic claim: fails if a concurrent refund already changed this
         // transaction's status (double-submit / retry / two staff refunding at once).
         const claimed = await Transaction.findOneAndUpdate(
-          { _id: id, tenantId, status: 'completed' },
-          { $set: { status: isFullRefund ? 'refunded' : 'completed' } },
+          // refundCount makes a concurrent partial refund lose this claim too, so
+          // two requests can't both spend the same remaining quantity.
+          { _id: id, tenantId, status: 'completed', refundCount: refundCount === 0 ? { $in: [0, null] } : refundCount },
+          {
+            $set: {
+              status: isFullRefund ? 'refunded' : 'completed',
+              ...Object.fromEntries(
+                [...plan.refundedQuantities].map(([lineIndex, quantity]) => [`items.${lineIndex}.refundedQuantity`, quantity])
+              ),
+            },
+            $inc: { refundCount: 1, refundedAmount: refundAmount },
+          },
           session ? { session, new: true } : { new: true }
         );
         if (!claimed) {
@@ -139,18 +145,24 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         const [createdRefund] = await Transaction.create(
           [{
             tenantId,
-            items: refundItems.map((item: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+            userId: openDrawer?.userId ?? authUser.userId,
+            items: refundItems.map((item) => ({
               product: item.productId,
-              name: transaction.items.find((i: any) => i.product.toString() === item.productId)?.name || '', // eslint-disable-line @typescript-eslint/no-explicit-any
+              name: item.name,
               price: item.price,
               quantity: item.quantity,
               subtotal: item.subtotal,
             })),
-            subtotal: refundAmount,
+            subtotal: plan.subtotal,
+            discountCategory: transaction.discountCategory,
+            discountAmount: portionOf(transaction.discountAmount),
+            taxAmount: portionOf(transaction.taxAmount),
+            taxExemptAmount: portionOf(transaction.taxExemptAmount),
+            zeroRatedAmount: portionOf(transaction.zeroRatedAmount),
             total: refundAmount,
             paymentMethod: transaction.paymentMethod,
             status: 'refunded',
-            receiptNumber: `REF-${transaction.receiptNumber || transaction._id.toString().slice(-8)}`,
+            receiptNumber: refundReceiptNumber,
             notes: notes || reason || 'Refund',
           }],
           session ? { session } : {}
@@ -160,8 +172,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         // Restore stock for refunded items (only if product tracks inventory).
         // One batched product read (reused as updateStock snapshots) and one
         // movement insert, instead of two reads + an insert per item.
+        // A product on several lines is restored once, with the combined quantity.
+        const stockReturns = new Map<string, number>();
+        for (const item of refundItems) {
+          if (item.productId) stockReturns.set(item.productId, (stockReturns.get(item.productId) ?? 0) + item.quantity);
+        }
         const refundProductsQuery = Product.find({
-          _id: { $in: refundItems.map((i: { productId: string }) => i.productId) },
+          _id: { $in: [...stockReturns.keys()] },
           tenantId,
         })
           .select(STOCK_SNAPSHOT_FIELDS)
@@ -169,13 +186,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         if (session) refundProductsQuery.session(session);
         const refundProducts = new Map((await refundProductsQuery).map((p) => [p._id.toString(), p]));
         const refundMovements: StockMovementInput[] = [];
-        for (const refundItem of refundItems) {
-          const product = refundProducts.get(String(refundItem.productId));
+        for (const [productId, quantity] of stockReturns) {
+          const product = refundProducts.get(productId);
           if (product && product.trackInventory !== false) {
             await updateStock(
-              refundItem.productId,
+              productId,
               tenantId,
-              refundItem.quantity, // Positive to restore
+              quantity, // Positive to restore
               'return',
               {
                 transactionId: refundTransaction._id.toString(),
@@ -188,13 +205,39 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             );
           }
         }
+
+        // Anything left is a bundle line, which returns its component products
+        const bundleIds = [...stockReturns.keys()].filter((id) => !refundProducts.has(id));
+        if (bundleIds.length > 0) {
+          const bundlesQuery = ProductBundle.find({ _id: { $in: bundleIds }, tenantId })
+            .select('name trackInventory items')
+            .lean();
+          if (session) bundlesQuery.session(session);
+          for (const bundle of await bundlesQuery) {
+            const bundleId = bundle._id.toString();
+            await updateBundleStock(
+              bundleId,
+              tenantId,
+              stockReturns.get(bundleId) ?? 0,
+              'return',
+              {
+                transactionId: refundTransaction._id.toString(),
+                reason: reason || 'Transaction refund',
+                notes: notes,
+                movements: refundMovements,
+              },
+              session,
+              { bundle }
+            );
+          }
+        }
         await insertStockMovements(refundMovements, session);
 
         // Create Payment refund record if original payment exists
         const originalPaymentQuery = Payment.findOne({
           tenantId,
           transactionId: transaction._id,
-          status: 'completed',
+          status: { $in: ['completed', 'partially_refunded'] },
         });
         const originalPayment = session ? await originalPaymentQuery.session(session) : await originalPaymentQuery;
 
@@ -216,7 +259,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           );
           refundPayment = createdPayment;
 
-          originalPayment.status = 'refunded';
+          // Only a refund that covers the whole payment marks it refunded
+          const paymentRefundedTotal = Math.round(((originalPayment.refundedAmount ?? 0) + refundAmount) * 100) / 100;
+          originalPayment.status = isFullRefund || paymentRefundedTotal >= originalPayment.amount
+            ? 'refunded'
+            : 'partially_refunded';
+          originalPayment.refundedAmount = paymentRefundedTotal;
           originalPayment.refundedAt = new Date();
           originalPayment.refundReason = body.reason || body.notes || 'Transaction refund';
           await originalPayment.save(session ? { session } : {});
@@ -278,7 +326,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     // Best-effort external side effects — kept outside the DB transaction
     {
-      const ids = refundItems.map((x) => x.productId);
+      const ids = [...new Set(refundItems.flatMap((x) => (x.productId ? [x.productId] : [])))];
       const { pushChannelInventoryForProducts } = await import('@/lib/ecommerce/inventory-push');
       void pushChannelInventoryForProducts(tenantId, ids, {
         stockReason: reason || 'Transaction refund',
@@ -301,7 +349,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           accessToken,
           tenantId,
           transaction.externalOrderId,
-          refundItems.map((i) => ({ productId: i.productId, quantity: i.quantity })),
+          refundItems.flatMap((i) => (i.productId ? [{ productId: i.productId, quantity: i.quantity }] : [])),
           refundAmount
         );
       }

@@ -29,7 +29,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const t = await getValidationTranslatorFromRequest(request);
     
     const transaction = await Transaction.findOne({ _id: id, tenantId, isActive: { $ne: false } })
-      .populate('items.product', 'name sku')
+      // Bundle lines and deleted products have no Product doc; keep their id instead of null
+      .populate({ path: 'items.product', select: 'name sku', transform: (doc, id) => doc ?? id })
       .populate('userId', 'name email')
       .lean();
     
@@ -103,8 +104,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (body.status === 'cancelled') {
       // Atomic claim: guards against a concurrent void/refund racing on the
       // same transaction (double-click, retry) before either write lands.
+      // A partly refunded sale stays 'completed', so refundCount is what blocks voiding it.
       const claimed = await Transaction.findOneAndUpdate(
-        { _id: id, tenantId, status: transaction.status },
+        { _id: id, tenantId, status: transaction.status, refundCount: { $in: [0, null] } },
         { $set: { status: 'cancelled' } },
         { new: true }
       );

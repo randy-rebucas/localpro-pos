@@ -5,6 +5,7 @@ export interface IBooking extends Document {
   customerName: string;
   customerEmail?: string;
   customerPhone?: string;
+  bookedByUserId?: mongoose.Types.ObjectId; // Account that made the booking; emails aren't verified, so they can't prove this
   serviceName: string;
   serviceDescription?: string;
   startTime: Date;
@@ -32,6 +33,10 @@ const BookingSchema: Schema = new Schema(
       type: String,
       required: [true, 'Customer name is required'],
       trim: true,
+    },
+    bookedByUserId: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
     },
     customerEmail: {
       type: String,

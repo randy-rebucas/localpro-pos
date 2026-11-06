@@ -326,11 +326,11 @@ export async function updateBundleStock(
 
   // Update stock for each item in the bundle
   for (const item of bundle.items) {
-    const itemQuantity = item.quantity * quantity; // Multiply by bundle quantity
+    const itemQuantity = item.quantity * quantity; // Same sign as `quantity`: negative for a sale
     await updateStock(
       item.productId.toString(),
       tenantId,
-      -itemQuantity, // Negative for sale, positive for purchase
+      itemQuantity,
       type,
       {
         ...options,

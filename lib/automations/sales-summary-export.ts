@@ -41,6 +41,10 @@ export interface SalesSummaryPayload {
   discountTotal: number;
   transactionCount: number;
   voidCount: number;
+  refundCount: number;
+  refundTotal: number;
+  refundVatAmount: number;
+  netSales: number;
   grandTotalSales: number;
   grandTotalRegister: string; // zero-padded 10-digit display format
   generatedAt: string;
@@ -58,6 +62,7 @@ async function aggregateMonth(tenantId: string, monthStart: Date) {
   const totals = {
     grossSales: 0, vatableSales: 0, vatAmount: 0, vatExemptSales: 0,
     zeroRatedSales: 0, discountTotal: 0, transactionCount: 0, voidCount: 0,
+    refundCount: 0, refundTotal: 0, refundVatAmount: 0, netSales: 0,
   };
 
   for (let day = new Date(monthStart); day < monthEnd; day.setDate(day.getDate() + 1)) {
@@ -70,6 +75,10 @@ async function aggregateMonth(tenantId: string, monthStart: Date) {
     totals.discountTotal += daily.discountTotal;
     totals.transactionCount += daily.transactionCount;
     totals.voidCount += daily.voidCount;
+    totals.refundCount += daily.refundCount;
+    totals.refundTotal += daily.refundTotal;
+    totals.refundVatAmount += daily.refundVatAmount;
+    totals.netSales += daily.netSales;
   }
 
   return { ...totals, startDate: monthStart, endDate: monthEnd };
@@ -106,7 +115,7 @@ export async function generateSalesSummaryExport(
     for (const tenant of tenants) {
       const tenantId = tenant._id.toString();
       try {
-        let aggregate: { grossSales: number; vatableSales: number; vatAmount: number; vatExemptSales: number; zeroRatedSales: number; discountTotal: number; transactionCount: number; voidCount: number; startDate: Date; endDate: Date };
+        let aggregate: { grossSales: number; vatableSales: number; vatAmount: number; vatExemptSales: number; zeroRatedSales: number; discountTotal: number; transactionCount: number; voidCount: number; refundCount: number; refundTotal: number; refundVatAmount: number; netSales: number; startDate: Date; endDate: Date };
 
         if (options.period === 'daily') {
           const businessDate = options.businessDate ?? (() => {
@@ -139,6 +148,10 @@ export async function generateSalesSummaryExport(
           discountTotal: aggregate.discountTotal,
           transactionCount: aggregate.transactionCount,
           voidCount: aggregate.voidCount,
+          refundCount: aggregate.refundCount,
+          refundTotal: aggregate.refundTotal,
+          refundVatAmount: aggregate.refundVatAmount,
+          netSales: aggregate.netSales,
           grandTotalSales: tenant.grandTotalSales || 0,
           grandTotalRegister: formatGrandTotalRegister(tenant.grandTotalSales || 0),
           generatedAt: new Date().toISOString(),

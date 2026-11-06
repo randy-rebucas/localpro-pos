@@ -1,6 +1,6 @@
 # Database cost & performance
 
-MongoDB Atlas (Flex/Serverless) bills per document and index key read and written. These are the mechanisms that keep the count down. Please keep them in mind when adding routes, models or cron jobs.
+How Atlas charges depends on the cluster tier, so check the tier before treating read counts as cost: Flex bills in ops/sec bands, and dedicated tiers bill mainly for cluster size. Atlas Serverless, which billed per read, has been retired. These mechanisms keep database load down. Please keep them in mind when adding routes, models or cron jobs.
 
 ## In-process cache (`lib/cache.ts`)
 
@@ -51,7 +51,7 @@ Rules for new indexes:
 
 ## Retention
 
-- **AuditLog:** there is no TTL. `lib/automations/audit-log-cleanup.ts` runs daily and moves logs older than 90 days into `ArchivedAuditLog` using `$merge`. `/api/audit-logs/export` reads both collections.
+- **AuditLog:** live logs expire after 90 days through a TTL index. `lib/automations/audit-log-cleanup.ts` runs daily and moves logs older than 89 days into `ArchivedAuditLog` using `$merge`, so the TTL only removes a log the job failed to archive. It must stay daily, and within a day of the TTL. `/api/audit-logs/export` reads both collections.
 - **TTL indexes:**
   - `PosSession`: 1h idle, on `updatedAt`
   - `OfflineTransaction`: 30 days after sync
@@ -76,6 +76,50 @@ Rules for new indexes:
   - The customer display polls every 2s.
   - Subscription status refreshes every 30 min.
   - `/api/auth/me` runs on mount, on focus (at most once a minute), and on navigation only while signed out.
+
+## Query limits
+
+`lib/query-utils.ts` holds the shared helpers:
+- `escapeRegex`: use it on any user input that goes into a `$regex`.
+- `REPORT_MAX_TIME_MS` (30s): report and dashboard queries. BIR exports get a time limit and a projection but no row cap, because they must be complete.
+- `INTERACTIVE_MAX_TIME_MS` (3s): non-critical POS reads such as upsell suggestions.
+
+Super-admin top tenants and platform transaction stats are cached for 10 minutes per instance (`platform:top-tenants`, `platform:tx-stats:<range>`), because they scan all transactions.
+
+Upsell co-occurrence scores are cached for 5 minutes per tenant and cart (`upsell:<tenantId>:<productIds>`). Stock is still checked live.
+
+**Aggregates aren't cast.** Mongoose casts `find` filters but not `aggregate` pipelines, and `requireTenantAccess` returns `tenantId` as a string. An uncast id in `$match` returns no rows and no error, so wrap ids in `new mongoose.Types.ObjectId()`.
+
+Bundle analytics reads `items[].product`, where checkout stores a bundle line's id. `bundleId` isn't in the transaction item schema.
+
+Lists that clients load in full (`/api/bookings`, `/api/bookings/customer/[customerId]`, `/api/expenses`) stop at `LIST_SAFETY_CAP` rows and set `truncated: true`. They keep the newest rows, so upcoming bookings are never dropped.
+
+## Refunds
+
+A sale can be refunded in parts. Refunded quantities live on each line (`items[].refundedQuantity`), and `lib/refund-plan.ts` works out what's left. `refundCount` guards the atomic claim, so concurrent refunds can't both spend the same quantity.
+
+- The sale stays `completed` until everything is refunded, because reports filter on that status.
+- The original Payment becomes `partially_refunded`, with a running `refundedAmount`, until it's fully covered.
+- Each refund pays the lines' share of the sale total, so discounts, tax and loyalty redemptions come back in proportion. The last refund pays exactly what's left, so a sale's refunds always add up to its total. Lines don't record tax exemption, so in a basket mixing exempt and taxable items the split between partial refunds is approximate, though the overall total is exact.
+- A sale with any refund against it can't be voided.
+- Refund records store their share of discount, tax, exempt and zero-rated amounts. The sales journal keeps each sale as recorded and shows each refund as a negative line on the refund's date, so totals net out without changing a past period. Voids stay listed at zero. Refunds made before these fields existed show their total with no tax split.
+- Refund receipts are `REF-<receipt>`, then `REF-<receipt>-2` and so on. `isRefundRecord` in `lib/refund-plan.ts` is the one rule for telling a refund record from a refunded sale, which share the `refunded` status.
+- Cash drawers count a sale even if it's refunded later, and take each refund from the drawer of the user who processed it, in the session it was paid. A cash refund belongs to the tenant's open drawer, whoever processes it; `Payment.processedBy` and the audit log record who did. With no drawer open it comes out of none.
+- X and Z readings keep sale figures as sold, so gross sales reconcile with the Grand Total, which never goes down. Refunds paid that day are reported beside them with net sales. Stored Z readings are never recalculated, so ones from before this show no refunds.
+- The CAS report shows a refund as a credit on its own date.
+- Sales analytics (`lib/analytics.ts`, `/api/transactions/stats`) report what was kept, on the sale's date: a fully refunded sale leaves, a partly refunded one counts net. Accounting reports show the refund on its own date instead, so the two can differ for a period.
+- Refunding a bundle line returns its component products. Manual lines are refunded by their line id, as the POS sends it.
+- A sale partially refunded before this tracking existed returns 409 instead of risking a double payout, because nothing records which items that refund covered.
+
+## Booking ownership
+
+Emails aren't verified, and `/api/auth/register` is public, so an email can't prove whose booking it is. "My bookings" reads `Booking.bookedByUserId` for accounts, and the verified phone number for customers who log in by OTP. `pnpm db:backfill-booking-accounts` links older bookings, only to accounts that existed when the booking was made.
+
+## User email uniqueness
+
+Emails are unique per tenant through `{ tenantId, email }`. Every tenant login path includes the tenant. Tenant signup and super-admin tenant creation still check globally, so a new business can't reuse an existing account's email.
+
+Changing `email_1` from unique to non-unique takes effect when you run `pnpm db:sync-indexes --apply --only=User`. Until then the old global rule stays in force. Review the dry run first.
 
 ## Cron (`vercel.json`)
 

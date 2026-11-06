@@ -5,6 +5,17 @@ import Transaction from '@/models/Transaction';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { logger } from '@/lib/logger';
+import { REPORT_MAX_TIME_MS } from '@/lib/query-utils';
+import mongoose from 'mongoose';
+
+const DEFAULT_RANGE_DAYS = 90;
+
+type BundleSales = {
+  _id: mongoose.Types.ObjectId;
+  totalSales: number;
+  totalQuantity: number;
+  transactionCount: number;
+};
 
 /**
  * Get bundle analytics - sales performance metrics
@@ -23,24 +34,12 @@ export async function GET(request: NextRequest) {
     const endDate = searchParams.get('endDate');
     const bundleId = searchParams.get('bundleId');
 
-    // Build date query
-    const dateQuery: any = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
-    if (startDate) dateQuery.$gte = new Date(startDate);
-    if (endDate) {
-      const end = new Date(endDate);
-      end.setHours(23, 59, 59, 999);
-      dateQuery.$lte = end;
-    }
-
-    // Get all transactions in the date range
-    const transactionQuery: any = { tenantId, status: 'completed' }; // eslint-disable-line @typescript-eslint/no-explicit-any
-    if (Object.keys(dateQuery).length > 0) {
-      transactionQuery.createdAt = dateQuery;
-    }
-
-    const transactions = await Transaction.find(transactionQuery)
-      .select('items createdAt total')
-      .lean();
+    // Bounded by default, so a call without dates can't read a tenant's whole history
+    const rangeStart = startDate
+      ? new Date(startDate)
+      : new Date(Date.now() - DEFAULT_RANGE_DAYS * 86_400_000);
+    const rangeEnd = endDate ? new Date(endDate) : new Date();
+    rangeEnd.setHours(23, 59, 59, 999);
 
     // Get all bundles
     const bundleQuery: any = { tenantId }; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -48,25 +47,40 @@ export async function GET(request: NextRequest) {
     const bundles = await ProductBundle.find(bundleQuery)
       .select('_id name price')
       .lean();
+    const bundleIds = bundles.map((bundle) => bundle._id);
+
+    // Checkout stores a bundle line's id in items[].product. Aggregates aren't
+    // cast by Mongoose, so tenantId has to be an ObjectId here.
+    const salesMatch = {
+      tenantId: new mongoose.Types.ObjectId(tenantId),
+      status: 'completed',
+      createdAt: { $gte: rangeStart, $lte: rangeEnd },
+      'items.product': { $in: bundleIds },
+    };
+    const [sales, totalTransactions] = await Promise.all([
+      Transaction.aggregate<BundleSales>([
+        { $match: salesMatch },
+        { $unwind: '$items' },
+        { $match: { 'items.product': { $in: bundleIds } } },
+        {
+          $group: {
+            _id: '$items.product',
+            totalSales: { $sum: '$items.subtotal' },
+            totalQuantity: { $sum: '$items.quantity' },
+            transactionCount: { $sum: 1 },
+          },
+        },
+      ]).option({ maxTimeMS: REPORT_MAX_TIME_MS }),
+      Transaction.countDocuments(salesMatch).maxTimeMS(REPORT_MAX_TIME_MS),
+    ]);
+    const salesByBundle = new Map(sales.map((row) => [row._id.toString(), row]));
 
     // Calculate analytics for each bundle
     const analytics = bundles.map(bundle => {
-      let totalSales = 0;
-      let totalQuantity = 0;
-      let transactionCount = 0;
-
-      // Filter transactions that include this bundle
-      transactions.forEach(transaction => {
-        transaction.items.forEach((item: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-          // Check if item has bundleId (stored but not in schema)
-          const itemBundleId = (item as any).bundleId; // eslint-disable-line @typescript-eslint/no-explicit-any
-          if (itemBundleId && itemBundleId.toString() === bundle._id.toString()) {
-            totalSales += item.subtotal;
-            totalQuantity += item.quantity;
-            transactionCount++;
-          }
-        });
-      });
+      const row = salesByBundle.get(bundle._id.toString());
+      const totalSales = row?.totalSales ?? 0;
+      const totalQuantity = row?.totalQuantity ?? 0;
+      const transactionCount = row?.transactionCount ?? 0;
 
       const averageOrderValue = transactionCount > 0 ? totalSales / transactionCount : 0;
       const averageQuantity = transactionCount > 0 ? totalQuantity / transactionCount : 0;
@@ -92,13 +106,7 @@ export async function GET(request: NextRequest) {
       totalBundles: analytics.length,
       totalSales: analytics.reduce((sum, a) => sum + a.totalSales, 0),
       totalQuantity: analytics.reduce((sum, a) => sum + a.totalQuantity, 0),
-      totalTransactions: new Set(
-        transactions.flatMap(t => 
-          t.items
-            .filter((item: any) => (item as any).bundleId) // eslint-disable-line @typescript-eslint/no-explicit-any
-            .map((_item: any) => t._id.toString()) // eslint-disable-line @typescript-eslint/no-explicit-any
-        )
-      ).size,
+      totalTransactions,
     };
 
     return NextResponse.json({
@@ -107,8 +115,8 @@ export async function GET(request: NextRequest) {
         analytics,
         summary,
         period: {
-          startDate: startDate || null,
-          endDate: endDate || null,
+          startDate: rangeStart.toISOString(),
+          endDate: rangeEnd.toISOString(),
         },
       },
     });

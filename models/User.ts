@@ -23,7 +23,9 @@ const UserSchema: Schema = new Schema(
     email: {
       type: String,
       required: [true, 'Email is required'],
-      unique: true,
+      // Unique per tenant through the { tenantId, email } index below. This one
+      // only serves lookups that have no tenant, such as super-admin login.
+      index: true,
       lowercase: true,
       trim: true,
       match: [/^\S+@\S+\.\S+$/, 'Please provide a valid email'],

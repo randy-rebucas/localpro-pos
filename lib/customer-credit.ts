@@ -30,7 +30,7 @@ export async function getOnAccountTotalForTransaction(
     tenantId,
     transactionId,
     method: 'on_account',
-    status: 'completed',
+    status: { $in: ['completed', 'partially_refunded'] },
   })
     .select('amount')
     .lean();

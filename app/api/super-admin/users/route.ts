@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { escapeRegex } from '@/lib/query-utils';
 import connectDB from '@/lib/mongodb';
 import User from '@/models/User';
 import Tenant from '@/models/Tenant';
@@ -24,8 +25,8 @@ export async function GET(request: NextRequest) {
 
     if (search) {
       query.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } },
+        { name: { $regex: escapeRegex(search), $options: 'i' } },
+        { email: { $regex: escapeRegex(search), $options: 'i' } },
       ];
     }
 

@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { REPORT_MAX_TIME_MS } from '@/lib/query-utils';
+import { isRefundRecord } from '@/lib/refund-plan';
 import connectDB from '@/lib/mongodb';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
@@ -10,6 +12,16 @@ import { checkFeatureAccess } from '@/lib/subscription';
 import { arrayToCSV } from '@/lib/export';
 import { logger } from '@/lib/logger';
 import { resolveTenantDateRange, DEFAULT_TENANT_TIMEZONE } from '@/lib/timezone';
+
+type JournalEntryType = 'sale' | 'refund' | 'void';
+
+/** Sales stay as recorded, refunds reverse them on the refund's date, voids count for nothing. */
+const JOURNAL_SIGN: Record<JournalEntryType, number> = { sale: 1, refund: -1, void: 0 };
+
+function journalEntryType(txn: { status?: string; receiptNumber?: string }): JournalEntryType {
+  if (txn.status === 'cancelled') return 'void';
+  return isRefundRecord(txn) ? 'refund' : 'sale';
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -53,31 +65,38 @@ export async function GET(request: NextRequest) {
       tenantId,
       createdAt: { $gte: startDate, $lte: endDate },
     })
+      .select('createdAt receiptNumber paymentMethod status subtotal total taxAmount taxExemptAmount discountAmount discountCategory items.name')
       .sort({ createdAt: -1 })
+      .maxTimeMS(REPORT_MAX_TIME_MS)
       .lean();
 
     // Map to sales journal format
-    const journalEntries = transactions.map((txn: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
-      receiptNumber: txn.receiptNumber || '',
-      date: new Date(txn.createdAt).toLocaleDateString('en-CA', { timeZone: tenantTz }),
-      time: new Date(txn.createdAt).toLocaleTimeString('en-US', { timeZone: tenantTz, hour12: tenantTimeFormat === '12h' }),
-      items: txn.items?.map((item: any) => item.name).join('; ') || '', // eslint-disable-line @typescript-eslint/no-explicit-any
-      itemCount: txn.items?.length || 0,
-      subtotal: txn.subtotal || 0,
-      discountCategory: txn.discountCategory || '',
-      discountAmount: txn.discountAmount || 0,
-      taxExemptAmount: txn.taxExemptAmount || 0,
-      taxAmount: txn.taxAmount || 0,
-      total: txn.total || 0,
-      paymentMethod: txn.paymentMethod || '',
-      status: txn.status || '',
-    }));
+    const journalEntries = transactions.map((txn: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+      const entryType = journalEntryType(txn);
+      const sign = JOURNAL_SIGN[entryType];
+      return {
+        receiptNumber: txn.receiptNumber || '',
+        date: new Date(txn.createdAt).toLocaleDateString('en-CA', { timeZone: tenantTz }),
+        time: new Date(txn.createdAt).toLocaleTimeString('en-US', { timeZone: tenantTz, hour12: tenantTimeFormat === '12h' }),
+        items: txn.items?.map((item: any) => item.name).join('; ') || '', // eslint-disable-line @typescript-eslint/no-explicit-any
+        itemCount: txn.items?.length || 0,
+        subtotal: sign * (txn.subtotal || 0),
+        discountCategory: txn.discountCategory || '',
+        discountAmount: sign * (txn.discountAmount || 0),
+        taxExemptAmount: sign * (txn.taxExemptAmount || 0),
+        taxAmount: sign * (txn.taxAmount || 0),
+        total: sign * (txn.total || 0),
+        paymentMethod: txn.paymentMethod || '',
+        status: txn.status || '',
+        entryType,
+      };
+    });
 
     if (format === 'csv') {
       const headers = [
         'receiptNumber', 'date', 'time', 'items', 'itemCount',
         'subtotal', 'discountCategory', 'discountAmount',
-        'taxExemptAmount', 'taxAmount', 'total', 'paymentMethod', 'status',
+        'taxExemptAmount', 'taxAmount', 'total', 'paymentMethod', 'status', 'entryType',
       ];
       const csv = arrayToCSV(journalEntries, headers);
       return new NextResponse(csv, {
@@ -88,16 +107,19 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    const netOf = (field: 'total' | 'taxAmount' | 'discountAmount' | 'taxExemptAmount') =>
+      Math.round(journalEntries.reduce((sum, entry) => sum + entry[field], 0) * 100) / 100;
+
     return NextResponse.json({
       success: true,
       data: {
         entries: journalEntries,
         summary: {
-          totalTransactions: journalEntries.length,
-          totalSales: journalEntries.reduce((sum: number, e: any) => sum + e.total, 0), // eslint-disable-line @typescript-eslint/no-explicit-any
-          totalTax: journalEntries.reduce((sum: number, e: any) => sum + e.taxAmount, 0), // eslint-disable-line @typescript-eslint/no-explicit-any
-          totalDiscounts: journalEntries.reduce((sum: number, e: any) => sum + e.discountAmount, 0), // eslint-disable-line @typescript-eslint/no-explicit-any
-          totalTaxExempt: journalEntries.reduce((sum: number, e: any) => sum + e.taxExemptAmount, 0), // eslint-disable-line @typescript-eslint/no-explicit-any
+          totalTransactions: journalEntries.filter((entry) => entry.entryType === 'sale').length,
+          totalSales: netOf('total'),
+          totalTax: netOf('taxAmount'),
+          totalDiscounts: netOf('discountAmount'),
+          totalTaxExempt: netOf('taxExemptAmount'),
         },
         startDate: startDate.toISOString(),
         endDate: endDate.toISOString(),

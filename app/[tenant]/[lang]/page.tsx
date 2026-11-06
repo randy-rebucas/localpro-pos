@@ -1,5 +1,6 @@
 'use client';
 
+import { saleLineKey } from '@/lib/refund-plan';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import Navbar from '@/components/Navbar';
 import Currency from '@/components/Currency';
@@ -656,7 +657,10 @@ export default function Dashboard() {
         refundItems.forEach((item) => removeRefundItem(item.productId));
         // Add all transaction items for refund selection
         transaction.items.forEach((item: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-          addRefundItem(item.product.toString(), item.quantity);
+          // Skip what earlier refunds took
+          const remaining = item.quantity - (item.refundedQuantity ?? 0);
+          const productId = saleLineKey(item);
+          if (productId && remaining > 0) addRefundItem(productId, remaining);
         });
       } else {
         showToast.error(data.error || dict.pos.noTransactionFound);

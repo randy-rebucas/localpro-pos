@@ -77,6 +77,10 @@ export function useExpensesList(): UseExpensesListReturn {
       const data = await res.json();
       if (data.success) {
         setExpenses(data.data || []);
+        // The total on this screen only covers what was loaded
+        if (data.truncated) {
+          setMessage({ type: 'error', text: 'Showing the latest 1,000 expenses, so the total is incomplete. Narrow the date range.' });
+        }
         // Extract unique expense names
         const uniqueNames = Array.from(new Set((data.data || []).map((e: Expense) => e.name))).sort() as string[];
         setExpenseNames(uniqueNames);
