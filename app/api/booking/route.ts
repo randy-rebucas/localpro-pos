@@ -111,6 +111,7 @@ export async function POST(request: NextRequest) {
       tenantId: tenant._id,
       customerName: user.name,
       customerEmail: user.email,
+      bookedByUserId: user._id,
       serviceName,
       serviceDescription,
       startTime: bookingStartTime,
@@ -208,7 +209,7 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status');
     const filter: Record<string, any> = { // eslint-disable-line @typescript-eslint/no-explicit-any
       tenantId: tenant._id,
-      customerEmail: user.email,
+      bookedByUserId: user._id,
     };
 
     if (status) {

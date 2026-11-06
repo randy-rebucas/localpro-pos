@@ -80,7 +80,7 @@ describe('POST /api/booking tenant isolation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockRequireAuth.mockResolvedValue({ userId: USER_A, tenantId: TENANT_A, role: 'viewer' });
-    mockUserFindById.mockReturnValue(lean({ name: 'Person', email: 'person@example.com' }));
+    mockUserFindById.mockReturnValue(lean({ _id: USER_A, name: 'Person', email: 'person@example.com' }));
     mockBookingFindOne.mockReturnValue(lean(null));
     mockBookingCreate.mockResolvedValue({ _id: { toString: () => 'booking-1' } });
   });
@@ -108,8 +108,8 @@ describe('POST /api/booking tenant isolation', () => {
 describe('GET /api/booking tenant isolation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockUserFindOne.mockReturnValue(lean({ email: 'person@example.com' }));
-    mockUserFindById.mockReturnValue(lean({ email: 'person@example.com' }));
+    mockUserFindOne.mockReturnValue(lean({ _id: USER_A, email: 'person@example.com' }));
+    mockUserFindById.mockReturnValue(lean({ _id: USER_A, email: 'person@example.com' }));
     mockBookingFind.mockReturnValue({
       sort: vi.fn().mockReturnValue({
         limit: vi.fn().mockReturnValue(lean([{ _id: 'booking-1' }])),
@@ -158,7 +158,9 @@ describe('GET /api/booking tenant isolation', () => {
 
     expect(res.status).toBe(200);
     expect((await res.json()).data).toHaveLength(1);
-    expect(mockBookingFind.mock.calls[0][0]).toMatchObject({ customerEmail: 'person@example.com' });
+    const filter = mockBookingFind.mock.calls[0][0];
+    expect(String(filter.bookedByUserId)).toBe(USER_A);
+    expect(filter).not.toHaveProperty('customerEmail');
   });
 
   it("lets a manager list a colleague's bookings in the same tenant", async () => {

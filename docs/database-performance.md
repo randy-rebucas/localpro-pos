@@ -111,6 +111,16 @@ A sale can be refunded in parts. Refunded quantities live on each line (`items[]
 - Refunding a bundle line returns its component products. Manual lines are refunded by their line id, as the POS sends it.
 - A sale partially refunded before this tracking existed returns 409 instead of risking a double payout, because nothing records which items that refund covered.
 
+## Booking ownership
+
+Emails aren't verified, and `/api/auth/register` is public, so an email can't prove whose booking it is. "My bookings" reads `Booking.bookedByUserId` for accounts, and the verified phone number for customers who log in by OTP. `pnpm db:backfill-booking-accounts` links older bookings, only to accounts that existed when the booking was made.
+
+## User email uniqueness
+
+Emails are unique per tenant through `{ tenantId, email }`. Every tenant login path includes the tenant. Tenant signup and super-admin tenant creation still check globally, so a new business can't reuse an existing account's email.
+
+Changing `email_1` from unique to non-unique takes effect when you run `pnpm db:sync-indexes --apply --only=User`. Until then the old global rule stays in force. Review the dry run first.
+
 ## Cron (`vercel.json`)
 
 Only `vercel.json` schedules jobs; `lib/cron.ts` is never initialized. If you self-host with `lib/cron.ts`, its intervals don't match the time windows below. For example, suspicious-activity would need `windowMinutes: 15`.
