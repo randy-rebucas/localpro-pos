@@ -17,10 +17,10 @@ function DashboardMockup() {
   const bars = [42, 67, 53, 80, 61, 74, 88, 65, 71, 93, 82, 78];
   const months = ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar'];
   const txns = [
-    { id: '#4821', item: 'Chicken Rice Meal', amt: '₱185', status: 'Paid', color: 'text-emerald-400' },
-    { id: '#4820', item: 'Coffee + Pastry Set', amt: '₱220', status: 'Paid', color: 'text-emerald-400' },
-    { id: '#4819', item: 'Laundry — 5kg', amt: '₱350', status: 'Paid', color: 'text-emerald-400' },
-    { id: '#4818', item: 'Haircut Service', amt: '₱250', status: 'Refund', color: 'text-red-400' },
+    { id: '#4821', item: 'Canned Goods Bundle', amt: '₱185', status: 'Paid', color: 'text-emerald-400' },
+    { id: '#4820', item: 'Coffee Gift Set', amt: '₱220', status: 'Paid', color: 'text-emerald-400' },
+    { id: '#4819', item: 'Rice — 5kg Sack', amt: '₱350', status: 'Paid', color: 'text-emerald-400' },
+    { id: '#4818', item: 'Phone Charger', amt: '₱250', status: 'Refund', color: 'text-red-400' },
     { id: '#4817', item: 'T-Shirt (M, Blue)', amt: '₱599', status: 'Paid', color: 'text-emerald-400' },
   ];
   const navItems = ['Dashboard', 'Point of Sale', 'Products', 'Customers', 'Inventory', 'Reports', 'Settings'];
@@ -189,16 +189,13 @@ export default function MarketingPageClient() {
 
   const businessTypes = [
     { emoji: '🏪', name: 'Retail', desc: d?.retailDesc || 'Product & inventory focused', gradient: 'from-brand/70 to-brand-navy/90', img: '/images/business/retail.jpg', alt: 'Retail store' },
-    { emoji: '🍕', name: 'Restaurant', desc: d?.restaurantDesc || 'Menu & table management', gradient: 'from-orange-600/70 to-red-800/90', img: '/images/business/restaurant.jpg', alt: 'Restaurant' },
-    { emoji: '👔', name: 'Laundry', desc: d?.laundryDesc || 'Weight-based pricing', gradient: 'from-cyan-600/70 to-brand-navy-deep/90', img: '/images/business/laundry.jpg', alt: 'Laundry shop' },
-    { emoji: '💼', name: 'Service', desc: d?.serviceDesc || 'Time-based bookings', gradient: 'from-indigo-600/70 to-purple-900/90', img: '/images/business/service.jpg', alt: 'Service business' },
     { emoji: '🔧', name: 'General', desc: d?.generalDesc || 'Fully flexible setup', gradient: 'from-slate-600/70 to-slate-900/90', img: '/images/business/general.jpg', alt: 'General business' },
   ];
 
   const testimonials = [
     { quote: d?.testimonial1Quote || '1pos transformed how we run our retail chain. The real-time inventory and multi-branch reporting paid for itself within the first month.', name: d?.testimonial1Name || 'Maria Santos', role: d?.testimonial1Role || 'Owner, Santos Retail Group' },
-    { quote: d?.testimonial2Quote || 'The automated workflows alone save my team 3+ hours every day — reminders, stock alerts, and scheduled reports just run themselves.', name: d?.testimonial2Name || 'James Reyes', role: d?.testimonial2Role || 'Operations Manager, FastBite Restaurants' },
-    { quote: d?.testimonial3Quote || 'We replaced three separate tools with 1pos. Bookings, customer CRM, and POS all in one platform is an absolute game changer.', name: d?.testimonial3Name || 'Ana Cruz', role: d?.testimonial3Role || 'Director, Cruz Service Centers' },
+    { quote: d?.testimonial2Quote || 'The automated workflows alone save my team 3+ hours every day — reminders, stock alerts, and scheduled reports just run themselves.', name: d?.testimonial2Name || 'James Reyes', role: d?.testimonial2Role || 'Operations Manager' },
+    { quote: d?.testimonial3Quote || 'We replaced three separate tools with 1pos. Bookings, customer CRM, and POS all in one platform is an absolute game changer.', name: d?.testimonial3Name || 'Ana Cruz', role: d?.testimonial3Role || 'Director' },
   ];
 
   const benefits = [
@@ -552,13 +549,13 @@ export default function MarketingPageClient() {
                 {d?.solutionsBadge || 'VERSATILE SOLUTION'}
               </div>
               <h2 id="solutions-heading" className="text-5xl md:text-6xl font-bold mb-5 text-gray-900">
-                {d?.solutionsHeading || 'Built for Every Business'}
+                {d?.solutionsHeading || 'Built for Your Business'}
               </h2>
               <p className="text-xl text-gray-500 max-w-2xl mx-auto">
-                {d?.solutionsDesc || 'Industry-specific configurations tailored to your business model'}
+                {d?.solutionsDesc || 'Purpose-built for retail, with a flexible setup for any other business'}
               </p>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 max-w-3xl mx-auto">
               {businessTypes.map((type) => (
                 <div key={type.name} className="group relative overflow-hidden shadow-md hover:shadow-2xl transition-all duration-300 hover:-translate-y-2" style={{ minHeight: '280px' }}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}

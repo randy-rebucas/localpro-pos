@@ -83,7 +83,7 @@ After creating your tenant, complete these steps:
 - [ ] Enter business address
 - [ ] Add contact email and phone
 - [ ] Set TIN (Tax Identification Number)
-- [ ] Select business type
+- [ ] Select business type (Retail or General)
 
 ### Step 2: Currency & Localization
 - [ ] Set primary currency (PHP for Philippines)

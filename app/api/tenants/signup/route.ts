@@ -5,7 +5,7 @@ import User from '@/models/User';
 import { getDefaultTenantSettings } from '@/lib/currency';
 import { validateEmail, validatePassword, validateTenant } from '@/lib/validation';
 import { getValidationTranslator } from '@/lib/validation-translations';
-import { applyBusinessTypeDefaults } from '@/lib/business-types';
+import { applyBusinessTypeDefaults, isBusinessTypeOpenForSignup } from '@/lib/business-types';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { SubscriptionService } from '@/lib/subscription';
 import { logger } from '@/lib/logger';
@@ -50,6 +50,19 @@ export async function POST(request: NextRequest) {
     // Get translation function based on selected language
     const lang = (language === 'es' ? 'es' : 'en') as 'en' | 'es';
     t = await getValidationTranslator(lang);
+
+    // Reject business types that are closed to new sign-ups
+    if (!isBusinessTypeOpenForSignup(businessType)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: lang === 'es'
+            ? 'Este tipo de negocio ya no está disponible para nuevos registros'
+            : 'This business type is no longer available for new sign-ups',
+        },
+        { status: 400 }
+      );
+    }
 
     // Validate tenant data
     const tenantErrors = validateTenant({ slug, name }, t);

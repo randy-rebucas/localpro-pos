@@ -7,6 +7,18 @@
 
 export type BusinessType = 'retail' | 'restaurant' | 'laundry' | 'service' | 'general' | 'pharmacy';
 
+/**
+ * Types no longer offered to new sign-ups. Their configs stay in
+ * BUSINESS_TYPE_CONFIGS because existing tenants still run on them.
+ */
+export const SIGNUP_CLOSED_BUSINESS_TYPES: readonly BusinessType[] = ['restaurant', 'laundry', 'service', 'pharmacy'];
+
+/** Case-insensitive, matching getBusinessTypeConfig. */
+export function isBusinessTypeOpenForSignup(businessType: unknown): boolean {
+  const type = String(businessType ?? '').toLowerCase() as BusinessType;
+  return !SIGNUP_CLOSED_BUSINESS_TYPES.includes(type);
+}
+
 export interface BusinessTypeConfig {
   type: BusinessType;
   name: string;

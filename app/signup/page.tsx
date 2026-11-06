@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { detectLocation } from '@/lib/location-detection';
 import { getDictionaryClient } from '@/app/[tenant]/[lang]/dictionaries-client';
 import { validatePassword as validatePasswordLib } from '@/lib/validation';
+import { isBusinessTypeOpenForSignup } from '@/lib/business-types';
 import PasswordInput from '@/components/ui/PasswordInput';
 
 export default function SignupPage() {
@@ -16,7 +17,7 @@ export default function SignupPage() {
     slug: '',
     name: '',
     companyName: '',
-    businessType: 'general' as 'retail' | 'restaurant' | 'laundry' | 'service' | 'general',
+    businessType: 'general' as 'retail' | 'general',
     // Admin user info
     adminEmail: '',
     adminPassword: '',
@@ -48,7 +49,7 @@ export default function SignupPage() {
         const res = await fetch('/api/business-types');
         const data = await res.json();
         if (data.success) {
-          setBusinessTypes(data.data);
+          setBusinessTypes(data.data.filter((t: { type: string }) => isBusinessTypeOpenForSignup(t.type)));
         }
       } catch (err) {
         console.error('Failed to load business types:', err);
