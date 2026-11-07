@@ -45,20 +45,20 @@ export default function PosSavedCartsModal({
 }: PosSavedCartsModalProps) {
   return (
     <div
-      className="fixed inset-0 bg-gray-900/30 backdrop-blur-md z-50"
+      className="fixed inset-0 bg-ink/60 z-50"
       onClick={onClose}
     >
       <div
-        className="absolute inset-y-0 right-0 w-full max-w-2xl bg-white border-l border-gray-300 flex flex-col animate-slide-in-right"
+        className="absolute inset-y-0 right-0 w-full max-w-2xl bg-paper-white text-ink flex flex-col animate-slide-in-right"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between p-5 sm:p-6 border-b border-gray-200">
-          <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
+        <div className="flex items-center justify-between p-5 sm:p-6 border-b border-dashed border-ink/30">
+          <h2 className="text-4xl text-ink">
             {dict.pos?.savedCarts || 'Saved Carts'}
           </h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+            className="text-ink/50 hover:text-ink transition-colors"
           >
             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -88,26 +88,24 @@ export default function PosSavedCartsModal({
               {savedCarts.map((savedCart) => (
                 <div
                   key={savedCart._id}
-                  className="border-2 border-gray-300 p-4 transition-colors"
-                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = primaryColor; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#d1d5db'; }}
+                  className="border border-ink/25 hover:border-ink p-4 transition-colors"
                 >
                   <div className="flex justify-between items-start mb-3">
                     <div className="flex-1">
-                      <h3 className="font-semibold text-gray-900 text-lg mb-1">{savedCart.name}</h3>
-                      <p className="text-sm text-gray-500">
+                      <h3 className="font-semibold text-ink text-lg mb-1">{savedCart.name}</h3>
+                      <p className="font-receipt text-xs text-ink/60">
                         {formatDateTime(new Date(savedCart.createdAt), settings || getDefaultTenantSettings())}
                       </p>
-                      <p className="text-sm text-gray-600 mt-2">
+                      <p className="font-receipt text-xs text-ink/70 mt-2">
                         {savedCart.items.length} {savedCart.items.length === 1 ? (dict.pos?.item || 'item') : (dict.pos?.items || 'items')}
                       </p>
                     </div>
                     <div className="text-right">
-                      <div className="font-bold text-lg mb-2" style={{ color: primaryColor }}>
+                      <div className="font-receipt font-semibold text-lg text-ink mb-2">
                         <Currency amount={savedCart.total} />
                       </div>
                       {savedCart.discountCode && (
-                        <div className="text-xs text-green-600">
+                        <div className="font-receipt text-xs text-brand-hover">
                           {dict.pos?.discount || 'Discount'}: {savedCart.discountCode}
                         </div>
                       )}
@@ -116,19 +114,13 @@ export default function PosSavedCartsModal({
                   <div className="flex gap-2">
                     <button
                       onClick={() => onLoadCart(savedCart)}
-                      className="flex-1 px-4 py-2 text-white font-medium transition-colors border"
-                      style={{
-                        backgroundColor: primaryColor,
-                        borderColor: primaryColor,
-                      }}
-                      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = `${primaryColor}dd`; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = primaryColor; }}
+                      className="flex-1 px-4 py-2 bg-ink text-paper-white hover:bg-brand-navy font-receipt font-medium uppercase transition-colors text-sm"
                     >
                       {dict.pos?.loadCart || 'Load Cart'}
                     </button>
                     <button
                       onClick={() => onDeleteCart(savedCart._id)}
-                      className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 font-medium transition-colors border border-red-700"
+                      className="px-4 py-2 bg-paper-white text-stamp border border-stamp/60 hover:bg-stamp hover:text-paper-white transition-colors"
                       title={dict.pos?.deleteCart || 'Delete Cart'}
                     >
                       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">

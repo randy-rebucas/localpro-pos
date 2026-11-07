@@ -32,7 +32,7 @@ export default function EmptyState({
   return (
     <div className={`text-center ${py} ${className}`}>
       <svg
-        className={`mx-auto ${iconSize} text-gray-300 mb-4`}
+        className={`mx-auto ${iconSize} text-ink/25 mb-4`}
         fill="none"
         viewBox="0 0 24 24"
         stroke="currentColor"
@@ -41,9 +41,9 @@ export default function EmptyState({
       >
         <path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS[icon]} />
       </svg>
-      <p className={`text-gray-500 ${compact ? 'text-sm font-medium' : 'text-lg'}`}>{title}</p>
+      <p className={`text-ink/60 ${compact ? 'text-sm font-medium' : 'text-lg'}`}>{title}</p>
       {description && (
-        <p className="text-gray-400 text-sm mt-1 max-w-sm mx-auto">{description}</p>
+        <p className="text-ink/50 text-sm mt-1 max-w-sm mx-auto">{description}</p>
       )}
       {action && (
         <button

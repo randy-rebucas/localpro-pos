@@ -1,5 +1,7 @@
 'use client';
 
+import '@/app/marketing.css';
+import { marketingFontClasses } from '@/components/marketing/fonts';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { hardwareService } from '@/lib/hardware';
@@ -82,14 +84,14 @@ export default function QRCodeScanner({ onScan, onClose, enabled = true }: QRCod
   const showOverlay = status === 'prompt' || status === 'starting' || status === 'error';
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
-      <div className="bg-white border border-gray-300 p-6 max-w-md w-full mx-4">
+    <div className={`${marketingFontClasses} fixed inset-0 bg-ink/70 flex items-center justify-center z-50`}>
+      <div className="bg-paper-white text-ink p-6 max-w-md w-full mx-4">
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-bold">{dict?.common?.scanQRCode || dict?.login?.scanQRCode || 'Scan QR Code'}</h2>
+          <h2 className="font-display text-3xl font-extrabold uppercase leading-none text-ink">{dict?.common?.scanQRCode || dict?.login?.scanQRCode || 'Scan QR Code'}</h2>
           {onClose && (
             <button
               onClick={onClose}
-              className="text-gray-500 hover:text-gray-700"
+              className="text-ink/60 hover:text-ink"
             >
               <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -98,10 +100,10 @@ export default function QRCodeScanner({ onScan, onClose, enabled = true }: QRCod
           )}
         </div>
 
-        <div className="relative bg-gray-900 min-h-[240px]">
+        <div className="relative overflow-hidden bg-ink min-h-[240px]">
           <video
             ref={videoRef}
-            className="w-full border border-gray-300"
+            className="w-full"
             autoPlay
             playsInline
             muted
@@ -109,6 +111,7 @@ export default function QRCodeScanner({ onScan, onClose, enabled = true }: QRCod
 
           {status === 'scanning' && (
             <div className="absolute inset-0 border-4 border-brand pointer-events-none">
+              <span className="mk-sweep" />
               <div className="absolute top-2 left-2 w-8 h-8 border-t-4 border-l-4 border-brand"></div>
               <div className="absolute top-2 right-2 w-8 h-8 border-t-4 border-r-4 border-brand"></div>
               <div className="absolute bottom-2 left-2 w-8 h-8 border-b-4 border-l-4 border-brand"></div>
@@ -117,7 +120,7 @@ export default function QRCodeScanner({ onScan, onClose, enabled = true }: QRCod
           )}
 
           {showOverlay && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900/80 px-6 text-center">
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-ink/80 px-6 text-center">
               {status === 'starting' ? (
                 <>
                   <div className="animate-spin h-8 w-8 border-b-2 border-white mb-3" />
@@ -129,10 +132,10 @@ export default function QRCodeScanner({ onScan, onClose, enabled = true }: QRCod
                 <>
                   {status === 'error' && (
                     <>
-                      <svg className="w-10 h-10 text-red-400 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <svg className="w-10 h-10 text-paper-white mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l-4 4m0-4l4 4m6-2a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
-                      <p className="text-red-200 text-sm mb-4">{error}</p>
+                      <p className="text-paper-white text-sm mb-4">{error}</p>
                     </>
                   )}
                   {status === 'prompt' && (
@@ -143,7 +146,7 @@ export default function QRCodeScanner({ onScan, onClose, enabled = true }: QRCod
                   <button
                     type="button"
                     onClick={startCamera}
-                    className="px-4 py-2 bg-brand text-white text-sm font-medium hover:bg-brand-hover transition-colors"
+                    className="px-4 py-2 bg-brand text-ink font-receipt text-xs font-medium uppercase hover:bg-brand-muted transition-colors"
                   >
                     {status === 'error'
                       ? (dict?.common?.retry || 'Try Again')
@@ -155,7 +158,7 @@ export default function QRCodeScanner({ onScan, onClose, enabled = true }: QRCod
           )}
         </div>
 
-        <p className="text-sm text-gray-600 mt-4 text-center">
+        <p className="font-receipt text-xs text-ink/70 mt-4 text-center">
           {dict?.common?.positionQRCode || 'Position the QR code within the frame'}
         </p>
       </div>

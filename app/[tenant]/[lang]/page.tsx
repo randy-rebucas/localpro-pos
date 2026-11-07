@@ -18,8 +18,10 @@ import { useCashDrawer } from '@/hooks/useCashDrawer';
 import { getOfflineStorage } from '@/lib/offline-storage';
 import { TranslationDict } from '@/types/dictionary';
 import dynamic from 'next/dynamic';
+import '@/app/marketing.css';
+import { marketingFontClasses } from '@/components/marketing/fonts';
+import { Barcode } from '@/components/marketing/primitives';
 import PageLoading from '@/components/ui/PageLoading';
-import EmptyState from '@/components/ui/EmptyState';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 
 const BarcodeScanner = dynamic(() => import('@/components/BarcodeScanner'), {
@@ -94,7 +96,7 @@ import type { CustomerSummary } from '@/types/customer';
 import CartLineItem from '@/components/pos/CartLineItem';
 import CartActionBar from '@/components/pos/CartActionBar';
 import CartDiscountSection from '@/components/pos/CartDiscountSection';
-import CartSummaryFooter from '@/components/pos/CartSummaryFooter';
+import { CartSummaryRows, CartTill } from '@/components/pos/CartSummaryFooter';
 import CartUpsellSuggestions from '@/components/pos/CartUpsellSuggestions';
 import ProductGrid from '@/components/pos/ProductGrid';
 import { usePosProducts, type PosProduct } from '@/hooks/usePosProducts';
@@ -280,7 +282,8 @@ export default function Dashboard() {
     ? 'grid gap-2.5 sm:gap-3 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6'
     : 'grid gap-2.5 sm:gap-3 grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5';
   const productCardHeightClass = 'h-52 sm:h-56 md:h-60 xl:h-64';
-  const productListClass = 'flex flex-col gap-2';
+  const productListClass = 'flex flex-col border-t border-dashed border-ink/25 bg-paper-white';
+  const posKeyTone = 'bg-paper-white border border-ink/25 hover:border-ink hover:bg-paper transition-colors text-ink font-receipt font-medium uppercase text-xs';
 
   const [showCashDrawerModal, setShowCashDrawerModal] = useState<'open' | 'close' | null>(null);
   const [drawerAmount, setDrawerAmount] = useState('');
@@ -598,12 +601,12 @@ export default function Dashboard() {
   const handleOpenDrawer = async () => {
     const amount = parseFloat(drawerAmount);
     if (isNaN(amount) || amount < 0) {
-      showToast.error('Please enter a valid opening amount');
+      showToast.error(dictValue('pos.enterOpeningAmount', 'Please enter a valid opening amount'));
       return;
     }
     const success = await openDrawer(amount, drawerNotes || undefined);
     if (success) {
-      showToast.success('Cash drawer opened. Shift started.');
+      showToast.success(dictValue('pos.drawerOpened', 'Cash drawer opened. Shift started.'));
       setShowCashDrawerModal(null);
       setDrawerAmount('');
       setDrawerNotes('');
@@ -613,7 +616,7 @@ export default function Dashboard() {
   const handleCloseDrawer = async () => {
     const amount = parseFloat(drawerAmount);
     if (isNaN(amount) || amount < 0) {
-      showToast.error('Please enter the actual closing amount');
+      showToast.error(dictValue('pos.enterClosingAmount', 'Please enter the actual closing amount'));
       return;
     }
     const result = await closeDrawer(amount, drawerNotes || undefined);
@@ -626,9 +629,9 @@ export default function Dashboard() {
       });
       setDrawerAmount('');
       setDrawerNotes('');
-      showToast.success('Cash drawer closed. Shift ended.');
+      showToast.success(dictValue('pos.drawerClosed', 'Cash drawer closed. Shift ended.'));
     } else {
-      showToast.error(result.error || 'Failed to close drawer');
+      showToast.error(result.error || dictValue('pos.failedToCloseDrawer', 'Failed to close drawer'));
     }
   };
 
@@ -814,7 +817,7 @@ export default function Dashboard() {
       const confirmed = await confirm(
         dictValue('pos.loadCartConfirmTitle', 'Load Saved Cart'),
         dictValue('pos.loadCartConfirm', 'Loading a saved cart will replace your current cart. Continue?'),
-        { variant: 'warning' }
+        { variant: 'warning', confirmText: dictValue('common.confirm', 'Confirm'), cancelText: dictValue('common.cancel', 'Cancel') }
       );
       if (!confirmed) {
         return;
@@ -859,7 +862,7 @@ export default function Dashboard() {
     const confirmed = await confirm(
       dictValue('pos.deleteCartConfirmTitle', 'Delete Saved Cart'),
       dictValue('pos.deleteCartConfirm', 'Are you sure you want to delete this saved cart?'),
-      { variant: 'danger' }
+      { variant: 'danger', confirmText: dictValue('common.confirm', 'Confirm'), cancelText: dictValue('common.cancel', 'Cancel') }
     );
     if (!confirmed) {
       return;
@@ -1101,7 +1104,7 @@ export default function Dashboard() {
     } else if (result?.errors && result.errors.length > 0) {
       showToast.error(result.errors.join(', '));
     } else {
-      showToast.error(result?.error || 'Failed to process refund');
+      showToast.error(result?.error || dictValue('pos.failedToProcessRefund', 'Failed to process refund'));
     }
   };
 
@@ -1172,7 +1175,7 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="flex h-dvh min-h-0 flex-col">
+    <div className={`${marketingFontClasses} mk-root pos-register flex h-dvh min-h-0 flex-col`}>
       <OfflineIndicator />
       <BarcodeScanner onScan={handleBarcodeScan} enabled={true} />
       {showQRScanner && (
@@ -1182,23 +1185,23 @@ export default function Dashboard() {
           enabled={true}
         />
       )}
-      <div className="fixed bottom-4 right-4 z-40">
+      <div className="fixed bottom-4 left-4 z-40">
         <HardwareStatusChecker compact={true} autoRefresh={true} />
       </div>
 
       {/* Hardware status banner */}
       {hwStatusMsg && (
-        <div className="bg-amber-50 border-b border-amber-300 px-4 py-2 flex items-center justify-between text-sm">
-          <div className="flex items-center gap-2 text-amber-800">
-            <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <div className="bg-paper-white border-b border-stamp/40 px-4 py-2 flex items-center justify-between text-sm">
+          <div className="flex items-center gap-2 text-ink">
+            <svg className="w-4 h-4 flex-shrink-0 text-stamp" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
-            <span className="font-medium">{hwStatusMsg}</span>
+            <span className="font-medium">{dictValue('pos.printerNoIp', hwStatusMsg)}</span>
           </div>
           <button
             type="button"
             onClick={() => setHwStatusMsg(null)}
-            className="p-1 text-amber-600 hover:text-amber-800 transition-colors"
+            className="p-1 text-ink/60 hover:text-ink transition-colors"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -1209,36 +1212,40 @@ export default function Dashboard() {
 
       {/* Cash Drawer Shift Bar */}
       {cashDrawerSession && (
-        <div className="bg-green-50 border-b border-green-200 px-3 sm:px-4 py-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-sm">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-green-800 min-w-0">
+        <div className="bg-ink px-3 sm:px-4 py-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 font-receipt text-xs sm:text-sm">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[#8fe3d0] min-w-0">
             <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <span className="font-medium">{dict.pos?.shiftActive || 'Shift Active'}</span>
-            <span className="text-green-600 text-xs sm:text-sm truncate">
-              <span className="hidden sm:inline">| Opened: {formatTime(cashDrawerSession.openingTime, settings || getDefaultTenantSettings())}</span>
-              <span className="sm:ml-1">| Opening: <Currency amount={cashDrawerSession.openingAmount} /></span>
+            <span className="text-paper/70 text-xs sm:text-sm truncate">
+              <span className="hidden sm:inline">| {dictValue('pos.opened', 'Opened')}: {formatTime(cashDrawerSession.openingTime, settings || getDefaultTenantSettings())}</span>
+              <span className="sm:ml-1">| {dictValue('pos.opening', 'Opening')}: <Currency amount={cashDrawerSession.openingAmount} /></span>
             </span>
           </div>
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1.5 text-xs">
-              <span className={`w-2 h-2 ${stockSyncConnected ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
-              <span className={stockSyncConnected ? 'text-green-700' : 'text-gray-500'}>
-                {stockSyncConnected ? 'Stock Live' : 'Stock Offline'}
+              <span className={`w-2 h-2 ${stockSyncConnected ? 'bg-[#7df0d6] animate-pulse motion-reduce:animate-none' : 'bg-white/30'}`} />
+              <span className={stockSyncConnected ? 'text-[#8fe3d0]' : 'text-white/60'}>
+                {stockSyncConnected ? dictValue('pos.stockLive', 'Stock Live') : dictValue('pos.stockOffline', 'Stock Offline')}
               </span>
             </div>
             <button
               onClick={async () => {
-                const ok = await confirm('End Shift', 'Are you sure you want to end your shift? You will need to count the cash in the drawer.');
+                const ok = await confirm(
+                  dictValue('pos.endShift', 'End Shift'),
+                  dictValue('pos.endShiftConfirm', 'Are you sure you want to end your shift? You will need to count the cash in the drawer.'),
+                  { confirmText: dictValue('common.confirm', 'Confirm'), cancelText: dictValue('common.cancel', 'Cancel') }
+                );
                 if (!ok) return;
                 setDrawerAmount('');
                 setDrawerNotes('');
                 setClosingSummary(null);
                 setShowCashDrawerModal('close');
               }}
-              className="px-3 py-1 bg-red-100 text-red-700 hover:bg-red-200 text-xs font-medium transition-colors"
+              className="px-3 py-1 border border-white/30 text-paper-white hover:bg-stamp hover:border-stamp text-xs font-medium uppercase transition-colors"
             >
-              End Shift
+              {dictValue('pos.endShift', 'End Shift')}
             </button>
           </div>
         </div>
@@ -1246,23 +1253,22 @@ export default function Dashboard() {
 
       {/* Start Shift Overlay - only blocks cashier role when no cash drawer session */}
       {isCashier && !cashDrawerSession && !cashDrawerLoading && productsStatus !== 'loading' && (
-        <div className="fixed inset-0 z-50 bg-gray-900/60 flex items-center justify-center" style={{ top: '64px' }}>
-          <div className="bg-white border border-gray-300 p-8 max-w-md w-full mx-4 text-center">
-            <div className="w-16 h-16 mx-auto mb-4 bg-brand-soft border border-teal-300 flex items-center justify-center">
-              <svg className="w-8 h-8 text-brand" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <div className="fixed inset-0 z-50 bg-ink/70 flex items-center justify-center" style={{ top: '64px' }}>
+          <div className="bg-paper-white text-ink p-8 max-w-md w-full mx-4">
+            <div className="w-14 h-14 mb-5 bg-ink flex items-center justify-center">
+              <svg className="w-7 h-7 text-[#8fe3d0]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
               </svg>
             </div>
-            <h2 className="text-xl font-bold text-gray-900 mb-2">{dictValue('pos.startYourShift', 'Start Your Shift')}</h2>
-            <p className="text-gray-600 mb-6">{dictValue('pos.startShiftDescription', 'Open the cash drawer to begin processing transactions.')}</p>
+            <h2 className="text-4xl text-ink mb-3">{dictValue('pos.startYourShift', 'Start Your Shift')}</h2>
+            <p className="text-ink/70 mb-6">{dictValue('pos.startShiftDescription', 'Open the cash drawer to begin processing transactions.')}</p>
             <button
               onClick={() => {
                 setDrawerAmount('');
                 setDrawerNotes('');
                 setShowCashDrawerModal('open');
               }}
-              className="w-full py-3 text-white font-semibold transition-colors mb-3"
-              style={{ backgroundColor: primaryColor }}
+              className="w-full py-3 bg-ink text-paper-white hover:bg-brand-navy font-receipt font-medium uppercase transition-colors mb-3"
             >
               {dictValue('pos.openCashDrawer', 'Open Cash Drawer')}
             </button>
@@ -1271,7 +1277,7 @@ export default function Dashboard() {
                 await logout();
                 window.location.href = `/${tenant}/${lang}/login`;
               }}
-              className="w-full py-2.5 text-gray-600 font-medium border border-gray-300 hover:bg-gray-50 transition-colors text-sm"
+              className="w-full py-2.5 text-ink/70 font-medium border border-ink/25 hover:bg-paper transition-colors text-sm"
             >
               {dictValue('common.logout', 'Logout')}
             </button>
@@ -1281,29 +1287,29 @@ export default function Dashboard() {
 
       {/* Cash Drawer Open/Close Modal */}
       {showCashDrawerModal && (
-        <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center">
-          <div className="bg-white border border-gray-300 p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-bold text-gray-900 mb-4">
+        <div className="fixed inset-0 z-[60] bg-ink/70 flex items-center justify-center">
+          <div className="bg-paper-white text-ink p-6 max-w-md w-full mx-4">
+            <h3 className="font-display text-4xl font-extrabold uppercase leading-none text-ink mb-5">
               {showCashDrawerModal === 'open' ? dictValue('pos.openCashDrawer', 'Open Cash Drawer') : dictValue('pos.closeCashDrawer', 'Close Cash Drawer')}
             </h3>
 
             {closingSummary ? (
               <div className="space-y-3 mb-6">
-                <h4 className="font-semibold text-gray-800">{dictValue('pos.shiftSummary', 'Shift Summary')}</h4>
-                <div className="bg-gray-50 border border-gray-200 p-4 space-y-2 text-sm">
+                <h4 className="font-receipt text-xs font-medium uppercase tracking-[0.14em] text-ink/70">{dictValue('pos.shiftSummary', 'Shift Summary')}</h4>
+                <div className="border-y border-dashed border-ink/30 py-3 space-y-2 font-receipt text-sm">
                   <div className="flex justify-between">
-                    <span className="text-gray-600">{dictValue('admin.expectedAmount', 'Expected Amount')}:</span>
+                    <span className="text-ink/70">{dictValue('admin.expectedAmount', 'Expected Amount')}:</span>
                     <span className="font-medium"><Currency amount={closingSummary.expectedAmount || 0} /></span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-600">{dictValue('pos.actualClosing', 'Actual Closing')}:</span>
+                    <span className="text-ink/70">{dictValue('pos.actualClosing', 'Actual Closing')}:</span>
                     <span className="font-medium"><Currency amount={closingSummary.closingAmount || 0} /></span>
                   </div>
-                  <div className="border-t pt-2 flex justify-between font-semibold">
+                  <div className="border-t border-dashed border-ink/30 pt-2 flex justify-between font-semibold">
                     <span>{dictValue('pos.difference', 'Difference')}:</span>
                     <span className={
-                      (closingSummary.shortage || 0) > 0 ? 'text-red-600' :
-                        (closingSummary.overage || 0) > 0 ? 'text-green-600' : 'text-gray-900'
+                      (closingSummary.shortage || 0) > 0 ? 'text-stamp' :
+                        (closingSummary.overage || 0) > 0 ? 'text-brand-hover' : 'text-ink'
                     }>
                       {(closingSummary.shortage || 0) > 0 && <>{dictValue('pos.short', 'Short')}: <Currency amount={closingSummary.shortage || 0} /></>}
                       {(closingSummary.overage || 0) > 0 && <>{dictValue('pos.over', 'Over')}: <Currency amount={closingSummary.overage || 0} /></>}
@@ -1316,7 +1322,7 @@ export default function Dashboard() {
                     setClosingSummary(null);
                     setShowCashDrawerModal(null);
                   }}
-                  className="w-full py-2 bg-gray-900 text-white font-medium hover:bg-gray-800 transition-colors"
+                  className="w-full py-2 bg-ink text-paper-white font-receipt font-medium uppercase hover:bg-brand-navy transition-colors"
                 >
                   {dictValue('common.done', 'Done')}
                 </button>
@@ -1325,7 +1331,7 @@ export default function Dashboard() {
               <>
                 <div className="space-y-4 mb-6">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-ink/80 mb-1">
                       {showCashDrawerModal === 'open' ? dictValue('admin.openingAmount', 'Opening Amount') : dictValue('pos.actualClosingAmount', 'Actual Closing Amount')}
                     </label>
                     <input
@@ -1335,18 +1341,18 @@ export default function Dashboard() {
                       value={drawerAmount}
                       onChange={(e) => setDrawerAmount(e.target.value)}
                       placeholder="0.00"
-                      className="w-full px-4 py-3 border border-gray-300 text-lg focus:ring-2 focus:ring-brand focus:border-brand"
+                      className="w-full px-4 py-3 bg-paper-white border border-ink/25 font-receipt text-lg focus:ring-2 focus:ring-brand focus:border-brand"
                       autoFocus
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{dictValue('pos.notesOptional', 'Notes (optional)')}</label>
+                    <label className="block text-sm font-medium text-ink/80 mb-1">{dictValue('pos.notesOptional', 'Notes (optional)')}</label>
                     <input
                       type="text"
                       value={drawerNotes}
                       onChange={(e) => setDrawerNotes(e.target.value)}
                       placeholder={dictValue('pos.morningShiftPlaceholder', 'e.g. Morning shift')}
-                      className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand"
+                      className="w-full px-3 py-2 border border-ink/25 focus:ring-2 focus:ring-brand focus:border-brand"
                     />
                   </div>
                 </div>
@@ -1357,17 +1363,16 @@ export default function Dashboard() {
                       setDrawerAmount('');
                       setDrawerNotes('');
                     }}
-                    className="flex-1 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
+                    className="flex-1 py-2 border border-ink/25 text-ink/80 hover:bg-paper transition-colors"
                   >
-                    Cancel
+                    {dictValue('common.cancel', 'Cancel')}
                   </button>
                   <button
                     onClick={showCashDrawerModal === 'open' ? handleOpenDrawer : handleCloseDrawer}
                     disabled={cashDrawerLoading || !drawerAmount}
-                    className="flex-1 py-2 text-white font-medium transition-colors disabled:opacity-50"
-                    style={{ backgroundColor: showCashDrawerModal === 'open' ? primaryColor : '#dc2626' }}
+                    className={`flex-1 py-2 text-paper-white font-receipt font-medium uppercase transition-colors disabled:opacity-50 ${showCashDrawerModal === 'open' ? 'bg-ink hover:bg-brand-navy' : 'bg-stamp hover:brightness-110'}`}
                   >
-                    {cashDrawerLoading ? 'Processing...' : showCashDrawerModal === 'open' ? 'Open Drawer' : 'Close Drawer'}
+                    {cashDrawerLoading ? dictValue('pos.processing', 'Processing...') : showCashDrawerModal === 'open' ? dictValue('pos.openDrawerAction', 'Open Drawer') : dictValue('pos.closeDrawerAction', 'Close Drawer')}
                   </button>
                 </div>
               </>
@@ -1382,9 +1387,9 @@ export default function Dashboard() {
       >
         {/* Cart Section - hidden in roaming mode (replaced by FAB + bottom sheet) */}
         <div
-          className={`order-1 flex flex-col min-h-0 flex-1 max-h-[min(50vh,440px)] sm:max-h-[min(55vh,480px)] md:max-h-none md:h-full md:min-h-0 md:flex-none md:order-2 md:shrink-0 md:w-[min(100%,280px)] lg:w-[300px] xl:w-[360px] 2xl:w-[420px] md:border-l md:border-gray-300 ${roamingMode ? 'hidden' : ''}`}
+          className={`order-1 flex flex-col min-h-0 flex-1 max-h-[min(50vh,440px)] sm:max-h-[min(55vh,480px)] md:max-h-none md:h-full md:min-h-0 md:flex-none md:order-2 md:shrink-0 md:w-[min(100%,280px)] lg:w-[300px] xl:w-[360px] 2xl:w-[420px] bg-brand-navy-deep p-2 sm:p-3 ${roamingMode ? 'hidden' : ''}`}
         >
-            <div className="bg-white border border-gray-300 p-3 sm:p-4 md:p-4 lg:p-5 flex h-full min-h-0 flex-col flex-1 overflow-hidden md:min-h-0">
+            <div className="bg-paper-white text-ink px-3 pt-3 sm:px-4 sm:pt-4 flex min-h-0 flex-col flex-1 overflow-hidden">
               <CartActionBar
                 cartLength={cart.length}
                 itemCount={cart.reduce((s, i) => s + i.quantity, 0)}
@@ -1416,11 +1421,14 @@ export default function Dashboard() {
               )}
 
               {cart.length === 0 ? (
-                <EmptyState icon="cart" title={dictValue('pos.cartEmpty', 'Cart is empty')} compact className="flex-1" />
+                <div className="flex flex-1 flex-col items-center justify-center gap-3 py-8 text-center">
+                  <Barcode className="h-10 w-32 text-ink/20" />
+                  <p className="font-receipt text-xs uppercase tracking-[0.14em] text-ink/60">{dictValue('pos.cartEmpty', 'Cart is empty')}</p>
+                </div>
               ) : (
                 <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
                   <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1 -mr-1 [scrollbar-gutter:stable]">
-                    <div className="divide-y divide-gray-200 border border-gray-200 bg-white">
+                    <div className="divide-y divide-dashed divide-ink/25">
                     {cart.map((item) => {
                       const product = products.find((p) => p._id === item.productId);
                       return (
@@ -1444,7 +1452,6 @@ export default function Dashboard() {
                     </div>
                     <CartUpsellSuggestions
                       suggestions={upsellSuggestions}
-                      primaryColor={primaryColor}
                       dict={dict}
                       onAdd={(productId) => {
                         const product = products.find((p) => p._id === productId);
@@ -1455,7 +1462,6 @@ export default function Dashboard() {
 
                   <CartDiscountSection
                     dict={dict}
-                    primaryColor={primaryColor}
                     tenant={tenant}
                     cartLength={cart.length}
                     promoCode={promoCode}
@@ -1479,11 +1485,9 @@ export default function Dashboard() {
                     onDiscountError={(msg) => showToast.error(msg)}
                   />
 
-                  <CartSummaryFooter
+                  <CartSummaryRows
                     dict={dict}
-                    primaryColor={primaryColor}
                     subtotal={getSubtotal()}
-                    total={getTotal()}
                     taxAmount={getTaxAmount(
                       { taxEnabled: settings?.taxEnabled, taxRate: settings?.taxRate },
                       Math.max(0, getSubtotal() - (appliedDiscount?.amount || 0))
@@ -1492,13 +1496,22 @@ export default function Dashboard() {
                     taxEnabled={settings?.taxEnabled}
                     taxLabel={settings?.taxLabel}
                     taxRate={settings?.taxRate}
-                    processing={processing}
-                    processingLabel={dictValue('pos.processing', 'Processing...')}
-                    onCheckout={handleCheckout}
+                    className="pb-2"
                   />
                 </div>
               )}
             </div>
+            {/* Its own strip, because a mask on the receipt would clip the customer search dropdown */}
+            <div className="mk-tear-b h-3 shrink-0 bg-paper-white" aria-hidden />
+            {cart.length > 0 && (
+              <CartTill
+                dict={dict}
+                total={getTotal()}
+                processing={processing}
+                processingLabel={dictValue('pos.processing', 'Processing...')}
+                onCheckout={handleCheckout}
+              />
+            )}
           </div>
 
         {/* Products column: nav width matches this column only */}
@@ -1509,30 +1522,30 @@ export default function Dashboard() {
             className="flex-1 overflow-y-auto min-h-0 mx-auto w-full px-3 sm:px-4 md:px-4 lg:px-5 py-3 sm:py-4 md:py-3 lg:py-4"
           >
             <div className="mb-4 md:mb-5">
-              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-3 md:mb-4">
+              <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-3 mb-3 md:mb-4">
                 {/* Restaurant: order-type selector + table number */}
                 {businessType === 'restaurant' ? (
                   <div className="flex flex-col gap-2 flex-1 min-w-0">
-                    <h1 className="text-xl sm:text-2xl md:text-xl lg:text-2xl font-bold text-gray-900">{dict.pos.title}</h1>
+                    <h1 className="text-4xl xl:text-5xl text-ink">{dict.pos.title}</h1>
                     <div className="flex gap-1">
                       {(['dine-in', 'takeout', 'delivery'] as const).map((type) => (
                         <button
                           key={type}
                           type="button"
                           onClick={() => setOrderType(type)}
-                          className={`px-3 py-2 text-sm font-semibold border-2 transition-all capitalize ${orderType === type
+                          className={`px-3 py-2 font-receipt text-xs font-medium uppercase border transition-colors ${orderType === type
                             ? 'text-white border-transparent'
-                            : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
+                            : 'bg-paper-white text-ink border-ink/25 hover:border-ink'
                             }`}
                           style={orderType === type ? { backgroundColor: primaryColor, borderColor: primaryColor } : {}}
                         >
-                          {type === 'dine-in' ? `🍽 ${dictValue('pos.dineIn', 'Dine-in')}` : type === 'takeout' ? `🥡 ${dictValue('pos.takeout', 'Takeout')}` : `🛵 ${dictValue('pos.delivery', 'Delivery')}`}
+                          {type === 'dine-in' ? dictValue('pos.dineIn', 'Dine-in') : type === 'takeout' ? dictValue('pos.takeout', 'Takeout') : dictValue('pos.delivery', 'Delivery')}
                         </button>
                       ))}
                     </div>
                     {orderType === 'dine-in' && (
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-500 font-medium flex-shrink-0">{dictValue('pos.tableNumberLabel', 'Table #')}</span>
+                        <span className="text-xs text-ink/60 font-medium flex-shrink-0">{dictValue('pos.tableNumberLabel', 'Table #')}</span>
                         <input
                           type="text"
                           value={tableNumber}
@@ -1541,20 +1554,20 @@ export default function Dashboard() {
                             setSelectedTableId('');
                           }}
                           placeholder={dictValue('pos.tableNumberPlaceholder', 'e.g. 5A')}
-                          className="w-24 px-3 py-1.5 text-sm border-2 border-gray-300 bg-white font-semibold"
+                          className="w-24 px-3 py-1.5 font-receipt text-sm border border-ink/25 bg-paper-white"
                           onFocus={(e) => { e.currentTarget.style.borderColor = primaryColor; }}
-                          onBlur={(e) => { e.currentTarget.style.borderColor = '#d1d5db'; }}
+                          onBlur={(e) => { e.currentTarget.style.borderColor = 'rgb(16 32 43 / 0.25)'; }}
                         />
                       </div>
                     )}
                   </div>
                 ) : (
-                  <h1 className="text-xl sm:text-2xl md:text-xl lg:text-2xl xl:text-3xl font-bold text-gray-900">{dict.pos.title}</h1>
+                  <h1 className="text-4xl xl:text-5xl text-ink">{dict.pos.title}</h1>
                 )}
-                <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap sm:justify-end">
+                <div className="flex items-center gap-2 flex-wrap xl:justify-end">
                   {/* Quick Actions Row */}
                   {!isCashier && (
-                    <div className={`${roamingMode ? 'grid grid-cols-2 sm:grid-cols-4 gap-2 w-full sm:w-auto' : 'flex flex-wrap sm:flex-nowrap gap-2 max-w-full'}`}>
+                    <div className={`${roamingMode ? 'grid grid-cols-2 sm:grid-cols-4 gap-2 w-full sm:w-auto' : 'contents'}`}>
 
                       {/* Restaurant: Floor Map table selector + Check Requested */}
                       {businessType === 'restaurant' && orderType === 'dine-in' ? (
@@ -1563,8 +1576,8 @@ export default function Dashboard() {
                             type="button"
                             onClick={() => setShowFloorMap(true)}
                             className={`flex flex-col items-center justify-center gap-1 border-2 transition-all text-xs font-medium min-h-[52px] md:min-h-[56px] ${roamingMode ? 'w-full px-2 py-1.5 text-[11px]' : 'px-4 py-2 min-w-[100px]'} ${selectedTableId
-                              ? 'bg-green-50 border-green-400 text-green-800'
-                              : 'bg-orange-50 border-orange-300 text-orange-700 hover:border-orange-400'
+                              ? 'bg-brand-soft border-brand text-ink'
+                              : 'bg-paper-white border-ink/25 text-ink hover:border-ink'
                               }`}
                           >
                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -1588,7 +1601,7 @@ export default function Dashboard() {
                                   showToast.error(dictValue('pos.failedToUpdateTableStatus', 'Failed to update table status'));
                                 }
                               }}
-                              className={`flex flex-col items-center justify-center gap-1 bg-yellow-50 border-2 border-yellow-400 text-yellow-800 hover:bg-yellow-100 transition-all text-xs font-medium min-h-[52px] md:min-h-[56px] ${roamingMode ? 'w-full px-2 py-1.5 text-[11px]' : 'px-3 py-2'}`}
+                              className={`flex flex-col items-center justify-center gap-1 bg-paper-white border-2 border-ink text-ink hover:bg-paper transition-colors text-xs font-medium min-h-[52px] md:min-h-[56px] ${roamingMode ? 'w-full px-2 py-1.5 text-[11px]' : 'px-3 py-2'}`}
                               title={dictValue('pos.titleMarkCheckRequested', 'Mark check requested')}
                             >
                               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -1600,8 +1613,8 @@ export default function Dashboard() {
                         </div>
                       ) : businessType === 'restaurant' ? (
                         /* Takeout/delivery: show order type label */
-                        <div className={`flex flex-col justify-center gap-1 bg-orange-50 border-2 border-orange-200 text-gray-700 font-medium text-xs min-h-[52px] md:min-h-[56px] ${roamingMode ? 'w-full px-2 py-1.5 text-[11px]' : 'px-4 py-2 min-w-[100px]'}`}>
-                          <span className="text-[10px] font-semibold text-orange-600 uppercase tracking-wide">{dictValue('pos.orderNumber', 'Order #')}</span>
+                        <div className={`flex flex-col justify-center gap-1 bg-paper-white border border-ink/25 text-ink font-medium text-xs min-h-[52px] md:min-h-[56px] ${roamingMode ? 'w-full px-2 py-1.5 text-[11px]' : 'px-4 py-2 min-w-[100px]'}`}>
+                          <span className="font-receipt text-[10px] font-medium text-ink/60 uppercase tracking-wide">{dictValue('pos.orderNumber', 'Order #')}</span>
                           <input
                             type="text"
                             value={tableNumber}
@@ -1610,7 +1623,7 @@ export default function Dashboard() {
                               setSelectedTableId('');
                             }}
                             placeholder={dictValue('pos.orderNumberPlaceholder', 'T/O-1')}
-                            className={`text-sm border border-orange-300 bg-white font-semibold focus:outline-none focus:border-orange-500 ${roamingMode ? 'px-1 py-0.5' : 'px-2 py-1'}`}
+                            className={`font-receipt text-sm border border-ink/25 bg-paper-white focus:outline-none focus:border-ink ${roamingMode ? 'px-1 py-0.5' : 'px-2 py-1'}`}
                           />
                         </div>
                       ) : (
@@ -1618,10 +1631,10 @@ export default function Dashboard() {
                         <button
                           type="button"
                           onClick={() => { if (cart.length > 0) { setSplitStep('guests'); setGuestPayments([]); setShowSplitCheckModal(true); } else showToast.error(dictValue('pos.cartEmptyAlert', 'Cart is empty')); }}
-                          className={`flex items-center gap-2 min-h-[52px] md:min-h-[56px] bg-white border-2 border-gray-200 hover:border-gray-400 hover:bg-gray-50 transition-all text-gray-700 font-medium text-xs ${roamingMode ? 'w-full px-3 py-2' : 'flex-shrink-0 px-5 py-3'}`}
+                          className={`flex items-center gap-2 min-h-[52px] md:min-h-[56px] ${posKeyTone} ${roamingMode ? 'w-full px-3 py-2' : 'flex-shrink-0 px-3 py-2'}`}
                           title={dictValue('pos.titleSplitBill', 'Split bill equally between guests')}
                         >
-                          <svg className="w-5 h-5 text-gray-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
                           </svg>
                           <span>{dictValue('pos.splitCheck', 'Split Check')}</span>
@@ -1633,10 +1646,10 @@ export default function Dashboard() {
                         <button
                           type="button"
                           onClick={() => { if (cart.length > 0) { setSplitStep('guests'); setGuestPayments([]); setShowSplitCheckModal(true); } else showToast.error(dictValue('pos.cartEmptyAlert', 'Cart is empty')); }}
-                          className={`flex items-center gap-1.5 min-h-[52px] md:min-h-[56px] bg-white border-2 border-gray-200 hover:border-gray-400 hover:bg-gray-50 transition-all text-gray-700 font-medium text-xs ${roamingMode ? 'w-full px-3 py-2' : 'flex-shrink-0 px-4 py-2'}`}
+                          className={`flex items-center gap-1.5 min-h-[52px] md:min-h-[56px] ${posKeyTone} ${roamingMode ? 'w-full px-3 py-2' : 'flex-shrink-0 px-4 py-2'}`}
                           title={dictValue('pos.titleSplitBill', 'Split bill equally between guests')}
                         >
-                          <svg className="w-4 h-4 text-gray-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
                           </svg>
                           <span>{dictValue('pos.split', 'Split')}</span>
@@ -1645,13 +1658,13 @@ export default function Dashboard() {
 
                       {/* Service/laundry: Schedule appointment */}
                       {(businessType === 'service' || businessType === 'laundry') && (
-                        <div className={`flex flex-col justify-center gap-1 bg-brand-soft border-2 border-teal-200 text-gray-700 font-medium text-xs min-h-[52px] md:min-h-[56px] ${roamingMode ? 'w-full px-2 py-1.5 text-[11px]' : 'px-4 py-2 min-w-[140px]'}`}>
-                          <span className="text-[10px] font-semibold text-brand uppercase tracking-wide">{dictValue('pos.scheduleFor', 'Schedule for')}</span>
+                        <div className={`flex flex-col justify-center gap-1 bg-paper-white border border-ink/25 text-ink font-medium text-xs min-h-[52px] md:min-h-[56px] ${roamingMode ? 'w-full px-2 py-1.5 text-[11px]' : 'px-4 py-2 min-w-[140px]'}`}>
+                          <span className="font-receipt text-[10px] font-medium text-ink/60 uppercase tracking-wide">{dictValue('pos.scheduleFor', 'Schedule for')}</span>
                           <input
                             type="datetime-local"
                             value={scheduledFor}
                             onChange={(e) => setScheduledFor(e.target.value)}
-                            className={`border border-teal-300 bg-white font-medium focus:outline-none focus:border-brand ${roamingMode ? 'px-1 py-0.5 text-[10px]' : 'px-1 py-1 text-xs'}`}
+                            className={`border border-ink/25 bg-paper-white font-receipt focus:outline-none focus:border-ink ${roamingMode ? 'px-1 py-0.5 text-[10px]' : 'px-1 py-1 text-xs'}`}
                           />
                         </div>
                       )}
@@ -1659,10 +1672,10 @@ export default function Dashboard() {
                       <button
                         type="button"
                         onClick={() => cart.length > 0 ? setShowSaveCartModal(true) : showToast.error(dictValue('pos.cartEmptyAlert', 'Cart is empty'))}
-                        className={`flex items-center gap-2 min-h-[52px] md:min-h-[56px] bg-white border-2 border-gray-200 hover:border-gray-400 hover:bg-gray-50 transition-all text-gray-700 font-medium text-xs ${roamingMode ? 'w-full px-3 py-2' : 'flex-shrink-0 px-5 py-3'}`}
+                        className={`flex items-center gap-2 min-h-[52px] md:min-h-[56px] ${posKeyTone} ${roamingMode ? 'w-full px-3 py-2' : 'flex-shrink-0 px-3 py-2'}`}
                         title={dictValue('pos.titleHoldOrder', 'Hold current order')}
                       >
-                        <svg className="w-5 h-5 text-gray-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                         <span>{dictValue('pos.holdOrder', 'Hold Order')}</span>
@@ -1671,10 +1684,10 @@ export default function Dashboard() {
                       <button
                         type="button"
                         onClick={() => setShowRefundModal(true)}
-                        className={`flex items-center gap-2 min-h-[52px] md:min-h-[56px] bg-white border-2 border-gray-200 hover:border-red-200 hover:bg-red-50 transition-all text-gray-700 font-medium text-xs ${roamingMode ? 'w-full px-3 py-2' : 'flex-shrink-0 px-5 py-3'}`}
+                        className={`flex items-center gap-2 min-h-[52px] md:min-h-[56px] bg-paper-white border border-ink/25 hover:border-stamp hover:text-stamp transition-colors text-ink font-receipt font-medium uppercase text-xs ${roamingMode ? 'w-full px-3 py-2' : 'flex-shrink-0 px-3 py-2'}`}
                         title={dictValue('pos.titleProcessRefund', 'Process a refund')}
                       >
-                        <svg className="w-5 h-5 text-red-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
                         </svg>
                         <span>{dictValue('pos.refund', 'Refund')}</span>
@@ -1683,10 +1696,10 @@ export default function Dashboard() {
                       <button
                         type="button"
                         onClick={() => { setShowSavedCartsModal(true); loadSavedCarts(); }}
-                        className={`flex items-center gap-2 min-h-[52px] md:min-h-[56px] bg-white border-2 border-gray-200 hover:border-gray-400 hover:bg-gray-50 transition-all text-gray-700 font-medium text-xs ${roamingMode ? 'w-full px-3 py-2' : 'flex-shrink-0 px-5 py-3'}`}
+                        className={`flex items-center gap-2 min-h-[52px] md:min-h-[56px] ${posKeyTone} ${roamingMode ? 'w-full px-3 py-2' : 'flex-shrink-0 px-3 py-2'}`}
                         title={dictValue('pos.titleSavedOrders', 'Load a saved order')}
                       >
-                        <svg className="w-5 h-5 text-gray-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                         </svg>
                         <span>{dictValue('pos.savedOrders', 'Saved Orders')}</span>
@@ -1694,14 +1707,14 @@ export default function Dashboard() {
                     </div>
                   )}
 
-                  <div className="w-px min-h-[52px] md:min-h-[56px] bg-gray-200" />
+                  <div className="hidden xl:block w-px min-h-[52px] md:min-h-[56px] bg-ink/20" />
 
                   <button
                     type="button"
                     onClick={() => { setRoamingMode((v) => !v); setShowRoamingCart(false); }}
-                    className={`flex items-center gap-2 px-3 py-2 text-sm font-medium border transition-colors flex-shrink-0 ${roamingMode
+                    className={`flex items-center gap-2 px-3 py-2 font-receipt text-xs font-medium uppercase border transition-colors flex-shrink-0 ${roamingMode
                       ? 'text-white border-transparent'
-                      : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'
+                      : 'bg-paper-white text-ink border-ink/25 hover:border-ink'
                       }`}
                     style={roamingMode ? { backgroundColor: primaryColor, borderColor: primaryColor } : {}}
                     title={roamingMode ? dictValue('pos.exitRoamingMode', 'Exit roaming mode') : dictValue('pos.enableRoamingMode', 'Enable roaming mode (line-busting)')}
@@ -1712,7 +1725,7 @@ export default function Dashboard() {
                     </svg>
                     <span className="hidden sm:inline">{roamingMode ? dictValue('pos.roamingMode', 'Roaming') : dictValue('pos.roamMode', 'Roam')}</span>
                     {roamingMode && (
-                      <span className="w-2 h-2 bg-white/80 animate-pulse" />
+                      <span className="w-2 h-2 bg-white/80 animate-pulse motion-reduce:animate-none" />
                     )}
                   </button>
                 </div>
@@ -1726,17 +1739,17 @@ export default function Dashboard() {
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     autoFocus={!device.isTouch}
-                    className="w-full px-3 sm:px-4 py-2.5 sm:py-3 pl-10 sm:pl-11 text-sm sm:text-base border-2 border-gray-300 bg-white transition-all"
+                    className="w-full px-3 sm:px-4 py-2.5 sm:py-3 pl-10 sm:pl-11 font-receipt text-sm sm:text-base border-2 border-ink bg-paper-white placeholder:text-ink/50 transition-all"
                     onFocus={(e) => {
                       e.currentTarget.style.borderColor = primaryColor;
                       e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
                     }}
                     onBlur={(e) => {
-                      e.currentTarget.style.borderColor = '#d1d5db';
+                      e.currentTarget.style.borderColor = '#10202b';
                       e.currentTarget.style.boxShadow = 'none';
                     }}
                   />
-                  <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-ink/50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                   </svg>
                 </div>
@@ -1755,7 +1768,7 @@ export default function Dashboard() {
                 {canRefund && (
                 <button
                   onClick={() => setShowRefundModal(true)}
-                  className="px-2.5 py-2.5 sm:px-3 sm:py-3 min-h-[44px] min-w-[44px] bg-red-600 text-white hover:bg-red-700 transition-colors border border-red-700 flex-shrink-0"
+                  className="px-2.5 py-2.5 sm:px-3 sm:py-3 min-h-[44px] min-w-[44px] bg-paper-white text-stamp hover:bg-stamp hover:text-paper-white transition-colors border border-stamp/60 flex-shrink-0"
                   title={dict.pos.refunds}
                 >
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1766,11 +1779,11 @@ export default function Dashboard() {
                 <button
                   type="button"
                   onClick={() => setDisplayMode('grid')}
-                  className="px-2.5 py-2.5 sm:px-3 sm:py-3 min-h-[44px] min-w-[44px] bg-white transition-all flex-shrink-0 border-2"
+                  className="px-2.5 py-2.5 sm:px-3 sm:py-3 min-h-[44px] min-w-[44px] bg-paper-white transition-all flex-shrink-0 border-2"
                   style={
                     displayMode === 'grid'
                       ? { borderColor: primaryColor, backgroundColor: `${primaryColor}10`, color: primaryColor }
-                      : { borderColor: '#d1d5db', color: '#374151' }
+                      : { borderColor: 'rgb(16 32 43 / 0.25)', color: '#10202b' }
                   }
                   title={dictValue('common.gridView', 'Grid View')}
                   aria-label={dictValue('common.gridView', 'Grid View')}
@@ -1783,11 +1796,11 @@ export default function Dashboard() {
                 <button
                   type="button"
                   onClick={() => setDisplayMode('list')}
-                  className="px-2.5 py-2.5 sm:px-3 sm:py-3 min-h-[44px] min-w-[44px] bg-white transition-all flex-shrink-0 border-2"
+                  className="px-2.5 py-2.5 sm:px-3 sm:py-3 min-h-[44px] min-w-[44px] bg-paper-white transition-all flex-shrink-0 border-2"
                   style={
                     displayMode === 'list'
                       ? { borderColor: primaryColor, backgroundColor: `${primaryColor}10`, color: primaryColor }
-                      : { borderColor: '#d1d5db', color: '#374151' }
+                      : { borderColor: 'rgb(16 32 43 / 0.25)', color: '#10202b' }
                   }
                   title={dictValue('common.listView', 'List View')}
                   aria-label={dictValue('common.listView', 'List View')}
@@ -1827,11 +1840,12 @@ export default function Dashboard() {
                 scrollRootRef={productsScrollRef}
               />
             ) : (
-              <div className="flex flex-col items-center justify-center py-24 gap-4 text-center select-none">
-                <svg className="w-16 h-16 opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
-                </svg>
-                <p className="text-lg font-medium opacity-40">{dict.pos?.searchPrompt || 'Search for a product to begin'}</p>
+              <div className="flex flex-col items-center justify-center py-16 lg:py-24 gap-5 text-center select-none">
+                <div className="relative h-24 w-56 overflow-hidden bg-paper-white p-3 text-ink" aria-hidden>
+                  <Barcode className="h-full w-full" />
+                  <span className="mk-sweep" />
+                </div>
+                <p className="font-receipt text-xs sm:text-sm uppercase tracking-[0.14em] text-ink/70">{dict.pos?.searchPrompt || 'Search for a product to begin'}</p>
               </div>
             )}
           </div>
@@ -1843,8 +1857,7 @@ export default function Dashboard() {
         <button
           type="button"
           onClick={() => setShowRoamingCart(true)}
-          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-6 py-4 min-h-[44px] text-white font-bold border-2 border-white/20 transition-all hover:brightness-110"
-          style={{ backgroundColor: primaryColor }}
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-6 py-4 min-h-[44px] bg-ink text-paper-white font-receipt font-medium uppercase border-2 border-white/20 transition-colors hover:bg-brand-navy"
           aria-label={`${dict.pos.cart}, ${cart.reduce((s, i) => s + i.quantity, 0)} ${dict.pos?.items || 'items'}, ${dict.pos?.total || dict.common?.total || 'Total'} ${getTotal()}`}
         >
           <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -1979,18 +1992,18 @@ export default function Dashboard() {
       {/* Save Cart Modal */}
       {showSaveCartModal && (
         <div
-          className="fixed inset-0 bg-gray-900/30 backdrop-blur-md z-50"
+          className="fixed inset-0 bg-ink/60 z-50"
           onClick={() => {
             setShowSaveCartModal(false);
             setCartName('');
           }}
         >
           <div
-            className="absolute inset-y-0 right-0 w-full max-w-md bg-white border-l border-gray-300 flex flex-col animate-slide-in-right"
+            className="absolute inset-y-0 right-0 w-full max-w-md bg-paper-white text-ink flex flex-col animate-slide-in-right"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between p-5 sm:p-6 border-b border-gray-200">
-              <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
+            <div className="flex items-center justify-between p-5 sm:p-6 border-b border-ink/15">
+              <h2 className="text-4xl text-ink">
                 {dict.pos?.saveCart || 'Save Cart'}
               </h2>
               <button
@@ -1998,7 +2011,7 @@ export default function Dashboard() {
                   setShowSaveCartModal(false);
                   setCartName('');
                 }}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
+                className="text-ink/50 hover:text-ink transition-colors"
               >
                 <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -2007,7 +2020,7 @@ export default function Dashboard() {
             </div>
             <div className="flex-1 overflow-y-auto p-5 sm:p-6">
               <div className="mb-5">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-ink/80 mb-2">
                   {dict.pos?.cartName || 'Cart Name'}
                 </label>
                 <input
@@ -2015,7 +2028,7 @@ export default function Dashboard() {
                   value={cartName}
                   onChange={(e) => setCartName(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && saveCart()}
-                  className="w-full px-4 py-3 text-base border-2 border-gray-300 transition-all"
+                  className="w-full px-4 py-3 font-receipt text-base bg-paper-white border-2 border-ink/25 transition-all"
                   placeholder={dict.pos?.cartNamePlaceholder || 'Enter a name for this cart'}
                   autoFocus
                   onFocus={(e) => {
@@ -2023,11 +2036,11 @@ export default function Dashboard() {
                     e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
                   }}
                   onBlur={(e) => {
-                    e.currentTarget.style.borderColor = '#d1d5db';
+                    e.currentTarget.style.borderColor = 'rgb(16 32 43 / 0.25)';
                     e.currentTarget.style.boxShadow = 'none';
                   }}
                 />
-                <p className="text-sm text-gray-500 mt-2">
+                <p className="text-sm text-ink/60 mt-2">
                   {dict.pos?.cartNameHint || 'This cart will be saved for later processing'}
                 </p>
               </div>
@@ -2038,7 +2051,7 @@ export default function Dashboard() {
                     setShowSaveCartModal(false);
                     setCartName('');
                   }}
-                  className="px-4 py-2.5 border-2 border-gray-300 text-gray-700 hover:bg-gray-100 font-medium transition-colors bg-white"
+                  className="px-4 py-2.5 border-2 border-ink/25 text-ink/80 hover:bg-paper font-medium transition-colors bg-paper-white"
                 >
                   {dict.common.cancel}
                 </button>
@@ -2046,7 +2059,7 @@ export default function Dashboard() {
                   type="button"
                   onClick={saveCart}
                   disabled={savingCart || !cartName.trim()}
-                  className="px-4 py-2.5 bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors border border-green-700"
+                  className="px-4 py-2.5 bg-ink text-paper-white hover:bg-brand-navy disabled:opacity-50 disabled:cursor-not-allowed font-receipt font-medium uppercase transition-colors"
                 >
                   {savingCart ? (dict.common.saving || 'Saving...') : (dict.common.save || 'Save')}
                 </button>
@@ -2075,6 +2088,7 @@ export default function Dashboard() {
       {/* Age Verification Modal */}
       {showAgeVerificationModal && pendingAgeVerifyProduct && (
         <PosAgeVerificationModal
+          dictValue={dictValue}
           product={pendingAgeVerifyProduct}
           onCancel={() => {
             setShowAgeVerificationModal(false);
@@ -2094,7 +2108,6 @@ export default function Dashboard() {
       {showSplitCheckModal && (
         <PosSplitCheckModal
           dictValue={dictValue}
-          primaryColor={primaryColor}
           total={getTotal()}
           splitStep={splitStep}
           setSplitStep={setSplitStep}
@@ -2118,17 +2131,17 @@ export default function Dashboard() {
 
       {/* Variant Selector Modal */}
       {showVariantModal && pendingVariantProduct && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-md border border-gray-300">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
+        <div className="fixed inset-0 bg-ink/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-paper-white text-ink w-full max-w-md">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-ink/15">
               <div>
-                <h2 className="font-bold text-gray-900 text-lg">{pendingVariantProduct.name}</h2>
-                <p className="text-sm text-gray-500">{dictValue('pos.selectAVariant', 'Select a variant')}</p>
+                <h2 className="text-3xl text-ink">{pendingVariantProduct.name}</h2>
+                <p className="text-sm text-ink/60">{dictValue('pos.selectAVariant', 'Select a variant')}</p>
               </div>
               <button
                 type="button"
                 onClick={() => { setShowVariantModal(false); setPendingVariantProduct(null); }}
-                className="p-2 text-gray-400 hover:text-gray-600"
+                className="p-2 text-ink/50 hover:text-ink"
               >
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -2137,7 +2150,7 @@ export default function Dashboard() {
             </div>
             <div className="p-5 grid grid-cols-2 gap-3 max-h-80 overflow-y-auto">
               {(pendingVariantProduct.variations || []).map((v, idx) => {
-                const label = [v.size, v.color, v.type].filter(Boolean).join(' / ') || v.sku || `Variant ${idx + 1}`;
+                const label = [v.size, v.color, v.type].filter(Boolean).join(' / ') || v.sku || `${dictValue('pos.variantLabel', 'Variant')} ${idx + 1}`;
                 const effectivePrice = v.price ?? pendingVariantProduct.price;
                 const effectiveStock = v.stock ?? 0;
                 const sku = v.sku || `${pendingVariantProduct._id}-v${idx}`;
@@ -2158,17 +2171,17 @@ export default function Dashboard() {
                       setShowVariantModal(false);
                       setPendingVariantProduct(null);
                     }}
-                    className={`flex flex-col items-start p-3 border-2 transition-all text-left ${outOfStock
-                      ? 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed'
-                      : 'border-gray-300 hover:border-brand hover:bg-brand-soft cursor-pointer'
+                    className={`flex flex-col items-start p-3 border transition-colors text-left ${outOfStock
+                      ? 'border-ink/15 bg-paper opacity-50 cursor-not-allowed'
+                      : 'border-ink/25 hover:border-brand hover:bg-brand-soft cursor-pointer'
                       }`}
                   >
-                    <span className="font-semibold text-sm text-gray-900">{label}</span>
-                    <span className="text-sm text-gray-600 mt-0.5">
+                    <span className="font-semibold text-sm text-ink">{label}</span>
+                    <span className="font-receipt text-sm text-ink/80 mt-0.5">
                       <Currency amount={effectivePrice} />
                     </span>
-                    <span className={`text-[11px] mt-1 font-medium ${outOfStock ? 'text-red-500' : effectiveStock <= 5 ? 'text-yellow-600' : 'text-green-600'}`}>
-                      {outOfStock ? 'Out of stock' : `${effectiveStock} in stock`}
+                    <span className={`font-receipt text-[11px] mt-1 font-medium ${outOfStock ? 'text-stamp' : effectiveStock <= 5 ? 'text-ink' : 'text-brand-hover'}`}>
+                      {outOfStock ? dictValue('pos.outOfStockLabel', 'Out of stock') : dictValue('pos.inStockCount', '{count} in stock').replace('{count}', String(effectiveStock))}
                     </span>
                   </button>
                 );
@@ -2181,6 +2194,7 @@ export default function Dashboard() {
       {/* Cross-Branch Inventory Lookup Modal */}
       {branchLookupProduct && (
         <PosBranchLookupModal
+          dictValue={dictValue}
           product={branchLookupProduct}
           loading={loadingBranchLookup}
           data={branchLookupData}
@@ -2221,6 +2235,7 @@ export default function Dashboard() {
       {/* Modifier Slide-Out Modal */}
       {showModifierModal && pendingModifierProduct && (
         <PosModifierModal
+          dictValue={dictValue}
           product={pendingModifierProduct}
           selectedModifiers={selectedModifiers}
           setSelectedModifiers={setSelectedModifiers}

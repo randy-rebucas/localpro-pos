@@ -67,6 +67,14 @@ export default function ProductGrid({
     rootRef: scrollRootRef,
   });
 
+  const cardLabels = {
+    out: dict.pos?.outBadge || 'OUT',
+    options: dict.pos?.plusOptions || '+ options',
+    variants: dict.pos?.variantsCount || '{count} variants',
+    pin: dict.pos?.pinProduct || 'Pin product',
+    unpin: dict.pos?.unpinProduct || 'Unpin product',
+  };
+
   if (status === 'loading') {
     return (
       <ProductCardSkeleton
@@ -80,7 +88,7 @@ export default function ProductGrid({
 
   if (status === 'error') {
     return (
-      <div className="bg-white border border-gray-300">
+      <div className="bg-paper-white border border-ink/25">
         <ErrorState
           title={dict.pos?.failedToLoadProducts || 'Failed to load products'}
           description={error || undefined}
@@ -101,7 +109,7 @@ export default function ProductGrid({
       )}
 
       {products.length === 0 ? (
-        <div className="bg-white border border-gray-300">
+        <div className="bg-paper-white border border-ink/25">
           <EmptyState
             icon={search.trim() ? 'search' : 'products'}
             title={
@@ -142,6 +150,7 @@ export default function ProductGrid({
                   businessType={businessType}
                   cardHeightClass={cardHeightClass}
                   addLabel={addLabel}
+                  labels={cardLabels}
                   variant={displayMode}
                   onAdd={onAdd}
                   onTogglePin={onTogglePin}

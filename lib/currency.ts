@@ -70,11 +70,11 @@ export function formatNumber(
 ): string {
   const { decimalSeparator, thousandsSeparator, decimalPlaces } = numberFormat;
   
-  // Round to specified decimal places
-  const rounded = Number(amount.toFixed(decimalPlaces));
+  // Keep every decimal place so 325.5 reads 325.50. Adding 0 turns a rounded -0 into 0.
+  const rounded = Number(amount.toFixed(decimalPlaces)) + 0;
   
   // Split integer and decimal parts
-  const parts = rounded.toString().split('.');
+  const parts = rounded.toFixed(decimalPlaces).split('.');
   const integerPart = parts[0];
   const decimalPart = parts[1] || '';
   

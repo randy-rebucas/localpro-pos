@@ -1,149 +1,106 @@
 'use client';
 
 import Currency from '@/components/Currency';
+import { ReceiptRow } from '@/components/marketing/primitives';
 import type { Discount } from '@/hooks/useDiscount';
 import type { TranslationDict } from '@/types/dictionary';
 
-interface CartSummaryFooterProps {
+interface CartSummaryRowsProps {
   dict: TranslationDict;
-  primaryColor: string;
   subtotal: number;
-  total: number;
   taxAmount: number;
   appliedDiscount: Discount | null;
   taxEnabled?: boolean;
   taxLabel?: string;
   taxRate?: number;
+  className?: string;
+}
+
+interface CartTillProps {
+  dict: TranslationDict;
+  total: number;
   processing?: boolean;
   processingLabel?: string;
-  variant?: 'main' | 'roaming';
   onCheckout: () => void;
 }
 
-export default function CartSummaryFooter({
+/** The printed lines above the total, on the receipt. */
+export function CartSummaryRows({
   dict,
-  primaryColor,
   subtotal,
-  total,
   taxAmount,
   appliedDiscount,
   taxEnabled,
   taxLabel,
   taxRate,
-  processing = false,
-  processingLabel,
-  variant = 'main',
-  onCheckout,
-}: CartSummaryFooterProps) {
+  className = '',
+}: CartSummaryRowsProps) {
+  return (
+    <div className={`shrink-0 mt-2 border-t border-dashed border-ink/30 pt-2 space-y-1 font-receipt text-xs sm:text-sm text-ink ${className}`}>
+      <ReceiptRow label={dict.pos?.subtotal} value={<Currency amount={subtotal} />} />
+      {appliedDiscount && (
+        <ReceiptRow
+          label={`${dict.pos?.discount} (${appliedDiscount.code})`}
+          value={<>-<Currency amount={appliedDiscount.amount} /></>}
+        />
+      )}
+      {taxEnabled && taxRate != null && (
+        <ReceiptRow label={`${taxLabel || 'Tax'} (${taxRate}%)`} value={<Currency amount={taxAmount} />} />
+      )}
+    </div>
+  );
+}
+
+/** The till display and checkout key, on the dark counter below the receipt. */
+export function CartTill({ dict, total, processing = false, processingLabel, onCheckout }: CartTillProps) {
   const totalLabel = dict.pos?.total || dict.common?.total || 'Total';
 
-  if (variant === 'roaming') {
-    return (
-      <div className="shrink-0 border-t border-gray-200 px-5 py-4 bg-gray-50 space-y-2">
-        <div className="flex justify-between text-sm text-gray-600">
-          <span>{dict.pos?.subtotal}:</span>
-          <Currency amount={subtotal} />
-        </div>
-        {appliedDiscount && (
-          <div className="flex justify-between text-sm text-green-700">
-            <span>
-              {dict.pos?.discount} ({appliedDiscount.code}):
-            </span>
-            <span>
-              -<Currency amount={appliedDiscount.amount} />
-            </span>
-          </div>
-        )}
-        {taxEnabled && taxRate != null && (
-          <div className="flex justify-between text-sm text-gray-600">
-            <span>
-              {taxLabel || 'Tax'} ({taxRate}%):
-            </span>
-            <Currency amount={taxAmount} />
-          </div>
-        )}
-        <div className="flex justify-between font-bold text-lg text-gray-900 pt-1 border-t border-gray-300">
-          <span>{totalLabel}:</span>
-          <Currency amount={total} showConverted convertedClassName="block text-xs text-gray-500 font-normal text-right leading-tight" />
-        </div>
-        <button
-          type="button"
-          onClick={onCheckout}
-          disabled={processing}
-          className="w-full bg-green-600 text-white py-4 min-h-[44px] font-bold hover:bg-green-700 transition-colors text-lg border border-green-700 flex items-center justify-center gap-2 mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {processing ? (
-            <>
-              <div className="animate-spin h-5 w-5 border-b-2 border-white" />
-              <span>{processingLabel || dict.pos?.processing || 'Processing...'}</span>
-            </>
-          ) : (
-            <>
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              {dict.pos?.checkout}
-            </>
-          )}
-        </button>
-      </div>
-    );
-  }
-
   return (
-    <div className="shrink-0 border-t border-gray-300 pt-3 md:pt-4 mt-3 md:mt-4 bg-gray-50 -mx-3 sm:-mx-4 md:-mx-4 px-3 sm:px-4 md:px-4 pb-3 md:pb-4">
-      <div className="space-y-1.5 md:space-y-2 mb-3 md:mb-4">
-        <div className="flex justify-between items-center text-sm">
-          <span className="text-gray-600">{dict.pos?.subtotal}:</span>
-          <span className="font-semibold text-gray-900">
-            <Currency amount={subtotal} />
-          </span>
-        </div>
-        {appliedDiscount && (
-          <div className="flex justify-between items-center text-sm">
-            <span className="text-gray-600">{dict.pos?.discount}:</span>
-            <span className="font-semibold text-green-600">
-              -<Currency amount={appliedDiscount.amount} />
-            </span>
-          </div>
-        )}
-        {taxEnabled && taxRate != null && (
-          <div className="flex justify-between items-center text-sm">
-            <span className="text-gray-600">
-              {taxLabel || 'Tax'} ({taxRate}%):
-            </span>
-            <span className="font-semibold text-gray-900">
-              <Currency amount={taxAmount} />
-            </span>
-          </div>
-        )}
-      </div>
-      <div className="flex justify-between items-center mb-3 md:mb-4 pt-2 md:pt-3 border-t-2 border-gray-300">
-        <span className="text-base md:text-lg font-bold text-gray-900">{totalLabel}:</span>
-        <span className="text-xl md:text-2xl xl:text-3xl font-bold" style={{ color: primaryColor }}>
-          <Currency amount={total} showConverted convertedClassName="block text-xs text-gray-500 font-normal text-right leading-tight" />
+    <div className="shrink-0 pt-2 sm:pt-3 space-y-2">
+      <div className="flex items-baseline justify-between gap-3 border border-white/10 bg-black/30 px-3 py-2 font-receipt">
+        <span className="text-xs uppercase tracking-[0.14em] text-[#8fe3d0]">{totalLabel}</span>
+        <span className="mk-led-glow text-right text-2xl font-semibold tabular-nums text-[#7df0d6] xl:text-3xl">
+          <Currency amount={total} showConverted convertedClassName="block text-xs font-normal leading-tight text-white/60" />
         </span>
       </div>
       <button
         type="button"
         onClick={onCheckout}
         disabled={processing}
-        className="w-full bg-green-600 text-white py-3 md:py-3.5 min-h-[44px] font-bold hover:bg-green-700 active:bg-green-800 transition-all duration-200 text-base md:text-lg border border-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+        className="flex min-h-[44px] w-full items-center justify-center gap-2 bg-brand py-3 font-display text-2xl font-extrabold uppercase leading-none text-ink transition-colors hover:bg-brand-muted disabled:cursor-not-allowed disabled:opacity-50"
       >
         {processing ? (
           <>
-            <div className="animate-spin h-6 w-6 border-b-2 border-white" />
+            <div className="h-5 w-5 animate-spin border-b-2 border-ink" />
             <span>{processingLabel || dict.pos?.processing || 'Processing...'}</span>
           </>
         ) : (
-          <>
-            <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            {dict.pos?.checkout}
-          </>
+          dict.pos?.checkout
         )}
       </button>
+    </div>
+  );
+}
+
+/** Rows and till stacked, for the roaming bottom sheet. */
+export default function CartSummaryFooter({
+  processing,
+  processingLabel,
+  total,
+  onCheckout,
+  ...rows
+}: CartSummaryRowsProps & CartTillProps) {
+  return (
+    <div className="shrink-0">
+      <div className="bg-paper-white px-5 pb-1">
+        <CartSummaryRows {...rows} className="mt-0" />
+      </div>
+      <div className="bg-brand-navy-deep pb-4">
+        <div className="mk-tear-b h-3 bg-paper-white" aria-hidden />
+        <div className="px-5">
+          <CartTill dict={rows.dict} total={total} processing={processing} processingLabel={processingLabel} onCheckout={onCheckout} />
+        </div>
+      </div>
     </div>
   );
 }

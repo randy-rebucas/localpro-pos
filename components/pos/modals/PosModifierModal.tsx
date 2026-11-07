@@ -20,6 +20,7 @@ export interface PosModifierProduct {
 }
 
 export interface PosModifierModalProps {
+  dictValue: (path: string, fallback?: string) => string;
   product: PosModifierProduct;
   selectedModifiers: Record<string, { option: string; price: number }>;
   setSelectedModifiers: (
@@ -32,6 +33,7 @@ export interface PosModifierModalProps {
 }
 
 export default function PosModifierModal({
+  dictValue,
   product,
   selectedModifiers,
   setSelectedModifiers,
@@ -47,20 +49,20 @@ export default function PosModifierModal({
   }));
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div className="fixed inset-0 bg-ink/60 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
       <div
-        className="bg-white w-full sm:max-w-md shadow-2xl sm:animate-fade-in animate-slide-in-bottom"
+        className="bg-paper-white text-ink w-full sm:max-w-md sm:animate-fade-in animate-slide-in-bottom"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-dashed border-ink/30">
           <div>
-            <h2 className="font-bold text-gray-900 text-lg">{product.name}</h2>
-            <p className="text-sm text-orange-600 font-medium">Customize your order</p>
+            <h2 className="text-3xl text-ink">{product.name}</h2>
+            <p className="font-receipt text-xs text-ink/60 mt-1">{dictValue('pos.customizeOrder', 'Customize your order')}</p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-2 text-gray-400 hover:text-gray-600"
+            className="p-2 text-ink/50 hover:text-ink"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -73,9 +75,9 @@ export default function PosModifierModal({
             return (
               <div key={modGroup.name}>
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="font-semibold text-sm text-gray-900">{modGroup.name}</span>
+                  <span className="font-semibold text-sm text-ink">{modGroup.name}</span>
                   {modGroup.required && (
-                    <span className="text-[10px] font-bold bg-orange-100 text-orange-700 px-1.5 py-0.5">REQUIRED</span>
+                    <span className="font-receipt text-[10px] bg-ink text-paper-white px-1.5 py-0.5">{dictValue('pos.requiredBadge', 'REQUIRED')}</span>
                   )}
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -89,14 +91,14 @@ export default function PosModifierModal({
                           ...prev,
                           [modGroup.name]: { option: opt.name, price: opt.price },
                         }))}
-                        className={`px-3 py-2 text-sm border-2 font-medium transition-all ${isChosen
-                          ? 'bg-orange-500 border-orange-500 text-white'
-                          : 'bg-white border-gray-300 text-gray-700 hover:border-orange-400'
+                        className={`px-3 py-2 text-sm border font-medium transition-colors ${isChosen
+                          ? 'bg-ink border-ink text-paper-white'
+                          : 'bg-paper-white border-ink/25 text-ink hover:border-ink'
                           }`}
                       >
                         {opt.name}
                         {opt.price > 0 && (
-                          <span className={`ml-1 text-xs ${isChosen ? 'text-orange-100' : 'text-orange-600'}`}>
+                          <span className={`ml-1 font-receipt text-xs ${isChosen ? 'text-paper/70' : 'text-ink/60'}`}>
                             +<Currency amount={opt.price} />
                           </span>
                         )}
@@ -108,14 +110,14 @@ export default function PosModifierModal({
             );
           })}
         </div>
-        <div className="px-5 py-4 border-t border-gray-200">
+        <div className="px-5 py-4 border-t border-dashed border-ink/30">
           <button
             type="button"
             disabled={!allSatisfied}
             onClick={() => onAddToOrder(chosenMods)}
-            className="w-full py-3 text-white font-bold text-base transition-colors border disabled:opacity-40 disabled:cursor-not-allowed bg-orange-500 border-orange-500 hover:bg-orange-600"
+            className="w-full py-3 bg-ink text-paper-white hover:bg-brand-navy font-receipt font-medium uppercase transition-colors text-sm disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            {!allSatisfied ? 'Select required options' : 'Add to Order'}
+            {!allSatisfied ? dictValue('pos.selectRequiredOptions', 'Select required options') : dictValue('pos.addToOrder', 'Add to Order')}
           </button>
         </div>
       </div>

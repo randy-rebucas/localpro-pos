@@ -5,44 +5,51 @@ export interface PosAgeVerificationProduct {
 }
 
 export interface PosAgeVerificationModalProps {
+  dictValue: (path: string, fallback?: string) => string;
   product: PosAgeVerificationProduct;
   onCancel: () => void;
   onConfirm: () => void;
 }
 
 export default function PosAgeVerificationModal({
+  dictValue,
   product,
   onCancel,
   onConfirm,
 }: PosAgeVerificationModalProps) {
   return (
-    <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white border-2 border-red-500 w-full max-w-sm shadow-2xl animate-fade-in">
-        <div className="bg-red-500 px-6 py-4 flex items-center gap-3">
-          <svg className="w-7 h-7 text-white flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-          </svg>
-          <h2 className="text-lg font-bold text-white">Age Verification Required</h2>
+    <div className="fixed inset-0 bg-ink/70 z-50 flex items-center justify-center p-4">
+      <div className="bg-paper-white text-ink w-full max-w-sm p-6 animate-fade-in">
+        <div className="flex items-start justify-between gap-4 mb-4">
+          <h2 className="text-4xl text-ink">{dictValue('pos.ageVerificationTitle', 'Age Verification Required')}</h2>
+          <span
+            className="mk-stamp shrink-0 border-4 border-stamp px-2 py-1 font-display text-3xl font-extrabold leading-none text-stamp"
+            aria-hidden
+          >
+            18+
+          </span>
         </div>
-        <div className="px-6 py-5">
-          <p className="text-gray-800 font-medium mb-1">{product.name}</p>
-          <p className="text-gray-600 text-sm mb-5">
-            This item may be an age-restricted product. Please verify the customer is <strong>18 years of age or older</strong> before proceeding.
+        <div className="border-t border-dashed border-ink/30 pt-4">
+          <p className="text-ink font-semibold mb-1">{product.name}</p>
+          <p className="text-ink/70 text-sm mb-5">
+            {dictValue('pos.ageVerificationIntro', 'This item may be an age-restricted product. Please verify the customer is')}{' '}
+            <strong>{dictValue('pos.ageVerificationAge', '18 years of age or older')}</strong>{' '}
+            {dictValue('pos.ageVerificationOutro', 'before proceeding.')}
           </p>
           <div className="flex gap-3">
             <button
               type="button"
               onClick={onCancel}
-              className="flex-1 py-3 min-h-[48px] border-2 border-gray-300 text-gray-700 hover:bg-gray-50 font-semibold transition-colors"
+              className="flex-1 py-3 min-h-[48px] border border-ink/25 text-ink hover:border-ink font-receipt text-xs font-medium uppercase transition-colors"
             >
-              Cancel
+              {dictValue('common.cancel', 'Cancel')}
             </button>
             <button
               type="button"
               onClick={onConfirm}
-              className="flex-1 py-3 min-h-[48px] bg-red-600 text-white hover:bg-red-700 font-semibold transition-colors border border-red-700"
+              className="flex-1 px-2 py-3 min-h-[48px] bg-ink text-paper-white hover:bg-brand-navy font-receipt font-medium uppercase transition-colors text-xs"
             >
-              Confirmed — Add Item
+              {dictValue('pos.ageConfirmAdd', 'Confirmed — Add Item')}
             </button>
           </div>
         </div>

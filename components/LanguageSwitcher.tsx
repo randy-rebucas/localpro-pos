@@ -1,16 +1,27 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useSyncExternalStore } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 
 type Locale = 'en' | 'es';
 
-const LOCALES: { code: Locale; label: string; flag: string }[] = [
-  { code: 'en', label: 'English', flag: '🇺🇸' },
-  { code: 'es', label: 'Español', flag: '🇪🇸' },
+const LOCALES: { code: Locale; label: string }[] = [
+  { code: 'en', label: 'English' },
+  { code: 'es', label: 'Español' },
 ];
 
 const STORAGE_KEY = 'preferred_lang';
+const CHANGE_EVENT = 'preferred_lang_change';
+
+function subscribeToStoredLocale(onChange: () => void) {
+  window.addEventListener(CHANGE_EVENT, onChange);
+  return () => window.removeEventListener(CHANGE_EVENT, onChange);
+}
+
+function readStoredLocale(): Locale | null {
+  const stored = localStorage.getItem(STORAGE_KEY);
+  return stored === 'en' || stored === 'es' ? stored : null;
+}
 
 interface LanguageSwitcherProps {
   /** Current locale — provide when inside a [tenant]/[lang] route */
@@ -33,16 +44,9 @@ export default function LanguageSwitcher({ lang, tenant, className }: LanguageSw
   const router = useRouter();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
-  const [current, setCurrent] = useState<Locale>(lang ?? 'en');
+  const storedLocale = useSyncExternalStore(subscribeToStoredLocale, readStoredLocale, () => null);
+  const current: Locale = lang ?? storedLocale ?? 'en';
   const ref = useRef<HTMLDivElement>(null);
-
-  // On public pages (no lang prop) read the stored preference
-  useEffect(() => {
-    if (!lang) {
-      const stored = (typeof window !== 'undefined' && localStorage.getItem(STORAGE_KEY)) as Locale | null;
-      if (stored === 'en' || stored === 'es') setCurrent(stored);
-    }
-  }, [lang]);
 
   // Close on outside click
   useEffect(() => {
@@ -62,10 +66,9 @@ export default function LanguageSwitcher({ lang, tenant, className }: LanguageSw
       const newPath = pathname.replace(`/${tenant}/${lang}`, `/${tenant}/${locale}`);
       router.push(newPath);
     } else {
-      // Public page: store preference, update local state, and notify same-tab listeners
+      // Public page: store preference and notify same-tab listeners, including this one
       localStorage.setItem(STORAGE_KEY, locale);
-      setCurrent(locale);
-      window.dispatchEvent(new CustomEvent('preferred_lang_change', { detail: locale }));
+      window.dispatchEvent(new CustomEvent(CHANGE_EVENT, { detail: locale }));
     }
   };
 
@@ -80,16 +83,16 @@ export default function LanguageSwitcher({ lang, tenant, className }: LanguageSw
         aria-haspopup="listbox"
         className={
           className ??
-          'flex items-center gap-1.5 px-2.5 py-1.5 text-sm font-medium border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors'
+          'flex items-center gap-1.5 px-2.5 py-1.5 font-receipt text-xs font-medium border border-ink/25 bg-paper-white text-ink hover:border-ink transition-colors'
         }
       >
         {/* Globe icon */}
-        <svg className="w-4 h-4 flex-shrink-0 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg className="w-4 h-4 flex-shrink-0 text-ink/60" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
         </svg>
         <span className="uppercase tracking-wide">{currentLocale.code}</span>
         <svg
-          className={`w-3 h-3 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`}
+          className={`w-3 h-3 text-ink/50 transition-transform ${open ? 'rotate-180' : ''}`}
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -102,7 +105,7 @@ export default function LanguageSwitcher({ lang, tenant, className }: LanguageSw
         <ul
           role="listbox"
           aria-label="Select language"
-          className="absolute right-0 mt-1 w-36 bg-white border border-gray-300 shadow-lg z-50 py-1"
+          className="absolute right-0 mt-1 w-36 bg-paper-white border border-ink/25 z-50 py-1"
         >
           {LOCALES.map((locale) => (
             <li key={locale.code}>
@@ -112,11 +115,11 @@ export default function LanguageSwitcher({ lang, tenant, className }: LanguageSw
                 onClick={() => handleSelect(locale.code)}
                 className={`w-full flex items-center gap-2.5 px-4 py-2 text-sm transition-colors ${
                   locale.code === current
-                    ? 'bg-brand-soft text-brand-navy font-semibold'
-                    : 'text-gray-700 hover:bg-gray-50'
+                    ? 'bg-brand-soft text-ink font-semibold'
+                    : 'text-ink/80 hover:bg-paper'
                 }`}
               >
-                <span className="text-base leading-none">{locale.flag}</span>
+                <span className="w-5 font-receipt text-xs uppercase text-ink/60">{locale.code}</span>
                 <span>{locale.label}</span>
               </button>
             </li>

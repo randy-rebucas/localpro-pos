@@ -3,6 +3,14 @@
 import Currency from '@/components/Currency';
 import type { PosProduct } from '@/hooks/usePosProducts';
 
+export interface ProductCardLabels {
+  out: string;
+  options: string;
+  variants: string;
+  pin: string;
+  unpin: string;
+}
+
 interface ProductCardProps {
   product: PosProduct;
   inCartQty: number;
@@ -12,6 +20,7 @@ interface ProductCardProps {
   businessType: string;
   cardHeightClass: string;
   addLabel: string;
+  labels: ProductCardLabels;
   variant?: 'grid' | 'list';
   onAdd: (product: PosProduct) => void;
   onTogglePin: (productId: string, pinned: boolean) => void;
@@ -20,10 +29,11 @@ interface ProductCardProps {
 interface PinButtonProps {
   pinned: boolean;
   variant: 'grid' | 'list';
+  label: string;
   onToggle: () => void;
 }
 
-function PinButton({ pinned, variant, onToggle }: PinButtonProps) {
+function PinButton({ pinned, variant, label, onToggle }: PinButtonProps) {
   const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
     e.preventDefault();
@@ -32,12 +42,12 @@ function PinButton({ pinned, variant, onToggle }: PinButtonProps) {
 
   const placementClass =
     variant === 'grid'
-      ? `absolute top-2 right-2 z-30 shadow-md ${
+      ? `absolute top-2 right-2 z-30 ${
           pinned
             ? 'opacity-100'
             : 'opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100'
         }`
-      : 'absolute right-2 top-1/2 -translate-y-1/2 z-30 shadow-sm';
+      : 'absolute right-2 top-1/2 -translate-y-1/2 z-30';
 
   return (
     <button
@@ -45,12 +55,12 @@ function PinButton({ pinned, variant, onToggle }: PinButtonProps) {
       onClick={handleClick}
       onPointerDown={(e) => e.stopPropagation()}
       aria-pressed={pinned}
-      title={pinned ? 'Unpin product' : 'Pin product'}
-      aria-label={pinned ? 'Unpin product' : 'Pin product'}
-      className={`${placementClass} flex h-11 w-11 items-center justify-center border-2 transition-all duration-200 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-1 ${
+      title={label}
+      aria-label={label}
+      className={`${placementClass} flex h-11 w-11 items-center justify-center border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 ${
         pinned
-          ? 'border-amber-400 bg-amber-500 text-white hover:bg-amber-600'
-          : 'border-white/80 bg-white/90 text-gray-500 hover:border-gray-300 hover:bg-white hover:text-gray-700 backdrop-blur-sm'
+          ? 'border-ink bg-ink text-paper-white hover:bg-brand-navy'
+          : 'border-ink/25 bg-paper-white text-ink/60 hover:border-ink hover:text-ink'
       }`}
     >
       <svg
@@ -82,6 +92,7 @@ export default function ProductCard({
   businessType,
   cardHeightClass,
   addLabel,
+  labels,
   variant = 'grid',
   onAdd,
   onTogglePin,
@@ -93,16 +104,18 @@ export default function ProductCard({
     businessType !== 'laundry' &&
     availableStock <= 10;
 
+  const stockBadgeTone = availableStock === 0 ? 'bg-stamp text-paper-white' : 'bg-paper-white text-ink border border-ink';
+
   const handleTogglePin = () => onTogglePin(product._id, isPinned);
 
   if (variant === 'list') {
     return (
       <div
-        className={`relative flex items-center gap-3 border bg-white hover:border-gray-400 transition-all duration-200 group min-h-[72px] px-3 py-2 ${
-          isPinned ? 'border-amber-300 bg-amber-50/40' : 'border-gray-300'
+        className={`relative flex items-center gap-3 border-b border-dashed border-ink/25 hover:bg-paper transition-colors group min-h-[72px] pl-3 pr-14 py-2 ${
+          isPinned ? 'border-l-4 border-l-brand bg-brand-soft' : ''
         } ${!canAdd ? 'opacity-60' : ''}`}
       >
-        <div className="relative w-14 h-14 flex-shrink-0 bg-gray-50 border border-gray-200 overflow-hidden">
+        <div className="relative w-14 h-14 flex-shrink-0 bg-paper overflow-hidden">
           {product.image &&
           (product.image.startsWith('http') ||
             product.image.startsWith('/') ||
@@ -119,35 +132,38 @@ export default function ProductCard({
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center">
-              <svg className="w-6 h-6 text-gray-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
+              <svg className="w-6 h-6 text-ink/20" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
               </svg>
             </div>
           )}
           {isPinned && (
-            <span className="absolute bottom-0 left-0 right-0 bg-amber-500 text-white text-[9px] font-bold text-center py-0.5">
+            <span className="absolute bottom-0 left-0 right-0 bg-ink text-paper-white font-receipt text-[9px] text-center py-0.5">
               PIN
             </span>
           )}
         </div>
 
-        <div className="flex-1 min-w-0 pr-14">
-          <p className="text-[11px] text-gray-500 truncate">{product.category || '\u00A0'}</p>
-          <p className="font-semibold text-gray-900 text-sm leading-tight truncate">{product.name}</p>
-          <div className="font-bold text-sm mt-0.5" style={{ color: primaryColor }}>
-            <Currency amount={product.price} showConverted convertedClassName="text-[10px] text-gray-500 font-normal" />
+        <div className="flex-1 min-w-0">
+          <p className="font-receipt text-[11px] uppercase tracking-wide text-ink/60 truncate">{product.category || '\u00A0'}</p>
+          <div className="flex items-baseline gap-2">
+            <p className="font-semibold text-ink text-sm leading-tight truncate">{product.name}</p>
+            <span className="mk-leader" aria-hidden />
+            <div className="font-receipt font-semibold text-sm text-ink whitespace-nowrap text-right">
+              <Currency amount={product.price} showConverted convertedClassName="block text-[10px] text-ink/60 font-normal" />
+            </div>
           </div>
         </div>
 
-        <div className="pointer-events-none absolute right-14 top-1/2 -translate-y-1/2 z-10 flex items-center gap-2">
+        <div className="pointer-events-none z-10 flex shrink-0 items-center gap-2">
           {showStockBadge && (
-            <span className={`text-[10px] font-bold px-1.5 py-0.5 text-white ${availableStock === 0 ? 'bg-red-500' : 'bg-yellow-500'}`}>
-              {availableStock === 0 ? 'OUT' : availableStock}
+            <span className={`font-receipt text-[10px] font-medium px-1.5 py-0.5 ${stockBadgeTone}`}>
+              {availableStock === 0 ? labels.out : availableStock}
             </span>
           )}
           {inCartQty > 0 && (
             <span
-              className="text-[10px] font-bold px-1.5 py-0.5 text-white"
+              className="font-receipt text-[10px] font-medium px-1.5 py-0.5 text-white"
               style={{ backgroundColor: primaryColor }}
             >
               {inCartQty}
@@ -155,7 +171,7 @@ export default function ProductCard({
           )}
         </div>
 
-        <PinButton pinned={isPinned} variant="list" onToggle={handleTogglePin} />
+        <PinButton pinned={isPinned} variant="list" label={isPinned ? labels.unpin : labels.pin} onToggle={handleTogglePin} />
 
         <button
           type="button"
@@ -172,21 +188,21 @@ export default function ProductCard({
 
   return (
     <div
-      className={`relative overflow-hidden border hover:border-gray-400 transition-all duration-200 group ${cardHeightClass} hover:shadow-lg ${
-        isPinned ? 'border-amber-400 ring-2 ring-amber-300/60' : 'border-gray-300'
+      className={`relative overflow-hidden border bg-paper-white hover:border-ink transition-colors group ${cardHeightClass} ${
+        isPinned ? 'border-2 border-ink' : 'border-ink/25'
       } ${!canAdd ? 'opacity-60' : ''}`}
     >
       {showStockBadge && (
         <div
-          className={`pointer-events-none absolute top-2 left-2 z-20 min-w-[1.5rem] h-6 px-1.5 flex items-center justify-center text-[11px] font-bold text-white shadow-md ${availableStock === 0 ? 'bg-red-500' : 'bg-yellow-500'}`}
+          className={`pointer-events-none absolute top-2 left-2 z-20 min-w-[1.5rem] h-6 px-1.5 flex items-center justify-center font-receipt text-[11px] font-medium ${stockBadgeTone}`}
         >
-          {availableStock === 0 ? 'OUT' : availableStock}
+          {availableStock === 0 ? labels.out : availableStock}
         </div>
       )}
 
       {inCartQty > 0 && (
         <div
-          className="pointer-events-none absolute top-2 right-14 z-20 min-w-[1.5rem] h-6 px-1.5 flex items-center justify-center text-[11px] font-bold text-white shadow-md"
+          className="pointer-events-none absolute top-2 right-14 z-20 min-w-[1.5rem] h-6 px-1.5 flex items-center justify-center font-receipt text-[11px] font-medium text-white"
           style={{ backgroundColor: primaryColor }}
           aria-hidden
         >
@@ -194,7 +210,7 @@ export default function ProductCard({
         </div>
       )}
 
-      <div className="pointer-events-none absolute inset-0 w-full h-full bg-gray-50 overflow-hidden">
+      <div className="pointer-events-none absolute inset-0 w-full h-full bg-paper overflow-hidden">
         {product.image &&
         (product.image.startsWith('http') ||
           product.image.startsWith('/') ||
@@ -211,7 +227,7 @@ export default function ProductCard({
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
-            <svg className="w-10 h-10 text-gray-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
+            <svg className="w-10 h-10 text-ink/20" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -223,41 +239,32 @@ export default function ProductCard({
         )}
       </div>
 
-      <div
-        className="pointer-events-none absolute bottom-0 left-0 right-0 h-20 bg-black/70 group-hover:bg-black/80 transition-colors duration-200 z-10"
-        aria-hidden
-      />
-
-      <div className="pointer-events-none absolute inset-0 flex flex-col justify-between p-4 z-10">
-        <div className="flex items-start justify-between gap-2">
-          <p className="text-xs text-gray-200 truncate h-4 opacity-90">{product.category || '\u00A0'}</p>
-        </div>
-        <div className="space-y-1">
-          {(businessType === 'service' || businessType === 'laundry') && product.serviceType && (
-            <p className="text-[10px] text-gray-300 truncate leading-none">
-              {product.serviceType.charAt(0).toUpperCase() +
-                product.serviceType.slice(1).replace(/-/g, ' ')}
-            </p>
-          )}
-          <p className="font-semibold text-white text-sm leading-5 line-clamp-2">{product.name}</p>
-          <div className="font-bold text-lg leading-tight text-white">
-            <Currency
-              amount={product.price}
-              showConverted
-              convertedClassName="block text-[10px] text-white/70 font-normal leading-tight"
-            />
-          </div>
+      <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-10 space-y-0.5 border-t border-dashed border-ink/30 bg-paper-white px-3 py-2">
+        <p className="font-receipt text-[10px] uppercase tracking-wide text-ink/60 truncate">{product.category || '\u00A0'}</p>
+        {(businessType === 'service' || businessType === 'laundry') && product.serviceType && (
+          <p className="font-receipt text-[10px] text-ink/60 truncate leading-none">
+            {product.serviceType.charAt(0).toUpperCase() +
+              product.serviceType.slice(1).replace(/-/g, ' ')}
+          </p>
+        )}
+        <p className="font-semibold text-ink text-sm leading-5 line-clamp-2">{product.name}</p>
+        <div className="font-receipt font-semibold text-base leading-tight text-ink">
+          <Currency
+            amount={product.price}
+            showConverted
+            convertedClassName="block text-[10px] text-ink/60 font-normal leading-tight"
+          />
         </div>
       </div>
 
       {businessType === 'restaurant' && product.modifiers?.length ? (
-        <span className="pointer-events-none absolute bottom-10 left-2 z-20 text-[9px] bg-orange-500/90 text-white px-1.5 py-0.5 font-semibold">
-          + options
+        <span className="pointer-events-none absolute top-10 left-2 z-20 font-receipt text-[9px] bg-ink text-paper-white px-1.5 py-0.5">
+          {labels.options}
         </span>
       ) : null}
       {product.hasVariations && product.variations?.length ? (
-        <span className="pointer-events-none absolute bottom-10 left-2 z-20 text-[9px] bg-brand/90 text-white px-1.5 py-0.5 font-semibold">
-          {product.variations.length} variants
+        <span className="pointer-events-none absolute top-10 left-2 z-20 font-receipt text-[9px] bg-ink text-paper-white px-1.5 py-0.5">
+          {labels.variants.replace('{count}', String(product.variations.length))}
         </span>
       ) : null}
 
@@ -271,7 +278,7 @@ export default function ProductCard({
         aria-label={`${addLabel} ${product.name}`}
       />
 
-      <PinButton pinned={isPinned} variant="grid" onToggle={handleTogglePin} />
+      <PinButton pinned={isPinned} variant="grid" label={isPinned ? labels.unpin : labels.pin} onToggle={handleTogglePin} />
     </div>
   );
 }

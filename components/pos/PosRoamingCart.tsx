@@ -129,15 +129,15 @@ export default function PosRoamingCart(props: PosRoamingCartProps) {
 
   return (
     <div
-      className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm z-50 flex items-end"
+      className="fixed inset-0 bg-ink/60 z-50 flex items-end"
       onClick={onClose}
     >
       <div
-        className="w-full bg-white border-t-2 border-gray-200 flex min-h-0 flex-col animate-slide-in-bottom max-h-[85vh] overflow-hidden"
+        className="w-full bg-paper-white border-t-2 border-ink/15 flex min-h-0 flex-col animate-slide-in-bottom max-h-[85vh] overflow-hidden"
         style={{ borderTopColor: primaryColor }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="w-12 h-1 rounded-full bg-gray-300 mx-auto mt-2 mb-1 flex-shrink-0" aria-hidden />
+        <div className="w-12 h-1 bg-ink/25 mx-auto mt-2 mb-1 flex-shrink-0" aria-hidden />
         <CartActionBar
           cartLength={cart.length}
           itemCount={cart.reduce((s, i) => s + i.quantity, 0)}
@@ -187,7 +187,6 @@ export default function PosRoamingCart(props: PosRoamingCartProps) {
               })}
               <CartUpsellSuggestions
                 suggestions={upsellSuggestions}
-                primaryColor={primaryColor}
                 dict={dict}
                 onAdd={(productId) => {
                   const product = products.find((p) => p._id === productId);
@@ -203,7 +202,6 @@ export default function PosRoamingCart(props: PosRoamingCartProps) {
             <div className="shrink-0 px-5">
               <CartDiscountSection
                 dict={dict}
-                primaryColor={primaryColor}
                 tenant={tenant}
                 cartLength={cart.length}
                 promoCode={promoCode}
@@ -229,8 +227,6 @@ export default function PosRoamingCart(props: PosRoamingCartProps) {
             </div>
             <CartSummaryFooter
               dict={dict}
-              primaryColor={primaryColor}
-              variant="roaming"
               subtotal={getSubtotal()}
               total={getTotal()}
               taxAmount={getTaxAmount(

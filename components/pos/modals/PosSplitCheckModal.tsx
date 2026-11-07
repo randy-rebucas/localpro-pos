@@ -7,7 +7,6 @@ export type SplitGuestPayment = SplitPaymentEntry & { collected: boolean };
 
 export interface PosSplitCheckModalProps {
   dictValue: (path: string, fallback?: string) => string;
-  primaryColor: string;
   total: number;
   splitStep: 'guests' | 'payments';
   setSplitStep: (step: 'guests' | 'payments') => void;
@@ -24,7 +23,6 @@ export interface PosSplitCheckModalProps {
 
 export default function PosSplitCheckModal({
   dictValue,
-  primaryColor,
   total,
   splitStep,
   setSplitStep,
@@ -38,6 +36,15 @@ export default function PosSplitCheckModal({
   onCollectGuest,
   onCompleteSplitPayment,
 }: PosSplitCheckModalProps) {
+  const methodLabel = (method: string) =>
+    ({
+      cash: dictValue('pos.cash', 'Cash'),
+      card: dictValue('pos.card', 'Card'),
+      wallet: dictValue('pos.wallet', 'Wallet'),
+      qr_code: dictValue('pos.qrCodeOption', 'QR Code'),
+      on_account: dictValue('pos.onAccount', 'On account'),
+    })[method] ?? method;
+
   const handleClose = () => {
     onClose();
     setSplitStep('guests');
@@ -46,24 +53,24 @@ export default function PosSplitCheckModal({
 
   return (
     <div
-      className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 bg-ink/60 z-50 flex items-center justify-center p-4"
       onClick={handleClose}
     >
       <div
-        className="bg-white border border-gray-300 w-full max-w-sm shadow-2xl animate-fade-in"
+        className="bg-paper-white text-ink w-full max-w-sm animate-fade-in"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-          <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} style={{ color: primaryColor }}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-dashed border-ink/30">
+          <h2 className="text-3xl text-ink flex items-center gap-2">
+            <svg className="w-6 h-6 text-brand-hover" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75} aria-hidden>
               <path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
             </svg>
-            Split Check
+            {dictValue('pos.splitCheck', 'Split Check')}
           </h2>
           <button
             type="button"
             onClick={handleClose}
-            className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+            className="p-2 text-ink/50 hover:text-ink transition-colors"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -72,39 +79,39 @@ export default function PosSplitCheckModal({
         </div>
         {splitStep === 'guests' ? (
           <div className="px-6 py-5">
-            <p className="text-sm text-gray-600 mb-4">Split the total equally among guests.</p>
+            <p className="text-sm text-ink/70 mb-4">{dictValue('pos.splitEqually', 'Split the total equally among guests.')}</p>
             <div className="flex items-center gap-4 mb-5">
-              <label className="text-sm font-semibold text-gray-700 w-28">Number of guests</label>
-              <div className="flex items-center border-2 border-gray-300 bg-white overflow-hidden">
+              <label className="font-receipt text-xs font-medium uppercase text-ink/70 w-28">{dictValue('pos.numberOfGuests', 'Number of guests')}</label>
+              <div className="flex items-center border border-ink/25 bg-paper-white overflow-hidden">
                 <button
                   type="button"
                   onClick={() => setSplitGuests((g) => Math.max(2, g - 1))}
-                  className="px-4 py-3 min-w-[44px] min-h-[44px] hover:bg-gray-100 font-bold text-xl transition-colors"
+                  className="px-4 py-3 min-w-[44px] min-h-[44px] hover:bg-paper font-bold text-xl transition-colors"
                 >
                   −
                 </button>
-                <span className="px-5 py-3 font-bold text-lg min-w-[3rem] text-center">{splitGuests}</span>
+                <span className="px-5 py-3 font-receipt font-semibold text-lg min-w-[3rem] text-center border-x border-ink/25">{splitGuests}</span>
                 <button
                   type="button"
                   onClick={() => setSplitGuests((g) => Math.min(20, g + 1))}
-                  className="px-4 py-3 min-w-[44px] min-h-[44px] hover:bg-gray-100 font-bold text-xl transition-colors"
+                  className="px-4 py-3 min-w-[44px] min-h-[44px] hover:bg-paper font-bold text-xl transition-colors"
                 >
                   +
                 </button>
               </div>
             </div>
-            <div className="bg-gray-50 border border-gray-200 px-4 py-3 mb-5 space-y-1.5">
-              <div className="flex justify-between text-sm text-gray-600">
+            <div className="border-y border-dashed border-ink/30 py-3 mb-5 space-y-1.5 font-receipt">
+              <div className="flex justify-between text-sm text-ink/70">
                 <span>{dictValue('common.total', 'Total')}</span>
                 <span className="font-semibold"><Currency amount={total} /></span>
               </div>
-              <div className="flex justify-between text-sm text-gray-600">
+              <div className="flex justify-between text-sm text-ink/70">
                 <span>{dictValue('pos.guests', 'Guests')}</span>
                 <span className="font-semibold">{splitGuests}</span>
               </div>
-              <div className="flex justify-between text-base font-bold text-gray-900 border-t border-gray-200 pt-1.5">
+              <div className="flex justify-between text-base font-semibold text-ink border-t border-dashed border-ink/30 pt-1.5">
                 <span>{dictValue('pos.perGuest', 'Per guest')}</span>
-                <span style={{ color: primaryColor }}>
+                <span>
                   <Currency amount={total / splitGuests} />
                 </span>
               </div>
@@ -124,29 +131,28 @@ export default function PosSplitCheckModal({
                 );
                 setSplitStep('payments');
               }}
-              className="w-full py-4 min-h-[52px] text-white font-bold text-base transition-colors border"
-              style={{ backgroundColor: primaryColor, borderColor: primaryColor }}
+              className="w-full py-4 min-h-[52px] bg-ink text-paper-white hover:bg-brand-navy font-receipt font-medium uppercase transition-colors text-sm"
             >
               {dictValue('pos.continueToPayment', 'Continue to Payment')} →
             </button>
           </div>
         ) : (
           <div className="px-6 py-5">
-            <p className="text-sm text-gray-600 mb-4">{dictValue('pos.collectPaymentInstruction', 'Collect payment from each guest.')}</p>
+            <p className="text-sm text-ink/70 mb-4">{dictValue('pos.collectPaymentInstruction', 'Collect payment from each guest.')}</p>
             <div className="space-y-2 mb-5 max-h-72 overflow-y-auto">
               {guestPayments.map((entry, idx) => (
                 <div
                   key={idx}
-                  className={`flex items-center gap-2 p-3 border ${entry.collected ? 'border-green-300 bg-green-50' : 'border-gray-200 bg-white'}`}
+                  className={`flex flex-wrap items-center gap-2 p-3 border ${entry.collected ? 'border-brand bg-brand-soft' : 'border-ink/15 bg-paper-white'}`}
                 >
-                  <span className="text-xs font-bold text-gray-500 w-14 shrink-0">{dictValue('pos.guestLabel', 'Guest')} {idx + 1}</span>
-                  <span className="text-sm font-semibold text-gray-800 w-20 shrink-0">
+                  <span className="font-receipt text-xs text-ink/60">{dictValue('pos.guestLabel', 'Guest')} {idx + 1}</span>
+                  <span className="ml-auto font-receipt text-sm font-semibold text-ink">
                     <Currency amount={entry.amount} />
                   </span>
                   {entry.collected ? (
-                    <span className="flex-1 text-xs text-green-600 font-semibold text-center">✓ {dictValue('pos.collectedWith', 'Collected')} ({entry.method})</span>
+                    <span className="w-full font-receipt text-xs text-ink">✓ {dictValue('pos.collectedWith', 'Collected')} ({methodLabel(entry.method)})</span>
                   ) : (
-                    <>
+                    <div className="flex w-full gap-2">
                       <select
                         value={entry.method}
                         onChange={(e) =>
@@ -154,7 +160,7 @@ export default function PosSplitCheckModal({
                             prev.map((p, i) => (i === idx ? { ...p, method: e.target.value } : p))
                           )
                         }
-                        className="flex-1 text-xs border border-gray-300 px-2 py-1.5 bg-white"
+                        className="flex-1 min-w-0 font-receipt text-xs border border-ink/25 px-2 py-1.5 bg-paper-white"
                       >
                         <option value="cash">{dictValue('pos.cash', 'Cash')}</option>
                         <option value="card">{dictValue('pos.card', 'Card')}</option>
@@ -167,12 +173,11 @@ export default function PosSplitCheckModal({
                       <button
                         type="button"
                         onClick={() => onCollectGuest(idx)}
-                        className="shrink-0 px-3 py-1.5 text-xs font-bold text-white"
-                        style={{ backgroundColor: primaryColor }}
+                        className="shrink-0 px-3 py-1.5 bg-ink text-paper-white hover:bg-brand-navy font-receipt font-medium uppercase transition-colors text-xs"
                       >
                         {dictValue('pos.collect', 'Collect')}
                       </button>
-                    </>
+                    </div>
                   )}
                 </div>
               ))}
@@ -181,8 +186,7 @@ export default function PosSplitCheckModal({
               type="button"
               disabled={processing || !guestPayments.every((g) => g.collected)}
               onClick={onCompleteSplitPayment}
-              className="w-full py-4 min-h-[52px] text-white font-bold text-base transition-colors border disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{ backgroundColor: primaryColor, borderColor: primaryColor }}
+              className="w-full py-4 min-h-[52px] bg-ink text-paper-white hover:bg-brand-navy font-receipt font-medium uppercase transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {processing
                 ? dictValue('pos.processing', 'Processing...')
@@ -191,7 +195,7 @@ export default function PosSplitCheckModal({
             <button
               type="button"
               onClick={() => setSplitStep('guests')}
-              className="w-full mt-2 py-2 text-sm text-gray-500 hover:text-gray-700"
+              className="w-full mt-2 py-2 text-sm text-ink/60 hover:text-ink"
             >
               ← {dictValue('pos.backToGuestCount', 'Back to guest count')}
             </button>

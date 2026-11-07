@@ -20,20 +20,20 @@ interface FloorMapProps {
 
 const STATUS_CONFIG = {
   open: {
-    bg: 'bg-green-50 border-green-400 hover:bg-green-100',
-    dot: 'bg-green-500',
+    bg: 'bg-paper-white border-brand hover:bg-brand-soft',
+    dot: 'bg-brand',
     label: 'Open',
     selectable: true,
   },
   occupied: {
-    bg: 'bg-red-50 border-red-400',
-    dot: 'bg-red-500',
+    bg: 'bg-paper border-stamp/60',
+    dot: 'bg-stamp',
     label: 'Occupied',
     selectable: false,
   },
   'check-requested': {
-    bg: 'bg-yellow-50 border-yellow-400',
-    dot: 'bg-yellow-500',
+    bg: 'bg-paper border-ink',
+    dot: 'bg-ink',
     label: 'Check Requested',
     selectable: false,
   },
@@ -75,23 +75,23 @@ export default function FloorMap({ tenant, selectedTableId, onSelectTable, onClo
 
   return (
     <div
-      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 bg-ink/60 z-50 flex items-center justify-center p-4"
       onClick={onClose}
     >
       <div
-        className="bg-white w-full max-w-lg shadow-2xl"
+        className="bg-paper-white text-ink w-full max-w-lg"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-dashed border-ink/30">
           <div>
-            <h2 className="font-bold text-gray-900 text-lg">{d?.title || 'Floor Map'}</h2>
-            <p className="text-xs text-gray-500">{d?.selectTable || 'Select an available table'}</p>
+            <h2 className="text-3xl text-ink">{d?.title || 'Floor Map'}</h2>
+            <p className="font-receipt text-xs text-ink/60 mt-1">{d?.selectTable || 'Select an available table'}</p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-2 text-gray-400 hover:text-gray-600"
+            className="p-2 text-ink/50 hover:text-ink"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -100,10 +100,10 @@ export default function FloorMap({ tenant, selectedTableId, onSelectTable, onClo
         </div>
 
         {/* Legend */}
-        <div className="flex gap-4 px-5 pt-3 pb-1">
+        <div className="flex flex-wrap gap-x-4 gap-y-1 px-5 pt-3 pb-1">
           {(Object.entries(STATUS_CONFIG) as Array<[keyof typeof STATUS_CONFIG, typeof STATUS_CONFIG[keyof typeof STATUS_CONFIG]]>).map(([key, cfg]) => (
-            <div key={key} className="flex items-center gap-1.5 text-xs text-gray-500">
-              <span className={`w-2.5 h-2.5 rounded-full ${cfg.dot}`} />
+            <div key={key} className="flex items-center gap-1.5 font-receipt text-xs text-ink/70">
+              <span className={`w-2.5 h-2.5 ${cfg.dot}`} />
               {statusLabels[key]}
             </div>
           ))}
@@ -112,9 +112,9 @@ export default function FloorMap({ tenant, selectedTableId, onSelectTable, onClo
         {/* Table grid */}
         <div className="p-5 max-h-96 overflow-y-auto">
           {loading ? (
-            <div className="text-center py-8 text-gray-400 text-sm">{d?.loadingTables || 'Loading tables…'}</div>
+            <div className="text-center py-8 text-ink/50 text-sm">{d?.loadingTables || 'Loading tables…'}</div>
           ) : tables.length === 0 ? (
-            <div className="text-center py-8 text-gray-400 text-sm">
+            <div className="text-center py-8 text-ink/50 text-sm">
               {d?.noTablesConfigured || 'No tables configured. Add tables in the admin settings.'}
             </div>
           ) : (
@@ -128,15 +128,15 @@ export default function FloorMap({ tenant, selectedTableId, onSelectTable, onClo
                     type="button"
                     disabled={!cfg.selectable && !isSelected}
                     onClick={() => cfg.selectable && onSelectTable({ _id: table._id, name: table.name })}
-                    className={`relative flex flex-col items-center justify-center p-3 border-2 transition-all min-h-[70px] ${cfg.bg} ${
+                    className={`relative flex flex-col items-center justify-center p-3 border-2 transition-colors min-h-[70px] ${cfg.bg} ${
                       isSelected ? 'ring-2 ring-brand ring-offset-1' : ''
-                    } ${!cfg.selectable ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer active:scale-95'}`}
+                    } ${!cfg.selectable ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
                     title={table.status === 'occupied' ? (d?.tableOccupied || 'Table occupied') : table.status === 'check-requested' ? (d?.checkRequested || 'Check requested') : (d?.clickToSelect || 'Click to select')}
                   >
-                    <span className={`w-2.5 h-2.5 rounded-full mb-1 ${cfg.dot}`} />
-                    <span className="font-bold text-gray-800 text-sm leading-none">{table.name}</span>
+                    <span className={`w-2.5 h-2.5 mb-1 ${cfg.dot}`} />
+                    <span className="font-receipt font-semibold text-ink text-sm leading-none">{table.name}</span>
                     {table.capacity && (
-                      <span className="text-[10px] text-gray-400 mt-0.5">{table.capacity} {d?.seats || 'seats'}</span>
+                      <span className="font-receipt text-[10px] text-ink/60 mt-0.5">{table.capacity} {d?.seats || 'seats'}</span>
                     )}
                   </button>
                 );

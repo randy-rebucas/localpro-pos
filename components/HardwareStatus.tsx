@@ -136,16 +136,16 @@ export default function HardwareStatusChecker({
   };
 
   const getOverallStatusColor = () => {
-    if (!status) return 'bg-gray-100';
+    if (!status) return 'bg-paper';
     switch (status.overallStatus) {
       case 'all-connected':
-        return 'bg-green-100 text-green-800';
+        return 'bg-brand-soft text-ink';
       case 'partial':
-        return 'bg-yellow-100 text-yellow-800';
+        return 'bg-paper-white text-ink';
       case 'none':
-        return 'bg-red-100 text-red-800';
+        return 'bg-paper-white text-stamp';
       default:
-        return 'bg-gray-100 text-gray-800';
+        return 'bg-paper text-ink';
     }
   };
 
@@ -156,7 +156,7 @@ export default function HardwareStatusChecker({
           <div className="animate-spin h-4 w-4 border-b-2" style={{ borderBottomColor: primaryColor }}></div>
         ) : status ? (
           <>
-            <div className={`px-2 py-1 border border-gray-300 text-xs font-medium ${getOverallStatusColor()}`}>
+            <div className={`px-2 py-1 border border-ink/25 font-receipt text-xs font-medium ${getOverallStatusColor()}`}>
               {status.overallStatus === 'all-connected' ? (dict?.components?.hardwareStatus?.allConnected || dict?.common?.allConnected || 'All Connected') :
                status.overallStatus === 'partial' ? (dict?.components?.hardwareStatus?.partial || dict?.common?.partial || 'Partial') : (dict?.components?.hardwareStatus?.notConfigured || dict?.common?.notConfigured || 'Not Configured')}
             </div>

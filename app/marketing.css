@@ -1,10 +1,12 @@
-/* Public marketing pages only. Imported from app/page.tsx. */
+/* Public marketing pages, plus the tenant register at app/[tenant]/[lang]/page.tsx. */
 
 .mk-root {
   font-family: var(--mk-font-body), system-ui, sans-serif;
   color: var(--color-ink);
   background: var(--color-paper);
   overflow-x: clip;
+  /* Big Shoulders has an optical size axis; keep small labels as narrow as the headings. */
+  font-optical-sizing: none;
 }
 
 .mk-root h1,
@@ -18,6 +20,11 @@
 
 .mk-root h3 {
   letter-spacing: -0.01em;
+}
+
+/* The register uses this look too, but a tenant's own branding font still wins. */
+.mk-root.pos-register {
+  font-family: var(--tenant-font-family, var(--mk-font-body)), system-ui, sans-serif;
 }
 
 /* Saw-tooth edge of torn thermal paper. Box shadows get masked, so use drop-shadow on a parent. */
