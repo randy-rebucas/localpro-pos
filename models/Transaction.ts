@@ -14,6 +14,7 @@ export interface ITransactionItem {
   subtotal: number;
   modifiers?: ITransactionItemModifier[];
   prescriptionId?: mongoose.Types.ObjectId; // Pharmacy: links Rx item to prescription
+  variation?: { size?: string; color?: string; type?: string }; // Which variant was sold, so a void can return it
   refundedQuantity?: number; // How much of this line earlier refunds have taken
 }
 
@@ -34,6 +35,7 @@ export interface ITransaction extends Document {
   discountAmount?: number;
   scPwdName?: string; // Senior Citizen / PWD name (BIR requirement when discountCategory is senior/pwd)
   scPwdId?: string; // Senior Citizen / PWD ID number (BIR requirement when discountCategory is senior/pwd)
+  vatRemovedAmount?: number; // VAT taken out of a VAT-inclusive price before a Senior/PWD discount; included in discountAmount
   taxExemptAmount?: number; // Amount exempt from VAT (BIR)
   zeroRatedAmount?: number; // Amount taxed at 0% VAT (BIR zero-rated sales, e.g. export/PEZA-registered buyers) — distinct from tax-exempt
   taxAmount?: number; // Calculated tax amount
@@ -47,6 +49,9 @@ export interface ITransaction extends Document {
   status: 'completed' | 'cancelled' | 'refunded';
   refundCount?: number; // Refunds issued against this sale; also guards concurrent refunds
   refundedAmount?: number; // Running total refunded against this sale
+  voidReason?: string;
+  voidedAt?: Date;
+  voidedBy?: mongoose.Types.ObjectId;
   customerId?: mongoose.Types.ObjectId;
   loyaltyPointsEarned?: number;
   loyaltyPointsRedeemed?: number;
@@ -121,6 +126,10 @@ const TransactionItemSchema: Schema = new Schema({
     type: Number,
     min: 0,
   },
+  variation: {
+    type: new Schema({ size: String, color: String, type: { type: String } }, { _id: false }),
+    default: undefined,
+  },
 });
 
 const SplitPaymentSchema: Schema = new Schema({
@@ -170,6 +179,10 @@ const TransactionSchema: Schema = new Schema(
     scPwdId: {
       type: String,
       trim: true,
+    },
+    vatRemovedAmount: {
+      type: Number,
+      min: 0,
     },
     taxExemptAmount: {
       type: Number,
@@ -299,6 +312,17 @@ const TransactionSchema: Schema = new Schema(
     splitPayments: {
       type: [SplitPaymentSchema],
       default: undefined,
+    },
+    voidReason: {
+      type: String,
+      trim: true,
+    },
+    voidedAt: {
+      type: Date,
+    },
+    voidedBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
     },
     salesChannel: {
       type: String,

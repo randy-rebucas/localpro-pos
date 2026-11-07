@@ -37,6 +37,7 @@ import {
   detectSuspiciousActivity,
   analyzeSalesTrends,
   generateSalesSummaryExport,
+  generateDailyZReadings,
 } from './automations';
 import { logger } from '@/lib/logger';
 
@@ -79,19 +80,6 @@ export function initializeCronJobs() {
       logger.info('✅ Low stock alerts:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       logger.error('❌ Low stock alerts error:' + error.message);
-    }
-  }, {
-    timezone: 'UTC',
-  });
-
-  // 3. Daily Sales Report - End of day at 10 PM
-  const dailyReportJob = cron.schedule('0 22 * * *', async () => {
-    logger.info('📊 Running daily sales report automation...');
-    try {
-      const result = await sendSalesReport({ period: 'daily' });
-      logger.info('✅ Daily sales report:' + result.message);
-    } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      logger.error('❌ Daily sales report error:' + error.message);
     }
   }, {
     timezone: 'UTC',
@@ -510,6 +498,20 @@ export function initializeCronJobs() {
     timezone: 'UTC',
   });
 
+  // 33. BIR Z-Reading - Hourly, closing each store's previous business day once it has ended there.
+  // Quarter past, so a sale still saving at midnight is in before the day locks.
+  const zReadingJob = cron.schedule('15 * * * *', async () => {
+    logger.info('🧾 Running automatic Z-Reading generation...');
+    try {
+      const result = await generateDailyZReadings();
+      logger.info('✅ Automatic Z-Readings:' + result.message);
+    } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+      logger.error('❌ Automatic Z-Readings error:' + error.message);
+    }
+  }, {
+    timezone: 'UTC',
+  });
+
   // Store jobs
   cronJobs = [
     bookingRemindersJob,
@@ -517,7 +519,6 @@ export function initializeCronJobs() {
     noShowJob,
     lowStockJob,
     purchaseOrderJob,
-    dailyReportJob,
     weeklyReportJob,
     monthlyReportJob,
     pendingReceiptsJob,
@@ -546,6 +547,7 @@ export function initializeCronJobs() {
     salesTrendMonthlyJob,
     salesSummaryDailyJob,
     salesSummaryMonthlyJob,
+    zReadingJob,
   ];
 
   // Start all jobs if enabled

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Product from '@/models/Product';
-import '@/models/Category'; // register schema for populate
+import Category from '@/models/Category';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -11,6 +11,17 @@ import { checkSubscriptionLimit, SubscriptionService } from '@/lib/subscription'
 import { logger } from '@/lib/logger';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
+import { findVariationProblem, normalizeVariationRows } from '@/lib/product-variations';
+import { findTakenVariationSku, newVariation, variationProblemMessage } from '@/lib/product-variations-save';
+
+// _id keeps equal values in a fixed order, so paging can't repeat or skip a product
+const PRODUCT_SORTS: Record<string, Record<string, 1 | -1>> = {
+  name: { name: 1, _id: 1 },
+  price_asc: { price: 1, _id: 1 },
+  price_desc: { price: -1, _id: 1 },
+  stock_asc: { stock: 1, _id: 1 },
+  stock_desc: { stock: -1, _id: 1 },
+};
 
 export async function GET(request: NextRequest) {
   try {
@@ -29,6 +40,8 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search') || '';
     const category = searchParams.get('category') || '';
     const categoryId = searchParams.get('categoryId') || '';
+    const categoryName = searchParams.get('categoryName') || '';
+    const sortKey = searchParams.get('sort') || '';
     const isActiveParam = searchParams.get('isActive');
     const filterParam = searchParams.get('filter'); // 'missing-barcode' | 'missing-image' | null
 
@@ -77,20 +90,32 @@ export async function GET(request: NextRequest) {
     if (categoryId) {
       query.categoryId = categoryId;
     }
+    // A product may hold its category as text, as a Category record, or both
+    if (categoryName) {
+      const records = await Category.find({ tenantId, name: categoryName }).select('_id').lean();
+      const categoryOr = [
+        { category: categoryName },
+        ...(records.length > 0 ? [{ categoryId: { $in: records.map((record) => record._id) } }] : []),
+      ];
+      query.$and = [...(query.$and ?? (query.$or ? [{ $or: query.$or }] : [])), { $or: categoryOr }];
+      delete query.$or;
+    }
 
     const rawPage = parseInt(searchParams.get('page') || '0', 10);
     const rawLimit = parseInt(searchParams.get('limit') || '0', 10);
     const usePagination = rawPage > 0 && rawLimit > 0;
     const page = usePagination ? Math.max(1, rawPage) : 1;
     const limit = usePagination ? Math.min(Math.max(1, rawLimit), 100) : 0;
-    const sort = { pinned: -1 as const, createdAt: -1 as const };
+    const sort = Object.hasOwn(PRODUCT_SORTS, sortKey) ? PRODUCT_SORTS[sortKey] : { pinned: -1 as const, createdAt: -1 as const };
+    const findProducts = () => {
+      const products = Product.find(query).populate('categoryId', 'name').sort(sort);
+      return sortKey === 'name' ? products.collation({ locale: 'en', strength: 2 }) : products;
+    };
 
     if (usePagination) {
       const skip = (page - 1) * limit;
       const [products, total] = await Promise.all([
-        Product.find(query)
-          .populate('categoryId', 'name')
-          .sort(sort)
+        findProducts()
           .skip(skip)
           .limit(limit)
           .lean(),
@@ -109,10 +134,7 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const products = await Product.find(query)
-      .populate('categoryId', 'name')
-      .sort(sort)
-      .lean();
+    const products = await findProducts().lean();
 
     return NextResponse.json({ success: true, data: products });
   } catch (error) {
@@ -196,7 +218,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const product = await Product.create({ ...data, tenantId });
+    // Variations only come in through the checked rows below
+    const { variations: rawVariations, hasVariations: _ignored, ...fields } = data;
+    const variationRows = normalizeVariationRows(rawVariations) ?? [];
+    const problem = findVariationProblem(variationRows);
+    const message = problem
+      ? variationProblemMessage(problem.code, problem.label, t)
+      : await findTakenVariationSku(tenantId, variationRows).then((sku) => (sku ? variationProblemMessage('duplicate_sku', sku, t) : null));
+    if (message) {
+      return NextResponse.json({ success: false, errors: [{ field: 'variations', message, code: 'variations' }] }, { status: 400 });
+    }
+
+    const product = await Product.create({
+      ...fields,
+      tenantId,
+      hasVariations: variationRows.length > 0,
+      variations: variationRows.map(newVariation),
+    });
 
     await createAuditLog(request, {
       tenantId,

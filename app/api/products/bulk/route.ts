@@ -11,6 +11,7 @@ import { getValidationTranslatorFromRequest } from '@/lib/validation-translation
 import { checkRateLimit } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
 import { logger } from '@/lib/logger';
+import { usesVariationStock } from '@/lib/product-variations';
 import { updateStock, insertStockMovements, STOCK_SNAPSHOT_FIELDS, StockMovementInput, StockProductSnapshot } from '@/lib/stock';
 
 const MAX_BULK_IDS = 100;
@@ -178,6 +179,7 @@ export async function PUT(request: NextRequest) {
       }
     }
 
+    let skippedVariationProducts = 0;
     if (updates.stock) {
       const { mode, value } = updates.stock;
       // Applied one product at a time through updateStock() so each change gets a
@@ -191,6 +193,11 @@ export async function PUT(request: NextRequest) {
       let stockModified = 0;
       for (const p of productsForStock) {
         if (p.trackInventory === false) continue;
+        // Main stock isn't sold once a product has variations, so changing it would do nothing
+        if (usesVariationStock(p)) {
+          skippedVariationProducts += 1;
+          continue;
+        }
         const currentStock = p.stock || 0;
         const delta = mode === 'set' ? value - currentStock : value;
         if (delta === 0) continue;
@@ -220,8 +227,11 @@ export async function PUT(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: `${modifiedCount} product(s) updated successfully`,
+      message: skippedVariationProducts > 0
+        ? `${modifiedCount} product(s) updated. Stock not changed on ${skippedVariationProducts} with variations: use Refill.`
+        : `${modifiedCount} product(s) updated successfully`,
       modifiedCount,
+      skippedVariationProducts,
     });
   } catch (error: unknown) {
     logger.error('Error in bulk product operation:', error);

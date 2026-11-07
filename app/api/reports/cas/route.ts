@@ -58,18 +58,15 @@ export async function GET(request: NextRequest) {
     // Boundaries are resolved in the tenant's timezone (not the server's,
     // which is UTC in production) so a BIR filing "day" matches the
     // merchant's actual business day — see lib/timezone.ts.
-    const { startDate, endDate } = resolveTenantDateRange(
-      startDateParam,
-      endDateParam,
-      tenantDoc?.settings?.timezone || DEFAULT_TENANT_TIMEZONE
-    );
+    const tenantTz = tenantDoc?.settings?.timezone || DEFAULT_TENANT_TIMEZONE;
+    const { startDate, endDate } = resolveTenantDateRange(startDateParam, endDateParam, tenantTz);
 
     const transactions = await Transaction.find({
       tenantId,
       status: { $in: SALE_AND_REFUND_STATUSES },
       createdAt: { $gte: startDate, $lte: endDate },
     })
-      .select('createdAt receiptNumber paymentMethod status subtotal total taxAmount taxExemptAmount')
+      .select('createdAt receiptNumber paymentMethod status total taxAmount taxExemptAmount zeroRatedAmount')
       .sort({ createdAt: 1 })
       .maxTimeMS(REPORT_MAX_TIME_MS)
       .lean();
@@ -79,27 +76,24 @@ export async function GET(request: NextRequest) {
       receiptNumber?: string;
       paymentMethod?: string;
       status?: string;
-      subtotal?: number;
       total?: number;
       taxAmount?: number;
       taxExemptAmount?: number;
+      zeroRatedAmount?: number;
     };
 
     // CAS format: BIR-compatible accounting ledger entries
     const casEntries = (transactions as TransactionDoc[]).map((txn) => {
-      const subtotal = txn.subtotal ?? txn.total ?? 0;
+      const total = txn.total ?? 0;
       const taxAmount = txn.taxAmount ?? 0;
       const taxExemptAmount = txn.taxExemptAmount ?? 0;
-      const vatableSales = subtotal - taxExemptAmount - taxAmount > 0
-        ? subtotal - taxExemptAmount - taxAmount
-        : 0;
-      const total = txn.total ?? 0;
+      const vatableSales = Math.max(0, total - taxAmount - taxExemptAmount - (txn.zeroRatedAmount ?? 0));
       // A refund is a credit on its own date, so past periods don't change
       const isRefund = isRefundRecord(txn);
       const sign = isRefund ? -1 : 1;
 
       return {
-        date: new Date(txn.createdAt).toISOString().split('T')[0],
+        date: new Date(txn.createdAt).toLocaleDateString('en-CA', { timeZone: tenantTz }),
         receiptNumber: txn.receiptNumber || '',
         description: `${isRefund ? 'Refund' : 'Sales'} - ${txn.paymentMethod || 'unknown'}`,
         debit: isRefund ? 0 : total,

@@ -6,10 +6,13 @@
 
 1. Navigate to **Inventory** from the sidebar
 2. The overview displays:
-   - Total products tracked
-   - Items below reorder threshold
-   - Out-of-stock items
-   - Total inventory value (at cost)
+   - A count of low stock alerts, at the top of the page
+   - **Low Stock Alerts**, listing items at or below their threshold, including out-of-stock items
+   - **Predicted Stockouts**, showing how many days each item has left at its recent sales rate (needs the inventory management permission)
+   - **Quick Actions** for Products, Stock Movements and Bundles
+3. Use **Previous** and **Next** to page through long lists: Low Stock Alerts shows 8 items at a time and Predicted Stockouts shows 5
+4. Use **Branch** to filter the low stock alerts and the audit sheet to one branch
+5. Click **Print Audit Sheet** to download a PDF for a stock count
 
 ## Stock Levels
 
@@ -23,11 +26,14 @@ Each product with stock tracking enabled shows:
 | **Status** | In Stock, Low, Out of Stock |
 | **Last Movement** | Date of last stock change |
 
-### Status Colors
+### Status Tags
 
-- **Green** — Stock is above the low threshold
-- **Yellow** — Stock is at or below the low threshold
-- **Red** — Out of stock (0 units)
+In **Low Stock Alerts**, each line shows current stock against its threshold, with a tag:
+
+- **Low stock** (outlined) — Stock is at or below the low threshold
+- **Out of stock** (red) — 0 units
+
+In **Predicted Stockouts**, the days-left figure is red at 3 days or fewer, dark at 7 days or fewer, and outlined beyond that.
 
 ## Stock Movements
 
@@ -77,6 +83,8 @@ Use this when receiving a delivery that covers many products at once, instead of
 3. Click **Restock Selected** in the toolbar that appears
 4. A list of the selected products opens, each with its current stock and a quantity box — enter the quantity received for each (leave blank to skip a product)
 5. Click **Restock**
+
+Products with variations can't be restocked here, because the delivery has to go to a specific variation. Use **Refill** on the Products page for those.
 
 Each product is updated and logged individually (as a **Purchase** stock movement), so even if one line fails validation, the rest are still applied — the confirmation shows how many succeeded and lists any that failed.
 

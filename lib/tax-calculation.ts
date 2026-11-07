@@ -1,6 +1,7 @@
 import TaxRule from '@/models/TaxRule';
 import { cacheWrap, CacheKeys, TTL } from '@/lib/cache';
 import Tenant, { ITenantSettings } from '@/models/Tenant';
+import { taxOn } from '@/lib/tax-pricing';
 import Product from '@/models/Product'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { ITenant } from '@/models/Tenant'; // eslint-disable-line @typescript-eslint/no-unused-vars
 
@@ -181,7 +182,7 @@ export async function calculateTax(
       if (applies) {
         taxRate = Math.min(Math.max(rule.rate, 0), 100); // Clamp rate 0-100
         taxLabel = rule.label;
-        taxAmount = (taxableAmount * taxRate) / 100;
+        taxAmount = taxOn(taxableAmount, taxRate, tenantSettings?.pricesIncludeTax);
         // Ensure tax doesn't exceed taxable amount
         taxAmount = Math.min(taxAmount, taxableAmount);
         break; // Use first matching rule
@@ -192,7 +193,7 @@ export async function calculateTax(
     if (tenantSettings?.taxEnabled && tenantSettings.taxRate != null && tenantSettings.taxRate > 0) {
       taxRate = Math.min(Math.max(tenantSettings.taxRate, 0), 100);
       taxLabel = tenantSettings.taxLabel || 'Tax';
-      taxAmount = (taxableAmount * taxRate) / 100;
+      taxAmount = taxOn(taxableAmount, taxRate, tenantSettings?.pricesIncludeTax);
       taxAmount = Math.min(taxAmount, taxableAmount);
     }
   }

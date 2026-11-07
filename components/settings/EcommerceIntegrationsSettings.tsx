@@ -33,17 +33,14 @@ export default function EcommerceIntegrationsSettings({
   const [wooUrl, setWooUrl] = useState('');
   const [wooKey, setWooKey] = useState('');
   const [wooSecret, setWooSecret] = useState('');
-  const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string; code?: string } | null>(null);
   const [syncing, setSyncing] = useState<string | null>(null);
   const [dict, setDict] = useState<Record<string, unknown> | null>(null);
 
   const ecDict = (dict?.settings as Record<string, unknown> | undefined)?.ecommerce as
-    | {
-        productionNoticeTitle?: string;
-        productionNoticeBody?: string;
-        viewPlansCta?: string;
-      }
+    | Record<string, string | undefined>
     | undefined;
+  const t = (key: string, fallback: string) => ecDict?.[key] || fallback;
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -59,7 +56,7 @@ export default function EcommerceIntegrationsSettings({
       if (!res.ok || !data.success) {
         setRows([]);
         setFeatureUnlocked(false);
-        setMsg({ type: 'error', text: data.error || 'Failed to load integration status.' });
+        setMsg({ type: 'error', text: data.error || 'Failed to load integration status.', code: data.error ? undefined : 'loadFailed' });
         return;
       }
       setRows(data.data || []);
@@ -67,7 +64,7 @@ export default function EcommerceIntegrationsSettings({
     } catch {
       setRows([]);
       setFeatureUnlocked(false);
-      setMsg({ type: 'error', text: 'Failed to load integration status.' });
+      setMsg({ type: 'error', text: 'Failed to load integration status.', code: 'loadFailed' });
     } finally {
       setLoading(false);
     }
@@ -88,15 +85,15 @@ export default function EcommerceIntegrationsSettings({
     wooCommerceEnabled: boolean;
   }) => {
     if (!settings) {
-      setMsg({ type: 'error', text: 'Settings are still loading.' });
+      setMsg({ type: 'error', text: t('settingsLoading', 'Settings are still loading.') });
       return;
     }
     if (next.shopifyEnabled === false && shopify?.shopDomain) {
-      setMsg({ type: 'error', text: 'Disconnect Shopify before turning it off here.' });
+      setMsg({ type: 'error', text: t('disconnectShopifyFirst', 'Disconnect Shopify before turning it off here.') });
       return;
     }
     if (next.wooCommerceEnabled === false && woo?.siteUrl) {
-      setMsg({ type: 'error', text: 'Disconnect WooCommerce before turning it off here.' });
+      setMsg({ type: 'error', text: t('disconnectWooFirst', 'Disconnect WooCommerce before turning it off here.') });
       return;
     }
     setSavingPrefs(true);
@@ -121,13 +118,13 @@ export default function EcommerceIntegrationsSettings({
       });
       const data = await res.json();
       if (data.success) {
-        setMsg({ type: 'success', text: 'Store integration preferences saved.' });
+        setMsg({ type: 'success', text: t('prefsSaved', 'Store integration preferences saved.') });
         await refreshSettings();
       } else {
-        setMsg({ type: 'error', text: data.error || 'Failed to save preferences' });
+        setMsg({ type: 'error', text: data.error || t('prefsFailed', 'Failed to save preferences.') });
       }
     } catch {
-      setMsg({ type: 'error', text: 'Failed to save preferences.' });
+      setMsg({ type: 'error', text: t('prefsFailed', 'Failed to save preferences.') });
     } finally {
       setSavingPrefs(false);
     }
@@ -138,7 +135,7 @@ export default function EcommerceIntegrationsSettings({
     if (!normalized) {
       setMsg({
         type: 'error',
-        text: 'Use only the shop hostname, e.g. your-store.myshopify.com — no https://, path, or admin URL.',
+        text: t('invalidShopDomain', 'Use only the shop hostname, e.g. your-store.myshopify.com — no https://, path, or admin URL.'),
       });
       return;
     }
@@ -164,15 +161,15 @@ export default function EcommerceIntegrationsSettings({
       });
       const data = await res.json();
       if (data.success) {
-        setMsg({ type: 'success', text: 'WooCommerce connected.' });
+        setMsg({ type: 'success', text: t('wooConnected', 'WooCommerce connected.') });
         setWooSecret('');
         await load();
         await refreshSettings();
       } else {
-        setMsg({ type: 'error', text: data.error || 'Connection failed' });
+        setMsg({ type: 'error', text: data.error || t('connectFailed', 'Connection failed.') });
       }
     } catch {
-      setMsg({ type: 'error', text: 'Connection failed.' });
+      setMsg({ type: 'error', text: t('connectFailed', 'Connection failed.') });
     }
   };
 
@@ -190,21 +187,24 @@ export default function EcommerceIntegrationsSettings({
       if (data.success) {
         setMsg({
           type: 'success',
-          text: `Catalog sync: linked ${data.data.linked}, created ${data.data.created}, skipped ${data.data.skipped}.`,
+          text: t('syncResult', 'Catalog sync: linked {linked}, created {created}, skipped {skipped}.')
+            .replace('{linked}', data.data.linked)
+            .replace('{created}', data.data.created)
+            .replace('{skipped}', data.data.skipped),
         });
       } else {
-        setMsg({ type: 'error', text: data.error || 'Sync failed' });
+        setMsg({ type: 'error', text: data.error || t('syncFailed', 'Sync failed.') });
       }
       await load();
     } catch {
-      setMsg({ type: 'error', text: 'Sync failed.' });
+      setMsg({ type: 'error', text: t('syncFailed', 'Sync failed.') });
     } finally {
       setSyncing(null);
     }
   };
 
   const disconnect = async (provider: 'shopify' | 'woocommerce') => {
-    if (!window.confirm('Disconnect this channel? Product links for this channel will be removed.')) return;
+    if (!window.confirm(t('disconnectConfirm', 'Disconnect this channel? Product links for this channel will be removed.'))) return;
     try {
       const res = await fetch(`/api/integrations/ecommerce/disconnect?tenant=${encodeURIComponent(tenant)}`, {
         method: 'POST',
@@ -214,14 +214,14 @@ export default function EcommerceIntegrationsSettings({
       });
       const data = await res.json();
       if (data.success) {
-        setMsg({ type: 'success', text: 'Disconnected.' });
+        setMsg({ type: 'success', text: t('disconnected', 'Disconnected.') });
         await load();
         await refreshSettings();
       } else {
-        setMsg({ type: 'error', text: data.error || 'Failed to disconnect' });
+        setMsg({ type: 'error', text: data.error || t('disconnectFailed', 'Failed to disconnect.') });
       }
     } catch {
-      setMsg({ type: 'error', text: 'Failed to disconnect.' });
+      setMsg({ type: 'error', text: t('disconnectFailed', 'Failed to disconnect.') });
     }
   };
 
@@ -237,36 +237,35 @@ export default function EcommerceIntegrationsSettings({
   return (
     <section className="space-y-10">
       <div>
-        <h2 className="text-xl font-bold text-gray-900 mb-1">E-commerce channels</h2>
-        <p className="text-sm text-gray-600">
-          Choose which storefronts this tenant may use, then connect credentials. Secrets stay on the server; only
-          preferences are stored in tenant settings.
+        <h2 className="mb-1 text-3xl">{t('heading', 'E-commerce channels')}</h2>
+        <p className="text-sm text-ink/70">
+          {t('intro', 'Choose which storefronts this tenant may use, then connect credentials. Secrets stay on the server; only preferences are stored in tenant settings.')}
         </p>
       </div>
 
       {featureUnlocked === null && (loading || settingsLoading) ? (
-        <p className="text-gray-600 text-sm">Checking plan access…</p>
+        <p className="text-ink/70 text-sm">{t('checkingPlan', 'Checking plan access…')}</p>
       ) : null}
 
       {planLocksEcommerce ? (
         <div
-          className="rounded-lg border-l-4 border-amber-500 bg-amber-50 p-5 shadow-sm ring-1 ring-amber-200/80"
+          className="border-l-4 border-stamp bg-paper p-5"
           role="status"
           aria-live="polite"
         >
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
-              <p className="font-semibold text-amber-950 mb-1.5">
+              <p className="mb-1.5 font-semibold text-ink">
                 {ecDict?.productionNoticeTitle || 'Custom integrations required'}
               </p>
-              <p className="text-sm text-amber-900/95 leading-relaxed">
+              <p className="text-sm leading-relaxed text-ink/80">
                 {ecDict?.productionNoticeBody ||
                   'In production, this feature requires a subscription plan that includes custom integrations.'}
               </p>
             </div>
             <Link
               href={`/${tenant}/${lang}/subscription`}
-              className="inline-flex flex-shrink-0 items-center justify-center gap-2 rounded-md bg-amber-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-amber-950 transition-colors"
+              className="inline-flex min-h-[44px] flex-shrink-0 items-center justify-center gap-2 px-4 bg-ink font-receipt text-xs font-medium uppercase text-paper-white transition-colors hover:bg-brand-navy disabled:cursor-not-allowed disabled:opacity-50"
             >
               {ecDict?.viewPlansCta || 'View subscription & plans'}
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden>
@@ -279,31 +278,29 @@ export default function EcommerceIntegrationsSettings({
 
       {msg && (
         <div
-          className={`p-3 text-sm border rounded-sm ${
-            msg.type === 'success'
-              ? 'bg-green-50 border-green-200 text-green-900'
-              : 'bg-red-50 border-red-200 text-red-900'
+          className={`border-l-4 bg-paper p-3 font-receipt text-sm text-ink ${
+            msg.type === 'success' ? 'border-brand' : 'border-stamp'
           }`}
         >
-          {msg.text}
+          {msg.code ? t(msg.code, msg.text) : msg.text}
         </div>
       )}
 
       {(loading || settingsLoading) && !settings && featureUnlocked !== null ? (
-        <p className="text-gray-600 text-sm">Loading…</p>
+        <p className="text-ink/70 text-sm">{t('loading', 'Loading…')}</p>
       ) : null}
 
       {!hideDisconnectedSetupUi && (
-        <div className="border border-gray-300 p-5 rounded-sm bg-white">
-          <h3 className="text-lg font-semibold text-gray-900 mb-1">Store integrations</h3>
-          <p className="text-sm text-gray-600 mb-4">
-            Turn on each channel your business uses. OAuth and API connect are only allowed for enabled channels.
+        <div className="border-2 border-ink/25 bg-paper-white p-5">
+          <h3 className="text-lg font-semibold text-ink mb-1">{t('storeIntegrations', 'Store integrations')}</h3>
+          <p className="text-sm text-ink/70 mb-4">
+            {t('storeIntegrationsDesc', 'Turn on each channel your business uses. OAuth and API connect are only allowed for enabled channels.')}
           </p>
           <div className="space-y-4 max-w-xl">
             <label className="flex items-start gap-3 cursor-pointer">
               <input
                 type="checkbox"
-                className="mt-1 h-4 w-4 border-gray-400"
+                className="checkbox-win8 mt-1 cursor-pointer"
                 checked={shopifyLayer}
                 disabled={
                   savingPrefs ||
@@ -320,17 +317,17 @@ export default function EcommerceIntegrationsSettings({
                 }
               />
               <span>
-                <span className="font-medium text-gray-900">Shopify</span>
-                <span className="block text-xs text-gray-500 mt-0.5">
-                  Allow connecting a Shopify store for this tenant.
-                  {shopify?.shopDomain ? ' Disconnect first to turn this off.' : ''}
+                <span className="font-medium text-ink">Shopify</span>
+                <span className="block text-xs text-ink/60 mt-0.5">
+                  {t('shopifyToggleDesc', 'Allow connecting a Shopify store for this tenant.')}
+                  {shopify?.shopDomain ? ` ${t('disconnectToTurnOff', 'Disconnect first to turn this off.')}` : ''}
                 </span>
               </span>
             </label>
             <label className="flex items-start gap-3 cursor-pointer">
               <input
                 type="checkbox"
-                className="mt-1 h-4 w-4 border-gray-400"
+                className="checkbox-win8 mt-1 cursor-pointer"
                 checked={wooLayer}
                 disabled={
                   savingPrefs ||
@@ -347,162 +344,160 @@ export default function EcommerceIntegrationsSettings({
                 }
               />
               <span>
-                <span className="font-medium text-gray-900">WooCommerce</span>
-                <span className="block text-xs text-gray-500 mt-0.5">
-                  Allow connecting a WooCommerce site (REST API keys).
-                  {woo?.siteUrl ? ' Disconnect first to turn this off.' : ''}
+                <span className="font-medium text-ink">WooCommerce</span>
+                <span className="block text-xs text-ink/60 mt-0.5">
+                  {t('wooToggleDesc', 'Allow connecting a WooCommerce site (REST API keys).')}
+                  {woo?.siteUrl ? ` ${t('disconnectToTurnOff', 'Disconnect first to turn this off.')}` : ''}
                 </span>
               </span>
             </label>
-            {savingPrefs ? <p className="text-xs text-gray-500">Saving…</p> : null}
+            {savingPrefs ? <p className="text-xs text-ink/60">{t('saving', 'Saving…')}</p> : null}
           </div>
         </div>
       )}
 
       {loading && featureUnlocked !== null ? (
-        <p className="text-gray-600 text-sm">Loading channel status…</p>
+        <p className="text-ink/70 text-sm">{t('loadingStatus', 'Loading channel status…')}</p>
       ) : null}
 
       {!hideDisconnectedSetupUi &&
         (showShopifyCard ? (
-        <div className="border border-gray-200 p-5 rounded-sm bg-gray-50/50">
-          <h3 className="text-lg font-semibold text-gray-900 mb-3">Shopify</h3>
+        <div className="border-2 border-ink/25 bg-paper p-5">
+          <h3 className="text-lg font-semibold text-ink mb-3">Shopify</h3>
           {shopify?.shopDomain ? (
             <div className="space-y-3 text-sm">
               <p>
-                Store:{' '}
-                <span className="font-mono bg-white px-2 py-0.5 border border-gray-200">{shopify.shopDomain}</span>
+                {t('store', 'Store')}:{' '}
+                <span className="break-all border border-ink/25 bg-paper-white px-2 py-0.5 font-receipt">{shopify.shopDomain}</span>
               </p>
               {!shopify.hasLocation ? (
-                <p className="text-amber-800">No default inventory location detected; stock push may be skipped.</p>
+                <p className="text-stamp">{t('noLocation', 'No default inventory location detected; stock push may be skipped.')}</p>
               ) : null}
               {shopify.lastSyncAt ? (
-                <p className="text-gray-600">Last catalog sync: {new Date(shopify.lastSyncAt).toLocaleString()}</p>
+                <p className="text-ink/70">{t('lastSync', 'Last catalog sync')}: {new Date(shopify.lastSyncAt).toLocaleString(lang)}</p>
               ) : null}
-              {shopify.lastError ? <p className="text-red-700">Last error: {shopify.lastError}</p> : null}
+              {shopify.lastError ? <p className="text-stamp">{t('lastError', 'Last error')}: {shopify.lastError}</p> : null}
               <div className="flex gap-2 flex-wrap pt-1">
                 <button
                   type="button"
                   disabled={syncing !== null || gateClosed}
                   onClick={() => sync('shopify')}
-                  className="px-4 py-2 bg-gray-900 text-white text-sm font-medium disabled:opacity-50 border border-gray-900"
+                  className="min-h-[44px] px-4 bg-ink font-receipt text-xs font-medium uppercase text-paper-white transition-colors hover:bg-brand-navy disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {syncing === 'shopify' ? 'Syncing…' : 'Run catalog sync'}
+                  {syncing === 'shopify' ? t('syncing', 'Syncing…') : t('runSync', 'Run catalog sync')}
                 </button>
                 <button
                   type="button"
                   onClick={() => disconnect('shopify')}
-                  className="px-4 py-2 border-2 border-gray-400 text-sm font-medium text-gray-800 hover:bg-gray-100"
+                  className="min-h-[44px] px-4 border border-ink/25 font-receipt text-xs font-medium uppercase text-ink transition-colors hover:border-ink disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  Disconnect
+                  {t('disconnect', 'Disconnect')}
                 </button>
               </div>
             </div>
           ) : shopifyLayer ? (
             <div className="space-y-3 max-w-lg">
-              <label className="block text-sm font-medium text-gray-700">Shop domain</label>
+              <label className="block font-receipt text-xs font-medium uppercase tracking-[0.08em] text-ink/70">{t('shopDomain', 'Shop domain')}</label>
               <input
                 value={shopDomain}
                 onChange={(e) => setShopDomain(e.target.value)}
                 placeholder="your-store.myshopify.com"
-                className="w-full px-3 py-2 border-2 border-gray-300 text-sm bg-white"
+                className="w-full min-h-[44px] border-2 border-ink/25 bg-paper-white px-3 py-2 font-receipt text-sm text-ink placeholder:text-ink/45 focus:border-ink focus:outline-none"
               />
               <button
                 type="button"
                 disabled={gateClosed || !normalizeShopifyShopDomain(shopDomain)}
                 onClick={startShopify}
-                className="px-4 py-2 bg-gray-900 text-white text-sm font-medium disabled:opacity-50 border border-gray-900"
+                className="min-h-[44px] px-4 bg-ink font-receipt text-xs font-medium uppercase text-paper-white transition-colors hover:bg-brand-navy disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Connect with Shopify
+                {t('connectShopify', 'Connect with Shopify')}
               </button>
             </div>
           ) : (
-            <p className="text-sm text-gray-600">
-              Shopify is connected but the store integration toggle is off. Turn Shopify on under Store integrations,
-              or disconnect if you no longer use this channel.
+            <p className="text-sm text-ink/70">
+              {t('shopifyToggleOff', 'Shopify is connected but the store integration toggle is off. Turn Shopify on under Store integrations, or disconnect if you no longer use this channel.')}
             </p>
           )}
         </div>
         ) : (
-        <p className="text-sm text-gray-500 border border-dashed border-gray-300 p-4 rounded-sm">
-          Enable <strong>Shopify</strong> above to connect a store.
+        <p className="text-sm text-ink/60 border border-dashed border-ink/25 p-4 ">
+          {t('enableShopifyHint', 'Enable Shopify above to connect a store.')}
         </p>
         ))}
 
       {!hideDisconnectedSetupUi &&
         (showWooCard ? (
-        <div className="border border-gray-200 p-5 rounded-sm bg-gray-50/50">
-          <h3 className="text-lg font-semibold text-gray-900 mb-3">WooCommerce</h3>
+        <div className="border-2 border-ink/25 bg-paper p-5">
+          <h3 className="text-lg font-semibold text-ink mb-3">WooCommerce</h3>
           {woo?.siteUrl ? (
             <div className="space-y-3 text-sm">
               <p>
-                Site: <span className="font-mono bg-white px-2 py-0.5 border border-gray-200">{woo.siteUrl}</span>
+                {t('site', 'Site')}: <span className="break-all border border-ink/25 bg-paper-white px-2 py-0.5 font-receipt">{woo.siteUrl}</span>
               </p>
               {woo.lastSyncAt ? (
-                <p className="text-gray-600">Last catalog sync: {new Date(woo.lastSyncAt).toLocaleString()}</p>
+                <p className="text-ink/70">{t('lastSync', 'Last catalog sync')}: {new Date(woo.lastSyncAt).toLocaleString(lang)}</p>
               ) : null}
-              {woo.lastError ? <p className="text-red-700">Last error: {woo.lastError}</p> : null}
+              {woo.lastError ? <p className="text-stamp">{t('lastError', 'Last error')}: {woo.lastError}</p> : null}
               <div className="flex gap-2 flex-wrap pt-1">
                 <button
                   type="button"
                   disabled={syncing !== null || gateClosed}
                   onClick={() => sync('woocommerce')}
-                  className="px-4 py-2 bg-gray-900 text-white text-sm font-medium disabled:opacity-50 border border-gray-900"
+                  className="min-h-[44px] px-4 bg-ink font-receipt text-xs font-medium uppercase text-paper-white transition-colors hover:bg-brand-navy disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {syncing === 'woocommerce' ? 'Syncing…' : 'Run catalog sync'}
+                  {syncing === 'woocommerce' ? t('syncing', 'Syncing…') : t('runSync', 'Run catalog sync')}
                 </button>
                 <button
                   type="button"
                   onClick={() => disconnect('woocommerce')}
-                  className="px-4 py-2 border-2 border-gray-400 text-sm font-medium text-gray-800 hover:bg-gray-100"
+                  className="min-h-[44px] px-4 border border-ink/25 font-receipt text-xs font-medium uppercase text-ink transition-colors hover:border-ink disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  Disconnect
+                  {t('disconnect', 'Disconnect')}
                 </button>
               </div>
             </div>
           ) : wooLayer ? (
             <div className="space-y-3 max-w-lg">
-              <label className="block text-sm font-medium text-gray-700">Site URL</label>
+              <label className="block font-receipt text-xs font-medium uppercase tracking-[0.08em] text-ink/70">{t('siteUrl', 'Site URL')}</label>
               <input
                 value={wooUrl}
                 onChange={(e) => setWooUrl(e.target.value)}
                 placeholder="https://your-wordpress-site.com"
-                className="w-full px-3 py-2 border-2 border-gray-300 text-sm bg-white"
+                className="w-full min-h-[44px] border-2 border-ink/25 bg-paper-white px-3 py-2 font-receipt text-sm text-ink placeholder:text-ink/45 focus:border-ink focus:outline-none"
               />
-              <label className="block text-sm font-medium text-gray-700">REST API consumer key</label>
+              <label className="block font-receipt text-xs font-medium uppercase tracking-[0.08em] text-ink/70">{t('consumerKey', 'REST API consumer key')}</label>
               <input
                 value={wooKey}
                 onChange={(e) => setWooKey(e.target.value)}
                 placeholder="ck_…"
-                className="w-full px-3 py-2 border-2 border-gray-300 text-sm font-mono bg-white"
+                className="w-full min-h-[44px] border-2 border-ink/25 bg-paper-white px-3 py-2 font-receipt text-sm text-ink placeholder:text-ink/45 focus:border-ink focus:outline-none"
               />
-              <label className="block text-sm font-medium text-gray-700">REST API consumer secret</label>
+              <label className="block font-receipt text-xs font-medium uppercase tracking-[0.08em] text-ink/70">{t('consumerSecret', 'REST API consumer secret')}</label>
               <input
                 value={wooSecret}
                 onChange={(e) => setWooSecret(e.target.value)}
                 placeholder="cs_…"
                 type="password"
-                className="w-full px-3 py-2 border-2 border-gray-300 text-sm font-mono bg-white"
+                className="w-full min-h-[44px] border-2 border-ink/25 bg-paper-white px-3 py-2 font-receipt text-sm text-ink placeholder:text-ink/45 focus:border-ink focus:outline-none"
               />
               <button
                 type="button"
                 disabled={gateClosed || !wooUrl.trim() || !wooKey.trim() || !wooSecret.trim()}
                 onClick={connectWoo}
-                className="px-4 py-2 bg-gray-900 text-white text-sm font-medium disabled:opacity-50 border border-gray-900"
+                className="min-h-[44px] px-4 bg-ink font-receipt text-xs font-medium uppercase text-paper-white transition-colors hover:bg-brand-navy disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Save and connect
+                {t('saveAndConnect', 'Save and connect')}
               </button>
             </div>
           ) : (
-            <p className="text-sm text-gray-600">
-              WooCommerce is connected but the store integration toggle is off. Turn WooCommerce on under Store
-              integrations, or disconnect if you no longer use this channel.
+            <p className="text-sm text-ink/70">
+              {t('wooToggleOff', 'WooCommerce is connected but the store integration toggle is off. Turn WooCommerce on under Store integrations, or disconnect if you no longer use this channel.')}
             </p>
           )}
         </div>
         ) : (
-        <p className="text-sm text-gray-500 border border-dashed border-gray-300 p-4 rounded-sm">
-          Enable <strong>WooCommerce</strong> above to connect a site.
+        <p className="text-sm text-ink/60 border border-dashed border-ink/25 p-4 ">
+          {t('enableWooHint', 'Enable WooCommerce above to connect a site.')}
         </p>
         ))}
     </section>

@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
     const startDate = startDateParam ? getTenantDayBoundaries(startDateParam, tenantTz).start : undefined;
     const endDate = endDateParam ? getTenantDayBoundaries(endDateParam, tenantTz).end : undefined;
 
-    const report = await getSalesReport(tenantId, period, startDate, endDate);
+    const report = await getSalesReport(tenantId, period, startDate, endDate, tenantTz);
 
     return NextResponse.json({ success: true, data: report });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any

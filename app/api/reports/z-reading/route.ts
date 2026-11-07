@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
 import ZReading from '@/models/ZReading';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
-import { getDailySalesAggregate, startOfBusinessDay } from '@/lib/bir-readings';
+import { generateZReading } from '@/lib/z-reading';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
@@ -71,60 +70,26 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json().catch(() => ({}));
-    const businessDate = startOfBusinessDay(body.date ? new Date(body.date) : new Date());
+    if (body.date && isNaN(new Date(body.date).getTime())) {
+      return NextResponse.json({ success: false, error: t('validation.invalidDate', 'Invalid date') }, { status: 400 });
+    }
 
-    const existing = await ZReading.findOne({ tenantId, businessDate }).populate('generatedBy', 'name email').lean();
-    if (existing) {
+    const { reading, created, businessDate } = await generateZReading({
+      tenantId,
+      day: body.date || new Date(),
+      generatedBy: user.userId,
+    });
+
+    if (!created) {
       await createAuditLog(request, {
         tenantId,
         userId: user.userId,
         action: AuditActions.Z_READING_VIEW,
         entityType: 'z_reading',
-        entityId: existing._id.toString(),
+        entityId: reading._id.toString(),
         metadata: { businessDate: businessDate.toISOString(), reprint: true },
       });
-      return NextResponse.json({ success: true, data: existing, reprint: true });
-    }
-
-    const [aggregate, tenant] = await Promise.all([
-      getDailySalesAggregate(tenantId, businessDate),
-      Tenant.findById(tenantId).select('grandTotalSales').lean(),
-    ]);
-
-    const endingGT = tenant?.grandTotalSales ?? 0;
-    const beginningGT = Math.max(0, endingGT - aggregate.grossSales);
-
-    let zReading;
-    try {
-      zReading = await ZReading.create({
-        tenantId,
-        businessDate,
-        beginningGT,
-        endingGT,
-        grossSales: aggregate.grossSales,
-        vatableSales: aggregate.vatableSales,
-        vatAmount: aggregate.vatAmount,
-        vatExemptSales: aggregate.vatExemptSales,
-        zeroRatedSales: aggregate.zeroRatedSales,
-        discountTotal: aggregate.discountTotal,
-        transactionCount: aggregate.transactionCount,
-        voidCount: aggregate.voidCount,
-        refundCount: aggregate.refundCount,
-        refundTotal: aggregate.refundTotal,
-        refundVatAmount: aggregate.refundVatAmount,
-        netSales: aggregate.netSales,
-        generatedBy: user.userId,
-        generatedAt: new Date(),
-      });
-    } catch (createErr: unknown) {
-      // Unique index race: another request generated it first — return that one as a reprint.
-      if (createErr instanceof Error && 'code' in createErr && (createErr as { code?: number }).code === 11000) {
-        const race = await ZReading.findOne({ tenantId, businessDate }).populate('generatedBy', 'name email').lean();
-        if (race) {
-          return NextResponse.json({ success: true, data: race, reprint: true });
-        }
-      }
-      throw createErr;
+      return NextResponse.json({ success: true, data: reading, reprint: true });
     }
 
     await createAuditLog(request, {
@@ -132,17 +97,17 @@ export async function POST(request: NextRequest) {
       userId: user.userId,
       action: AuditActions.Z_READING_GENERATE,
       entityType: 'z_reading',
-      entityId: zReading._id.toString(),
+      entityId: reading._id.toString(),
       changes: {
         businessDate: businessDate.toISOString(),
-        grossSales: aggregate.grossSales,
-        beginningGT,
-        endingGT,
-        transactionCount: aggregate.transactionCount,
+        grossSales: reading.grossSales,
+        beginningGT: reading.beginningGT,
+        endingGT: reading.endingGT,
+        transactionCount: reading.transactionCount,
       },
     });
 
-    return NextResponse.json({ success: true, data: zReading, reprint: false }, { status: 201 });
+    return NextResponse.json({ success: true, data: reading, reprint: false }, { status: 201 });
   } catch (error: unknown) {
     logger.error('Error generating Z-Reading:', error);
     const message = error instanceof Error ? error.message : 'Failed to generate Z-Reading';

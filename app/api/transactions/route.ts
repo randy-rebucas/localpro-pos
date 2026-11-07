@@ -19,6 +19,7 @@ import { getTenantSettingsById } from '@/lib/tenant';
 import { checkSubscriptionLimit, SubscriptionService, checkFeatureAccess } from '@/lib/subscription';
 import { logger } from '@/lib/logger';
 import { calculateTax } from '@/lib/tax-calculation';
+import { discountFor, totalWithTax } from '@/lib/tax-pricing';
 import Customer from '@/models/Customer';
 import LoyaltyConfig from '@/models/LoyaltyConfig';
 import LoyaltyTransaction from '@/models/LoyaltyTransaction';
@@ -556,6 +557,7 @@ export async function POST(request: NextRequest) {
         subtotal += itemSubtotal;
 
         transactionItems.push({
+          ...(variation && product.hasVariations ? { variation } : {}),
           product: product._id,
           name: product.name,
           price: effectiveItemPrice,
@@ -572,6 +574,8 @@ export async function POST(request: NextRequest) {
     let discountAmount = 0;
     let appliedDiscountCode: string | undefined;
     let appliedDiscountCategory: string | undefined;
+    // VAT taken out of a VAT-inclusive price ahead of a Senior/PWD discount; part of discountAmount
+    let vatRemovedAmount = 0;
     // Set once the usage-increment below succeeds; used to compensate the
     // increment if checkout fails or is replayed after this point.
     let appliedDiscountId: mongoose.Types.ObjectId | undefined;
@@ -637,15 +641,7 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Calculate discount amount using integer math to avoid floating point
-      if (discount.type === 'percentage') {
-        discountAmount = Math.round((subtotal * discount.value) / 100 * 100) / 100;
-        if (discount.maxDiscountAmount) {
-          discountAmount = Math.min(discountAmount, discount.maxDiscountAmount);
-        }
-      } else {
-        discountAmount = Math.min(discount.value, subtotal);
-      }
+      ({ amount: discountAmount, vatRemoved: vatRemovedAmount } = discountFor(discount, subtotal, tenantSettings, discount));
 
       appliedDiscountCode = discount.code;
       appliedDiscountCategory = discount.category || 'general';
@@ -689,7 +685,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Calculate total after discount, tax, and loyalty redemption
-    const total = Math.max(0, subtotalAfterDiscount + taxAmount - loyaltyDiscountAmount);
+    const total = Math.max(0, totalWithTax(subtotalAfterDiscount, taxAmount, tenantSettings?.pricesIncludeTax) - loyaltyDiscountAmount);
 
     // Resolve the registered device/terminal (if any) and snapshot its identity onto the
     // transaction, so receipts remain accurate even if the device is later renamed/deactivated.
@@ -852,6 +848,7 @@ export async function POST(request: NextRequest) {
         discountCode: appliedDiscountCode,
         discountCategory: appliedDiscountCategory,
         discountAmount: discountAmount > 0 ? discountAmount : undefined,
+        vatRemovedAmount: vatRemovedAmount > 0 ? vatRemovedAmount : undefined,
         scPwdName: (appliedDiscountCategory === 'senior' || appliedDiscountCategory === 'pwd') ? (scPwdName || undefined) : undefined,
         scPwdId: (appliedDiscountCategory === 'senior' || appliedDiscountCategory === 'pwd') ? (scPwdId || undefined) : undefined,
         taxExemptAmount: taxResult?.exemptAmount || 0,

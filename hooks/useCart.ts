@@ -1,3 +1,4 @@
+import { cartTax, cartTotal, type TaxPricingSettings } from '@/lib/tax-pricing';
 import { useState, useCallback } from 'react';
 
 export interface CartItemVariation {
@@ -45,8 +46,8 @@ interface UseCartReturn {
   updateQuantity: (cartItemId: string, quantity: number, onError: (message: string) => void) => void;
   clearCart: () => void;
   getSubtotal: () => number;
-  getCartTotal: (settings?: { taxEnabled?: boolean; taxRate?: number }) => number;
-  getTaxAmount: (settings?: { taxEnabled?: boolean; taxRate?: number }, taxableBase?: number) => number;
+  getCartTotal: (settings?: TaxPricingSettings) => number;
+  getTaxAmount: (settings?: TaxPricingSettings, taxableBase?: number, discount?: { category?: string; code?: string } | null) => number;
 }
 
 const MAX_QUANTITY = 9999;
@@ -58,17 +59,11 @@ export function useCart(showError: (msg: string) => void): UseCartReturn {
     return cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   }, [cart]);
 
-  const getTaxAmount = useCallback((settings?: { taxEnabled?: boolean; taxRate?: number }, taxableBase?: number) => {
-    if (!settings?.taxEnabled || !settings?.taxRate) return 0;
-    const base = taxableBase ?? getSubtotal();
-    return Math.round(base * (settings.taxRate / 100) * 100) / 100;
+  const getTaxAmount = useCallback((settings?: TaxPricingSettings, taxableBase?: number, discount?: { category?: string; code?: string } | null) => {
+    return cartTax(taxableBase ?? getSubtotal(), settings, discount);
   }, [getSubtotal]);
 
-  const getCartTotal = useCallback((settings?: { taxEnabled?: boolean; taxRate?: number }) => {
-    const subtotal = getSubtotal();
-    const tax = getTaxAmount(settings);
-    return Math.round((subtotal + tax) * 100) / 100;
-  }, [getSubtotal, getTaxAmount]);
+  const getCartTotal = useCallback((settings?: TaxPricingSettings) => cartTotal(getSubtotal(), settings), [getSubtotal]);
 
   const addToCart = useCallback((
     product: { _id: string; name: string; price: number; stock: number; trackInventory?: boolean; allowOutOfStockSales?: boolean },

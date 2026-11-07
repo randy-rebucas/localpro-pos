@@ -17,6 +17,7 @@ interface AuthContextType {
   login: (email: string, password: string, tenantSlug: string, turnstileToken?: string | null) => Promise<{ success: boolean; error?: string }>;
   loginQR: (qrToken: string, tenantSlug: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
+  refreshUser: () => Promise<void>;
   isAuthenticated: boolean;
   hasRole: (roles: string[]) => boolean;
 }
@@ -153,6 +154,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         login,
         loginQR,
         logout,
+        refreshUser: checkAuth,
         isAuthenticated: !!user,
         hasRole,
       }}

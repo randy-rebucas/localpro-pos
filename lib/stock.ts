@@ -4,6 +4,7 @@ import Product from '@/models/Product';
 import ProductBundle from '@/models/ProductBundle';
 import StockMovement from '@/models/StockMovement';
 import { logger } from '@/lib/logger';
+import { matchesVariation } from '@/lib/product-variations';
 import { IProductVariation } from '@/models/Product'; // eslint-disable-line @typescript-eslint/no-unused-vars
 
 export interface StockUpdateOptions {
@@ -53,13 +54,6 @@ export interface StockProductSnapshot {
 }
 
 type VariationOption = { size?: string; color?: string; type?: string };
-
-function matchesVariation(v: VariationOption, option: VariationOption): boolean {
-  const matchSize = !option.size || v.size === option.size;
-  const matchColor = !option.color || v.color === option.color;
-  const matchType = !option.type || v.type === option.type;
-  return matchSize && matchColor && matchType;
-}
 
 /**
  * Current stock of an already-loaded product, considering branch and variation.
@@ -404,7 +398,7 @@ export async function checkLowStock(
     return false;
   }
 
-  const stockThreshold = threshold || product.lowStockThreshold || 10;
+  const stockThreshold = threshold ?? (product.lowStockThreshold || 10);
   const currentStock = await getProductStock(productId, tenantId);
 
   return currentStock <= stockThreshold;
@@ -424,8 +418,7 @@ export async function getLowStockProducts(
   // inventory-page poll and in cron jobs). The filter is a superset of the exact
   // per-product check below, which still decides the final result.
   const thresholdExpr = threshold
-    ? threshold
-    : { $cond: [{ $gt: [{ $ifNull: ['$lowStockThreshold', 0] }, 0] }, '$lowStockThreshold', 10] };
+    ?? { $cond: [{ $gt: [{ $ifNull: ['$lowStockThreshold', 0] }, 0] }, '$lowStockThreshold', 10] };
   const candidates: Record<string, unknown>[] = [
     // Variation products: checked per variation below
     { hasVariations: true },
@@ -454,7 +447,7 @@ export async function getLowStockProducts(
       // Check each variation
       for (const variation of product.variations) {
         const stock = variation.stock || 0;
-        const stockThreshold = threshold || product.lowStockThreshold || 10;
+        const stockThreshold = threshold ?? (product.lowStockThreshold || 10);
         if (stock <= stockThreshold) {
           isLowStock = true;
           currentStock = Math.min(currentStock || stock, stock);
@@ -466,12 +459,12 @@ export async function getLowStockProducts(
       );
       if (branchStock) {
         currentStock = branchStock.stock;
-        const stockThreshold = threshold || product.lowStockThreshold || 10;
+        const stockThreshold = threshold ?? (product.lowStockThreshold || 10);
         isLowStock = currentStock <= stockThreshold;
       }
     } else {
       currentStock = product.stock || 0;
-      const stockThreshold = threshold || product.lowStockThreshold || 10;
+      const stockThreshold = threshold ?? (product.lowStockThreshold || 10);
       isLowStock = currentStock <= stockThreshold;
     }
 
@@ -479,7 +472,7 @@ export async function getLowStockProducts(
       lowStockProducts.push({
         ...product,
         currentStock,
-        threshold: threshold || product.lowStockThreshold || 10,
+        threshold: threshold ?? (product.lowStockThreshold || 10),
       });
     }
   }

@@ -22,6 +22,16 @@
   letter-spacing: -0.01em;
 }
 
+/* A receipt template preview shows what prints, so the page's heading style must not reach it. */
+.mk-root .mk-print-preview h1,
+.mk-root .mk-print-preview h2 {
+  font-family: inherit;
+  font-weight: bold;
+  letter-spacing: normal;
+  line-height: normal;
+  text-transform: none;
+}
+
 /* The register uses this look too, but a tenant's own branding font still wins. */
 .mk-root.pos-register {
   font-family: var(--tenant-font-family, var(--mk-font-body)), system-ui, sans-serif;

@@ -4,6 +4,8 @@ import Transaction from '@/models/Transaction';
 import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { requireAuth } from '@/lib/auth'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { hasTenantPermission } from '@/lib/permissions-server';
+import { checkRateLimit } from '@/lib/rate-limit';
+import { isChannelOrder, voidSale, VoidConflictError, VoidVariationUnknownError, type VoidSaleResult } from '@/lib/void-sale';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
@@ -54,9 +56,11 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     await connectDB();
     // SECURITY: Validate tenant access for authenticated requests
     let tenantId: string;
+    let userId: string;
     try {
       const tenantAccess = await requireTenantAccess(request);
       tenantId = tenantAccess.tenantId;
+      userId = tenantAccess.user.userId;
       // Also check role
       if (!(await hasTenantPermission(tenantAccess.user.role, tenantId, 'transactions.edit'))) {
         throw new Error('Forbidden: Insufficient permissions');
@@ -102,31 +106,63 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     // Only allow void (cancel) on completed transactions
     if (body.status === 'cancelled') {
-      // Atomic claim: guards against a concurrent void/refund racing on the
-      // same transaction (double-click, retry) before either write lands.
-      // A partly refunded sale stays 'completed', so refundCount is what blocks voiding it.
-      const claimed = await Transaction.findOneAndUpdate(
-        { _id: id, tenantId, status: transaction.status, refundCount: { $in: [0, null] } },
-        { $set: { status: 'cancelled' } },
-        { new: true }
-      );
-      if (!claimed) {
+      const { allowed } = checkRateLimit(`transactions:void:${tenantId}`, 30, 60_000);
+      if (!allowed) {
+        return NextResponse.json({ success: false, error: t('validation.tooManyRequests', 'Too many requests') }, { status: 429 });
+      }
+
+      const reason = typeof body.reason === 'string' ? body.reason.trim().slice(0, 500) : '';
+      if (!reason) {
+        return NextResponse.json({ success: false, error: t('validation.voidReasonRequired', 'A reason is required to void a sale') }, { status: 400 });
+      }
+      if (isChannelOrder(transaction)) {
         return NextResponse.json(
-          { success: false, error: t('validation.transactionAlreadyFinalized', 'This transaction has already been voided or refunded and cannot be modified') },
-          { status: 409 }
+          { success: false, error: t('validation.voidChannelOrder', 'Online store orders cannot be voided here. Refund the order instead.') },
+          { status: 400 }
         );
       }
-      const oldStatus = transaction.status;
+
+      let result: VoidSaleResult;
+      try {
+        // The atomic claim inside guards against a concurrent void or refund, and
+        // refundCount blocks a partly refunded sale, which stays 'completed'.
+        result = await voidSale({ tenantId, sale: transaction, userId, reason });
+      } catch (voidError: unknown) {
+        if (voidError instanceof VoidConflictError) {
+          return NextResponse.json(
+            { success: false, error: t('validation.transactionAlreadyFinalized', 'This transaction has already been voided or refunded and cannot be modified') },
+            { status: 409 }
+          );
+        }
+        if (voidError instanceof VoidVariationUnknownError) {
+          return NextResponse.json(
+            { success: false, error: t('validation.voidVariationUnknown', 'This older sale did not record which variation was sold, so stock cannot be returned automatically. Refund the sale instead.') },
+            { status: 409 }
+          );
+        }
+        throw voidError;
+      }
+
+      if (result.productIds.length > 0) {
+        const { pushChannelInventoryForProducts } = await import('@/lib/ecommerce/inventory-push');
+        void pushChannelInventoryForProducts(tenantId, result.productIds, { stockReason: reason });
+      }
 
       await createAuditLog(request, {
         tenantId,
         action: AuditActions.TRANSACTION_CANCEL,
         entityType: 'transaction',
         entityId: id,
-        changes: { status: { old: oldStatus, new: 'cancelled' } },
+        changes: {
+          status: { old: transaction.status, new: 'cancelled' },
+          reason,
+          onAccountReversed: result.onAccountReversed,
+          loyaltyPointsReversed: result.loyaltyPointsReversed,
+          discountReleased: result.discountReleased,
+        },
       });
 
-      return NextResponse.json({ success: true, data: claimed });
+      return NextResponse.json({ success: true, data: result.transaction });
     }
 
     // Reject any other modifications to completed transactions

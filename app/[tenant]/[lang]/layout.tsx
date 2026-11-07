@@ -43,15 +43,6 @@ export default async function RootLayout({
 }>) {
   const { tenant: tenantSlug, lang } = await params;
   
-  // If lang is "forbidden", it means Next.js incorrectly matched /tenant/forbidden to this route
-  // We need to prevent this layout from rendering and let Next.js match the forbidden.tsx route
-  // Use notFound() which will cause Next.js to try the next route match (forbidden.tsx)
-  // This prevents infinite redirect loops
-  if (lang === 'forbidden') {
-    const { notFound } = await import('next/navigation');
-    notFound();
-  }
-  
   // Validate lang is a valid locale - if not, redirect to English
   if (lang !== 'en' && lang !== 'es') {
     const { redirect } = await import('next/navigation');

@@ -6,14 +6,14 @@ import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { handleApiError } from '@/lib/error-handler';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
-import { applyBusinessTypeDefaults } from '@/lib/business-types';
+import { applyBusinessTypeDefaults, isBusinessTypeOpenForSignup } from '@/lib/business-types';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   try {
     await connectDB();
     const { slug } = await params;
     const t = await getValidationTranslatorFromRequest(request);
-    const tenant = await Tenant.findOne({ slug }).lean();
+    const tenant = await Tenant.findOne({ slug }).select('-dailyReport').lean();
 
     if (!tenant) {
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
@@ -107,6 +107,14 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       // Check if business type is being changed
       const currentBusinessType = oldTenant.settings?.businessType;
       const newBusinessType = settings.businessType;
+
+      // A tenant may stay on a closed type, but cannot move onto one
+      if (newBusinessType && newBusinessType !== currentBusinessType && !isBusinessTypeOpenForSignup(newBusinessType)) {
+        return NextResponse.json(
+          { success: false, error: t('validation.businessTypeUnavailable', 'This business type is no longer available') },
+          { status: 400 }
+        );
+      }
 
       let updatedSettings = settings;
       settingsKeysToSet = Object.keys(settings);

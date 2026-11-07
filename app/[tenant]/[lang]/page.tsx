@@ -3,6 +3,7 @@
 import { saleLineKey } from '@/lib/refund-plan';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import Navbar from '@/components/Navbar';
+import { productStockTotal, variationLabel } from '@/lib/product-variations';
 import Currency from '@/components/Currency';
 import OfflineIndicator from '@/components/OfflineIndicator';
 import { useParams } from 'next/navigation';
@@ -12,6 +13,7 @@ import { useStockSync } from '@/hooks/useStockSync';
 import { useUpsell } from '@/hooks/useUpsell';
 import { useCart } from '@/hooks/useCart';
 import { useDiscount, type Discount } from '@/hooks/useDiscount';
+import { cartTax, cartTotal } from '@/lib/tax-pricing';
 import { usePayment } from '@/hooks/usePayment';
 import { useRefund } from '@/hooks/useRefund';
 import { useCashDrawer } from '@/hooks/useCashDrawer';
@@ -167,6 +169,8 @@ export default function Dashboard() {
   // Age verification modal state
   const [showAgeVerificationModal, setShowAgeVerificationModal] = useState(false);
   const [pendingAgeVerifyProduct, setPendingAgeVerifyProduct] = useState<Product | null>(null);
+  // What was already picked for the product waiting on the modifier or age step
+  const [pendingCartChoice, setPendingCartChoice] = useState<{ variant?: CartVariant; modifiers?: CartItemModifier[] }>({});
   // Split Check modal state
   const [showSplitCheckModal, setShowSplitCheckModal] = useState(false);
   const [splitGuests, setSplitGuests] = useState(2);
@@ -301,9 +305,8 @@ export default function Dashboard() {
     const discount = appliedDiscount?.amount || 0;
     const afterDiscount = Math.max(0, subtotal - discount);
     // Tax is calculated on the discounted amount (taxable base)
-    const taxAmount = getTaxAmount({ taxEnabled: settings?.taxEnabled, taxRate: settings?.taxRate }, afterDiscount);
-    return Math.round((afterDiscount + taxAmount) * 100) / 100;
-  }, [getSubtotal, getTaxAmount, appliedDiscount, settings]);
+    return cartTotal(afterDiscount, settings, appliedDiscount);
+  }, [getSubtotal, appliedDiscount, settings]);
 
   useEffect(() => {
     if (appliedDiscount) {
@@ -468,9 +471,10 @@ export default function Dashboard() {
         const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
         const discountAmount = discount?.amount || appliedDiscount?.amount || 0;
         const taxableBase = Math.max(0, subtotal - discountAmount);
-        const taxAmount = settings?.taxEnabled && settings?.taxRate ? (taxableBase * (settings.taxRate / 100)) : 0;
+        const activeDiscount = discount ?? appliedDiscount;
+        const taxAmount = cartTax(taxableBase, settings, activeDiscount);
         const tipAmount = tip ?? 0;
-        const total = taxableBase + taxAmount + tipAmount;
+        const total = cartTotal(taxableBase, settings, activeDiscount) + tipAmount;
 
         const res = await fetch(`/api/pos/session/${sessionId}?tenant=${tenant}`, {
           method: 'POST',
@@ -556,8 +560,9 @@ export default function Dashboard() {
     let product = products.find(
       p => p.barcode === code || p.sku === code || p._id === code
     );
+    let scannedVariation: NonNullable<PosProduct['variations']>[number] | undefined;
 
-    // Fallback: API lookup for when products aren't loaded in memory yet
+    // Fallback: API lookup for products not loaded in memory yet, and for variation SKUs
     if (!product) {
       try {
         const res = await fetch(`/api/products/by-barcode?code=${encodeURIComponent(code)}&tenant=${tenant}`);
@@ -565,6 +570,7 @@ export default function Dashboard() {
           const data = await res.json();
           if (data.success && data.data?.product) {
             product = data.data.product as PosProduct;
+            scannedVariation = data.data.variation;
           }
         }
       } catch {
@@ -572,7 +578,22 @@ export default function Dashboard() {
       }
     }
 
-    if (product && (product.stock > 0 || product.allowOutOfStockSales)) {
+    if (product && scannedVariation) {
+      const stock = scannedVariation.stock ?? 0;
+      if (stock > 0 || product.allowOutOfStockSales) {
+        const { sku, price, size, color, type } = scannedVariation;
+        // Same sku and label as the variant picker, so both land on one cart line
+        handleAddToCart(product, {
+          sku: sku ?? code,
+          label: variationLabel(scannedVariation),
+          price,
+          stock,
+          variation: { size, color, type },
+        });
+      } else {
+        showToast.error(dictValue('pos.outOfStockLabel', 'Out of stock'));
+      }
+    } else if (product && (productStockTotal(product) > 0 || product.allowOutOfStockSales)) {
       handleAddToCart(product);
     } else {
       if (dict) {
@@ -586,7 +607,7 @@ export default function Dashboard() {
     // QR codes might contain product IDs, URLs, or other data
     // Try to parse as product ID first
     const product = products.find(p => p._id === data);
-    if (product && (product.stock > 0 || product.allowOutOfStockSales)) {
+    if (product && (productStockTotal(product) > 0 || product.allowOutOfStockSales)) {
       handleAddToCart(product);
       setShowQRScanner(false);
     }
@@ -689,20 +710,23 @@ export default function Dashboard() {
   // Wrap addToCart with context-aware checks (e.g. age verification for alcohol)
   const ALCOHOL_PATTERN = /alcohol|beer|wine|spirits|liquor|whiskey|whisky|vodka|rum|gin|brandy|tequila|cider|mead|sake/i;
   const handleAddToCart = (product: Product, variant?: CartVariant, modifiers?: CartItemModifier[]) => {
-    if (ALCOHOL_PATTERN.test(product.category || '') || ALCOHOL_PATTERN.test(product.name || '')) {
-      setPendingAgeVerifyProduct(product);
-      setShowAgeVerificationModal(true);
-      return;
-    }
     if (product.hasVariations && product.variations?.length && !variant) {
       setPendingVariantProduct(product);
       setShowVariantModal(true);
       return;
     }
     if (businessType === 'restaurant' && product.modifiers?.length && !modifiers) {
+      setPendingCartChoice({ variant });
       setPendingModifierProduct(product);
       setSelectedModifiers({});
       setShowModifierModal(true);
+      return;
+    }
+    // Last, so the check runs once and confirming it adds exactly what was picked
+    if (ALCOHOL_PATTERN.test(product.category || '') || ALCOHOL_PATTERN.test(product.name || '')) {
+      setPendingCartChoice({ variant, modifiers });
+      setPendingAgeVerifyProduct(product);
+      setShowAgeVerificationModal(true);
       return;
     }
     addToCart(product, variant, modifiers);
@@ -945,9 +969,9 @@ export default function Dashboard() {
       : undefined;
     const taxEnabled = settings.taxEnabled && settings.taxRate;
     const isScPwd = transaction.discountCategory === 'senior' || transaction.discountCategory === 'pwd';
-    const taxableBase = (transaction.subtotal || transaction.total) - (transaction.discountAmount || 0);
+    // What was charged at the time, so a later change to the tax settings can't rewrite an old receipt.
     // SC/PWD transactions are fully VAT-exempt (RA 9994 / RA 10754) — never taxed
-    const taxAmount = isScPwd ? 0 : (taxEnabled ? taxableBase * (settings.taxRate! / 100) : undefined);
+    const taxAmount = isScPwd ? 0 : (transaction.taxAmount || undefined);
     const isVAT = !isScPwd && !!(taxEnabled && (settings.taxLabel || '').toUpperCase().includes('VAT'));
     const ptuDateStr = settings.birPtuIssuedDate
       ? new Date(settings.birPtuIssuedDate).toLocaleDateString()
@@ -1006,7 +1030,7 @@ export default function Dashboard() {
       // Senior Citizen / PWD discount block
       scPwdName: isScPwd ? transaction.scPwdName : undefined,
       scPwdId: isScPwd ? transaction.scPwdId : undefined,
-      scPwdDiscount: isScPwd ? transaction.discountAmount : undefined,
+      scPwdDiscount: isScPwd ? (transaction.discountAmount ?? 0) - (transaction.vatRemovedAmount ?? 0) : undefined,
       // Auto-kick cash drawer on cash payments (drawer connected to printer via RJ11)
       openDrawerOnPrint: transaction.paymentMethod === 'cash' && !!cashDrawerSession,
     };
@@ -1455,7 +1479,7 @@ export default function Dashboard() {
                       dict={dict}
                       onAdd={(productId) => {
                         const product = products.find((p) => p._id === productId);
-                        if (product) addToCart(product);
+                        if (product) handleAddToCart(product);
                       }}
                     />
                   </div>
@@ -1489,13 +1513,15 @@ export default function Dashboard() {
                     dict={dict}
                     subtotal={getSubtotal()}
                     taxAmount={getTaxAmount(
-                      { taxEnabled: settings?.taxEnabled, taxRate: settings?.taxRate },
-                      Math.max(0, getSubtotal() - (appliedDiscount?.amount || 0))
+                      settings ?? undefined,
+                      Math.max(0, getSubtotal() - (appliedDiscount?.amount || 0)),
+                      appliedDiscount
                     )}
                     appliedDiscount={appliedDiscount}
                     taxEnabled={settings?.taxEnabled}
                     taxLabel={settings?.taxLabel}
                     taxRate={settings?.taxRate}
+                    taxIncluded={settings?.pricesIncludeTax}
                     className="pb-2"
                   />
                 </div>
@@ -2096,7 +2122,7 @@ export default function Dashboard() {
           }}
           onConfirm={() => {
             if (pendingAgeVerifyProduct) {
-              addToCart(pendingAgeVerifyProduct);
+              addToCart(pendingAgeVerifyProduct, pendingCartChoice.variant, pendingCartChoice.modifiers);
             }
             setShowAgeVerificationModal(false);
             setPendingAgeVerifyProduct(null);
@@ -2244,7 +2270,7 @@ export default function Dashboard() {
             setPendingModifierProduct(null);
           }}
           onAddToOrder={(modifiers) => {
-            handleAddToCart(pendingModifierProduct, undefined, modifiers);
+            handleAddToCart(pendingModifierProduct, pendingCartChoice.variant, modifiers);
             setShowModifierModal(false);
             setPendingModifierProduct(null);
           }}

@@ -6,14 +6,16 @@
 
 1. Navigate to **Products** from the sidebar
 2. Products display as a grid or list (toggle view)
-3. Each product card shows: name, image, price, stock level, status
+3. Each product shows its name, image, price and stock level, with an **Inactive** badge if it has been deactivated
 
 ### Filtering & Searching
 
 - **Search** by product name, SKU, or barcode
-- **Filter by Category** — Select a category tab
+- **Filter by Category** — Choose a category from the list
 - **Filter by Status** — Active, Inactive, or All (defaults to Active). Deactivated products carry an **Inactive** badge next to their name so they're easy to spot once you switch the filter.
-- **Sort** — By name, price, date added, stock level
+- **Sort** — By newest, name, price or stock level. Pinned products come first only under **Newest**.
+
+The stock tag stands out once a product reaches its own **Low Stock Threshold**, or your store's default if it doesn't have one. It turns red at zero. Products that don't track stock show no tag.
 
 ## Adding a New Product
 
@@ -28,7 +30,6 @@
 | **Barcode** | No | Scannable barcode number |
 | **Category** | Yes | Product category |
 | **Price** | Yes | Selling price |
-| **Cost** | No | Purchase/cost price (for profit tracking) |
 | **Description** | No | Product description |
 | **Image** | No | Product photo |
 | **Tax Rule** | Yes | Taxable (12% VAT) or VAT-Exempt |
@@ -42,19 +43,26 @@
 
 ## Product Variations
 
-For products with multiple options (size, color, etc.):
+For products sold in separate sizes, colors or types (retail and general stores):
 
-1. In the product editor, scroll to **Variations**
-2. Click **Add Variation**
-3. Define variation attributes:
-   - **Name** (e.g., "Large", "Red")
-   - **SKU suffix** (e.g., "-LG", "-RED")
-   - **Price adjustment** (optional — can differ from base price)
-   - **Stock** (tracked independently per variation)
-4. Add as many variations as needed
-5. Click **Save**
+1. Go to **Products** and add or edit a product
+2. Under **Variations**, click **Add variation**
+3. Fill in **Size**, **Color** and/or **Type**, using the same details on each variation
+4. Optionally add a **SKU** and a **Price**. Leave the price empty to use the product's price
+5. Enter the starting **Stock**
+6. Click **Save**
 
-Each variation has its own stock count and can have its own price.
+At the register, choosing the product asks which variation to sell. Each variation has its own stock count, and the product shows their total.
+
+- **Adding stock:** use **Refill** and choose the variation. Stock can't be typed over on an existing variation, so every change is recorded.
+- **Removing a variation:** it has to be at 0 stock first.
+- **Similar variations:** "L" and "L / Red" can't sit side by side, because a sale of "L" could match either.
+- **Branches:** variation stock isn't tracked per branch.
+- **Renaming a variation:** past sales keep the old name. If one of those sales is refunded or voided, its stock goes back to the main product stock and may need adjusting by hand.
+
+Add stock through **Refill** on the Products page, which asks which variation to fill. **Bulk restock** and the stock option in **Bulk edit** on Admin > Products skip products with variations. The stock field in the Admin > Products form is locked for them.
+
+**Scanning:** give a variation its own SKU and scanning that code at the register adds that variation straight to the cart. Scanning the product's own barcode still opens the variation picker. If a variation SKU matches another product's barcode or SKU, the other product wins, so keep them different.
 
 ## Product Bundles
 
@@ -116,7 +124,7 @@ The product is hidden from the POS and from the default product list, but remain
 
 ## Reactivating a Product
 
-1. Navigate to **Admin > Products**
+1. Navigate to **Products** or **Admin > Products**
 2. Switch the **Status** filter to **Inactive** (or **All**) — deactivated products don't show under the default Active filter
 3. Click the **Reactivate** (↺) icon on the product row, in place of the usual Delete icon
 4. The product becomes active again immediately (visible in POS and listings)

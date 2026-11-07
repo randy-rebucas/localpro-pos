@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
+import { variationLabel } from '@/lib/product-variations';
 import PageLoading from '@/components/ui/PageLoading';
 import EmptyState from '@/components/ui/EmptyState';
 import ErrorState from '@/components/ui/ErrorState';
@@ -66,7 +67,7 @@ export default function AdminInventoryPage() {
         const category = ((p.categoryId as { name?: string } | undefined)?.name) || (p.category as string) || '';
         if (p.hasVariations && Array.isArray(p.variations) && p.variations.length) {
           return (p.variations as Array<Record<string, unknown>>).map((v) => ({
-            name: `${p.name as string} - ${(v.name as string) || (v.label as string) || (v.sku as string) || ''}`,
+            name: `${p.name as string} - ${variationLabel(v)}`,
             sku: (v.sku as string) || '',
             category,
             stock: (v.stock as number) ?? 0,

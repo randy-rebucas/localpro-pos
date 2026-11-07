@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
-import { getBusinessTypeConfig } from '@/lib/business-types';
+import { getBusinessTypeConfig, isBusinessTypeOpenForSignup } from '@/lib/business-types';
 import { getBusinessType } from '@/lib/business-type-helpers';
 import { getFeatureFlagLabel } from '@/lib/feature-flags-helpers';
 
@@ -44,7 +44,7 @@ export default function BusinessTypesPage() {
       .then(res => res.json())
       .then(data => {
         if (data.success) {
-          setTypes(data.data);
+          setTypes(data.data.filter((bt: { type: string }) => isBusinessTypeOpenForSignup(bt.type)));
         }
       })
       .catch(() => {})

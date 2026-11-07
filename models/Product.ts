@@ -143,7 +143,7 @@ const ProductSchema: Schema = new Schema(
     variations: [{
       size: String,
       color: String,
-      type: String,
+      type: { type: String }, // Plain `type: String` here would make the whole entry a string
       sku: String,
       price: {
         type: Number,

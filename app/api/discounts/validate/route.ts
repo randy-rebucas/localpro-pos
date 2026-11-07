@@ -1,3 +1,4 @@
+import { discountFor } from '@/lib/tax-pricing';
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Discount from '@/models/Discount';
@@ -100,15 +101,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Calculate discount amount
-    let discountAmount = 0;
-    if (discount.type === 'percentage') {
-      discountAmount = Math.round((subtotal * discount.value) / 100 * 100) / 100;
-      if (discount.maxDiscountAmount) {
-        discountAmount = Math.min(discountAmount, discount.maxDiscountAmount);
-      }
-    } else {
-      discountAmount = Math.min(discount.value, subtotal);
-    }
+    const tenantSettings = await getTenantSettingsById(tenantId);
+    const { amount: discountAmount, vatRemoved } = discountFor(discount, subtotal, tenantSettings, discount);
 
     return NextResponse.json({
       success: true,
@@ -120,6 +114,7 @@ export async function POST(request: NextRequest) {
         category: discount.category,
         requiresIdVerification: discount.requiresIdVerification,
         discountAmount,
+        vatRemovedAmount: vatRemoved,
         finalTotal: Math.max(0, Math.round((subtotal - discountAmount) * 100) / 100),
       },
     });

@@ -9,6 +9,7 @@ import { createAuditLog, AuditActions } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
 import { logger } from '@/lib/logger';
+import { usesVariationStock } from '@/lib/product-variations';
 
 const MAX_RESTOCK_ITEMS = 200;
 
@@ -105,6 +106,11 @@ export async function POST(request: NextRequest) {
       try {
         const product = snapshotById.get(item.productId);
         if (!product) throw new Error('Product not found');
+        // The delivery has to land on a variation, and this request can't say which
+        if (usesVariationStock(product)) {
+          failed.push({ productId: item.productId, error: 'Has variations. Use Refill to choose one.' });
+          continue;
+        }
         const before = movements.length;
         await updateStock(item.productId, tenantId, item.quantity, 'purchase', {
           userId,

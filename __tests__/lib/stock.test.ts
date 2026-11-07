@@ -12,6 +12,7 @@ vi.mock('@/lib/logger', () => ({
 
 vi.mock('@/models/Product', () => ({
   default: {
+    find: vi.fn(),
     findOne: vi.fn(),
     findOneAndUpdate: vi.fn(),
   },
@@ -32,6 +33,7 @@ import Product from '@/models/Product';
 import StockMovement from '@/models/StockMovement';
 import {
   computeProductStock,
+  getLowStockProducts,
   updateStock,
   insertStockMovements,
   type StockMovementInput,
@@ -431,5 +433,35 @@ describe('insertStockMovements', () => {
     };
     await insertStockMovements([m], session);
     expect(StockMovementMock.insertMany).toHaveBeenCalledWith([m], { session });
+  });
+});
+
+describe('getLowStockProducts', () => {
+  const products = [
+    { _id: 'out', name: 'Out', stock: 0, lowStockThreshold: 5 },
+    { _id: 'few', name: 'Few', stock: 3, lowStockThreshold: 5 },
+    { _id: 'unset', name: 'Unset', stock: 8, lowStockThreshold: 0 },
+    { _id: 'plenty', name: 'Plenty', stock: 50, lowStockThreshold: 5 },
+  ];
+
+  beforeEach(() => {
+    ProductMock.find.mockReset();
+    ProductMock.find.mockReturnValue({
+      select: vi.fn().mockReturnValue({ lean: vi.fn().mockResolvedValue(products) }),
+    });
+  });
+
+  it('treats a threshold of 0 as out of stock only, not as unset', async () => {
+    const result = await getLowStockProducts('tenant-1', undefined, 0);
+
+    expect(result.map((p) => p._id)).toEqual(['out']);
+    expect(result[0].threshold).toBe(0);
+    expect(ProductMock.find.mock.calls[0][0].$or[1].$expr.$lte[1]).toBe(0);
+  });
+
+  it('uses each product threshold, and 10 for an unset one, when none is passed', async () => {
+    const result = await getLowStockProducts('tenant-1');
+
+    expect(result.map((p) => [p._id, p.threshold])).toEqual([['out', 5], ['few', 5], ['unset', 10]]);
   });
 });

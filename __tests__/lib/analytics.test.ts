@@ -56,6 +56,24 @@ describe('getSalesReport', () => {
     { _id: null, sales: 0, count: 1 },
   ];
 
+  it('groups sales by day in the store timezone', async () => {
+    TransactionMock.aggregate.mockResolvedValue([{ byMethod: [], byDay: [] }]);
+
+    await getSalesReport(TENANT, 'daily', new Date('2026-11-01T00:00:00Z'), new Date('2026-11-02T00:00:00Z'), 'America/New_York');
+
+    const facet = TransactionMock.aggregate.mock.calls[0][0][1].$facet;
+    expect(facet.byDay[0].$group._id.$dateToString.timezone).toBe('America/New_York');
+  });
+
+  it('falls back to the default timezone when none is given', async () => {
+    TransactionMock.aggregate.mockResolvedValue([{ byMethod: [], byDay: [] }]);
+
+    await getSalesReport(TENANT, 'weekly', new Date('2026-11-01T00:00:00Z'), new Date('2026-11-02T00:00:00Z'));
+
+    const facet = TransactionMock.aggregate.mock.calls[0][0][1].$facet;
+    expect(facet.byDay[0].$group._id.$dateToString.timezone).toBe('Asia/Manila');
+  });
+
   it('maps facet rows to totals and payment method buckets', async () => {
     TransactionMock.aggregate.mockResolvedValue([
       { byMethod, byDay: [{ _id: '2026-11-01', sales: 300, transactions: 10 }] },

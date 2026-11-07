@@ -10,6 +10,7 @@ import CartDiscountSection from '@/components/pos/CartDiscountSection';
 import CartSummaryFooter from '@/components/pos/CartSummaryFooter';
 import CartUpsellSuggestions from '@/components/pos/CartUpsellSuggestions';
 import type { CartItem } from '@/hooks/useCart';
+import type { TaxPricingSettings } from '@/lib/tax-pricing';
 import type { PosProduct } from '@/hooks/usePosProducts';
 import type { Discount } from '@/hooks/useDiscount';
 import type { TranslationDict } from '@/types/dictionary';
@@ -51,20 +52,21 @@ export interface PosRoamingCartProps {
   showDiscountSection: boolean;
   setShowDiscountSection: React.Dispatch<React.SetStateAction<boolean>>;
   sessionId: string | null;
-  settings?: { taxEnabled?: boolean; taxRate?: number; taxLabel?: string } | null;
+  settings?: (TaxPricingSettings & { taxLabel?: string }) | null;
   processing: boolean;
   fetchWithTimeout: (url: string, options?: RequestInit, timeoutMs?: number) => Promise<Response>;
   applyDiscount: (
     subtotal: number,
     tenant: string,
     onSuccess: (discount: Discount) => void,
-    onError: (error: string) => void
+    onError: (error: string) => void,
+    settings?: TaxPricingSettings | null
   ) => void;
   setAppliedDiscount: (discount: Discount | null) => void;
   removeDiscount: () => void;
   getSubtotal: () => number;
   getTotal: () => number;
-  getTaxAmount: (settings?: { taxEnabled?: boolean; taxRate?: number }, taxableBase?: number) => number;
+  getTaxAmount: (settings?: TaxPricingSettings, taxableBase?: number, discount?: { category?: string; code?: string } | null) => number;
   onClose: () => void;
   onSaveCart: () => void;
   onClearCart: () => void;
@@ -230,13 +232,15 @@ export default function PosRoamingCart(props: PosRoamingCartProps) {
               subtotal={getSubtotal()}
               total={getTotal()}
               taxAmount={getTaxAmount(
-                { taxEnabled: settings?.taxEnabled, taxRate: settings?.taxRate },
-                Math.max(0, getSubtotal() - (appliedDiscount?.amount || 0))
+                settings ?? undefined,
+                Math.max(0, getSubtotal() - (appliedDiscount?.amount || 0)),
+                appliedDiscount
               )}
               appliedDiscount={appliedDiscount}
               taxEnabled={settings?.taxEnabled}
               taxLabel={settings?.taxLabel}
               taxRate={settings?.taxRate}
+              taxIncluded={settings?.pricesIncludeTax}
               processing={processing}
               processingLabel={dictValue('pos.processing', 'Processing...')}
               onCheckout={onCheckout}

@@ -1,26 +1,101 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import Navbar from '@/components/Navbar';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { Check, LocateFixed, X } from 'lucide-react';
+import '@/app/marketing.css';
+import { marketingFontClasses } from '@/components/marketing/fonts';
+import { LineTag } from '@/components/marketing/primitives';
+import PageTitle from '@/components/PageTitle';
+import StatusSlip, { slipSecondaryKey } from '@/components/StatusSlip';
 import { getDictionaryClient } from '../dictionaries-client';
 import { ITenantSettings } from '@/types/tenant';
+import { isBusinessTypeSelectable } from '@/lib/business-types';
 import { detectLocation, getCurrencySymbolForCode } from '@/lib/location-detection';
 import MultiCurrencyDisplaySettings from '@/components/settings/MultiCurrencyDisplaySettings';
 import ReceiptTemplatesManager from '@/components/settings/ReceiptTemplatesManager';
 import SettingsPageSkeleton from '@/components/settings/SettingsPageSkeleton';
+import { useAuth } from '@/contexts/AuthContext';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
-import { getDefaultTenantSettings } from '@/lib/currency';
 import EcommerceIntegrationsSettings from '@/components/settings/EcommerceIntegrationsSettings';
 import ImageUploadField from '@/components/settings/ImageUploadField';
-import PageLoading from '@/components/ui/PageLoading';
 import ErrorState from '@/components/ui/ErrorState';
-import InlineBanner from '@/components/ui/InlineBanner';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import { useSettingsPage } from '@/hooks/useSettingsPage';
 import { usePermissions } from '@/hooks/usePermissions';
 import type { TranslationDict } from '@/types/dictionary';
+import DailyReportRecipients from '@/components/settings/DailyReportRecipients';
+
+type SettingsTab = 'general' | 'branding' | 'contact' | 'receipt' | 'business' | 'notifications' | 'multiCurrency' | 'ecommerce';
+
+const LABEL = 'mb-1 block font-receipt text-xs font-medium uppercase tracking-[0.08em] text-ink/70';
+const HINT = 'font-normal normal-case tracking-normal text-ink/60';
+const FIELD = 'w-full min-h-[44px] border-2 border-ink/25 bg-paper-white px-3 py-2 font-receipt text-sm text-ink placeholder:text-ink/45 focus:border-ink focus:outline-none disabled:opacity-60';
+const SWATCH = 'h-11 w-16 shrink-0 cursor-pointer border-2 border-ink/25 bg-paper-white';
+const OPTION = 'flex items-center border-2 border-ink/25 p-4 transition-colors hover:bg-paper';
+const NOTE = 'border-l-4 border-brand bg-paper p-4';
+
+/** Dictionary key for each business type feature flag. */
+const FEATURE_LABELS: Record<string, string> = {
+  enableInventory: 'inventoryManagement',
+  enableCategories: 'categoriesFeature',
+  enableDiscounts: 'discountsPromotions',
+  enableLoyaltyProgram: 'loyaltyProgram',
+  enableCustomerManagement: 'customerManagementFeature',
+  enableBookingScheduling: 'bookingScheduling',
+};
+
+/** A message printed on a strip of paper. Inside a slip it uses the darker paper so it still stands out. */
+function Notice({ tone, text, dismissLabel, onDismiss, className = 'bg-paper' }: {
+  tone: 'success' | 'error' | 'warning';
+  text: string;
+  dismissLabel?: string;
+  onDismiss?: () => void;
+  className?: string;
+}) {
+  return (
+    <div
+      role={tone === 'error' ? 'alert' : 'status'}
+      className={`flex items-center justify-between gap-3 border-l-4 pl-4 font-receipt text-sm text-ink ${tone === 'success' ? 'border-brand' : 'border-stamp'} ${className}`}
+    >
+      <span className="min-w-0 py-2 pr-4">{text}</span>
+      {onDismiss && (
+        <button
+          type="button"
+          onClick={onDismiss}
+          aria-label={dismissLabel}
+          className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center text-ink/60 transition-colors hover:text-ink"
+        >
+          <X className="h-4 w-4" strokeWidth={1.75} aria-hidden />
+        </button>
+      )}
+    </div>
+  );
+}
+
+function SettingsShell({ tag, title, subtitle, children }: {
+  tag?: string;
+  title: string;
+  subtitle: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className={`${marketingFontClasses} mk-root pos-register flex min-h-dvh flex-col`}>
+      <PageTitle />
+      <Navbar />
+      <div className="flex-1 bg-brand-navy-deep text-paper">
+        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
+          {tag && <LineTag no="CFG" className="mb-3 text-[#8fe3d0]">{tag}</LineTag>}
+          <h1 className="text-5xl text-paper-white sm:text-6xl lg:text-7xl">{title}</h1>
+          <p className="mt-3 text-paper/70">{subtitle}</p>
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function SettingsPage() {
   const params = useParams();
@@ -28,7 +103,7 @@ export default function SettingsPage() {
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
   const { settings: tenantSettings, applySettings } = useTenantSettings();
-  const primaryColor = (tenantSettings || getDefaultTenantSettings()).primaryColor || '#35979c';
+  const { loading: authLoading } = useAuth();
   const { canAccess } = usePermissions();
   const canManageSettings = canAccess('settings.manage');
   const [dict, setDict] = useState<TranslationDict | null>(null);
@@ -45,9 +120,7 @@ export default function SettingsPage() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [detecting, setDetecting] = useState(false);
   const [detectedInfo, setDetectedInfo] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<
-    'general' | 'branding' | 'contact' | 'receipt' | 'business' | 'notifications' | 'multiCurrency' | 'ecommerce'
-  >('general');
+  const [activeTab, setActiveTab] = useState<SettingsTab>('general');
   const [businessTypeWarning, setBusinessTypeWarning] = useState<string | null>(null);
 
   useEffect(() => {
@@ -80,7 +153,7 @@ export default function SettingsPage() {
       newSettings.numberFormat = detected.numberFormat;
       
       setSettings(newSettings);
-      setDetectedInfo(`Detected: ${detected.locale} (${detected.country || 'Unknown'}) - ${detected.currency} - ${detected.timezone}`);
+      setDetectedInfo(`${dict?.settings?.detectedTimezone || 'Detected'}: ${detected.locale} (${detected.country || 'Unknown'}) - ${detected.currency} - ${detected.timezone}`);
       
       // Clear message after 5 seconds
       setTimeout(() => setDetectedInfo(null), 5000);
@@ -111,11 +184,12 @@ export default function SettingsPage() {
   }, [settings, status]);
 
   const validateSettings = (): string | null => {
-    if (!settings) return 'Settings not loaded';
+    const copy = dict?.settings as Record<string, string | undefined> | undefined;
+    if (!settings) return copy?.validationNotLoaded || 'Settings not loaded';
 
     // Validate currency
     if (settings.currency && settings.currency.length !== 3) {
-      return 'Currency code must be 3 characters (e.g., USD, EUR)';
+      return copy?.validationCurrency || 'Currency code must be 3 characters (e.g., USD, EUR)';
     }
 
     // Validate colors (hex format)
@@ -123,42 +197,42 @@ export default function SettingsPage() {
     for (const field of colorFields) {
       const value = settings[field as keyof ITenantSettings] as string | undefined;
       if (value && !/^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/.test(value)) {
-        return `Invalid color format for ${field}. Use hex format (e.g., #FF5733)`;
+        return (copy?.validationColor || 'Invalid color format for {field}. Use hex format (e.g., #FF5733)').replace('{field}', copy?.[field] || field);
       }
     }
 
     // Validate URLs
     if (settings.logo && !/^https?:\/\/.+/.test(settings.logo)) {
-      return 'Logo URL must be a valid HTTP/HTTPS URL';
+      return copy?.validationLogoUrl || 'Logo URL must be a valid HTTP/HTTPS URL';
     }
     if (settings.favicon && !/^https?:\/\/.+/.test(settings.favicon)) {
-      return 'Favicon URL must be a valid HTTP/HTTPS URL';
+      return copy?.validationFaviconUrl || 'Favicon URL must be a valid HTTP/HTTPS URL';
     }
     if (settings.website && !/^https?:\/\/.+/.test(settings.website)) {
-      return 'Website URL must be a valid HTTP/HTTPS URL';
+      return copy?.validationWebsiteUrl || 'Website URL must be a valid HTTP/HTTPS URL';
     }
 
     // Validate email
     if (settings.email && !/^\S+@\S+\.\S+$/.test(settings.email)) {
-      return 'Invalid email format';
+      return copy?.validationEmail || 'Invalid email format';
     }
 
     // Validate tax rate
     if (settings.taxEnabled && (settings.taxRate === undefined || settings.taxRate < 0 || settings.taxRate > 100)) {
-      return 'Tax rate must be between 0 and 100';
+      return copy?.validationTaxRate || 'Tax rate must be between 0 and 100';
     }
 
     // Validate number format
     if (settings.numberFormat) {
       if (settings.numberFormat.decimalPlaces < 0 || settings.numberFormat.decimalPlaces > 4) {
-        return 'Decimal places must be between 0 and 4';
+        return copy?.validationDecimalPlaces || 'Decimal places must be between 0 and 4';
       }
       if (
         settings.numberFormat.decimalSeparator &&
         settings.numberFormat.thousandsSeparator &&
         settings.numberFormat.decimalSeparator === settings.numberFormat.thousandsSeparator
       ) {
-        return 'Decimal separator and thousands separator must be different';
+        return copy?.validationSeparators || 'Decimal separator and thousands separator must be different';
       }
     }
 
@@ -204,7 +278,7 @@ export default function SettingsPage() {
               'Unauthorized. Please login with admin or manager account to save settings.',
           });
         } else {
-          setMessage({ type: 'error', text: data.error || 'Failed to save settings' });
+          setMessage({ type: 'error', text: data.error || dict?.common?.failedToSaveSettings || 'Failed to save settings' });
         }
       }
     } catch (error) {
@@ -245,8 +319,13 @@ export default function SettingsPage() {
     setSettings(newSettings);
   };
 
-  if (!dict) {
-    return <PageLoading label="Loading..." />;
+  // canAccess is false until the user loads, which would flash the 403 slip at allowed users.
+  if (!dict || authLoading) {
+    return (
+      <div className="flex min-h-dvh items-center justify-center bg-brand-navy-deep">
+        <LoadingSpinner size="md" color="#8fe3d0" />
+      </div>
+    );
   }
 
   const settingsDict = (dict.settings ?? {}) as Record<string, string | undefined> & {
@@ -254,51 +333,40 @@ export default function SettingsPage() {
   };
 
   if (!canManageSettings) {
+    const forbidden = dict.components?.forbidden;
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center max-w-md">
-          <div className="text-6xl mb-4">🔒</div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">
-            {dict?.components?.protectedRoute?.accessDenied || 'Access Denied'}
-          </h1>
-          <p className="text-gray-600 mb-4">
-            {settingsDict.noPermission || 'You don\'t have permission to access store settings. Required role: manager or higher.'}
-          </p>
-        </div>
-      </div>
+      <StatusSlip
+        code="403"
+        stamp={forbidden?.stamp || 'Denied'}
+        title={dict.components?.protectedRoute?.accessDenied || 'Access Denied'}
+        message={settingsDict.noPermission || 'You don\'t have permission to access store settings. Required role: manager or higher.'}
+      >
+        <button type="button" onClick={() => router.back()} className={slipSecondaryKey}>
+          {forbidden?.goBack || 'Go Back'}
+        </button>
+      </StatusSlip>
     );
   }
 
-  const pageHeader = (
-    <div className="mb-6 sm:mb-8">
-      <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
-        {settingsDict.title || 'Store Settings'}
-      </h1>
-      <p className="text-gray-600">
-        {settingsDict.subtitle || 'Configure your store preferences and branding'}
-      </p>
-    </div>
-  );
+  const shell = {
+    tag: tenantSettings?.companyName,
+    title: settingsDict.title || 'Store Settings',
+    subtitle: settingsDict.subtitle || 'Configure your store preferences and branding',
+  };
 
   if (status === 'loading') {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <Navbar />
-        <div className="w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-          {pageHeader}
-          <SettingsPageSkeleton />
-        </div>
-      </div>
+      <SettingsShell {...shell}>
+        <SettingsPageSkeleton />
+      </SettingsShell>
     );
   }
 
   if (status === 'error' || !settings) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <Navbar />
-        <div className="w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-          {pageHeader}
-          <div className="bg-white border border-gray-300">
+      <SettingsShell {...shell}>
+        <div className="mt-6 max-w-2xl">
+          <div className="bg-paper-white text-ink">
             <ErrorState
               title={settingsDict.failedToLoad || 'Failed to Load Settings'}
               description={
@@ -310,168 +378,90 @@ export default function SettingsPage() {
               retryLabel={settingsDict.retry || dict.common.retry || 'Retry'}
             />
           </div>
+          <div className="mk-tear-b h-3 bg-paper-white" aria-hidden />
         </div>
-      </div>
+      </SettingsShell>
     );
   }
 
+  const tabs: { id: SettingsTab; label: string }[] = [
+    { id: 'general', label: settingsDict.tabs?.general || 'General' },
+    { id: 'branding', label: settingsDict.tabs?.branding || 'Branding' },
+    { id: 'contact', label: settingsDict.tabs?.contact || 'Contact' },
+    { id: 'receipt', label: settingsDict.tabs?.receipt || 'Receipt' },
+    { id: 'business', label: settingsDict.tabs?.business || 'Business' },
+    { id: 'notifications', label: settingsDict.tabs?.notifications || 'Notifications' },
+    { id: 'multiCurrency', label: settingsDict.tabs?.multiCurrency || 'Multi-Currency' },
+    { id: 'ecommerce', label: settingsDict.tabs?.ecommerce || 'E-commerce' },
+  ];
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-      <div className="w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        {pageHeader}
+    <SettingsShell {...shell}>
+      {/* Sticky, because Save sits at the foot of a long slip and the result must stay in view. */}
+      {message && (
+        <div className="sticky top-[4.5rem] z-40 mt-6">
+          <Notice
+            tone={message.type}
+            text={message.text}
+            dismissLabel={dict.common.close || 'Close'}
+            onDismiss={() => setMessage(null)}
+            className="border-y border-r border-y-ink/40 border-r-ink/40 bg-paper"
+          />
+        </div>
+      )}
 
-        {message && (
-          <div className="mb-6">
-            <InlineBanner
-              variant={message.type === 'error' ? 'error' : 'info'}
-              message={message.text}
-              onDismiss={() => setMessage(null)}
-              className={
-                message.type === 'success'
-                  ? 'bg-green-50 text-green-800 border-green-300'
-                  : undefined
-              }
-            />
-          </div>
-        )}
+      {/* Function keys on the till select which part of the setup slip to print. */}
+      <nav aria-label={dict?.common?.tabs || 'Tabs'} className="mt-6 grid grid-cols-2 gap-1 sm:grid-cols-4 xl:grid-cols-8">
+        {tabs.map(({ id, label }, index) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setActiveTab(id)}
+            aria-current={activeTab === id ? 'true' : undefined}
+            className={`flex min-h-[44px] min-w-0 items-center gap-2 border px-3 py-2 text-left font-receipt text-xs font-medium uppercase transition-colors touch-manipulation ${
+              activeTab === id
+                ? 'border-paper-white bg-paper-white text-ink'
+                : 'border-white/15 bg-black/25 text-paper/80 hover:border-[#8fe3d0] hover:text-paper-white'
+            }`}
+          >
+            <span className="opacity-60" aria-hidden>F{index + 1}</span>
+            <span className="min-w-0 break-words">{label}</span>
+          </button>
+        ))}
+      </nav>
 
-        <div className="bg-white border border-gray-300 overflow-hidden">
-          {/* Tabs */}
-          <div className="border-b border-gray-200">
-            <nav className="flex overflow-x-auto" aria-label={dict?.common?.tabs || 'Tabs'}>
-              <button
-                onClick={() => setActiveTab('general')}
-                className={`px-6 py-4 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-                  activeTab === 'general'
-                    ? 'border-brand text-brand'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                {settingsDict.tabs?.general || 'General'}
-              </button>
-              <button
-                onClick={() => setActiveTab('branding')}
-                style={{
-                  borderBottomWidth: '2px',
-                  borderBottomColor: activeTab === 'branding' ? primaryColor : 'transparent',
-                  color: activeTab === 'branding' ? primaryColor : '#6b7280',
-                }}
-                className="px-6 py-4 text-sm font-medium whitespace-nowrap transition-colors hover:text-gray-700 hover:border-gray-300"
-              >
-                {settingsDict.tabs?.branding || 'Branding'}
-              </button>
-              <button
-                onClick={() => setActiveTab('contact')}
-                style={{
-                  borderBottomWidth: '2px',
-                  borderBottomColor: activeTab === 'contact' ? primaryColor : 'transparent',
-                  color: activeTab === 'contact' ? primaryColor : '#6b7280',
-                }}
-                className="px-6 py-4 text-sm font-medium whitespace-nowrap transition-colors hover:text-gray-700 hover:border-gray-300"
-              >
-                {settingsDict.tabs?.contact || 'Contact'}
-              </button>
-              <button
-                onClick={() => setActiveTab('receipt')}
-                style={{
-                  borderBottomWidth: '2px',
-                  borderBottomColor: activeTab === 'receipt' ? primaryColor : 'transparent',
-                  color: activeTab === 'receipt' ? primaryColor : '#6b7280',
-                }}
-                className="px-6 py-4 text-sm font-medium whitespace-nowrap transition-colors hover:text-gray-700 hover:border-gray-300"
-              >
-                {settingsDict.tabs?.receipt || 'Receipt'}
-              </button>
-              <button
-                onClick={() => setActiveTab('business')}
-                style={{
-                  borderBottomWidth: '2px',
-                  borderBottomColor: activeTab === 'business' ? primaryColor : 'transparent',
-                  color: activeTab === 'business' ? primaryColor : '#6b7280',
-                }}
-                className="px-6 py-4 text-sm font-medium whitespace-nowrap transition-colors hover:text-gray-700 hover:border-gray-300"
-              >
-                {settingsDict.tabs?.business || 'Business'}
-              </button>
-              <button
-                onClick={() => setActiveTab('notifications')}
-                style={{
-                  borderBottomWidth: '2px',
-                  borderBottomColor: activeTab === 'notifications' ? primaryColor : 'transparent',
-                  color: activeTab === 'notifications' ? primaryColor : '#6b7280',
-                }}
-                className="px-6 py-4 text-sm font-medium whitespace-nowrap transition-colors hover:text-gray-700 hover:border-gray-300"
-              >
-                {settingsDict.tabs?.notifications || 'Notifications'}
-              </button>
-              <button
-                onClick={() => setActiveTab('multiCurrency')}
-                style={{
-                  borderBottomWidth: '2px',
-                  borderBottomColor: activeTab === 'multiCurrency' ? primaryColor : 'transparent',
-                  color: activeTab === 'multiCurrency' ? primaryColor : '#6b7280',
-                }}
-                className="px-6 py-4 text-sm font-medium whitespace-nowrap transition-colors hover:text-gray-700 hover:border-gray-300"
-              >
-                {settingsDict.tabs?.multiCurrency || 'Multi-Currency'}
-              </button>
-              <button
-                onClick={() => setActiveTab('ecommerce')}
-                style={{
-                  borderBottomWidth: '2px',
-                  borderBottomColor: activeTab === 'ecommerce' ? primaryColor : 'transparent',
-                  color: activeTab === 'ecommerce' ? primaryColor : '#6b7280',
-                }}
-                className="px-6 py-4 text-sm font-medium whitespace-nowrap transition-colors hover:text-gray-700 hover:border-gray-300"
-              >
-                {settingsDict.tabs?.ecommerce || 'E-commerce'}
-              </button>
-            </nav>
-          </div>
-
+      <div className="mt-1 bg-paper-white text-ink">
           {/* Tab Content */}
-          <div className="p-5 sm:p-6 lg:p-8">
+          <div className="px-4 py-6 sm:px-6 lg:px-8">
             {/* General Tab */}
             {activeTab === 'general' && (
               <div className="space-y-8">
                 {/* Currency & Localization */}
                 <section>
-                  <div className="flex items-center justify-between mb-5">
-                    <h2 className="text-xl font-bold text-gray-900">{settingsDict.currencyLocalization || 'Currency & Localization'}</h2>
+                  <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+                    <h2 className="min-w-0 text-3xl">{settingsDict.currencyLocalization || 'Currency & Localization'}</h2>
                     <button
                       onClick={autoDetectLocation}
                       disabled={detecting}
-                      className="px-4 py-2 text-sm font-medium text-brand bg-brand-soft hover:bg-brand-soft transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 border border-teal-300"
+                      className="flex min-h-[44px] items-center gap-2 border border-ink/25 px-3 font-receipt text-xs font-medium uppercase text-ink transition-colors hover:border-ink touch-manipulation disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      {detecting ? (
-                        <>
-                          <div className="animate-spin h-4 w-4 border-b-2 border-brand"></div>
-                          <span>{settingsDict.detecting || 'Detecting...'}</span>
-                        </>
-                      ) : (
-                        <>
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                          <span>{settingsDict.detectLocation || 'Auto-Detect Location'}</span>
-                        </>
-                      )}
+                      <LocateFixed className="h-4 w-4" strokeWidth={1.75} aria-hidden />
+                      {detecting ? settingsDict.detecting || 'Detecting...' : settingsDict.detectLocation || 'Auto-Detect Location'}
                     </button>
                   </div>
                   {detectedInfo && (
                     <div className="mb-5">
-                      <InlineBanner
-                        variant="info"
-                        message={detectedInfo}
+                      <Notice
+                        tone="success"
+                        text={detectedInfo}
+                        dismissLabel={dict.common.close || 'Close'}
                         onDismiss={() => setDetectedInfo(null)}
-                        className="bg-green-50 text-green-800 border-green-300"
                       />
                     </div>
                   )}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className={LABEL}>
                         {settingsDict.currencyCode || 'Currency Code'}
                       </label>
                       <input
@@ -490,13 +480,13 @@ export default function SettingsPage() {
                             };
                           });
                         }}
-                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
+                        className={FIELD}
                         placeholder={settingsDict.currencyPlaceholder || 'USD'}
                         maxLength={3}
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className={LABEL}>
                         {settingsDict.currencySymbol || 'Currency Symbol'}
                       </label>
                       <div className="relative">
@@ -504,43 +494,43 @@ export default function SettingsPage() {
                           type="text"
                           value={settings.currencySymbol || getCurrencySymbolForCode(settings.currency || 'USD')}
                           onChange={(e) => updateSetting('currencySymbol', e.target.value)}
-                          className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
+                          className={FIELD}
                           placeholder="$"
                         />
                         {!settings.currencySymbol && (
                           <button
                             type="button"
                             onClick={() => updateSetting('currencySymbol', getCurrencySymbolForCode(settings.currency || 'USD'))}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-brand hover:text-brand-hover font-medium"
+                            className="absolute right-1 top-1/2 flex min-h-[44px] -translate-y-1/2 items-center px-2 font-receipt text-xs font-medium uppercase text-brand-hover hover:text-ink"
                             title={dict?.common?.autoFillSymbol || 'Auto-fill symbol'}
                           >
-                            Auto
+                            {settingsDict.autoFill || 'Auto'}
                           </button>
                         )}
                       </div>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className={LABEL}>
                         {settingsDict.currencyPosition || 'Currency Position'}
                       </label>
                       <select
                         value={settings.currencyPosition || 'before'}
                         onChange={(e) => updateSetting('currencyPosition', e.target.value)}
-                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
+                        className={FIELD}
                       >
                         <option value="before">{settingsDict.currencyPositionBefore || 'Before amount ($100)'}</option>
                         <option value="after">{settingsDict.currencyPositionAfter || 'After amount (100$)'}</option>
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className={LABEL}>
                         {settingsDict.timezone || 'Timezone'}
                       </label>
                       <input
                         type="text"
                         value={settings.timezone || 'Asia/Manila'}
                         onChange={(e) => updateSetting('timezone', e.target.value)}
-                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
+                        className={FIELD}
                         placeholder={settingsDict.timezonePlaceholder || 'America/New_York'}
                         list="timezone-suggestions"
                       />
@@ -557,18 +547,18 @@ export default function SettingsPage() {
                         <option value="Australia/Sydney">Sydney (Australia)</option>
                         <option value="UTC">UTC</option>
                       </datalist>
-                      <p className="mt-2 text-xs text-gray-500">
-                        Detected: {Intl.DateTimeFormat().resolvedOptions().timeZone}
+                      <p className="mt-2 text-xs text-ink/60">
+                        {settingsDict.detectedTimezone || 'Detected'}: {Intl.DateTimeFormat().resolvedOptions().timeZone}
                       </p>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className={LABEL}>
                         {settingsDict.dateFormat || 'Date Format'}
                       </label>
                       <select
                         value={settings.dateFormat || 'MM/DD/YYYY'}
                         onChange={(e) => updateSetting('dateFormat', e.target.value)}
-                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
+                        className={FIELD}
                       >
                         <option value="MM/DD/YYYY">MM/DD/YYYY</option>
                         <option value="DD/MM/YYYY">DD/MM/YYYY</option>
@@ -576,20 +566,20 @@ export default function SettingsPage() {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className={LABEL}>
                         {settingsDict.timeFormat || 'Time Format'}
                       </label>
                       <select
                         value={settings.timeFormat || '12h'}
                         onChange={(e) => updateSetting('timeFormat', e.target.value)}
-                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
+                        className={FIELD}
                       >
                         <option value="12h">{settingsDict.timeFormat12h || '12-hour (AM/PM)'}</option>
                         <option value="24h">{settingsDict.timeFormat24h || '24-hour'}</option>
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className={LABEL}>
                         {settingsDict.language || 'Language'}
                       </label>
                       <select
@@ -620,7 +610,7 @@ export default function SettingsPage() {
                               const currentPath = window.location.pathname.replace(`/${tenant}/${lang}`, '') || '/';
                               router.push(`/${tenant}/${newLang}${currentPath}`);
                             } else {
-                              setMessage({ type: 'error', text: data.error || 'Failed to save language setting' });
+                              setMessage({ type: 'error', text: data.error || dict?.common?.failedToSaveLanguageSetting || 'Failed to save language setting' });
                             }
                           } catch (error) {
                             console.error('Error saving language:', error);
@@ -629,36 +619,36 @@ export default function SettingsPage() {
                             setSaving(false);
                           }
                         }}
-                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
+                        className={FIELD}
                       >
                         <option value="en">English</option>
                         <option value="es">Español</option>
                       </select>
-                      <p className="mt-2 text-xs text-gray-500">
+                      <p className="mt-2 text-xs text-ink/60">
                         {settingsDict.languageChangeHint || 'Changing language will save settings and reload the page'}
                       </p>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className={LABEL}>
                         {settingsDict.decimalSeparator || 'Decimal Separator'}
                       </label>
                       <select
                         value={settings.numberFormat?.decimalSeparator || '.'}
                         onChange={(e) => updateSetting('numberFormat.decimalSeparator', e.target.value)}
-                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
+                        className={FIELD}
                       >
                         <option value=".">{settingsDict.separatorPeriod || 'Period (.)'}</option>
                         <option value=",">{settingsDict.separatorComma || 'Comma (,)'}</option>
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className={LABEL}>
                         {settingsDict.thousandsSeparator || 'Thousands Separator'}
                       </label>
                       <select
                         value={settings.numberFormat?.thousandsSeparator || ','}
                         onChange={(e) => updateSetting('numberFormat.thousandsSeparator', e.target.value)}
-                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
+                        className={FIELD}
                       >
                         <option value=",">{settingsDict.separatorComma || 'Comma (,)'}</option>
                         <option value=".">{settingsDict.separatorPeriod || 'Period (.)'}</option>
@@ -667,16 +657,19 @@ export default function SettingsPage() {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className={LABEL}>
                         {settingsDict.decimalPlaces || 'Decimal Places'}
                       </label>
                       <input
                         type="number"
                         min="0"
                         max="4"
-                        value={settings.numberFormat?.decimalPlaces || 2}
-                        onChange={(e) => updateSetting('numberFormat.decimalPlaces', parseInt(e.target.value) || 2)}
-                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
+                        value={settings.numberFormat?.decimalPlaces ?? 2}
+                        onChange={(e) => {
+                          const places = parseInt(e.target.value, 10);
+                          updateSetting('numberFormat.decimalPlaces', Number.isNaN(places) ? 2 : places);
+                        }}
+                        className={FIELD}
                       />
                     </div>
                   </div>
@@ -684,7 +677,7 @@ export default function SettingsPage() {
 
                 {/* Tax Settings */}
                 <section>
-                  <h2 className="text-xl font-bold text-gray-900 mb-5">{settingsDict.taxSettings || 'Tax Settings'}</h2>
+                  <h2 className="mb-5 text-3xl">{settingsDict.taxSettings || 'Tax Settings'}</h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="flex items-center">
                       <input
@@ -694,14 +687,14 @@ export default function SettingsPage() {
                         onChange={(e) => updateSetting('taxEnabled', e.target.checked)}
                         className="checkbox-win8 h-4 w-4 cursor-pointer"
                       />
-                      <label htmlFor="taxEnabled" className="ml-2 text-sm font-medium text-gray-700">
+                      <label htmlFor="taxEnabled" className="ml-2 text-sm font-medium text-ink/80">
                         {settingsDict.enableTax || 'Enable Tax'}
                       </label>
                     </div>
                     {settings.taxEnabled && (
                       <>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <label className={LABEL}>
                             {settingsDict.taxRate || 'Tax Rate (%)'}
                           </label>
                           <input
@@ -711,20 +704,37 @@ export default function SettingsPage() {
                             step="0.01"
                             value={settings.taxRate || 0}
                             onChange={(e) => updateSetting('taxRate', parseFloat(e.target.value) || 0)}
-                            className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
+                            className={FIELD}
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <label className={LABEL}>
                             {settingsDict.taxLabel || 'Tax Label'}
                           </label>
                           <input
                             type="text"
                             value={settings.taxLabel || 'Tax'}
                             onChange={(e) => updateSetting('taxLabel', e.target.value)}
-                            className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
+                            className={FIELD}
                             placeholder={settingsDict.taxNamePlaceholder || 'VAT, GST, Sales Tax'}
                           />
+                        </div>
+                        <div className="md:col-span-2">
+                          <div className="flex items-center">
+                            <input
+                              type="checkbox"
+                              id="pricesIncludeTax"
+                              checked={settings.pricesIncludeTax || false}
+                              onChange={(e) => updateSetting('pricesIncludeTax', e.target.checked)}
+                              className="checkbox-win8 h-4 w-4 cursor-pointer"
+                            />
+                            <label htmlFor="pricesIncludeTax" className="ml-2 text-sm font-medium text-ink/80">
+                              {settingsDict.pricesIncludeTax || 'Prices already include tax'}
+                            </label>
+                          </div>
+                          <p className="mt-1 text-sm text-ink/60">
+                            {settingsDict.pricesIncludeTaxDesc || 'On: a ₱112 item charges ₱112, with the tax inside it. Off: tax is added on top at checkout.'}
+                          </p>
                         </div>
                       </>
                     )}
@@ -737,30 +747,31 @@ export default function SettingsPage() {
             {activeTab === 'branding' && (
               <section className="space-y-8">
                 <div>
-                  <h2 className="text-xl font-bold text-gray-900 mb-5">{settingsDict.basicBranding || 'Basic Branding'}</h2>
+                  <h2 className="mb-5 text-3xl">{settingsDict.basicBranding || 'Basic Branding'}</h2>
                   <div className="max-w-md">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className={LABEL}>
                       {settingsDict.companyName || 'Company Name'}
                     </label>
                     <input
                       type="text"
                       value={settings.companyName || ''}
                       onChange={(e) => updateSetting('companyName', e.target.value)}
-                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
+                      className={FIELD}
                     />
                   </div>
                 </div>
 
                 <div className="pt-2">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">{settingsDict.logoAndFavicon || 'Logo & Favicon'}</h3>
+                  <h3 className="text-lg font-semibold text-ink mb-4">{settingsDict.logoAndFavicon || 'Logo & Favicon'}</h3>
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <ImageUploadField
                       tenant={tenant}
                       label={settingsDict.logoUrl || 'Logo'}
                       value={settings.logo || ''}
                       onChange={(url) => updateSetting('logo', url)}
-                      recommendedSize="200x200px (square) or 400x100px (wide)"
-                      helpText="Shown in the navbar, receipts, and invoices."
+                      recommendedSize={settingsDict.logoRecommendedSize || '200x200px (square) or 400x100px (wide)'}
+                      helpText={settingsDict.logoHelp || 'Shown on your login page and receipts.'}
+                      labels={settingsDict}
                       previewClassName="h-16 w-16"
                     />
                     <ImageUploadField
@@ -768,8 +779,10 @@ export default function SettingsPage() {
                       label={settingsDict.faviconUrl || 'Favicon'}
                       value={settings.favicon || ''}
                       onChange={(url) => updateSetting('favicon', url)}
-                      recommendedSize="32x32px or 64x64px (square)"
-                      helpText="Shown in the browser tab for your store."
+                      recommendedSize={settingsDict.faviconRecommendedSize || '32x32px or 64x64px (square)'}
+                      formats={settingsDict.faviconFormats || 'PNG or ICO'}
+                      labels={settingsDict}
+                      helpText={settingsDict.faviconHelp || 'Shown in the browser tab for your store.'}
                       previewClassName="h-10 w-10"
                       accept="image/png,image/x-icon,image/vnd.microsoft.icon"
                     />
@@ -777,10 +790,10 @@ export default function SettingsPage() {
                 </div>
 
                 <div className="pt-2">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">{settingsDict.colors || 'Colors'}</h3>
+                  <h3 className="text-lg font-semibold text-ink mb-4">{settingsDict.colors || 'Colors'}</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className={LABEL}>
                       {settingsDict.primaryColor || 'Primary Color'}
                     </label>
                     <div className="flex gap-2">
@@ -788,19 +801,19 @@ export default function SettingsPage() {
                         type="color"
                         value={settings.primaryColor || '#35979c'}
                         onChange={(e) => updateSetting('primaryColor', e.target.value)}
-                        className="h-10 w-20 border-2 border-gray-300 cursor-pointer bg-white"
+                        className={SWATCH}
                       />
                       <input
                         type="text"
                         value={settings.primaryColor || '#35979c'}
                         onChange={(e) => updateSetting('primaryColor', e.target.value)}
-                        className="flex-1 px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
+                        className={`${FIELD} min-w-0 flex-1`}
                         placeholder="#35979c"
                       />
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className={LABEL}>
                       {settingsDict.secondaryColor || 'Secondary Color'}
                     </label>
                     <div className="flex gap-2">
@@ -808,19 +821,19 @@ export default function SettingsPage() {
                         type="color"
                         value={settings.secondaryColor || '#64748b'}
                         onChange={(e) => updateSetting('secondaryColor', e.target.value)}
-                        className="h-10 w-20 border-2 border-gray-300 cursor-pointer bg-white"
+                        className={SWATCH}
                       />
                       <input
                         type="text"
                         value={settings.secondaryColor || ''}
                         onChange={(e) => updateSetting('secondaryColor', e.target.value)}
-                        className="flex-1 px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
+                        className={`${FIELD} min-w-0 flex-1`}
                         placeholder="#64748b"
                       />
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className={LABEL}>
                       {settingsDict.accentColor || 'Accent Color'}
                     </label>
                     <div className="flex gap-2">
@@ -828,19 +841,19 @@ export default function SettingsPage() {
                         type="color"
                         value={settings.accentColor || '#10b981'}
                         onChange={(e) => updateSetting('accentColor', e.target.value)}
-                        className="h-10 w-20 border-2 border-gray-300 cursor-pointer bg-white"
+                        className={SWATCH}
                       />
                       <input
                         type="text"
                         value={settings.accentColor || ''}
                         onChange={(e) => updateSetting('accentColor', e.target.value)}
-                        className="flex-1 px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
+                        className={`${FIELD} min-w-0 flex-1`}
                         placeholder="#10b981"
                       />
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className={LABEL}>
                       {settingsDict.backgroundColor || 'Background Color'}
                     </label>
                     <div className="flex gap-2">
@@ -848,19 +861,19 @@ export default function SettingsPage() {
                         type="color"
                         value={settings.backgroundColor || '#ffffff'}
                         onChange={(e) => updateSetting('backgroundColor', e.target.value)}
-                        className="h-10 w-20 border-2 border-gray-300 cursor-pointer bg-white"
+                        className={SWATCH}
                       />
                       <input
                         type="text"
                         value={settings.backgroundColor || ''}
                         onChange={(e) => updateSetting('backgroundColor', e.target.value)}
-                        className="flex-1 px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
+                        className={`${FIELD} min-w-0 flex-1`}
                         placeholder="#ffffff"
                       />
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className={LABEL}>
                       {settingsDict.textColor || 'Text Color'}
                     </label>
                     <div className="flex gap-2">
@@ -868,13 +881,13 @@ export default function SettingsPage() {
                         type="color"
                         value={settings.textColor || '#111827'}
                         onChange={(e) => updateSetting('textColor', e.target.value)}
-                        className="h-10 w-20 border-2 border-gray-300 cursor-pointer bg-white"
+                        className={SWATCH}
                       />
                       <input
                         type="text"
                         value={settings.textColor || ''}
                         onChange={(e) => updateSetting('textColor', e.target.value)}
-                        className="flex-1 px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
+                        className={`${FIELD} min-w-0 flex-1`}
                         placeholder="#111827"
                       />
                     </div>
@@ -883,15 +896,15 @@ export default function SettingsPage() {
                 </div>
 
                 {/* Advanced Branding Section - Moved to Admin */}
-                <div className="pt-8 mt-8 border-t-2 border-gray-200">
-                  <div className="p-4 bg-brand-soft border border-teal-200">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">{settingsDict.advancedBranding || 'Advanced Branding'}</h3>
-                    <p className="text-sm text-brand-navy mb-3">
+                <div className="pt-8 mt-8 border-t border-dashed border-ink/30">
+                  <div className={NOTE}>
+                    <h3 className="text-lg font-semibold text-ink mb-2">{settingsDict.advancedBranding || 'Advanced Branding'}</h3>
+                    <p className="mb-3 text-sm text-ink/80">
                       {settingsDict.advancedBrandingNote || 'Advanced branding features (custom fonts, themes, CSS) have been moved to Admin → Advanced Branding for better access control.'}
                     </p>
                     <Link
                       href={`/${tenant}/${lang}/admin/advanced-branding`}
-                      className="inline-flex items-center px-4 py-2 bg-brand text-white text-sm font-medium hover:bg-brand-hover transition-colors"
+                      className="inline-flex min-h-[44px] items-center bg-ink px-4 font-receipt text-xs font-medium uppercase text-paper-white transition-colors hover:bg-brand-navy"
                     >
                       {dict?.admin?.advancedBranding || 'Advanced Branding'} →
                     </Link>
@@ -903,78 +916,78 @@ export default function SettingsPage() {
             {/* Contact Tab */}
             {activeTab === 'contact' && (
               <section>
-                <h2 className="text-xl font-bold text-gray-900 mb-5">{settingsDict.contactInformation || 'Contact Information'}</h2>
+                <h2 className="mb-5 text-3xl">{settingsDict.contactInformation || 'Contact Information'}</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{settingsDict.email || 'Email'}</label>
+                    <label className={LABEL}>{settingsDict.email || 'Email'}</label>
                     <input
                       type="email"
                       value={settings.email || ''}
                       onChange={(e) => updateSetting('email', e.target.value)}
-                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
+                      className={FIELD}
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{settingsDict.phone || 'Phone'}</label>
+                    <label className={LABEL}>{settingsDict.phone || 'Phone'}</label>
                     <input
                       type="tel"
                       value={settings.phone || ''}
                       onChange={(e) => updateSetting('phone', e.target.value)}
-                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
+                      className={FIELD}
                     />
                   </div>
                   <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{settingsDict.streetAddress || 'Street Address'}</label>
+                    <label className={LABEL}>{settingsDict.streetAddress || 'Street Address'}</label>
                     <input
                       type="text"
                       value={settings.address?.street || ''}
                       onChange={(e) => updateSetting('address.street', e.target.value)}
-                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
+                      className={FIELD}
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{settingsDict.city || 'City'}</label>
+                    <label className={LABEL}>{settingsDict.city || 'City'}</label>
                     <input
                       type="text"
                       value={settings.address?.city || ''}
                       onChange={(e) => updateSetting('address.city', e.target.value)}
-                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
+                      className={FIELD}
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{settingsDict.stateProvince || 'State/Province'}</label>
+                    <label className={LABEL}>{settingsDict.stateProvince || 'State/Province'}</label>
                     <input
                       type="text"
                       value={settings.address?.state || ''}
                       onChange={(e) => updateSetting('address.state', e.target.value)}
-                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
+                      className={FIELD}
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{settingsDict.zipPostalCode || 'ZIP/Postal Code'}</label>
+                    <label className={LABEL}>{settingsDict.zipPostalCode || 'ZIP/Postal Code'}</label>
                     <input
                       type="text"
                       value={settings.address?.zipCode || ''}
                       onChange={(e) => updateSetting('address.zipCode', e.target.value)}
-                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
+                      className={FIELD}
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{settingsDict.country || 'Country'}</label>
+                    <label className={LABEL}>{settingsDict.country || 'Country'}</label>
                     <input
                       type="text"
                       value={settings.address?.country || ''}
                       onChange={(e) => updateSetting('address.country', e.target.value)}
-                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
+                      className={FIELD}
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{settingsDict.website || 'Website'}</label>
+                    <label className={LABEL}>{settingsDict.website || 'Website'}</label>
                     <input
                       type="url"
                       value={settings.website || ''}
                       onChange={(e) => updateSetting('website', e.target.value)}
-                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
+                      className={FIELD}
                       placeholder="https://example.com"
                     />
                   </div>
@@ -985,36 +998,36 @@ export default function SettingsPage() {
             {/* Receipt Tab */}
             {activeTab === 'receipt' && (
               <section>
-                <h2 className="text-xl font-bold text-gray-900 mb-5">{settingsDict.receiptInvoiceSettings || 'Receipt & Invoice Settings'}</h2>
+                <h2 className="mb-5 text-3xl">{settingsDict.receiptInvoiceSettings || 'Receipt & Invoice Settings'}</h2>
                 <div className="space-y-6">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className={LABEL}>
                       {settingsDict.receiptHeader || 'Receipt Header'}
                     </label>
                     <textarea
                       value={settings.receiptHeader || ''}
                       onChange={(e) => updateSetting('receiptHeader', e.target.value)}
                       rows={3}
-                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
+                      className={FIELD}
                       placeholder={settingsDict.receiptHeaderPlaceholder || 'Custom header text to appear at the top of receipts'}
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className={LABEL}>
                       {settingsDict.receiptFooter || 'Receipt Footer'}
                     </label>
                     <textarea
                       value={settings.receiptFooter || ''}
                       onChange={(e) => updateSetting('receiptFooter', e.target.value)}
                       rows={3}
-                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
+                      className={FIELD}
                       placeholder={settingsDict.receiptFooterPlaceholder || 'Custom footer text to appear at the bottom of receipts'}
                     />
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-3">{settingsDict.displayOptions || 'Display Options'}</h3>
+                    <h3 className="text-lg font-semibold text-ink mb-3">{settingsDict.displayOptions || 'Display Options'}</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
+                      <div className={OPTION}>
                         <input
                           type="checkbox"
                           id="receiptShowLogo"
@@ -1022,11 +1035,11 @@ export default function SettingsPage() {
                           onChange={(e) => updateSetting('receiptShowLogo', e.target.checked)}
                           className="checkbox-win8 h-5 w-5 cursor-pointer"
                         />
-                        <label htmlFor="receiptShowLogo" className="ml-3 text-sm font-medium text-gray-700">
+                        <label htmlFor="receiptShowLogo" className="ml-3 text-sm font-medium text-ink/80">
                           {settingsDict.showLogoOnReceipts || 'Show Logo on Receipts'}
                         </label>
                       </div>
-                      <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
+                      <div className={OPTION}>
                         <input
                           type="checkbox"
                           id="receiptShowAddress"
@@ -1034,11 +1047,11 @@ export default function SettingsPage() {
                           onChange={(e) => updateSetting('receiptShowAddress', e.target.checked)}
                           className="checkbox-win8 h-5 w-5 cursor-pointer"
                         />
-                        <label htmlFor="receiptShowAddress" className="ml-3 text-sm font-medium text-gray-700">
+                        <label htmlFor="receiptShowAddress" className="ml-3 text-sm font-medium text-ink/80">
                           {settingsDict.showAddressOnReceipts || 'Show Address on Receipts'}
                         </label>
                       </div>
-                      <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
+                      <div className={OPTION}>
                         <input
                           type="checkbox"
                           id="receiptShowPhone"
@@ -1046,11 +1059,11 @@ export default function SettingsPage() {
                           onChange={(e) => updateSetting('receiptShowPhone', e.target.checked)}
                           className="checkbox-win8 h-5 w-5 cursor-pointer"
                         />
-                        <label htmlFor="receiptShowPhone" className="ml-3 text-sm font-medium text-gray-700">
+                        <label htmlFor="receiptShowPhone" className="ml-3 text-sm font-medium text-ink/80">
                           {settingsDict.showPhoneOnReceipts || 'Show Phone on Receipts'}
                         </label>
                       </div>
-                      <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
+                      <div className={OPTION}>
                         <input
                           type="checkbox"
                           id="receiptShowEmail"
@@ -1058,7 +1071,7 @@ export default function SettingsPage() {
                           onChange={(e) => updateSetting('receiptShowEmail', e.target.checked)}
                           className="checkbox-win8 h-5 w-5 cursor-pointer"
                         />
-                        <label htmlFor="receiptShowEmail" className="ml-3 text-sm font-medium text-gray-700">
+                        <label htmlFor="receiptShowEmail" className="ml-3 text-sm font-medium text-ink/80">
                           {settingsDict.showEmailOnReceipts || 'Show Email on Receipts'}
                         </label>
                       </div>
@@ -1067,152 +1080,152 @@ export default function SettingsPage() {
                 </div>
 
                 {/* BIR Compliance Section */}
-                <div className="mt-8 pt-8 border-t-2 border-gray-200">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-1">{settingsDict.birCompliance || 'BIR Compliance'}</h3>
-                  <p className="text-sm text-gray-500 mb-4">
+                <div className="mt-8 pt-8 border-t border-dashed border-ink/30">
+                  <h3 className="text-lg font-semibold text-ink mb-1">{settingsDict.birCompliance || 'BIR Compliance'}</h3>
+                  <p className="text-sm text-ink/60 mb-4">
                     {settingsDict.birComplianceDesc || 'Required fields for Bureau of Internal Revenue (BIR) official receipts in the Philippines.'}
                   </p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        {settingsDict.birTin || 'BIR TIN'} <span className="text-gray-400 font-normal">(NNN-NNN-NNN-NNN)</span>
+                      <label className={LABEL}>
+                        {settingsDict.birTin || 'BIR TIN'} <span className={HINT}>(NNN-NNN-NNN-NNN)</span>
                       </label>
                       <input
                         type="text"
                         value={settings.birTin || ''}
                         onChange={(e) => updateSetting('birTin', e.target.value)}
-                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
+                        className={FIELD}
                         placeholder="000-000-000-000"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        {settingsDict.birBusinessStyle || 'Business Style'} <span className="text-gray-400 font-normal">(trade name)</span>
+                      <label className={LABEL}>
+                        {settingsDict.birBusinessStyle || 'Business Style'} <span className={HINT}>{settingsDict.birTradeNameHint || '(trade name)'}</span>
                       </label>
                       <input
                         type="text"
                         value={settings.birBusinessStyle || ''}
                         onChange={(e) => updateSetting('birBusinessStyle', e.target.value)}
-                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
-                        placeholder="Retail / Trading / Services"
+                        className={FIELD}
+                        placeholder={settingsDict.birBusinessStylePlaceholder || 'Retail / Trading'}
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        {settingsDict.birPtuNumber || 'PTU No.'} <span className="text-gray-400 font-normal">(Permit to Use)</span>
+                      <label className={LABEL}>
+                        {settingsDict.birPtuNumber || 'PTU No.'} <span className={HINT}>{settingsDict.birPtuHint || '(Permit to Use)'}</span>
                       </label>
                       <input
                         type="text"
                         value={settings.birPtuNumber || ''}
                         onChange={(e) => updateSetting('birPtuNumber', e.target.value)}
-                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
+                        className={FIELD}
                         placeholder="POS-0001-2024"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className={LABEL}>
                         {settingsDict.birPtuIssuedDate || 'PTU Date Issued'}
                       </label>
                       <input
                         type="date"
                         value={settings.birPtuIssuedDate ? new Date(settings.birPtuIssuedDate).toISOString().slice(0, 10) : ''}
                         onChange={(e) => updateSetting('birPtuIssuedDate', e.target.value ? new Date(e.target.value) : undefined)}
-                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
+                        className={FIELD}
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        {settingsDict.birMinNumber || 'MIN'} <span className="text-gray-400 font-normal">(Machine Identification No.)</span>
+                      <label className={LABEL}>
+                        {settingsDict.birMinNumber || 'MIN'} <span className={HINT}>{settingsDict.birMinHint || '(Machine Identification No.)'}</span>
                       </label>
                       <input
                         type="text"
                         value={settings.birMinNumber || ''}
                         onChange={(e) => updateSetting('birMinNumber', e.target.value)}
-                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
-                        placeholder="MIN assigned by BIR"
+                        className={FIELD}
+                        placeholder={settingsDict.birMinPlaceholder || 'MIN assigned by BIR'}
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className={LABEL}>
                         {settingsDict.birSystemProvider || 'Accredited System Provider'}
                       </label>
                       <input
                         type="text"
                         value={settings.birSystemProvider || ''}
                         onChange={(e) => updateSetting('birSystemProvider', e.target.value)}
-                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
-                        placeholder="LocalPro POS"
+                        className={FIELD}
+                        placeholder="1POS"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        {settingsDict.birTerminalSN || 'Terminal SN'} <span className="text-gray-400 font-normal">(Serial No.)</span>
+                      <label className={LABEL}>
+                        {settingsDict.birTerminalSN || 'Terminal SN'} <span className={HINT}>{settingsDict.birSerialHint || '(Serial No.)'}</span>
                       </label>
                       <input
                         type="text"
                         value={settings.birTerminalSN || ''}
                         onChange={(e) => updateSetting('birTerminalSN', e.target.value)}
-                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
+                        className={FIELD}
                         placeholder="HW-XYZ-987654321"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className={LABEL}>
                         {settingsDict.birAccreditationNo || 'Accreditation No.'}
                       </label>
                       <input
                         type="text"
                         value={settings.birAccreditationNo || ''}
                         onChange={(e) => updateSetting('birAccreditationNo', e.target.value)}
-                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
+                        className={FIELD}
                         placeholder="ACC-1234567-2026-001"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className={LABEL}>
                         {settingsDict.birAccreditationDate || 'Accreditation Date Issued'}
                       </label>
                       <input
                         type="date"
                         value={settings.birAccreditationDate ? new Date(settings.birAccreditationDate).toISOString().slice(0, 10) : ''}
                         onChange={(e) => updateSetting('birAccreditationDate', e.target.value ? new Date(e.target.value) : undefined)}
-                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
+                        className={FIELD}
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className={LABEL}>
                         {settingsDict.birAccreditationValidUntil || 'Accreditation Valid Until'}
                       </label>
                       <input
                         type="date"
                         value={settings.birAccreditationValidUntil ? new Date(settings.birAccreditationValidUntil).toISOString().slice(0, 10) : ''}
                         onChange={(e) => updateSetting('birAccreditationValidUntil', e.target.value ? new Date(e.target.value) : undefined)}
-                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
+                        className={FIELD}
                       />
                     </div>
                     <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        {settingsDict.birEsalesPushUrl || 'eSales Push Endpoint'} <span className="text-gray-400 font-normal">(optional)</span>
+                      <label className={LABEL}>
+                        {settingsDict.birEsalesPushUrl || 'eSales Push Endpoint'} <span className={HINT}>{settingsDict.optionalHint || '(optional)'}</span>
                       </label>
                       <input
                         type="url"
                         value={settings.birEsalesPushUrl || ''}
                         onChange={(e) => updateSetting('birEsalesPushUrl', e.target.value)}
-                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
+                        className={FIELD}
                         placeholder="https://your-endpoint.example.com/esales-webhook"
                       />
-                      <p className="text-xs text-gray-400 mt-1">
+                      <p className="text-xs text-ink/60 mt-1">
                         {settingsDict.birEsalesPushUrlDesc || 'If set, daily and monthly sales summaries are automatically POSTed here as JSON. Otherwise they are only saved to the server for manual upload.'}
                       </p>
                     </div>
                   </div>
-                  <p className="text-xs text-gray-400 mt-3">
+                  <p className="text-xs text-ink/60 mt-3">
                     {settingsDict.birVatNote || 'Set Tax Label to "VAT" in General → Tax Settings to print a VAT receipt. Non-VAT receipts will show "THIS DOCUMENT IS NOT VALID FOR CLAIM OF INPUT TAX".'}
                   </p>
                 </div>
 
                 {/* Receipt Templates Section */}
-                <div className="mt-8 pt-8 border-t-2 border-gray-200">
+                <div className="mt-8 pt-8 border-t border-dashed border-ink/30">
                   <ReceiptTemplatesManager
                     settings={settings}
                     tenant={tenant}
@@ -1228,24 +1241,24 @@ export default function SettingsPage() {
             {/* Business Tab */}
             {activeTab === 'business' && (
               <section>
-                <h2 className="text-xl font-bold text-gray-900 mb-5">{settingsDict.businessInformation || 'Business Information'}</h2>
+                <h2 className="mb-5 text-3xl">{settingsDict.businessInformation || 'Business Information'}</h2>
                 
                 {businessTypeWarning && (
                   <div className="mb-6">
-                    <InlineBanner variant="warning" message={businessTypeWarning} />
+                    <Notice tone="warning" text={businessTypeWarning} />
                   </div>
                 )}
 
                 <div className="space-y-6">
                   {/* Business Type Selection */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      {settingsDict.businessType || 'Business Type'} <span className="text-red-500">*</span>
+                    <label className={LABEL}>
+                      {settingsDict.businessType || 'Business Type'} <span className="text-stamp">*</span>
                     </label>
                     {businessTypesStatus === 'loading' ? (
-                      <div className="w-full px-4 py-3 border-2 border-gray-300 bg-gray-50 flex items-center justify-center gap-2">
+                      <div className="w-full px-4 py-3 border-2 border-ink/25 bg-paper flex items-center justify-center gap-2">
                         <LoadingSpinner size="sm" />
-                        <span className="text-sm text-gray-600">
+                        <span className="text-sm text-ink/70">
                           {settingsDict.loadingBusinessTypes || 'Loading business types...'}
                         </span>
                       </div>
@@ -1254,43 +1267,36 @@ export default function SettingsPage() {
                         <select
                           value={settings.businessType || 'general'}
                           onChange={(e) => updateSetting('businessType', e.target.value)}
-                          className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
+                          className={FIELD}
                         >
-                          {businessTypes.map((type) => (
+                          {businessTypes.filter((type) => isBusinessTypeSelectable(type.type, tenantSettings?.businessType)).map((type) => (
                             <option key={type.type} value={type.type}>
                               {type.name}
                             </option>
                           ))}
                         </select>
                         {settings.businessType && businessTypesStatus === 'ready' && (
-                          <div className="mt-3 p-4 bg-brand-soft border-2 border-teal-200">
-                            <p className="text-sm text-brand-navy-deep font-medium mb-2">
+                          <div className={`mt-3 ${NOTE}`}>
+                            <p className="mb-2 text-sm font-medium text-ink">
                               {businessTypes.find((t) => t.type === settings.businessType)?.name || 'Business Type'}
                             </p>
-                            <p className="text-xs text-brand-hover mb-3">
+                            <p className="mb-3 text-xs text-ink/70">
                               {businessTypes.find((t) => t.type === settings.businessType)?.description || ''}
                             </p>
-                            <div className="mt-3 pt-3 border-t border-teal-300">
-                              <p className="text-xs font-medium text-brand-navy-deep mb-2">{settingsDict.defaultFeatures || 'Default Features:'}</p>
+                            <div className="mt-3 border-t border-dashed border-ink/30 pt-3">
+                              <p className="mb-2 font-receipt text-xs font-medium uppercase text-ink">{settingsDict.defaultFeatures || 'Default Features:'}</p>
                               <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                                 {businessTypes.find((t) => t.type === settings.businessType)?.defaultFeatures && Object.entries(
                                   businessTypes.find((t) => t.type === settings.businessType)?.defaultFeatures || {}
                                 ).map(([feature, enabled]) => (
                                   <div key={feature} className="flex items-center gap-2">
-                                    <svg
-                                      className={`w-4 h-4 ${enabled ? 'text-green-600' : 'text-gray-400'}`}
-                                      fill="none"
-                                      viewBox="0 0 24 24"
-                                      stroke="currentColor"
-                                    >
-                                      {enabled ? (
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                      ) : (
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                      )}
-                                    </svg>
-                                    <span className={`text-xs ${enabled ? 'text-green-700' : 'text-gray-500'}`}>
-                                      {feature.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
+                                    {enabled ? (
+                                      <Check className="h-4 w-4 shrink-0 text-brand-hover" strokeWidth={1.75} aria-hidden />
+                                    ) : (
+                                      <X className="h-4 w-4 shrink-0 text-ink/40" strokeWidth={1.75} aria-hidden />
+                                    )}
+                                    <span className={`text-xs ${enabled ? 'text-ink' : 'text-ink/60'}`}>
+                                      {settingsDict[FEATURE_LABELS[feature]] || feature.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
                                     </span>
                                   </div>
                                 ))}
@@ -1305,26 +1311,26 @@ export default function SettingsPage() {
                   {/* Business Details */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className={LABEL}>
                         {settingsDict.taxIdEin || 'Tax ID / EIN'}
                       </label>
                       <input
                         type="text"
                         value={settings.taxId || ''}
                         onChange={(e) => updateSetting('taxId', e.target.value)}
-                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
+                        className={FIELD}
                         placeholder="12-3456789"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Registration Number
+                      <label className={LABEL}>
+                        {settingsDict.registrationNumber || 'Registration Number'}
                       </label>
                       <input
                         type="text"
                         value={settings.registrationNumber || ''}
                         onChange={(e) => updateSetting('registrationNumber', e.target.value)}
-                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
+                        className={FIELD}
                         placeholder={settingsDict.registrationNumberPlaceholder || 'Business registration number'}
                       />
                     </div>
@@ -1332,13 +1338,13 @@ export default function SettingsPage() {
 
                   {/* Feature Flags Section */}
                   {settings.businessType && (
-                    <div className="mt-6 pt-6 border-t-2 border-gray-200">
-                      <h3 className="text-lg font-semibold text-gray-900 mb-4">{settingsDict.featureConfiguration || 'Feature Configuration'}</h3>
-                      <p className="text-sm text-gray-600 mb-4">
+                    <div className="mt-6 pt-6 border-t border-dashed border-ink/30">
+                      <h3 className="text-lg font-semibold text-ink mb-4">{settingsDict.featureConfiguration || 'Feature Configuration'}</h3>
+                      <p className="text-sm text-ink/70 mb-4">
                         {settingsDict.featureConfigurationDesc || 'These features are automatically configured based on your business type. You can override them if needed.'}
                       </p>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
+                        <div className={OPTION}>
                           <input
                             type="checkbox"
                             id="enableInventory"
@@ -1347,11 +1353,11 @@ export default function SettingsPage() {
                             className="checkbox-win8 h-5 w-5 cursor-pointer"
                           />
                           <label htmlFor="enableInventory" className="ml-3 flex-1">
-                            <div className="text-sm font-medium text-gray-900">{settingsDict.inventoryManagement || 'Inventory Management'}</div>
-                            <div className="text-xs text-gray-500 mt-1">{settingsDict.inventoryManagementDesc || 'Track product stock levels'}</div>
+                            <div className="text-sm font-medium text-ink">{settingsDict.inventoryManagement || 'Inventory Management'}</div>
+                            <div className="text-xs text-ink/60 mt-1">{settingsDict.inventoryManagementDesc || 'Track product stock levels'}</div>
                           </label>
                         </div>
-                        <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
+                        <div className={OPTION}>
                           <input
                             type="checkbox"
                             id="enableCategories"
@@ -1360,11 +1366,11 @@ export default function SettingsPage() {
                             className="checkbox-win8 h-5 w-5 cursor-pointer"
                           />
                           <label htmlFor="enableCategories" className="ml-3 flex-1">
-                            <div className="text-sm font-medium text-gray-900">{settingsDict.categoriesFeature || 'Categories'}</div>
-                            <div className="text-xs text-gray-500 mt-1">{settingsDict.categoriesFeatureDesc || 'Organize products by categories'}</div>
+                            <div className="text-sm font-medium text-ink">{settingsDict.categoriesFeature || 'Categories'}</div>
+                            <div className="text-xs text-ink/60 mt-1">{settingsDict.categoriesFeatureDesc || 'Organize products by categories'}</div>
                           </label>
                         </div>
-                        <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
+                        <div className={OPTION}>
                           <input
                             type="checkbox"
                             id="enableDiscounts"
@@ -1373,11 +1379,11 @@ export default function SettingsPage() {
                             className="checkbox-win8 h-5 w-5 cursor-pointer"
                           />
                           <label htmlFor="enableDiscounts" className="ml-3 flex-1">
-                            <div className="text-sm font-medium text-gray-900">{settingsDict.discountsPromotions || 'Discounts & Promotions'}</div>
-                            <div className="text-xs text-gray-500 mt-1">{settingsDict.discountsPromotionsDesc || 'Create discount codes and promotions'}</div>
+                            <div className="text-sm font-medium text-ink">{settingsDict.discountsPromotions || 'Discounts & Promotions'}</div>
+                            <div className="text-xs text-ink/60 mt-1">{settingsDict.discountsPromotionsDesc || 'Create discount codes and promotions'}</div>
                           </label>
                         </div>
-                        <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
+                        <div className={OPTION}>
                           <input
                             type="checkbox"
                             id="enableLoyaltyProgram"
@@ -1386,11 +1392,11 @@ export default function SettingsPage() {
                             className="checkbox-win8 h-5 w-5 cursor-pointer"
                           />
                           <label htmlFor="enableLoyaltyProgram" className="ml-3 flex-1">
-                            <div className="text-sm font-medium text-gray-900">{settingsDict.loyaltyProgram || 'Loyalty Program'}</div>
-                            <div className="text-xs text-gray-500 mt-1">{settingsDict.loyaltyProgramDesc || 'Customer loyalty and rewards'}</div>
+                            <div className="text-sm font-medium text-ink">{settingsDict.loyaltyProgram || 'Loyalty Program'}</div>
+                            <div className="text-xs text-ink/60 mt-1">{settingsDict.loyaltyProgramDesc || 'Customer loyalty and rewards'}</div>
                           </label>
                         </div>
-                        <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
+                        <div className={OPTION}>
                           <input
                             type="checkbox"
                             id="enableCustomerManagement"
@@ -1399,11 +1405,11 @@ export default function SettingsPage() {
                             className="checkbox-win8 h-5 w-5 cursor-pointer"
                           />
                           <label htmlFor="enableCustomerManagement" className="ml-3 flex-1">
-                            <div className="text-sm font-medium text-gray-900">{settingsDict.customerManagementFeature || 'Customer Management'}</div>
-                            <div className="text-xs text-gray-500 mt-1">{settingsDict.customerManagementFeatureDesc || 'Manage customer profiles and history'}</div>
+                            <div className="text-sm font-medium text-ink">{settingsDict.customerManagementFeature || 'Customer Management'}</div>
+                            <div className="text-xs text-ink/60 mt-1">{settingsDict.customerManagementFeatureDesc || 'Manage customer profiles and history'}</div>
                           </label>
                         </div>
-                        <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
+                        <div className={OPTION}>
                           <input
                             type="checkbox"
                             id="enableOnAccountSales"
@@ -1412,11 +1418,11 @@ export default function SettingsPage() {
                             className="checkbox-win8 h-5 w-5 cursor-pointer"
                           />
                           <label htmlFor="enableOnAccountSales" className="ml-3 flex-1">
-                            <div className="text-sm font-medium text-gray-900">{settingsDict.onAccountSales || 'Charge to customer account (pay later)'}</div>
-                            <div className="text-xs text-gray-500 mt-1">{settingsDict.onAccountSalesDesc || 'Allow POS to put sales on a customer’s balance when they cannot pay immediately'}</div>
+                            <div className="text-sm font-medium text-ink">{settingsDict.onAccountSales || 'Charge to customer account (pay later)'}</div>
+                            <div className="text-xs text-ink/60 mt-1">{settingsDict.onAccountSalesDesc || 'Allow POS to put sales on a customer’s balance when they cannot pay immediately'}</div>
                           </label>
                         </div>
-                        <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
+                        <div className={OPTION}>
                           <input
                             type="checkbox"
                             id="enableBookingScheduling"
@@ -1425,8 +1431,8 @@ export default function SettingsPage() {
                             className="checkbox-win8 h-5 w-5 cursor-pointer"
                           />
                           <label htmlFor="enableBookingScheduling" className="ml-3 flex-1">
-                            <div className="text-sm font-medium text-gray-900">{settingsDict.bookingScheduling || 'Booking & Scheduling'}</div>
-                            <div className="text-xs text-gray-500 mt-1">{settingsDict.bookingSchedulingDesc || 'Appointment and service scheduling'}</div>
+                            <div className="text-sm font-medium text-ink">{settingsDict.bookingScheduling || 'Booking & Scheduling'}</div>
+                            <div className="text-xs text-ink/60 mt-1">{settingsDict.bookingSchedulingDesc || 'Appointment and service scheduling'}</div>
                           </label>
                         </div>
                       </div>
@@ -1439,41 +1445,44 @@ export default function SettingsPage() {
             {/* Notifications Tab */}
             {activeTab === 'notifications' && (
               <section>
-                <h2 className="text-xl font-bold text-gray-900 mb-5">{settingsDict.notificationSettings || 'Notification Settings'}</h2>
-                <p className="text-sm text-gray-600 mb-6">
+                <h2 className="mb-5 text-3xl">{settingsDict.notificationSettings || 'Notification Settings'}</h2>
+                <p className="text-sm text-ink/70 mb-6">
                   {settingsDict.configureNotificationPreferences || 'Configure notification preferences and alert thresholds'}
                 </p>
                 <div className="space-y-6">
-                  <div className="p-4 bg-brand-soft border border-teal-200">
-                    <p className="text-sm text-brand-navy mb-2">
-                      <strong>Note:</strong> {settingsDict.notificationTemplateNote || 'Notification template customization has been moved to Admin → Notification Templates for better access control.'}
+                  <div className={NOTE}>
+                    <p className="mb-2 text-sm text-ink/80">
+                      <strong>{settingsDict.noteLabel || 'Note'}:</strong> {settingsDict.notificationTemplateNote || 'Notification template customization has been moved to Admin → Notification Templates for better access control.'}
                     </p>
                     <Link
                       href={`/${tenant}/${lang}/admin/notification-templates`}
-                      className="text-sm text-brand hover:text-brand-hover font-medium underline"
+                      className="inline-flex min-h-[44px] items-center font-receipt text-xs font-medium uppercase text-ink underline hover:no-underline"
                     >
                       {settingsDict.customizeTemplates || 'Customize Templates →'}
                     </Link>
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-3">{settingsDict.stockAlerts || 'Stock Alerts'}</h3>
+                    <h3 className="text-lg font-semibold text-ink mb-3">{settingsDict.stockAlerts || 'Stock Alerts'}</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label className={LABEL}>
                           {settingsDict.lowStockThreshold || 'Low Stock Threshold'}
                         </label>
                         <input
                           type="number"
                           min="0"
-                          value={settings.lowStockThreshold || 10}
-                          onChange={(e) => updateSetting('lowStockThreshold', parseInt(e.target.value) || 10)}
-                          className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
+                          value={settings.lowStockThreshold ?? 10}
+                          onChange={(e) => {
+                            const threshold = parseInt(e.target.value, 10);
+                            updateSetting('lowStockThreshold', Number.isNaN(threshold) ? 10 : threshold);
+                          }}
+                          className={FIELD}
                         />
-                        <p className="mt-2 text-xs text-gray-500">
+                        <p className="mt-2 text-xs text-ink/60">
                           {settingsDict.lowStockThresholdHint || 'Alert when stock falls below this quantity'}
                         </p>
                       </div>
-                      <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
+                      <div className={OPTION}>
                         <input
                           type="checkbox"
                           id="lowStockAlert"
@@ -1482,10 +1491,10 @@ export default function SettingsPage() {
                           className="checkbox-win8 h-5 w-5 cursor-pointer"
                         />
                         <label htmlFor="lowStockAlert" className="ml-3 flex-1">
-                          <div className="text-sm font-medium text-gray-900">
+                          <div className="text-sm font-medium text-ink">
                             {settingsDict.enableLowStockAlerts || 'Enable Low Stock Alerts'}
                           </div>
-                          <div className="text-xs text-gray-500 mt-1">
+                          <div className="text-xs text-ink/60 mt-1">
                             {settingsDict.lowStockAlertDesc || 'Get notified when products fall below threshold'}
                           </div>
                         </label>
@@ -1493,9 +1502,9 @@ export default function SettingsPage() {
                     </div>
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-3">{settingsDict.notificationChannels || 'Notification Channels'}</h3>
+                    <h3 className="text-lg font-semibold text-ink mb-3">{settingsDict.notificationChannels || 'Notification Channels'}</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
+                      <div className={OPTION}>
                         <input
                           type="checkbox"
                           id="emailNotifications"
@@ -1504,15 +1513,15 @@ export default function SettingsPage() {
                           className="checkbox-win8 h-5 w-5 cursor-pointer"
                         />
                         <label htmlFor="emailNotifications" className="ml-3 flex-1">
-                          <div className="text-sm font-medium text-gray-900">
+                          <div className="text-sm font-medium text-ink">
                             {settingsDict.enableEmailNotifications || 'Enable Email Notifications'}
                           </div>
-                          <div className="text-xs text-gray-500 mt-1">
+                          <div className="text-xs text-ink/60 mt-1">
                             {settingsDict.emailNotificationsDesc || 'Receive notifications via email'}
                           </div>
                         </label>
                       </div>
-                      <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
+                      <div className={OPTION}>
                         <input
                           type="checkbox"
                           id="smsNotifications"
@@ -1521,10 +1530,10 @@ export default function SettingsPage() {
                           className="checkbox-win8 h-5 w-5 cursor-pointer"
                         />
                         <label htmlFor="smsNotifications" className="ml-3 flex-1">
-                          <div className="text-sm font-medium text-gray-900">
+                          <div className="text-sm font-medium text-ink">
                             {settingsDict.enableSmsNotifications || 'Enable SMS Notifications'}
                           </div>
-                          <div className="text-xs text-gray-500 mt-1">
+                          <div className="text-xs text-ink/60 mt-1">
                             {settingsDict.smsNotificationsDesc || 'Receive notifications via SMS'}
                           </div>
                         </label>
@@ -1532,12 +1541,14 @@ export default function SettingsPage() {
                     </div>
                   </div>
 
+                  <DailyReportRecipients tenant={tenant} labels={settingsDict} />
+
                   {/* Attendance Notifications */}
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-1">{settingsDict.attendanceNotificationsSection || 'Attendance Notifications'}</h3>
-                    <p className="text-sm text-gray-500 mb-3">{settingsDict.attendanceNotificationsSectionDesc || 'Alert managers when staff miss clock-in or forget to clock out.'}</p>
+                    <h3 className="text-lg font-semibold text-ink mb-1">{settingsDict.attendanceNotificationsSection || 'Attendance Notifications'}</h3>
+                    <p className="text-sm text-ink/60 mb-3">{settingsDict.attendanceNotificationsSectionDesc || 'Alert managers when staff miss clock-in or forget to clock out.'}</p>
                     <div className="space-y-4">
-                      <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
+                      <div className={OPTION}>
                         <input
                           type="checkbox"
                           id="attendanceNotificationsEnabled"
@@ -1546,27 +1557,27 @@ export default function SettingsPage() {
                           className="checkbox-win8 h-5 w-5 cursor-pointer"
                         />
                         <label htmlFor="attendanceNotificationsEnabled" className="ml-3 flex-1">
-                          <div className="text-sm font-medium text-gray-900">{settingsDict.enableAttendanceAlerts || 'Enable Attendance Alerts'}</div>
-                          <div className="text-xs text-gray-500 mt-1">{settingsDict.enableAttendanceAlertsDesc || 'Notify managers of missed clock-ins and forgotten clock-outs'}</div>
+                          <div className="text-sm font-medium text-ink">{settingsDict.enableAttendanceAlerts || 'Enable Attendance Alerts'}</div>
+                          <div className="text-xs text-ink/60 mt-1">{settingsDict.enableAttendanceAlertsDesc || 'Notify managers of missed clock-ins and forgotten clock-outs'}</div>
                         </label>
                       </div>
 
                       {settings.attendanceNotifications?.enabled !== false && (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                            <label className={LABEL}>
                               {settingsDict.expectedClockInTime || 'Expected Clock-In Time'}
                             </label>
                             <input
                               type="time"
                               value={settings.attendanceNotifications?.expectedStartTime || '09:00'}
                               onChange={(e) => updateSetting('attendanceNotifications.expectedStartTime', e.target.value)}
-                              className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
+                              className={FIELD}
                             />
-                            <p className="text-xs text-gray-500 mt-1">{settingsDict.expectedClockInTimeHint || "Alert if staff haven't clocked in by this time"}</p>
+                            <p className="text-xs text-ink/60 mt-1">{settingsDict.expectedClockInTimeHint || "Alert if staff haven't clocked in by this time"}</p>
                           </div>
                           <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                            <label className={LABEL}>
                               {settingsDict.maxHoursWithoutClockOut || 'Max Hours Without Clock-Out'}
                             </label>
                             <input
@@ -1575,9 +1586,9 @@ export default function SettingsPage() {
                               max={24}
                               value={settings.attendanceNotifications?.maxHoursWithoutClockOut ?? 12}
                               onChange={(e) => updateSetting('attendanceNotifications.maxHoursWithoutClockOut', Number(e.target.value))}
-                              className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
+                              className={FIELD}
                             />
-                            <p className="text-xs text-gray-500 mt-1">{settingsDict.maxHoursWithoutClockOutHint || 'Alert after this many hours without clocking out (1–24)'}</p>
+                            <p className="text-xs text-ink/60 mt-1">{settingsDict.maxHoursWithoutClockOutHint || 'Alert after this many hours without clocking out (1–24)'}</p>
                           </div>
                         </div>
                       )}
@@ -1595,8 +1606,8 @@ export default function SettingsPage() {
             {activeTab === 'multiCurrency' && (
               <section>
                 <div className="mb-6">
-                  <h2 className="text-xl font-bold text-gray-900 mb-2">{settingsDict.multiCurrencySettings || 'Multi-Currency Settings'}</h2>
-                  <p className="text-sm text-gray-600">
+                  <h2 className="mb-2 text-3xl">{settingsDict.multiCurrencySettings || 'Multi-Currency Settings'}</h2>
+                  <p className="text-sm text-ink/70">
                     {settingsDict.multiCurrencySettingsSubtitle || 'Configure which currencies to display'}
                   </p>
                 </div>
@@ -1612,32 +1623,21 @@ export default function SettingsPage() {
               </section>
             )}
 
-            {/* Save Button */}
-            <div className="flex justify-end pt-6 mt-8 border-t border-gray-200">
-                <button
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="px-6 py-3 bg-brand text-white hover:bg-brand-hover font-semibold transition-all duration-200 border border-brand-hover disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                >
-                  {saving ? (
-                    <>
-                      <div className="animate-spin h-5 w-5 border-b-2 border-white"></div>
-                      <span>{settingsDict.saving || 'Saving...'}</span>
-                    </>
-                  ) : (
-                    <>
-                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                      <span>{settingsDict.save || 'Save Settings'}</span>
-                    </>
-                  )}
-                </button>
-              </div>
           </div>
-        </div>
+
+          <div className="flex justify-end border-t border-dashed border-ink/30 px-4 py-3 sm:px-6 lg:px-8">
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving}
+              className="flex min-h-[44px] w-full items-center justify-center gap-2 bg-ink px-5 font-receipt text-sm font-medium uppercase text-paper-white transition-colors hover:bg-brand-navy touch-manipulation disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+            >
+              {!saving && <Check className="h-4 w-4" strokeWidth={1.75} aria-hidden />}
+              {saving ? settingsDict.saving || 'Saving...' : settingsDict.save || 'Save Settings'}
+            </button>
+          </div>
       </div>
-    </div>
+      <div className="mk-tear-b h-3 bg-paper-white" aria-hidden />
+    </SettingsShell>
   );
 }
-

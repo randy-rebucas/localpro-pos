@@ -13,6 +13,7 @@ interface CartSummaryRowsProps {
   taxEnabled?: boolean;
   taxLabel?: string;
   taxRate?: number;
+  taxIncluded?: boolean;
   className?: string;
 }
 
@@ -33,6 +34,7 @@ export function CartSummaryRows({
   taxEnabled,
   taxLabel,
   taxRate,
+  taxIncluded,
   className = '',
 }: CartSummaryRowsProps) {
   return (
@@ -45,7 +47,7 @@ export function CartSummaryRows({
         />
       )}
       {taxEnabled && taxRate != null && (
-        <ReceiptRow label={`${taxLabel || 'Tax'} (${taxRate}%)`} value={<Currency amount={taxAmount} />} />
+        <ReceiptRow label={`${taxLabel || 'Tax'} (${taxRate}%)${taxIncluded ? ` ${dict.pos?.taxIncluded || 'included'}` : ''}`} value={<Currency amount={taxAmount} />} />
       )}
     </div>
   );

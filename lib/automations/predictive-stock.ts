@@ -115,7 +115,7 @@ export async function predictStockNeeds(
 
             // Get current stock
             const currentStock = product.stock || 0;
-            const threshold = product.lowStockThreshold || tenantSettings?.lowStockThreshold || 10;
+            const threshold = product.lowStockThreshold || (tenantSettings?.lowStockThreshold ?? 10);
 
             // Predict when stock will hit threshold
             const daysUntilThreshold = currentStock > threshold

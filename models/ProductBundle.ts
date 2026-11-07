@@ -44,7 +44,7 @@ const BundleItemSchema: Schema = new Schema({
   variation: {
     size: String,
     color: String,
-    type: String,
+    type: { type: String },
   },
 });
 

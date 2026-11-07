@@ -105,18 +105,16 @@ export default function RealTimeStockTracker({
   }
 
   return (
-    <div className="flex items-center gap-2 text-xs">
+    <div className="flex flex-wrap items-center gap-2 text-xs">
       <div
-        className={`w-2 h-2 border border-gray-300 ${
-          connected ? 'bg-green-500 animate-pulse' : 'bg-red-500'
-        }`}
+        className={`w-2 h-2 ${connected ? 'bg-brand motion-safe:animate-pulse' : 'bg-stamp'}`}
         title={connected ? (dict?.components?.realtimeStockTracker?.connected || 'Connected') : (dict?.components?.realtimeStockTracker?.disconnected || 'Disconnected')}
       />
-      <span className="text-gray-500">
+      <span className="opacity-80">
         {connected ? (dict?.components?.realtimeStockTracker?.live || 'Live') : (dict?.components?.realtimeStockTracker?.offline || 'Offline')}
       </span>
       {lastUpdate && (
-        <span className="text-gray-400">
+        <span className="opacity-60">
           • {(dict?.components?.realtimeStockTracker?.updated || 'Updated {time}').replace('{time}', lastUpdate.toLocaleTimeString())}
         </span>
       )}

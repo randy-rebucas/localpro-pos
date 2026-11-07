@@ -13,16 +13,16 @@
       "schedule": "0 * * * *"
     },
     {
-      "path": "/api/automations/reports/sales?period=daily",
-      "schedule": "0 8 * * *"
-    },
-    {
       "path": "/api/automations/reports/sales?period=weekly",
       "schedule": "0 9 * * 1"
     },
     {
       "path": "/api/automations/reports/sales?period=monthly",
       "schedule": "0 10 1 * *"
+    },
+    {
+      "path": "/api/automations/reports/z-reading",
+      "schedule": "15 * * * *"
     },
     {
       "path": "/api/automations/transaction-receipts?hoursAgo=24",

@@ -142,6 +142,7 @@ export const AuditActions = {
   TRANSACTION_CREATE: 'transaction.create',
   TRANSACTION_CANCEL: 'transaction.cancel',
   TRANSACTION_REFUND: 'transaction.refund',
+  TRANSACTION_EXPORT: 'transaction.export',
   STOCK_ADJUST: 'stock.adjust',
   STOCK_PURCHASE: 'stock.purchase',
   DISCOUNT_CREATE: 'discount.create',

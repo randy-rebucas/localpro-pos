@@ -1,6 +1,7 @@
 'use client';
 
 import type { RefObject } from 'react';
+import { productStockTotal } from '@/lib/product-variations';
 import EmptyState from '@/components/ui/EmptyState';
 import ErrorState from '@/components/ui/ErrorState';
 import InlineBanner from '@/components/ui/InlineBanner';
@@ -136,8 +137,9 @@ export default function ProductGrid({
               return 0;
             })
             .map((product) => {
-              const inCartQty = cart.find((i) => i.productId === product._id)?.quantity ?? 0;
-              const availableStock = Math.max(0, product.stock - inCartQty);
+              // Each variation is its own cart line, so a product can have several
+              const inCartQty = cart.reduce((sum, item) => (item.productId === product._id ? sum + item.quantity : sum), 0);
+              const availableStock = Math.max(0, productStockTotal(product) - inCartQty);
               const canAdd = availableStock > 0 || product.allowOutOfStockSales === true;
               return (
                 <ProductCard

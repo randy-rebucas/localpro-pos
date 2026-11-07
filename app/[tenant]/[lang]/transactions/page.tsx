@@ -1,14 +1,19 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
+import { Ban, Check, Eye, LayoutGrid, List, Loader2, Plus, Printer, RotateCcw, X } from 'lucide-react';
+import '@/app/marketing.css';
+import { marketingFontClasses } from '@/components/marketing/fonts';
+import { LineTag, ReceiptRow } from '@/components/marketing/primitives';
 import Navbar from '@/components/Navbar';
 import Currency from '@/components/Currency';
 import FormattedDate from '@/components/FormattedDate';
 import PageTitle from '@/components/PageTitle';
-import PageLoading from '@/components/ui/PageLoading';
+import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import EmptyState from '@/components/ui/EmptyState';
 import ErrorState from '@/components/ui/ErrorState';
 import TransactionsCatalogSkeleton from '@/components/transactions/TransactionsCatalogSkeleton';
+import TransactionFilters, { type ExportFormat, type TransactionFilterLabels } from '@/components/transactions/TransactionFilters';
 import { useParams } from 'next/navigation';
 import { getDictionaryClient } from '../dictionaries-client';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
@@ -16,17 +21,139 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { getDefaultTenantSettings } from '@/lib/currency';
 import { formatDate, formatDateTime } from '@/lib/formatting';
 import { hardwareService } from '@/lib/hardware';
+import { showToast } from '@/lib/toast';
 import {
+  EMPTY_TRANSACTION_FILTERS,
+  transactionFilterQuery,
   useTransactionsCatalog,
+  type TransactionFilterValues,
   type CatalogTransaction,
   type CatalogExpense,
+  type CatalogView,
 } from '@/hooks/useTransactionsCatalog';
 import type { TranslationDict } from '@/types/dictionary';
 
 type Transaction = CatalogTransaction;
 type Expense = CatalogExpense;
 
-type ViewType = 'all' | 'transactions' | 'expenses';
+type ViewType = CatalogView;
+
+const ICON = 'h-[18px] w-[18px]';
+const FIELD = 'w-full border border-ink/25 bg-paper-white px-3 py-2 font-receipt text-sm text-ink placeholder:text-ink/50 focus:border-ink focus:outline-none';
+const LABEL = 'mb-1 block font-receipt text-xs font-medium uppercase tracking-[0.08em] text-ink/70';
+const KEY = 'flex min-h-[44px] flex-1 items-center justify-center gap-2 px-4 font-receipt text-sm font-medium uppercase transition-colors touch-manipulation disabled:cursor-not-allowed disabled:opacity-50';
+const KEY_PRIMARY = `${KEY} bg-ink text-paper-white hover:bg-brand-navy`;
+const KEY_SECONDARY = `${KEY} border border-ink/25 text-ink hover:border-ink`;
+const KEY_STAMP = `${KEY} bg-stamp text-paper-white hover:brightness-110`;
+const ERROR_NOTE = 'border border-stamp px-3 py-2 font-receipt text-sm text-stamp';
+
+const receiptNo = (transaction: Transaction) => transaction.receiptNumber || transaction._id.slice(-8);
+
+const personName = (value: Transaction['customerId'] | Transaction['userId']) => {
+  if (!value || typeof value === 'string') return '';
+  return 'name' in value ? value.name : [value.firstName, value.lastName].filter(Boolean).join(' ');
+};
+
+const TAG_TONES = {
+  plain: 'border-ink/25 text-ink/70',
+  stamp: 'border-stamp font-semibold text-stamp',
+  void: 'border-dashed border-ink/40 text-ink/60',
+  inverse: 'border-ink bg-ink text-paper-white',
+} as const;
+
+function Tag({ tone, children }: { tone: keyof typeof TAG_TONES; children: ReactNode }) {
+  return (
+    <span className={`inline-block whitespace-nowrap border px-2 py-0.5 font-receipt text-xs uppercase ${TAG_TONES[tone]}`}>
+      {children}
+    </span>
+  );
+}
+
+function StatusTag({ status, label }: { status: Transaction['status']; label?: ReactNode }) {
+  const tone = status === 'completed' ? 'plain' : status === 'refunded' ? 'stamp' : 'void';
+  return <Tag tone={tone}>{label || status}</Tag>;
+}
+
+/** Money paid out of the drawer, as opposed to a sale. */
+function PaidOut({ amount, className = '' }: { amount: number; className?: string }) {
+  return <span className={`whitespace-nowrap ${className}`}>&minus;<Currency amount={amount} /></span>;
+}
+
+function SlipModal({ title, closeLabel, onClose, wide = false, children }: {
+  title: string;
+  closeLabel: string;
+  onClose: () => void;
+  wide?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-ink/60 p-4"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div role="dialog" aria-modal="true" aria-label={title} className={`my-6 w-full ${wide ? 'max-w-lg' : 'max-w-md'}`}>
+        <div className="bg-paper-white text-ink">
+          <div className="flex items-start justify-between gap-4 border-b border-dashed border-ink/30 px-5 py-4">
+            <h2 className="text-4xl">{title}</h2>
+            <button
+              type="button"
+              onClick={onClose}
+              className="-mr-2 -mt-1 flex min-h-[44px] w-11 shrink-0 items-center justify-center text-ink transition-colors hover:bg-paper"
+              aria-label={closeLabel}
+            >
+              <X className={ICON} strokeWidth={1.75} aria-hidden />
+            </button>
+          </div>
+          {children}
+        </div>
+        <div className="mk-tear-b h-3 bg-paper-white" aria-hidden />
+      </div>
+    </div>
+  );
+}
+
+function DoneNote({ message, note, closeLabel, onClose }: {
+  message?: string;
+  note?: string;
+  closeLabel: string;
+  onClose: () => void;
+}) {
+  return (
+    <div className="px-5 py-8 text-center">
+      <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center border-2 border-ink">
+        <Check className="h-6 w-6" strokeWidth={1.75} aria-hidden />
+      </div>
+      <p className="text-base font-semibold">{message}</p>
+      {note && <p className="mt-1 text-sm text-ink/60">{note}</p>}
+      <button type="button" onClick={onClose} className={`${KEY_PRIMARY} mx-auto mt-4 max-w-40`}>
+        {closeLabel}
+      </button>
+    </div>
+  );
+}
+
+interface ExportRow {
+  date: string;
+  type: string;
+  receipt: string;
+  description: string;
+  status: string;
+  customer: string;
+  cashier: string;
+  items: string | number;
+  payment: string;
+  subtotal: string | number;
+  discount: string | number;
+  tax: string | number;
+  total: number;
+  cash: string | number;
+  change: string | number;
+}
+
+function SaveIcon({ loading }: { loading: boolean }) {
+  const Icon = loading ? Loader2 : Check;
+  return <Icon className={`h-4 w-4 ${loading ? 'animate-spin motion-reduce:animate-none' : ''}`} strokeWidth={1.75} aria-hidden />;
+}
 
 export default function TransactionsPage() {
   const params = useParams();
@@ -70,30 +197,51 @@ export default function TransactionsPage() {
   const [expenseError, setExpenseError] = useState('');
   const [expenseSuccess, setExpenseSuccess] = useState(false);
 
+  // Void
+  const [voidTransaction, setVoidTransaction] = useState<Transaction | null>(null);
+  const [voidReason, setVoidReason] = useState('');
+  const [voidLoading, setVoidLoading] = useState(false);
+  const [voidError, setVoidError] = useState('');
+  const [voidSuccess, setVoidSuccess] = useState(false);
+
   const [viewType, setViewType] = useState<ViewType>('all');
+  const [filters, setFilters] = useState<TransactionFilterValues>(EMPTY_TRANSACTION_FILTERS);
+  const [filterOptions, setFilterOptions] = useState<{ cashiers: { _id: string; name: string }[]; branches: { _id: string; name: string }[] }>({ cashiers: [], branches: [] });
+  const [exporting, setExporting] = useState(false);
   const [displayMode, setDisplayMode] = useState<'grid' | 'list'>('list');
   const [dict, setDict] = useState<TranslationDict | null>(null);
   const { settings: tenantSettings } = useTenantSettings();
-  const primaryColor = (tenantSettings || getDefaultTenantSettings()).primaryColor || '#35979c';
   const { canAccess } = usePermissions();
   // Mirror the backend's refunds.process / expenses.manage permission checks so the UI doesn't
   // offer an action the API will reject — respects tenant-configured role overrides.
   const canRefund = canAccess('refunds.process');
   const canManageExpenses = canAccess('expenses.manage');
+  const canVoid = canAccess('transactions.edit');
+  const canExport = canAccess('reports.view');
 
   const {
-    transactions,
-    expenses,
+    items,
     totalPages,
     status,
     error,
     refetch,
     updateTransactionStatus,
-  } = useTransactionsCatalog(tenant, page);
+  } = useTransactionsCatalog(tenant, page, viewType, filters);
+
+  const txText = (key: string, fallback: string) => (dict?.transactions?.[key] as string | undefined) || fallback;
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
   }, [lang]);
+
+  useEffect(() => {
+    let current = true;
+    fetch(`/api/transactions/filters?tenant=${tenant}`, { credentials: 'include' })
+      .then((res) => res.json())
+      .then((data) => { if (current && data.success) setFilterOptions(data.data); })
+      .catch(() => { /* the filter panel works without these two lists */ });
+    return () => { current = false; };
+  }, [tenant]);
 
   // Initialize hardware config from localStorage or tenant settings
   useEffect(() => {
@@ -134,16 +282,49 @@ export default function TransactionsPage() {
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
-        setAdjustError(data.error || 'Refund failed');
+        setAdjustError(data.error || txText('refundFailed', 'Refund failed'));
       } else {
         setAdjustSuccess(true);
         refetch();
         updateTransactionStatus(adjustTransaction._id, 'refunded');
       }
     } catch {
-      setAdjustError('Network error. Please try again.');
+      setAdjustError(txText('networkError', 'Network error. Please try again.'));
     } finally {
       setAdjustLoading(false);
+    }
+  };
+
+  const openVoidModal = (transaction: Transaction) => {
+    setVoidTransaction(transaction);
+    setVoidReason('');
+    setVoidError('');
+    setVoidSuccess(false);
+  };
+
+  const doVoid = async () => {
+    if (!voidTransaction) return;
+    setVoidLoading(true);
+    setVoidError('');
+    try {
+      const res = await fetch(`/api/transactions/${voidTransaction._id}?tenant=${tenant}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ status: 'cancelled', reason: voidReason.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setVoidError(data.error || txText('voidFailed', 'The sale could not be voided'));
+      } else {
+        setVoidSuccess(true);
+        updateTransactionStatus(voidTransaction._id, 'cancelled');
+        refetch();
+      }
+    } catch {
+      setVoidError(txText('networkError', 'Network error. Please try again.'));
+    } finally {
+      setVoidLoading(false);
     }
   };
 
@@ -175,9 +356,9 @@ export default function TransactionsPage() {
 
       // client-side validation
       for (const it of parsedItems) {
-        if (!it.name) { setManualError('Each item must have a name.'); setManualLoading(false); return; }
-        if (isNaN(it.price) || it.price < 0) { setManualError(`Invalid price for "${it.name}".`); setManualLoading(false); return; }
-        if (isNaN(it.quantity) || it.quantity < 1) { setManualError(`Invalid quantity for "${it.name}".`); setManualLoading(false); return; }
+        if (!it.name) { setManualError(txText('itemNameRequired', 'Each item must have a name.')); setManualLoading(false); return; }
+        if (isNaN(it.price) || it.price < 0) { setManualError(txText('invalidItemPrice', 'Invalid price for "{name}".').replace('{name}', it.name)); setManualLoading(false); return; }
+        if (isNaN(it.quantity) || it.quantity < 1) { setManualError(txText('invalidItemQuantity', 'Invalid quantity for "{name}".').replace('{name}', it.name)); setManualLoading(false); return; }
       }
 
       const body: Record<string, unknown> = {
@@ -196,14 +377,14 @@ export default function TransactionsPage() {
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
-        setManualError(data.error || 'Failed to create transaction');
+        setManualError(data.error || txText('createTransactionFailed', 'Failed to create transaction'));
       } else {
         setManualSuccess(true);
         setManualIdempotencyKey(crypto.randomUUID());
         refetch();
       }
     } catch {
-      setManualError('Network error. Please try again.');
+      setManualError(txText('networkError', 'Network error. Please try again.'));
     } finally {
       setManualLoading(false);
     }
@@ -213,10 +394,10 @@ export default function TransactionsPage() {
     setExpenseLoading(true);
     setExpenseError('');
     try {
-      if (!expenseName.trim()) { setExpenseError('Name is required.'); setExpenseLoading(false); return; }
-      if (!expenseDescription.trim()) { setExpenseError('Description is required.'); setExpenseLoading(false); return; }
+      if (!expenseName.trim()) { setExpenseError(txText('expenseNameRequired', 'Name is required.')); setExpenseLoading(false); return; }
+      if (!expenseDescription.trim()) { setExpenseError(txText('expenseDescriptionRequired', 'Description is required.')); setExpenseLoading(false); return; }
       const parsedAmount = parseFloat(expenseAmount);
-      if (isNaN(parsedAmount) || parsedAmount < 0) { setExpenseError('A valid amount is required.'); setExpenseLoading(false); return; }
+      if (isNaN(parsedAmount) || parsedAmount < 0) { setExpenseError(txText('expenseAmountRequired', 'A valid amount is required.')); setExpenseLoading(false); return; }
 
       const res = await fetch(`/api/expenses?tenant=${tenant}`, {
         method: 'POST',
@@ -233,13 +414,13 @@ export default function TransactionsPage() {
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
-        setExpenseError(data.error || 'Failed to create expense');
+        setExpenseError(data.error || txText('createExpenseFailed', 'Failed to create expense'));
       } else {
         setExpenseSuccess(true);
         refetch();
       }
     } catch {
-      setExpenseError('Network error. Please try again.');
+      setExpenseError(txText('networkError', 'Network error. Please try again.'));
     } finally {
       setExpenseLoading(false);
     }
@@ -255,9 +436,9 @@ export default function TransactionsPage() {
     const settings = tenantSettings;
     const isScPwd = transaction.discountCategory === 'senior' || transaction.discountCategory === 'pwd';
     const taxEnabled = settings?.taxEnabled && settings?.taxRate;
-    const taxableBase = (transaction.subtotal ?? transaction.total) - (transaction.discountAmount || 0);
+    // What was charged at the time, so a later change to the tax settings can't rewrite an old receipt.
     // SC/PWD transactions are fully VAT-exempt (RA 9994 / RA 10754) — never taxed
-    const taxAmount = isScPwd ? 0 : (taxEnabled ? taxableBase * (settings!.taxRate! / 100) : undefined);
+    const taxAmount = isScPwd ? 0 : (transaction.taxAmount || undefined);
     const isVAT = !isScPwd && !!(taxEnabled && (settings?.taxLabel || '').toUpperCase().includes('VAT'));
     const cashierName = typeof transaction.userId === 'object' ? transaction.userId?.name : undefined;
 
@@ -306,989 +487,1058 @@ export default function TransactionsPage() {
       // Senior Citizen / PWD discount block
       scPwdName: isScPwd ? transaction.scPwdName : undefined,
       scPwdId: isScPwd ? transaction.scPwdId : undefined,
-      scPwdDiscount: isScPwd ? transaction.discountAmount : undefined,
+      scPwdDiscount: isScPwd ? (transaction.discountAmount ?? 0) - (transaction.vatRemovedAmount ?? 0) : undefined,
     };
-    const success = await hardwareService.printReceipt(receiptData);
-    if (!success) {
-      console.error('Failed to print receipt');
+    const printFailed = dict.pos?.printFailed || 'Receipt could not be printed. Check printer settings.';
+    try {
+      if (!(await hardwareService.printReceipt(receiptData))) showToast.error(printFailed);
+    } catch (err) {
+      console.error('Failed to print receipt:', err);
+      showToast.error(printFailed);
     }
   };
 
   if (!dict) {
-    return <PageLoading label="Loading..." />;
+    return (
+      <div className="flex min-h-dvh items-center justify-center bg-brand-navy-deep">
+        <LoadingSpinner size="md" color="#8fe3d0" />
+      </div>
+    );
   }
 
   const txDict = dict.transactions ?? {};
+  const closeLabel = dict.common?.close || 'Close';
+  const paymentLabel = (method: string) =>
+    dict.pos?.[method] || (method === 'other' ? txDict.reasonOther || 'Other' : method);
+  const itemCount = (transaction: Transaction) =>
+    `${transaction.items.length} ${transaction.items.length === 1 ? txDict.item : txDict.items}`.toLowerCase();
 
-  // Combine and sort transactions and expenses by date
-  const allItems = [
-    ...transactions.map(t => ({ type: 'transaction' as const, data: t, date: t.createdAt })),
-    ...expenses.map(e => ({ type: 'expense' as const, data: e, date: e.date || e.createdAt })),
-  ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const openExpenseModal = () => {
+    setShowExpenseModal(true);
+    setExpenseName('');
+    setExpenseDescription('');
+    setExpenseAmount('');
+    setExpenseDate(new Date().toISOString().slice(0, 10));
+    setExpensePayment('cash');
+    setExpenseNotes('');
+    setExpenseError('');
+    setExpenseSuccess(false);
+  };
 
-  const filteredItems = viewType === 'all' 
-    ? allItems 
-    : viewType === 'transactions' 
-    ? allItems.filter(item => item.type === 'transaction')
-    : allItems.filter(item => item.type === 'expense');
+  const openManualModal = () => {
+    setShowAddModal(true);
+    setManualItems([emptyItem()]);
+    setManualPayment('cash');
+    setManualCash('');
+    setManualNotes('');
+    setManualError('');
+    setManualSuccess(false);
+    setManualIdempotencyKey(crypto.randomUUID());
+  };
+
+  const updateFilters = (patch: Partial<TransactionFilterValues>) => {
+    setFilters((current) => ({ ...current, ...patch }));
+    setPage(1);
+  };
+
+  const filterLabels: TransactionFilterLabels = {
+    search: txDict?.searchPlaceholder || 'Search receipt, customer or expense…',
+    filters: txDict?.filters || 'Filters',
+    clear: txDict?.clearFilters || 'Clear filters',
+    from: txDict?.fromDate || 'From',
+    to: txDict?.toDate || 'To',
+    status: txDict.status || 'Status',
+    payment: txDict?.payment || 'Payment',
+    cashier: txDict?.cashier || 'Cashier',
+    branch: txDict?.branch || 'Branch',
+    any: txDict?.anyOption || 'Any',
+    export: txDict?.exportLabel || 'Export',
+    statuses: { completed: txDict.completed || 'Completed', refunded: txDict.refunded || 'Refunded', cancelled: txDict.cancelled || 'Cancelled' },
+    payments: {
+      cash: paymentLabel('cash'),
+      card: paymentLabel('card'),
+      digital: paymentLabel('digital'),
+      on_account: dict.pos?.onAccount || 'On account',
+      other: paymentLabel('other'),
+    },
+  };
+  const filtersActive = Object.values(filters).some(Boolean);
+
+  const exportView = async (format: ExportFormat) => {
+    setExporting(true);
+    try {
+      const res = await fetch(`/api/transactions/export?${transactionFilterQuery(viewType, filters)}&tenant=${tenant}`, { credentials: 'include' });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        showToast.error(data.error || txText('exportFailed', 'The export could not be created'));
+        return;
+      }
+
+      const settingsValue = tenantSettings || getDefaultTenantSettings();
+      const columns: [string, (row: ExportRow) => string | number][] = [
+        [txDict.date || 'Date', (row) => formatDateTime(row.date, settingsValue)],
+        [txDict.type || 'Type', (row) => (row.type === 'expense' ? txDict.expense || 'Expense' : txDict.sale || 'Sale')],
+        [txDict?.receipt || 'Receipt', (row) => row.receipt],
+        [txDict?.description || 'Description', (row) => row.description],
+        [txDict.status || 'Status', (row) => (row.status ? txDict[row.status] || row.status : '')],
+        [txDict?.customer || 'Customer', (row) => row.customer],
+        [txDict?.cashier || 'Cashier', (row) => row.cashier],
+        [txDict.items || 'Items', (row) => row.items],
+        [txDict.payment || 'Payment', (row) => paymentLabel(row.payment)],
+        [txDict?.subtotal || 'Subtotal', (row) => row.subtotal],
+        [txDict?.discount || 'Discount', (row) => row.discount],
+        [txDict?.tax || 'Tax', (row) => row.tax],
+        [dict.common.total || 'Total', (row) => row.total],
+        [txDict.cash || 'Cash', (row) => row.cash],
+        [txDict.change || 'Change', (row) => row.change],
+      ];
+      // A page is too narrow for every column, so the PDF keeps the ones people read
+      const pdfColumns = new Set([0, 2, 4, 8, 12]);
+      const used = format === 'pdf' ? columns.filter((_, index) => pdfColumns.has(index)) : columns;
+      const headers = used.map(([label]) => label);
+      const rows = (data.data as ExportRow[]).map((row) => Object.fromEntries(used.map(([label, read]) => [label, read(row)])));
+
+      const filename = `transactions-${new Date().toISOString().slice(0, 10)}.${format}`;
+      const { arrayToCSV, downloadCSV, downloadExcel, downloadPDF } = await import('@/lib/export');
+      if (format === 'csv') downloadCSV(`\uFEFF${arrayToCSV(rows, headers)}`, filename);
+      else if (format === 'xlsx') await downloadExcel(rows, headers, filename);
+      else await downloadPDF(rows, headers, filename, txDict.title || 'Transactions');
+
+      if (data.truncated) {
+        showToast.info(
+          txText('exportTruncated', 'Exported the newest {shown} of {total}. Narrow the dates to get the rest.')
+            .replace('{shown}', String(rows.length))
+            .replace('{total}', String(data.total))
+        );
+      }
+    } catch (err) {
+      console.error('Failed to export transactions:', err);
+      showToast.error(txText('exportFailed', 'The export could not be created'));
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const voidable = (transaction: Transaction) =>
+    canVoid && transaction.status === 'completed' && !transaction.refundCount && (!transaction.salesChannel || transaction.salesChannel === 'pos');
+
+  const closeDrawer = () => {
+    setSelectedTransaction(null);
+    setSelectedExpense(null);
+  };
+
+  const viewTransaction = (transaction: Transaction) => {
+    setSelectedTransaction(transaction);
+    setSelectedExpense(null);
+  };
+
+  const viewExpense = (expense: Expense) => {
+    setSelectedExpense(selectedExpense?._id === expense._id ? null : expense);
+    setSelectedTransaction(null);
+  };
+
+  const manualTotal = manualItems.reduce((sum, it) => {
+    const p = parseFloat(it.price);
+    const q = parseInt(it.quantity, 10);
+    return sum + (isNaN(p) || isNaN(q) ? 0 : p * q);
+  }, 0);
+  const manualChange = parseFloat(manualCash) - manualTotal;
+
+  const keyWidth = (canRefund ? 3 : 2) * 44 + 2;
+  const viewTypes: { view: ViewType; label: string }[] = [
+    { view: 'all', label: txDict?.all || 'All' },
+    { view: 'transactions', label: txDict?.transactions || 'Transactions' },
+    { view: 'expenses', label: txDict?.expenses || 'Expenses' },
+  ];
+  const displayModes = [
+    { mode: 'grid', label: dict.common?.gridView || 'Grid View', Icon: LayoutGrid },
+    { mode: 'list', label: dict.common?.listView || 'List View', Icon: List },
+  ] as const;
+  const toggleTone = (active: boolean) => (active ? 'bg-paper-white text-ink' : 'text-paper hover:bg-white/10');
+  const pageKey = 'flex min-h-[44px] w-full items-center justify-center border border-white/25 px-5 font-receipt text-xs font-medium uppercase text-paper transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent touch-manipulation sm:w-auto';
+
+  /** Till keys for a sale: joined in a list row, spanning the bottom edge of a grid slip. */
+  const renderKeys = (transaction: Transaction, layout: 'row' | 'strip') => {
+    const strip = layout === 'strip';
+    const key = `flex min-h-[44px] items-center justify-center gap-2 font-receipt text-xs font-medium uppercase text-ink touch-manipulation transition-colors hover:bg-paper ${strip ? 'min-w-0 flex-1' : 'w-11'}`;
+    return (
+      <div className={`flex divide-x divide-ink/25 ${strip ? 'border-t border-ink/25' : 'actions-touch-visible border border-ink/25 transition-opacity duration-200'}`}>
+        <button type="button" onClick={() => viewTransaction(transaction)} className={key} title={txDict.view} aria-label={txDict.view}>
+          <Eye className={ICON} strokeWidth={1.75} aria-hidden />
+        </button>
+        <button type="button" onClick={() => printReceipt(transaction)} className={key} title={dict.common.print} aria-label={dict.common.print}>
+          <Printer className={ICON} strokeWidth={1.75} aria-hidden />
+          {strip && <span className="hidden sm:inline">{dict.common.print}</span>}
+        </button>
+        {transaction.status === 'completed' && canRefund && (
+          <button
+            type="button"
+            onClick={() => openAdjustModal(transaction)}
+            className={`${key} hover:text-stamp`}
+            title={txDict?.adjustRefund || 'Adjust / Refund'}
+            aria-label={txDict?.adjustRefund || 'Adjust / Refund'}
+          >
+            <RotateCcw className={ICON} strokeWidth={1.75} aria-hidden />
+            {strip && <span className="hidden sm:inline">{txDict?.adjust || 'Adjust'}</span>}
+          </button>
+        )}
+      </div>
+    );
+  };
+
+  const renderExpenseKey = (expense: Expense, layout: 'row' | 'strip') => {
+    const label = selectedExpense?._id === expense._id ? txDict.hide : txDict.view;
+    const strip = layout === 'strip';
+    return (
+      <div className={strip ? 'border-t border-ink/25' : 'actions-touch-visible border border-ink/25 transition-opacity duration-200'}>
+        <button
+          type="button"
+          onClick={() => viewExpense(expense)}
+          className={`flex min-h-[44px] items-center justify-center gap-2 font-receipt text-xs font-medium uppercase text-ink touch-manipulation transition-colors hover:bg-paper ${strip ? 'w-full' : 'w-11'}`}
+          title={label}
+          aria-label={label}
+        >
+          <Eye className={ICON} strokeWidth={1.75} aria-hidden />
+          {strip && <span className="hidden sm:inline">{label}</span>}
+        </button>
+      </div>
+    );
+  };
+
+  const renderContent = () => {
+    if (status === 'loading') {
+      return <TransactionsCatalogSkeleton mode={displayMode} />;
+    }
+
+    if (status === 'error') {
+      return (
+        <div className="bg-paper-white text-ink">
+          <ErrorState
+            title={txDict.failedToLoadTransactions || 'Failed to load transactions'}
+            description={error || undefined}
+            onRetry={refetch}
+            retryLabel={dict.common.retry || 'Retry'}
+          />
+        </div>
+      );
+    }
+
+    if (items.length === 0) {
+      return (
+        <EmptyState
+          icon="savedCarts"
+          title={
+            filtersActive
+              ? (dict.common.noResults || 'No results found')
+              : viewType === 'expenses'
+              ? (txDict.noExpenses || 'No expenses found')
+              : viewType === 'transactions'
+              ? (txDict.noTransactions || 'No transactions found')
+              : (txDict.noActivityYet || 'No transactions or expenses yet')
+          }
+          action={
+            filtersActive
+              ? undefined
+              : viewType === 'expenses'
+              ? (canManageExpenses ? { label: txDict.addExpense || 'Add Expense', onClick: openExpenseModal } : undefined)
+              : { label: txDict.addManual || 'Add Transaction', onClick: openManualModal }
+          }
+          className="bg-paper-white text-ink"
+        />
+      );
+    }
+
+    if (displayMode === 'grid') {
+      return (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {items.map((item) => {
+            if (item.type === 'transaction') {
+              const transaction = item.data;
+              return (
+                <article key={transaction._id} className="flex min-w-0 flex-col">
+                  <div className="flex flex-1 flex-col bg-paper-white text-ink">
+                    <div className="flex flex-1 flex-col gap-3 p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate font-receipt text-sm font-semibold">#{receiptNo(transaction)}</p>
+                          <FormattedDate date={transaction.createdAt} includeTime={true} className="font-receipt text-xs text-ink/60" />
+                        </div>
+                        <StatusTag status={transaction.status} label={txDict[transaction.status]} />
+                      </div>
+                      <div className="space-y-1 border-y border-dashed border-ink/30 py-2 font-receipt text-sm">
+                        <ReceiptRow label={txDict.items} value={transaction.items.length} />
+                        <ReceiptRow label={txDict.payment} value={paymentLabel(transaction.paymentMethod)} />
+                        {!!transaction.cashReceived && <ReceiptRow label={txDict.cash} value={<Currency amount={transaction.cashReceived} />} />}
+                        {!!transaction.change && <ReceiptRow label={txDict.change} value={<Currency amount={transaction.change} />} />}
+                      </div>
+                      <div className="mt-auto font-receipt text-lg">
+                        <ReceiptRow strong label={dict.common.total} value={<Currency amount={transaction.total} />} />
+                      </div>
+                    </div>
+                    {renderKeys(transaction, 'strip')}
+                  </div>
+                  <div className="mk-tear-b h-3 bg-paper-white" aria-hidden />
+                </article>
+              );
+            }
+            const expense = item.data;
+            return (
+              <article key={expense._id} className="flex min-w-0 flex-col">
+                <div className="flex flex-1 flex-col bg-paper-white text-ink">
+                  <div className="flex flex-1 flex-col gap-3 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-base font-semibold">{expense.name}</p>
+                        <FormattedDate date={expense.date || expense.createdAt} includeTime={true} className="font-receipt text-xs text-ink/60" />
+                      </div>
+                      <Tag tone="inverse">{txDict?.expense || 'Expense'}</Tag>
+                    </div>
+                    <div className="space-y-1 border-y border-dashed border-ink/30 py-2 text-sm">
+                      {expense.description && <p className="line-clamp-2 text-ink/60">{expense.description}</p>}
+                      <div className="font-receipt">
+                        <ReceiptRow label={txDict.payment} value={paymentLabel(expense.paymentMethod)} />
+                      </div>
+                    </div>
+                    <div className="mt-auto font-receipt text-lg">
+                      <ReceiptRow strong label={dict.common.total} value={<PaidOut amount={expense.amount} />} />
+                    </div>
+                  </div>
+                  {renderExpenseKey(expense, 'strip')}
+                </div>
+                <div className="mk-tear-b h-3 bg-paper-white" aria-hidden />
+              </article>
+            );
+          })}
+        </div>
+      );
+    }
+
+    const keyColumn = 'ml-auto shrink-0 md:ml-0 md:flex md:w-[var(--tx-keys)] md:justify-end';
+
+    return (
+      <div style={{ '--tx-keys': `${keyWidth}px` } as CSSProperties}>
+        <div className="bg-paper-white text-ink">
+          <div className="hidden items-center gap-3 border-b border-dashed border-ink/30 px-4 py-2 font-receipt text-xs font-medium uppercase tracking-[0.14em] text-ink/60 md:flex">
+            <span className="flex-1">{txDict?.receipt || 'Receipt'}</span>
+            <span className="w-28 text-right">{txDict.status}</span>
+            <span className="w-32 text-right">{dict.common.total}</span>
+            <span className="w-[var(--tx-keys)] shrink-0" aria-hidden />
+          </div>
+          <div className="divide-y divide-dashed divide-ink/20">
+            {items.map((item) => {
+              if (item.type === 'transaction') {
+                const transaction = item.data;
+                return (
+                  <div key={transaction._id} className="group flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5 transition-colors hover:bg-paper md:flex-nowrap">
+                    <div className="flex min-w-0 basis-full items-center gap-3 md:flex-1 md:basis-0">
+                      <div className="min-w-0">
+                        <p className="truncate font-receipt text-sm font-semibold">#{receiptNo(transaction)}</p>
+                        <div className="flex flex-wrap gap-x-3 font-receipt text-xs text-ink/60">
+                          <FormattedDate date={transaction.createdAt} includeTime={true} />
+                          <span>{itemCount(transaction)}</span>
+                          <span>{paymentLabel(transaction.paymentMethod)}</span>
+                          {!!transaction.cashReceived && <span>{txDict.cash}: <Currency amount={transaction.cashReceived} /></span>}
+                          {!!transaction.change && <span>{txDict.change}: <Currency amount={transaction.change} /></span>}
+                        </div>
+                      </div>
+                      <span className="mk-leader hidden md:block" aria-hidden />
+                    </div>
+                    <div className="md:w-28 md:text-right">
+                      <StatusTag status={transaction.status} label={txDict[transaction.status]} />
+                    </div>
+                    <Currency amount={transaction.total} className="whitespace-nowrap font-receipt text-base font-semibold md:w-32 md:text-right" />
+                    <div className={keyColumn}>{renderKeys(transaction, 'row')}</div>
+                  </div>
+                );
+              }
+              const expense = item.data;
+              return (
+                <div key={expense._id} className="group flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5 transition-colors hover:bg-paper md:flex-nowrap">
+                  <div className="flex min-w-0 basis-full items-center gap-3 md:flex-1 md:basis-0">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold">{expense.name}</p>
+                      <div className="flex flex-wrap gap-x-3 font-receipt text-xs text-ink/60">
+                        <FormattedDate date={expense.date || expense.createdAt} includeTime={true} />
+                        <span>{paymentLabel(expense.paymentMethod)}</span>
+                      </div>
+                      {expense.description && <p className="line-clamp-1 text-xs text-ink/60">{expense.description}</p>}
+                    </div>
+                    <span className="mk-leader hidden md:block" aria-hidden />
+                  </div>
+                  <div className="md:w-28 md:text-right">
+                    <Tag tone="inverse">{txDict?.expense || 'Expense'}</Tag>
+                  </div>
+                  <PaidOut amount={expense.amount} className="font-receipt text-base font-semibold md:w-32 md:text-right" />
+                  <div className={keyColumn}>{renderExpenseKey(expense, 'row')}</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        <div className="mk-tear-b h-3 bg-paper-white" aria-hidden />
+      </div>
+    );
+  };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className={`${marketingFontClasses} mk-root pos-register flex min-h-dvh flex-col`}>
       <PageTitle />
       <Navbar />
-      <div className="w-full px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
-        <div className="flex flex-col gap-4 sm:gap-6 mb-4 sm:mb-6 lg:mb-8">
-          <div className="flex items-center justify-between gap-4">
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900">{txDict.title || 'Transactions'}</h1>
-            <div className="flex gap-2">
+      <div className="flex-1 bg-brand-navy-deep text-paper">
+        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
+          <div className="flex flex-wrap items-end justify-between gap-5">
+            <div className="min-w-0">
+              {tenantSettings?.companyName && (
+                <LineTag no="EJ" className="mb-3 text-[#8fe3d0]">{tenantSettings.companyName}</LineTag>
+              )}
+              <h1 className="text-5xl text-paper-white sm:text-6xl lg:text-7xl">{txDict.title || 'Transactions'}</h1>
+            </div>
+            <div className="flex w-full flex-wrap items-stretch gap-3 sm:w-auto">
+              <div className="flex items-center gap-3 border border-white/10 bg-black/30 px-4 py-2">
+                <span className="mk-led-glow font-led text-4xl leading-none text-[#7df0d6]">
+                  {status === 'ready' ? `${page}/${totalPages}` : '---'}
+                </span>
+                <span className="font-receipt text-xs uppercase tracking-[0.14em] text-white/60">{txDict.page}</span>
+              </div>
               {canManageExpenses && (
                 <button
-                  onClick={() => { setShowExpenseModal(true); setExpenseName(''); setExpenseDescription(''); setExpenseAmount(''); setExpenseDate(new Date().toISOString().slice(0, 10)); setExpensePayment('cash'); setExpenseNotes(''); setExpenseError(''); setExpenseSuccess(false); }}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-red-600 text-white hover:bg-red-700 active:bg-red-800 border border-red-700 text-sm font-medium transition-colors touch-manipulation min-h-[44px] sm:min-h-0 whitespace-nowrap"
+                  type="button"
+                  onClick={openExpenseModal}
+                  className="flex min-h-[44px] flex-1 items-center justify-center gap-2 border border-white/25 px-3 font-receipt text-xs font-medium uppercase text-paper transition-colors hover:bg-white/10 touch-manipulation sm:flex-none sm:px-5 sm:text-sm"
                 >
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                  <Plus className={ICON} strokeWidth={1.75} aria-hidden />
                   <span className="hidden sm:inline">{txDict?.addExpense || 'Add Expense'}</span>
-                  <span className="sm:hidden">Expense</span>
+                  <span className="sm:hidden">{txDict?.expense || 'Expense'}</span>
                 </button>
               )}
               <button
-                onClick={() => { setShowAddModal(true); setManualItems([emptyItem()]); setManualPayment('cash'); setManualCash(''); setManualNotes(''); setManualError(''); setManualSuccess(false); setManualIdempotencyKey(crypto.randomUUID()); }}
-                className="flex items-center gap-2 px-4 py-2.5 bg-green-600 text-white hover:bg-green-700 active:bg-green-800 border border-green-700 text-sm font-medium transition-colors touch-manipulation min-h-[44px] sm:min-h-0 whitespace-nowrap"
+                type="button"
+                onClick={openManualModal}
+                className="flex min-h-[44px] flex-1 items-center justify-center gap-2 bg-paper-white px-3 font-receipt text-xs font-medium uppercase text-ink transition-colors hover:bg-paper touch-manipulation sm:flex-none sm:px-5 sm:text-sm"
               >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                <Plus className={ICON} strokeWidth={1.75} aria-hidden />
                 <span className="hidden sm:inline">{txDict?.addManual || 'Add Transaction'}</span>
-                <span className="sm:hidden">Sale</span>
+                <span className="sm:hidden">{txDict?.sale || 'Sale'}</span>
               </button>
             </div>
           </div>
-          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 items-stretch sm:items-center">
-            {/* View Type Toggle - Mobile-first */}
-            <div className="flex gap-0 bg-white border border-gray-300 w-full sm:w-auto">
-              {(['all', 'transactions', 'expenses'] as ViewType[]).map((view) => (
+
+          <div className="mb-3 mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex divide-x divide-white/25 border border-white/25">
+              {viewTypes.map(({ view, label }) => (
                 <button
                   key={view}
                   type="button"
-                  onClick={() => setViewType(view)}
-                  className={`flex-1 sm:flex-none px-3 sm:px-4 py-2.5 sm:py-2 text-xs sm:text-sm font-semibold transition-all duration-200 touch-manipulation min-h-[44px] sm:min-h-0 border-r border-gray-300 last:border-r-0 ${
-                    viewType === view
-                      ? 'text-white'
-                      : 'text-gray-700 hover:bg-gray-100 active:bg-gray-200 bg-white'
-                  }`}
-                  style={viewType === view ? { backgroundColor: primaryColor } : {}}
+                  onClick={() => { setViewType(view); setPage(1); }}
+                  aria-pressed={viewType === view}
+                  className={`flex min-h-[44px] flex-auto items-center justify-center px-2 font-receipt text-xs font-medium uppercase transition-colors touch-manipulation sm:flex-none sm:px-4 ${toggleTone(viewType === view)}`}
                 >
-                  {view === 'all' 
-                    ? (txDict?.all || 'All')
-                    : view === 'transactions'
-                    ? (txDict?.transactions || 'Transactions')
-                    : (txDict?.expenses || 'Expenses')}
+                  {label}
                 </button>
               ))}
             </div>
-            {/* Display Mode Toggle */}
-            <div className="flex gap-2">
-              <button
-                onClick={() => setDisplayMode('grid')}
-                className={`px-4 py-2.5 sm:py-2 bg-white border-2 transition-all duration-200 flex items-center justify-center gap-2 text-sm font-medium touch-manipulation min-h-[44px] sm:min-h-0 ${
-                  displayMode === 'grid'
-                    ? 'border-gray-300 text-gray-700 hover:bg-gray-100'
-                    : 'border-gray-300 text-gray-700 hover:bg-gray-100'
-                }`}
-                style={displayMode === 'grid' ? { borderColor: primaryColor, backgroundColor: `${primaryColor}10`, color: primaryColor } : {}}
-                title={dict?.common?.gridView || 'Grid View'}
-                aria-label={dict?.common?.gridView || 'Grid View'}
-              >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-                </svg>
-                <span className="hidden sm:inline">Grid</span>
-              </button>
-              <button
-                onClick={() => setDisplayMode('list')}
-                className={`px-4 py-2.5 sm:py-2 bg-white border-2 transition-all duration-200 flex items-center justify-center gap-2 text-sm font-medium touch-manipulation min-h-[44px] sm:min-h-0 ${
-                  displayMode === 'list'
-                    ? 'border-gray-300 text-gray-700 hover:bg-gray-100'
-                    : 'border-gray-300 text-gray-700 hover:bg-gray-100'
-                }`}
-                style={displayMode === 'list' ? { borderColor: primaryColor, backgroundColor: `${primaryColor}10`, color: primaryColor } : {}}
-                title={dict?.common?.listView || 'List View'}
-                aria-label={dict?.common?.listView || 'List View'}
-              >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-                <span className="hidden sm:inline">{dict?.common?.listView || 'List'}</span>
-              </button>
+            <div className="flex shrink-0 divide-x divide-white/25 border border-white/25">
+              {displayModes.map(({ mode, label, Icon }) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setDisplayMode(mode)}
+                  aria-pressed={displayMode === mode}
+                  title={label}
+                  aria-label={label}
+                  className={`flex min-h-[44px] flex-1 items-center justify-center gap-2 px-4 font-receipt text-xs font-medium uppercase transition-colors touch-manipulation sm:flex-none ${toggleTone(displayMode === mode)}`}
+                >
+                  <Icon className={ICON} strokeWidth={1.75} aria-hidden />
+                  <span className="hidden lg:inline">{label}</span>
+                </button>
+              ))}
             </div>
           </div>
-        </div>
 
-        {status === 'loading' ? (
-          <TransactionsCatalogSkeleton mode={displayMode} />
-        ) : status === 'error' ? (
-          <div className="bg-white border border-gray-300">
-            <ErrorState
-              title={txDict.failedToLoadTransactions || 'Failed to load transactions'}
-              description={error || undefined}
-              onRetry={refetch}
-              retryLabel={dict.common.retry || 'Retry'}
-            />
-          </div>
-        ) : filteredItems.length === 0 ? (
-          <EmptyState
-            icon="savedCarts"
-            title={
-              viewType === 'expenses'
-                ? (txDict.noExpenses || 'No expenses found')
-                : viewType === 'transactions'
-                ? (txDict.noTransactions || 'No transactions found')
-                : (txDict.noActivityYet || 'No transactions or expenses yet')
-            }
-            action={
-              viewType === 'expenses'
-                ? (!canManageExpenses ? undefined : {
-                    label: txDict.addExpense || 'Add Expense',
-                    onClick: () => {
-                      setShowExpenseModal(true);
-                      setExpenseName('');
-                      setExpenseDescription('');
-                      setExpenseAmount('');
-                      setExpenseDate(new Date().toISOString().slice(0, 10));
-                      setExpensePayment('cash');
-                      setExpenseNotes('');
-                      setExpenseError('');
-                      setExpenseSuccess(false);
-                    },
-                  })
-                : {
-                    label: txDict.addManual || 'Add Transaction',
-                    onClick: () => {
-                      setShowAddModal(true);
-                      setManualItems([emptyItem()]);
-                      setManualPayment('cash');
-                      setManualCash('');
-                      setManualNotes('');
-                      setManualError('');
-                      setManualSuccess(false);
-                      setManualIdempotencyKey(crypto.randomUUID());
-                    },
-                  }
-            }
-            className="bg-white border border-gray-300"
+          <TransactionFilters
+            view={viewType}
+            values={filters}
+            onChange={updateFilters}
+            cashiers={filterOptions.cashiers}
+            branches={filterOptions.branches}
+            labels={filterLabels}
+            onExport={canExport ? exportView : undefined}
+            exporting={exporting}
           />
-        ) : displayMode === 'grid' ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-            {filteredItems.map((item) => {
-              if (item.type === 'transaction') {
-                const transaction = item.data as Transaction;
-                return (
-                  <div key={transaction._id} className="group relative bg-white border border-gray-300 p-4 sm:p-5 hover:border-teal-300 transition-all duration-200 flex flex-col">
-                    <div className="flex-1 mb-4">
-                      <div className="flex items-start justify-between mb-2">
-                        <div className="flex-1">
-                          <div className="text-xs text-gray-500 mb-1">{txDict.date}</div>
-                          <div className="text-sm text-gray-600"><FormattedDate date={transaction.createdAt} includeTime={true} /></div>
-                        </div>
-                        <span className={`inline-block px-2.5 py-1 text-xs font-medium border ${transaction.status === 'completed' ? 'bg-green-100 text-green-800 border-green-300' : transaction.status === 'refunded' ? 'bg-orange-100 text-orange-800 border-orange-300' : 'bg-red-100 text-red-800 border-red-300'}`}>
-                          {txDict[transaction.status]}
-                        </span>
-                      </div>
-                      <div className="mb-3">
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-gray-600 bg-gray-100 border border-gray-200">
-                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M16 11V7a4 4 0 10-8 0v4M5 9h14l1 11H4L5 9z" />
-                          </svg>
-                          {transaction.items.length} {transaction.items.length === 1 ? txDict.item : txDict.items}
-                        </span>
-                      </div>
-                      <div className="flex flex-wrap gap-2 mb-3">
-                        <span
-                          className="inline-block px-2.5 py-1 text-xs font-medium capitalize border"
-                          style={{
-                            backgroundColor: `${primaryColor}20`,
-                            color: primaryColor,
-                            borderColor: primaryColor,
-                          }}
-                        >
-                          {dict.pos[transaction.paymentMethod]}
-                        </span>
-                        {transaction.cashReceived && (
-                          <div className="text-xs text-gray-500">
-                            {txDict.cash}: <Currency amount={transaction.cashReceived} />
-                            {transaction.change && <span className="ml-1">{txDict.change}: <Currency amount={transaction.change} /></span>}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <div className="border-t border-gray-200 pt-4 mt-auto">
-                      <div className="flex items-center justify-between mb-4">
-                        <div>
-                          <div className="text-xs text-gray-500 mb-1">{dict.common.total}</div>
-                          <div className="font-bold text-xl sm:text-2xl" style={{ color: primaryColor }}><Currency amount={transaction.total} /></div>
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        <button onClick={() => { setSelectedTransaction(transaction); setSelectedExpense(null); }} className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 hover:bg-gray-200 active:bg-gray-300 transition-all duration-200 border border-gray-300 flex items-center justify-center gap-2 touch-manipulation min-h-[44px] text-sm font-medium" title={txDict.view} aria-label={txDict.view}>
-                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                        </button>
-                        <button onClick={() => printReceipt(transaction)} className="flex-1 px-4 py-2.5 text-white transition-all duration-200 border flex items-center justify-center gap-2 touch-manipulation min-h-[44px] text-sm font-medium hover:opacity-80" style={{ backgroundColor: primaryColor, borderColor: primaryColor }} title={dict.common.print} aria-label={dict.common.print}>
-                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
-                          <span className="hidden sm:inline">{dict.common.print}</span>
-                        </button>
-                        {transaction.status === 'completed' && canRefund && (
-                          <button onClick={() => openAdjustModal(transaction)} className="flex-1 px-4 py-2.5 bg-orange-500 text-white hover:bg-orange-600 active:bg-orange-700 transition-all duration-200 border border-orange-600 flex items-center justify-center gap-2 touch-manipulation min-h-[44px] text-sm font-medium" title={txDict?.adjust || 'Adjust / Refund'}>
-                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                            <span className="hidden sm:inline">{txDict?.adjust || 'Adjust'}</span>
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              } else {
-                const expense = item.data as Expense;
-                return (
-                  <div key={expense._id} className="group relative bg-white border-l-4 border-red-500 border border-gray-300 p-4 sm:p-5 hover:border-red-400 transition-all duration-200 flex flex-col">
-                    <div className="flex-1 mb-4">
-                      <div className="flex items-start justify-between mb-2">
-                        <div className="flex-1">
-                          <div className="text-xs text-gray-500 mb-1">{txDict.date}</div>
-                          <div className="text-sm text-gray-600"><FormattedDate date={expense.date || expense.createdAt} includeTime={true} /></div>
-                        </div>
-                        <span className="inline-block px-2.5 py-1 text-xs font-medium bg-orange-100 text-orange-800 border border-orange-300">{txDict?.expense || 'Expense'}</span>
-                      </div>
-                      <div className="mb-3">
-                        <div className="text-xs text-gray-500 mb-1">{txDict?.name || 'Name'}</div>
-                        <div className="text-base font-semibold text-gray-900">{expense.name}</div>
-                        {expense.description && <div className="text-sm text-gray-500 mt-1 line-clamp-2">{expense.description}</div>}
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <span className="inline-block px-2.5 py-1 text-xs font-medium bg-red-100 text-red-800 capitalize border border-red-300">{dict.pos?.[expense.paymentMethod] || expense.paymentMethod}</span>
-                      </div>
-                    </div>
-                    <div className="border-t border-gray-200 pt-4 mt-auto">
-                      <div className="flex items-center justify-between mb-4">
-                        <div>
-                          <div className="text-xs text-gray-500 mb-1">{dict.common.total}</div>
-                          <div className="font-bold text-red-600 text-xl sm:text-2xl"><Currency amount={expense.amount} /></div>
-                        </div>
-                      </div>
-                      <button onClick={() => { setSelectedExpense(selectedExpense?._id === expense._id ? null : expense); setSelectedTransaction(null); }} className="w-full px-4 py-2.5 bg-gray-100 text-gray-700 hover:bg-gray-200 active:bg-gray-300 transition-all duration-200 border border-gray-300 flex items-center justify-center gap-2 touch-manipulation min-h-[44px] text-sm font-medium">
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                        <span className="hidden sm:inline">{selectedExpense?._id === expense._id ? txDict.hide : txDict.view}</span>
-                      </button>
-                    </div>
-                  </div>
-                );
-              }
-            })}
-          </div>
-        ) : (
-          <div className="bg-white border border-gray-300 divide-y divide-gray-300">
-            {filteredItems.map((item) => {
-              if (item.type === 'transaction') {
-                const transaction = item.data as Transaction;
-                return (
-                  <div key={transaction._id} className="group relative px-4 sm:px-5 py-2.5 sm:py-3 hover:bg-gray-50 transition-colors">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm">
-                          <span className="text-gray-600"><FormattedDate date={transaction.createdAt} includeTime={true} /></span>
-                          <span className={`inline-block px-2 py-0.5 text-xs font-medium border ${transaction.status === 'completed' ? 'bg-green-100 text-green-800 border-green-300' : transaction.status === 'refunded' ? 'bg-orange-100 text-orange-800 border-orange-300' : 'bg-red-100 text-red-800 border-red-300'}`}>{txDict[transaction.status]}</span>
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-gray-600 bg-gray-100 border border-gray-200">
-                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M16 11V7a4 4 0 10-8 0v4M5 9h14l1 11H4L5 9z" />
-                            </svg>
-                            {transaction.items.length} {transaction.items.length === 1 ? txDict.item : txDict.items}
-                          </span>
-                          <span
-                            className="inline-block px-2 py-0.5 text-xs font-medium capitalize border"
-                            style={{
-                              backgroundColor: `${primaryColor}20`,
-                              color: primaryColor,
-                              borderColor: primaryColor,
-                            }}
-                          >
-                            {dict.pos[transaction.paymentMethod]}
-                          </span>
-                          {transaction.cashReceived && (
-                            <span className="text-xs text-gray-500">
-                              {txDict.cash}: <Currency amount={transaction.cashReceived} />
-                              {transaction.change && <span className="ml-1">{txDict.change}: <Currency amount={transaction.change} /></span>}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3 sm:gap-4">
-                        <div className="font-bold text-base sm:text-lg" style={{ color: primaryColor }}><Currency amount={transaction.total} /></div>
-                        <div className="flex gap-1.5 actions-touch-visible transition-opacity duration-200">
-                          <button onClick={() => { setSelectedTransaction(transaction); setSelectedExpense(null); }} className="px-2.5 py-1.5 bg-gray-100 text-gray-700 hover:bg-gray-200 active:bg-gray-300 transition-all duration-200 border border-gray-300 flex items-center justify-center touch-manipulation min-h-[36px] sm:min-h-0" title={txDict.view} aria-label={txDict.view}>
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                          </button>
-                          <button onClick={() => printReceipt(transaction)} className="px-2.5 py-1.5 text-white transition-all duration-200 border flex items-center justify-center touch-manipulation min-h-[36px] sm:min-h-0 hover:opacity-80" style={{ backgroundColor: primaryColor, borderColor: primaryColor }} title={dict.common.print} aria-label={dict.common.print}>
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
-                          </button>
-                          {transaction.status === 'completed' && canRefund && (
-                            <button onClick={() => openAdjustModal(transaction)} className="px-2.5 py-1.5 bg-orange-500 text-white hover:bg-orange-600 active:bg-orange-700 transition-all duration-200 border border-orange-600 flex items-center justify-center touch-manipulation min-h-[36px] sm:min-h-0" title={txDict?.adjust || 'Adjust / Refund'}>
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              } else {
-                const expense = item.data as Expense;
-                return (
-                  <div key={expense._id} className="group relative px-4 sm:px-5 py-2.5 sm:py-3 hover:bg-gray-50 transition-colors border-l-4 border-red-500">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm mb-1">
-                          <span className="text-gray-600"><FormattedDate date={expense.date || expense.createdAt} includeTime={true} /></span>
-                          <span className="inline-block px-2 py-0.5 text-xs font-medium bg-orange-100 text-orange-800 border border-orange-300">{txDict?.expense || 'Expense'}</span>
-                          <span className="inline-block px-2 py-0.5 text-xs font-medium bg-red-100 text-red-800 capitalize border border-red-300">{dict.pos?.[expense.paymentMethod] || expense.paymentMethod}</span>
-                        </div>
-                        <div className="text-sm font-semibold text-gray-900 truncate">{expense.name}</div>
-                        {expense.description && <div className="text-xs text-gray-500 line-clamp-1">{expense.description}</div>}
-                      </div>
-                      <div className="flex items-center gap-3 sm:gap-4">
-                        <div className="font-bold text-red-600 text-base sm:text-lg"><Currency amount={expense.amount} /></div>
-                        <button onClick={() => { setSelectedExpense(selectedExpense?._id === expense._id ? null : expense); setSelectedTransaction(null); }} className="px-2.5 py-1.5 bg-gray-100 text-gray-700 hover:bg-gray-200 active:bg-gray-300 transition-all duration-200 border border-gray-300 flex items-center justify-center touch-manipulation min-h-[36px] sm:min-h-0" title={selectedExpense?._id === expense._id ? txDict.hide : txDict.view}>
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              }
-            })}
-          </div>
-        )}
 
-        {/* Transaction Detail Drawer */}
-        {(selectedTransaction || selectedExpense) && (
+          {renderContent()}
+
+          {totalPages > 1 && (
+            <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row sm:gap-4">
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className={pageKey}
+              >
+                {txDict.previous}
+              </button>
+              <span className="mk-led-glow px-3 font-led text-2xl leading-none text-[#7df0d6]">
+                {page}/{totalPages}
+              </span>
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                className={pageKey}
+              >
+                {txDict.next}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Detail drawer: the sale or expense reprinted as a slip */}
+      {(selectedTransaction || selectedExpense) && (
+        <div className="fixed inset-0 z-50 bg-ink/60" onClick={closeDrawer}>
           <div
-            className="fixed inset-0 bg-gray-900/30 backdrop-blur-md z-50"
-            onClick={() => { setSelectedTransaction(null); setSelectedExpense(null); }}
+            role="dialog"
+            aria-modal="true"
+            aria-label={selectedTransaction ? txDict.transactionDetails : (txDict?.expenseDetails || 'Expense Details')}
+            className="animate-slide-in-right absolute inset-y-0 right-0 flex w-full max-w-md flex-col bg-brand-navy-deep text-paper motion-reduce:animate-none"
+            onClick={(e) => e.stopPropagation()}
           >
-            <div
-              className="absolute inset-y-0 right-0 w-full max-w-md bg-white border-l border-gray-300 flex flex-col animate-slide-in-right"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Drawer Header */}
-              <div className="flex items-center justify-between p-5 sm:p-6 border-b border-gray-200">
-                <div>
-                  <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
-                    {selectedTransaction ? txDict.transactionDetails : (txDict?.expenseDetails || 'Expense Details')}
-                  </h2>
-                  <p className="text-sm text-gray-500 mt-0.5">
-                    <FormattedDate
-                      date={selectedTransaction ? selectedTransaction.createdAt : (selectedExpense!.date || selectedExpense!.createdAt)}
-                      includeTime={true}
-                    />
-                  </p>
-                </div>
-                <button
-                  onClick={() => { setSelectedTransaction(null); setSelectedExpense(null); }}
-                  className="text-gray-400 hover:text-gray-600 transition-colors"
-                  aria-label="Close"
-                >
-                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
+            <div className="flex items-start justify-between gap-4 p-5">
+              <div className="min-w-0">
+                <h2 className="text-4xl text-paper-white">
+                  {selectedTransaction ? txDict.transactionDetails : (txDict?.expenseDetails || 'Expense Details')}
+                </h2>
+                <FormattedDate
+                  date={selectedTransaction ? selectedTransaction.createdAt : (selectedExpense!.date || selectedExpense!.createdAt)}
+                  includeTime={true}
+                  className="mt-2 block font-receipt text-xs text-[#8fe3d0]"
+                />
               </div>
+              <button
+                type="button"
+                onClick={closeDrawer}
+                className="-mr-2 -mt-1 flex min-h-[44px] w-11 shrink-0 items-center justify-center text-paper transition-colors hover:bg-white/10"
+                aria-label={closeLabel}
+              >
+                <X className={ICON} strokeWidth={1.75} aria-hidden />
+              </button>
+            </div>
 
-              {/* Drawer Body */}
-              <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-4">
+            <div className="flex-1 overflow-y-auto px-5 pb-5">
+              <div className="bg-paper-white p-5 font-receipt text-sm text-ink">
                 {selectedTransaction ? (
                   <>
-                    {/* Receipt & Status */}
-                    <div className="flex items-center justify-between">
-                      {selectedTransaction.receiptNumber && (
-                        <div>
-                          <div className="text-xs text-gray-500 mb-0.5">{txDict?.receipt || 'Receipt'}</div>
-                          <div className="font-mono text-sm font-semibold text-gray-900">{selectedTransaction.receiptNumber}</div>
-                        </div>
-                      )}
-                      <span className={`ml-auto inline-block px-2.5 py-1 text-xs font-semibold border ${
-                        selectedTransaction.status === 'completed'
-                          ? 'bg-green-100 text-green-800 border-green-300'
-                          : selectedTransaction.status === 'refunded'
-                          ? 'bg-brand-soft text-brand-navy border-teal-300'
-                          : 'bg-red-100 text-red-800 border-red-300'
-                      }`}>
-                        {selectedTransaction.status}
-                      </span>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-xs uppercase tracking-[0.14em] text-ink/60">{txDict?.receipt || 'Receipt'}</p>
+                        <p className="truncate font-semibold">#{receiptNo(selectedTransaction)}</p>
+                      </div>
+                      <StatusTag status={selectedTransaction.status} label={txDict[selectedTransaction.status]} />
                     </div>
 
-                    {/* Items */}
-                    <div className="border border-gray-200 divide-y divide-gray-100">
+                    <div className="mt-3 space-y-2 border-t border-dashed border-ink/30 pt-3">
                       {selectedTransaction.items.map((item, index) => (
-                        <div key={index} className="flex justify-between items-center px-4 py-3">
-                          <div className="flex-1 min-w-0">
-                            <div className="font-medium text-gray-900 text-sm truncate">{item.name}</div>
-                            <div className="text-xs text-gray-500 mt-0.5">
-                              <Currency amount={item.price} /> × {item.quantity}
-                            </div>
-                          </div>
-                          <div className="font-semibold text-gray-900 text-sm ml-4">
-                            <Currency amount={item.subtotal} />
-                          </div>
+                        <div key={index}>
+                          <p className="break-words font-medium">{item.name}</p>
+                          <ReceiptRow
+                            label={<span className="text-ink/60"><Currency amount={item.price} /> × {item.quantity}</span>}
+                            value={<Currency amount={item.subtotal} />}
+                          />
                         </div>
                       ))}
                     </div>
 
-                    {/* Totals */}
-                    <div className="border border-gray-200 divide-y divide-gray-100">
-                      {selectedTransaction.subtotal !== undefined && selectedTransaction.discountAmount && (
-                        <div className="flex justify-between items-center px-4 py-2.5 text-sm text-gray-600">
-                          <span>{txDict?.subtotal || 'Subtotal'}</span>
-                          <Currency amount={selectedTransaction.subtotal} />
-                        </div>
+                    <div className="mt-3 space-y-1 border-t border-dashed border-ink/30 pt-3">
+                      {selectedTransaction.subtotal !== undefined && !!selectedTransaction.discountAmount && (
+                        <ReceiptRow label={txDict?.subtotal || 'Subtotal'} value={<Currency amount={selectedTransaction.subtotal} />} />
                       )}
-                      {selectedTransaction.discountAmount && (
-                        <div className="flex justify-between items-center px-4 py-2.5 text-sm text-gray-600">
-                          <span>
-                            {txDict?.discount || 'Discount'}
-                            {selectedTransaction.discountCode && <span className="ml-1 font-mono text-xs bg-gray-100 px-1.5 py-0.5 border border-gray-200">{selectedTransaction.discountCode}</span>}
-                          </span>
-                          <span className="text-red-600">- <Currency amount={selectedTransaction.discountAmount} /></span>
-                        </div>
+                      {!!selectedTransaction.discountAmount && (
+                        <ReceiptRow
+                          label={
+                            <>
+                              {txDict?.discount || 'Discount'}
+                              {selectedTransaction.discountCode && <span className="ml-2 border border-ink/25 px-1.5 py-0.5 text-xs">{selectedTransaction.discountCode}</span>}
+                            </>
+                          }
+                          value={<PaidOut amount={selectedTransaction.discountAmount} />}
+                        />
                       )}
-                      <div className="flex justify-between items-center px-4 py-3 font-bold">
-                        <span className="text-base text-gray-900">{dict.common.total}</span>
-                        <span className="text-lg" style={{ color: primaryColor }}>
-                          <Currency amount={selectedTransaction.total} />
-                        </span>
+                      <div className="text-lg">
+                        <ReceiptRow strong label={dict.common.total} value={<Currency amount={selectedTransaction.total} />} />
                       </div>
                     </div>
 
-                    {/* Payment */}
-                    <div className="border border-gray-200 divide-y divide-gray-100">
-                      <div className="flex justify-between items-center px-4 py-2.5 text-sm">
-                        <span className="text-gray-500">{txDict.payment}</span>
-                        <span
-                          className="inline-block px-2.5 py-1 text-xs font-medium border capitalize"
-                          style={{ backgroundColor: `${primaryColor}20`, color: primaryColor, borderColor: primaryColor }}
-                        >
-                          {dict.pos?.[selectedTransaction.paymentMethod] || selectedTransaction.paymentMethod}
-                        </span>
-                      </div>
-                      {selectedTransaction.cashReceived && (
-                        <div className="flex justify-between items-center px-4 py-2.5 text-sm text-gray-600">
-                          <span>{txDict.cash}</span>
-                          <Currency amount={selectedTransaction.cashReceived} />
-                        </div>
+                    <div className="mt-3 space-y-1 border-t border-dashed border-ink/30 pt-3">
+                      {personName(selectedTransaction.customerId) && (
+                        <ReceiptRow label={txDict?.customer || 'Customer'} value={personName(selectedTransaction.customerId)} />
                       )}
-                      {selectedTransaction.change !== undefined && selectedTransaction.change > 0 && (
-                        <div className="flex justify-between items-center px-4 py-2.5 text-sm text-gray-600">
-                          <span>{txDict.change}</span>
-                          <Currency amount={selectedTransaction.change} />
-                        </div>
+                      {personName(selectedTransaction.userId) && (
+                        <ReceiptRow label={txDict?.cashier || 'Cashier'} value={personName(selectedTransaction.userId)} />
+                      )}
+                      <ReceiptRow label={txDict.payment} value={paymentLabel(selectedTransaction.paymentMethod)} />
+                      {!!selectedTransaction.cashReceived && (
+                        <ReceiptRow label={txDict.cash} value={<Currency amount={selectedTransaction.cashReceived} />} />
+                      )}
+                      {!!selectedTransaction.change && (
+                        <ReceiptRow label={txDict.change} value={<Currency amount={selectedTransaction.change} />} />
                       )}
                     </div>
+
+                    {selectedTransaction.voidReason && (
+                      <div className="mt-3 border-t border-dashed border-ink/30 pt-3">
+                        <p className="text-xs uppercase tracking-[0.14em] text-ink/60">{txDict?.voidReason || 'Reason for void'}</p>
+                        <p className="mt-1 font-body">{selectedTransaction.voidReason}</p>
+                      </div>
+                    )}
                   </>
                 ) : selectedExpense ? (
                   <>
-                    {/* Expense badge */}
-                    <div className="flex justify-end">
-                      <span className="inline-block px-2.5 py-1 text-xs font-semibold bg-orange-100 text-orange-800 border border-orange-300">
-                        {txDict?.expense || 'Expense'}
-                      </span>
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="min-w-0 break-words font-body text-base font-semibold">{selectedExpense.name}</p>
+                      <Tag tone="inverse">{txDict?.expense || 'Expense'}</Tag>
                     </div>
-
-                    <div className="border border-gray-200 divide-y divide-gray-100">
-                      <div className="flex justify-between items-center px-4 py-2.5 text-sm">
-                        <span className="text-gray-500">{txDict?.name || 'Name'}</span>
-                        <span className="font-semibold text-gray-900">{selectedExpense.name}</span>
+                    {selectedExpense.description && (
+                      <div className="mt-3 border-t border-dashed border-ink/30 pt-3">
+                        <p className="text-xs uppercase tracking-[0.14em] text-ink/60">{txDict?.description || 'Description'}</p>
+                        <p className="mt-1 font-body">{selectedExpense.description}</p>
                       </div>
-                      {selectedExpense.description && (
-                        <div className="flex flex-col gap-1 px-4 py-2.5 text-sm">
-                          <span className="text-gray-500">{txDict?.description || 'Description'}</span>
-                          <span className="text-gray-900">{selectedExpense.description}</span>
-                        </div>
-                      )}
-                      <div className="flex justify-between items-center px-4 py-2.5 text-sm">
-                        <span className="text-gray-500">{txDict.payment}</span>
-                        <span className="inline-block px-2.5 py-1 text-xs font-medium bg-red-100 text-red-800 border border-red-300 capitalize">
-                          {dict.pos?.[selectedExpense.paymentMethod] || selectedExpense.paymentMethod}
-                        </span>
+                    )}
+                    {selectedExpense.notes && (
+                      <div className="mt-3 border-t border-dashed border-ink/30 pt-3">
+                        <p className="text-xs uppercase tracking-[0.14em] text-ink/60">{txDict?.notes || 'Notes'}</p>
+                        <p className="mt-1 font-body">{selectedExpense.notes}</p>
                       </div>
-                      {selectedExpense.notes && (
-                        <div className="flex flex-col gap-1 px-4 py-2.5 text-sm">
-                          <span className="text-gray-500">{txDict?.notes || 'Notes'}</span>
-                          <span className="text-gray-900">{selectedExpense.notes}</span>
-                        </div>
-                      )}
-                      <div className="flex justify-between items-center px-4 py-3 font-bold">
-                        <span className="text-base text-gray-900">{dict.common.total}</span>
-                        <span className="text-lg text-red-600"><Currency amount={selectedExpense.amount} /></span>
+                    )}
+                    <div className="mt-3 space-y-1 border-t border-dashed border-ink/30 pt-3">
+                      <ReceiptRow label={txDict.payment} value={paymentLabel(selectedExpense.paymentMethod)} />
+                      <div className="text-lg">
+                        <ReceiptRow strong label={dict.common.total} value={<PaidOut amount={selectedExpense.amount} />} />
                       </div>
                     </div>
                   </>
                 ) : null}
               </div>
+              <div className="mk-tear-b h-3 bg-paper-white" aria-hidden />
+            </div>
 
-              {/* Drawer Footer — actions */}
-              {selectedTransaction && (
-                <div className="border-t border-gray-200 p-5 sm:p-6 flex gap-2">
+            {selectedTransaction && (
+              <div className="flex gap-2 border-t border-white/10 p-5">
+                <button
+                  type="button"
+                  onClick={() => printReceipt(selectedTransaction)}
+                  className={`${KEY} bg-paper-white text-ink hover:bg-paper`}
+                >
+                  <Printer className={ICON} strokeWidth={1.75} aria-hidden />
+                  {dict.common.print}
+                </button>
+                {selectedTransaction.status === 'completed' && canRefund && (
                   <button
-                    onClick={() => printReceipt(selectedTransaction)}
-                    className="flex-1 py-2.5 text-white transition-all duration-200 border flex items-center justify-center gap-2 hover:opacity-80 min-h-[44px] text-sm font-medium"
-                    style={{ backgroundColor: primaryColor, borderColor: primaryColor }}
+                    type="button"
+                    onClick={() => { openAdjustModal(selectedTransaction); setSelectedTransaction(null); }}
+                    className={`${KEY} border border-white/25 text-paper hover:bg-white/10`}
                   >
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
-                    {dict.common.print}
+                    <RotateCcw className={ICON} strokeWidth={1.75} aria-hidden />
+                    {txDict?.adjust || 'Adjust'}
                   </button>
-                  {selectedTransaction.status === 'completed' && canRefund && (
-                    <button
-                      onClick={() => { openAdjustModal(selectedTransaction); setSelectedTransaction(null); }}
-                      className="flex-1 py-2.5 bg-orange-500 text-white hover:bg-orange-600 active:bg-orange-700 transition-all duration-200 border border-orange-600 flex items-center justify-center gap-2 min-h-[44px] text-sm font-medium"
-                    >
-                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                      {txDict?.adjust || 'Adjust'}
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
+                )}
+                {voidable(selectedTransaction) && (
+                  <button
+                    type="button"
+                    onClick={() => { openVoidModal(selectedTransaction); setSelectedTransaction(null); }}
+                    className={`${KEY} border border-white/25 text-paper hover:border-stamp hover:bg-stamp`}
+                  >
+                    <Ban className={ICON} strokeWidth={1.75} aria-hidden />
+                    {txDict?.voidLabel || 'Void'}
+                  </button>
+                )}
+              </div>
+            )}
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Add Manual Expense Modal */}
-        {showExpenseModal && (
-          <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-4 overflow-y-auto" onClick={(e) => { if (e.target === e.currentTarget) setShowExpenseModal(false); }}>
-            <div className="bg-white w-full max-w-md border border-gray-300 my-6">
-              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 bg-red-50">
-                <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">
-                  <svg className="w-5 h-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                  {txDict?.addExpense || 'Add Expense'}
-                </h2>
-                <button onClick={() => setShowExpenseModal(false)} className="p-1 hover:bg-gray-200 transition-colors" aria-label="Close">
-                  <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                </button>
+      {/* Add Manual Expense Modal */}
+      {showExpenseModal && (
+        <SlipModal title={txDict?.addExpense || 'Add Expense'} closeLabel={closeLabel} onClose={() => setShowExpenseModal(false)}>
+          {expenseSuccess ? (
+            <DoneNote
+              message={txDict?.expenseCreated || 'Expense recorded successfully'}
+              closeLabel={closeLabel}
+              onClose={() => setShowExpenseModal(false)}
+            />
+          ) : (
+            <div className="space-y-4 px-5 py-4">
+              <div>
+                <label htmlFor="expense-name" className={LABEL}>{txDict?.name || 'Name'} <span className="text-stamp">*</span></label>
+                <input
+                  id="expense-name"
+                  type="text"
+                  value={expenseName}
+                  onChange={(e) => setExpenseName(e.target.value)}
+                  placeholder={txDict?.expenseNamePlaceholder || 'e.g. Office supplies'}
+                  className={FIELD}
+                />
               </div>
 
-              {expenseSuccess ? (
-                <div className="px-5 py-10 text-center">
-                  <div className="mx-auto mb-3 flex items-center justify-center w-12 h-12 bg-green-100">
-                    <svg className="w-6 h-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                  </div>
-                  <p className="text-base font-semibold text-gray-900">{txDict?.expenseCreated || 'Expense recorded successfully'}</p>
-                  <button onClick={() => setShowExpenseModal(false)} className="mt-4 px-6 py-2 bg-gray-800 text-white text-sm font-medium hover:bg-gray-900 transition-colors">
-                    {dict.common?.close || 'Close'}
+              <div>
+                <label htmlFor="expense-description" className={LABEL}>{txDict?.description || 'Description'} <span className="text-stamp">*</span></label>
+                <input
+                  id="expense-description"
+                  type="text"
+                  value={expenseDescription}
+                  onChange={(e) => setExpenseDescription(e.target.value)}
+                  placeholder={txDict?.expenseDescPlaceholder || 'Brief description of the expense'}
+                  className={FIELD}
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <div className="min-w-0 flex-1">
+                  <label htmlFor="expense-amount" className={LABEL}>{txDict?.amount || 'Amount'} <span className="text-stamp">*</span></label>
+                  <input
+                    id="expense-amount"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={expenseAmount}
+                    onChange={(e) => setExpenseAmount(e.target.value)}
+                    placeholder="0.00"
+                    className={FIELD}
+                  />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <label htmlFor="expense-date" className={LABEL}>{txDict?.date || 'Date'}</label>
+                  <input
+                    id="expense-date"
+                    type="date"
+                    value={expenseDate}
+                    onChange={(e) => setExpenseDate(e.target.value)}
+                    className={FIELD}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <p className={LABEL}>{txDict?.payment || 'Payment Method'}</p>
+                <div className="flex divide-x divide-ink/25 border border-ink/25">
+                  {(['cash', 'card', 'digital', 'other'] as const).map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setExpensePayment(m)}
+                      aria-pressed={expensePayment === m}
+                      className={`flex min-h-[44px] min-w-0 flex-1 items-center justify-center font-receipt text-xs font-medium uppercase transition-colors ${expensePayment === m ? 'bg-ink text-paper-white' : 'text-ink hover:bg-paper'}`}
+                    >
+                      {paymentLabel(m)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="expense-notes" className={LABEL}>{txDict?.notes || 'Notes'} ({dict.common?.optional || 'optional'})</label>
+                <textarea
+                  id="expense-notes"
+                  value={expenseNotes}
+                  onChange={(e) => setExpenseNotes(e.target.value)}
+                  rows={2}
+                  placeholder={txDict?.expenseNotesPlaceholder || 'Additional details…'}
+                  className={`${FIELD} resize-none`}
+                />
+              </div>
+
+              {expenseError && <div className={ERROR_NOTE}>{expenseError}</div>}
+
+              <div className="flex gap-3 pt-1">
+                <button type="button" onClick={() => setShowExpenseModal(false)} className={KEY_SECONDARY}>
+                  {dict.common?.cancel || 'Cancel'}
+                </button>
+                <button
+                  type="button"
+                  onClick={submitManualExpense}
+                  disabled={expenseLoading || !expenseName.trim() || !expenseDescription.trim() || !expenseAmount}
+                  className={KEY_PRIMARY}
+                >
+                  <SaveIcon loading={expenseLoading} />
+                  {txDict?.saveExpense || 'Save Expense'}
+                </button>
+              </div>
+            </div>
+          )}
+        </SlipModal>
+      )}
+
+      {/* Add Manual Transaction Modal */}
+      {showAddModal && (
+        <SlipModal title={txDict?.addManual || 'Add Transaction'} closeLabel={closeLabel} onClose={() => setShowAddModal(false)} wide>
+          {manualSuccess ? (
+            <DoneNote
+              message={txDict?.transactionCreated || 'Transaction created successfully'}
+              closeLabel={closeLabel}
+              onClose={() => setShowAddModal(false)}
+            />
+          ) : (
+            <div className="space-y-5 px-5 py-4">
+              <div>
+                <div className="mb-2 flex items-center justify-between">
+                  <p className={`${LABEL} mb-0`}>{txDict?.items || 'Items'}</p>
+                  <button
+                    type="button"
+                    onClick={() => setManualItems((prev) => [...prev, emptyItem()])}
+                    className="flex min-h-[44px] items-center gap-1 font-receipt text-xs font-medium uppercase text-brand-hover transition-colors hover:text-ink"
+                  >
+                    <Plus className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+                    {txDict?.addItem || 'Add item'}
                   </button>
                 </div>
-              ) : (
-                <div className="px-5 py-4 space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{txDict?.name || 'Name'} <span className="text-red-500">*</span></label>
-                    <input
-                      type="text"
-                      value={expenseName}
-                      onChange={(e) => setExpenseName(e.target.value)}
-                      placeholder={txDict?.expenseNamePlaceholder || 'e.g. Office supplies'}
-                      className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{txDict?.description || 'Description'} <span className="text-red-500">*</span></label>
-                    <input
-                      type="text"
-                      value={expenseDescription}
-                      onChange={(e) => setExpenseDescription(e.target.value)}
-                      placeholder={txDict?.expenseDescPlaceholder || 'Brief description of the expense'}
-                      className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
-                    />
-                  </div>
-
-                  <div className="flex gap-3">
-                    <div className="flex-1">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">{dict.common?.amount || 'Amount'} <span className="text-red-500">*</span></label>
+                <div className="space-y-2">
+                  {manualItems.map((item, idx) => (
+                    <div key={idx} className="flex items-start gap-2">
+                      <input
+                        type="text"
+                        placeholder={txDict?.itemName || 'Item name'}
+                        aria-label={txDict?.itemName || 'Item name'}
+                        value={item.name}
+                        onChange={(e) => setManualItems((prev) => prev.map((it, i) => i === idx ? { ...it, name: e.target.value } : it))}
+                        className={`${FIELD} min-w-0 flex-1`}
+                      />
                       <input
                         type="number"
+                        placeholder={dict.products?.price || 'Price'}
+                        aria-label={dict.products?.price || 'Price'}
+                        value={item.price}
                         min="0"
                         step="0.01"
-                        value={expenseAmount}
-                        onChange={(e) => setExpenseAmount(e.target.value)}
-                        placeholder="0.00"
-                        className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
+                        onChange={(e) => setManualItems((prev) => prev.map((it, i) => i === idx ? { ...it, price: e.target.value } : it))}
+                        className={`${FIELD} !w-24`}
                       />
-                    </div>
-                    <div className="flex-1">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">{txDict?.date || 'Date'}</label>
-                      <input
-                        type="date"
-                        value={expenseDate}
-                        onChange={(e) => setExpenseDate(e.target.value)}
-                        className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{txDict?.payment || 'Payment Method'}</label>
-                    <div className="flex gap-0 border border-gray-300 bg-white w-full">
-                      {(['cash', 'card', 'digital', 'other'] as const).map((m) => (
-                        <button
-                          key={m}
-                          type="button"
-                          onClick={() => setExpensePayment(m)}
-                          className={`flex-1 py-2 text-xs font-medium border-r border-gray-300 last:border-r-0 transition-colors ${expensePayment === m ? 'bg-red-600 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
-                        >
-                          {dict.pos?.[m] || m.charAt(0).toUpperCase() + m.slice(1)}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{txDict?.notes || 'Notes'} ({dict.common?.optional || 'optional'})</label>
-                    <textarea
-                      value={expenseNotes}
-                      onChange={(e) => setExpenseNotes(e.target.value)}
-                      rows={2}
-                      placeholder={txDict?.expenseNotesPlaceholder || 'Additional details…'}
-                      className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 resize-none"
-                    />
-                  </div>
-
-                  {expenseError && (
-                    <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2">{expenseError}</div>
-                  )}
-
-                  <div className="flex gap-3 pt-1">
-                    <button
-                      onClick={() => setShowExpenseModal(false)}
-                      className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300 text-sm font-medium transition-colors"
-                    >
-                      {dict.common?.cancel || 'Cancel'}
-                    </button>
-                    <button
-                      onClick={submitManualExpense}
-                      disabled={expenseLoading || !expenseName.trim() || !expenseDescription.trim() || !expenseAmount}
-                      className="flex-1 px-4 py-2.5 bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed border border-red-700 text-sm font-medium transition-colors flex items-center justify-center gap-2"
-                    >
-                      {expenseLoading ? (
-                        <span className="inline-block w-4 h-4 border-2 border-white/40 border-t-white animate-spin" />
-                      ) : (
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                      )}
-                      {txDict?.saveExpense || 'Save Expense'}
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Add Manual Transaction Modal */}
-        {showAddModal && (
-          <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-4 overflow-y-auto" onClick={(e) => { if (e.target === e.currentTarget) setShowAddModal(false); }}>
-            <div className="bg-white w-full max-w-lg border border-gray-300 my-6">
-              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 bg-green-50">
-                <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">
-                  <svg className="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                  {txDict?.addManual || 'Add Manual Transaction'}
-                </h2>
-                <button onClick={() => setShowAddModal(false)} className="p-1 hover:bg-gray-200 transition-colors" aria-label="Close">
-                  <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                </button>
-              </div>
-
-              {manualSuccess ? (
-                <div className="px-5 py-10 text-center">
-                  <div className="mx-auto mb-3 flex items-center justify-center w-12 h-12 bg-green-100">
-                    <svg className="w-6 h-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                  </div>
-                  <p className="text-base font-semibold text-gray-900">{txDict?.transactionCreated || 'Transaction created successfully'}</p>
-                  <button onClick={() => setShowAddModal(false)} className="mt-4 px-6 py-2 bg-gray-800 text-white text-sm font-medium hover:bg-gray-900 transition-colors">
-                    {dict.common?.close || 'Close'}
-                  </button>
-                </div>
-              ) : (
-                <div className="px-5 py-4 space-y-5">
-                  {/* Line items */}
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <label className="text-sm font-medium text-gray-700">{txDict?.items || 'Items'}</label>
-                      <button
-                        onClick={() => setManualItems((prev) => [...prev, emptyItem()])}
-                        className="text-xs text-brand hover:text-brand-navy font-medium flex items-center gap-1"
-                      >
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                        {txDict?.addItem || 'Add item'}
-                      </button>
-                    </div>
-                    <div className="space-y-2">
-                      {manualItems.map((item, idx) => (
-                        <div key={idx} className="flex gap-2 items-start">
-                          <input
-                            type="text"
-                            placeholder={txDict?.itemName || 'Item name'}
-                            value={item.name}
-                            onChange={(e) => setManualItems((prev) => prev.map((it, i) => i === idx ? { ...it, name: e.target.value } : it))}
-                            className="flex-1 border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400 min-w-0"
-                          />
-                          <input
-                            type="number"
-                            placeholder={dict.common?.price || 'Price'}
-                            value={item.price}
-                            min="0"
-                            step="0.01"
-                            onChange={(e) => setManualItems((prev) => prev.map((it, i) => i === idx ? { ...it, price: e.target.value } : it))}
-                            className="w-24 border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
-                          />
-                          <input
-                            type="number"
-                            placeholder="Qty"
-                            value={item.quantity}
-                            min="1"
-                            step="1"
-                            onChange={(e) => setManualItems((prev) => prev.map((it, i) => i === idx ? { ...it, quantity: e.target.value } : it))}
-                            className="w-16 border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
-                          />
-                          {manualItems.length > 1 && (
-                            <button
-                              onClick={() => setManualItems((prev) => prev.filter((_, i) => i !== idx))}
-                              className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 transition-colors"
-                              title={dict?.pos?.removeItem || 'Remove item'}
-                            >
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                    {/* Running total */}
-                    {manualItems.some((it) => it.price && it.quantity) && (
-                      <div className="mt-3 text-right text-sm text-gray-600">
-                        {dict.common?.total || 'Total'}:{' '}
-                        <span className="font-bold text-gray-900">
-                          {manualItems.reduce((sum, it) => {
-                            const p = parseFloat(it.price);
-                            const q = parseInt(it.quantity, 10);
-                            return sum + (isNaN(p) || isNaN(q) ? 0 : p * q);
-                          }, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Payment method */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{txDict?.payment || 'Payment Method'}</label>
-                    <div className="flex gap-0 border border-gray-300 bg-white w-full">
-                      {(['cash', 'card', 'digital'] as const).map((m) => (
-                        <button
-                          key={m}
-                          type="button"
-                          onClick={() => setManualPayment(m)}
-                          className={`flex-1 py-2 text-sm font-medium border-r border-gray-300 last:border-r-0 transition-colors ${manualPayment === m ? 'bg-green-600 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
-                        >
-                          {dict.pos?.[m] || m.charAt(0).toUpperCase() + m.slice(1)}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Cash received */}
-                  {manualPayment === 'cash' && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">{txDict?.cash || 'Cash Received'} ({dict.common?.optional || 'optional'})</label>
                       <input
                         type="number"
-                        min="0"
-                        step="0.01"
-                        value={manualCash}
-                        onChange={(e) => setManualCash(e.target.value)}
-                        placeholder="0.00"
-                        className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
+                        placeholder={txDict?.qty || 'Qty'}
+                        aria-label={txDict?.qty || 'Qty'}
+                        value={item.quantity}
+                        min="1"
+                        step="1"
+                        onChange={(e) => setManualItems((prev) => prev.map((it, i) => i === idx ? { ...it, quantity: e.target.value } : it))}
+                        className={`${FIELD} !w-16`}
                       />
-                      {manualCash && (() => {
-                        const total = manualItems.reduce((s, it) => { const p = parseFloat(it.price); const q = parseInt(it.quantity, 10); return s + (isNaN(p)||isNaN(q)?0:p*q); }, 0);
-                        const change = parseFloat(manualCash) - total;
-                        return change >= 0 ? (
-                          <p className="text-xs text-gray-500 mt-1">{txDict?.change || 'Change'}: <span className="font-medium text-green-700">{change.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></p>
-                        ) : (
-                          <p className="text-xs text-red-500 mt-1">{txDict?.insufficientCash || 'Cash received is less than total'}</p>
-                        );
-                      })()}
-                    </div>
-                  )}
-
-                  {/* Notes */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{txDict?.notes || 'Notes'} ({dict.common?.optional || 'optional'})</label>
-                    <textarea
-                      value={manualNotes}
-                      onChange={(e) => setManualNotes(e.target.value)}
-                      rows={2}
-                      placeholder={txDict?.notesPlaceholder || 'e.g. walk-in customer, special order…'}
-                      className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400 resize-none"
-                    />
-                  </div>
-
-                  {manualError && (
-                    <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2">{manualError}</div>
-                  )}
-
-                  <div className="flex gap-3 pt-1">
-                    <button
-                      onClick={() => setShowAddModal(false)}
-                      className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300 text-sm font-medium transition-colors"
-                    >
-                      {dict.common?.cancel || 'Cancel'}
-                    </button>
-                    <button
-                      onClick={submitManualTransaction}
-                      disabled={manualLoading || manualItems.every((it) => !it.name)}
-                      className="flex-1 px-4 py-2.5 bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed border border-green-700 text-sm font-medium transition-colors flex items-center justify-center gap-2"
-                    >
-                      {manualLoading ? (
-                        <span className="inline-block w-4 h-4 border-2 border-white/40 border-t-white animate-spin" />
-                      ) : (
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                      {manualItems.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => setManualItems((prev) => prev.filter((_, i) => i !== idx))}
+                          className="flex min-h-[44px] w-9 shrink-0 items-center justify-center text-ink/60 transition-colors hover:text-stamp"
+                          title={dict?.pos?.removeItem || 'Remove item'}
+                          aria-label={dict?.pos?.removeItem || 'Remove item'}
+                        >
+                          <X className="h-4 w-4" strokeWidth={1.75} aria-hidden />
+                        </button>
                       )}
-                      {txDict?.saveTransaction || 'Save Transaction'}
-                    </button>
-                  </div>
+                    </div>
+                  ))}
                 </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Adjustment / Refund Modal */}
-        {adjustTransaction && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={(e) => { if (e.target === e.currentTarget) closeAdjustModal(); }}>
-            <div className="bg-white w-full max-w-md border border-gray-300">
-              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 bg-orange-50">
-                <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">
-                  <svg className="w-5 h-5 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                  {txDict?.adjustRefund || 'Adjust / Refund Transaction'}
-                </h2>
-                <button onClick={closeAdjustModal} className="p-1 hover:bg-gray-200 transition-colors" aria-label="Close">
-                  <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                </button>
-              </div>
-              <div className="px-5 py-4 space-y-4">
-                {/* Transaction summary */}
-                <div className="bg-gray-50 border border-gray-200 p-3 text-sm space-y-1">
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">{txDict.date}:</span>
-                    <span className="font-medium text-gray-800"><FormattedDate date={adjustTransaction.createdAt} includeTime={true} /></span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">{txDict.items}:</span>
-                    <span className="font-medium text-gray-800">{adjustTransaction.items.length}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">{dict.common.total}:</span>
-                    <span className="font-bold text-brand"><Currency amount={adjustTransaction.total} /></span>
-                  </div>
-                </div>
-                {!adjustSuccess ? (
-                  <>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        {txDict?.refundReason || 'Reason'} <span className="text-red-500">*</span>
-                      </label>
-                      <select
-                        value={adjustReason}
-                        onChange={(e) => setAdjustReason(e.target.value)}
-                        className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
-                      >
-                        <option value="">{txDict?.selectReason || '— Select a reason —'}</option>
-                        <option value="customer_request">{txDict?.reasonCustomerRequest || 'Customer request'}</option>
-                        <option value="defective_item">{txDict?.reasonDefectiveItem || 'Defective item'}</option>
-                        <option value="wrong_item">{txDict?.reasonWrongItem || 'Wrong item'}</option>
-                        <option value="overcharge">{txDict?.reasonOvercharge || 'Overcharge'}</option>
-                        <option value="other">{txDict?.reasonOther || 'Other'}</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        {txDict?.refundNotes || 'Notes (optional)'}
-                      </label>
-                      <textarea
-                        value={adjustNotes}
-                        onChange={(e) => setAdjustNotes(e.target.value)}
-                        rows={3}
-                        placeholder={txDict?.refundNotesPlaceholder || 'Additional details…'}
-                        className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none"
-                      />
-                    </div>
-                    {adjustError && (
-                      <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2">
-                        {adjustError}
-                      </div>
-                    )}
-                    <div className="flex gap-3 pt-1">
-                      <button
-                        onClick={closeAdjustModal}
-                        className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300 text-sm font-medium transition-colors"
-                      >
-                        {dict.common?.cancel || 'Cancel'}
-                      </button>
-                      <button
-                        onClick={doRefund}
-                        disabled={!adjustReason || adjustLoading}
-                        className="flex-1 px-4 py-2.5 bg-orange-500 text-white hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed border border-orange-600 text-sm font-medium transition-colors flex items-center justify-center gap-2"
-                      >
-                        {adjustLoading ? (
-                          <span className="inline-block w-4 h-4 border-2 border-white/40 border-t-white animate-spin" />
-                        ) : (
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
-                        )}
-                        {txDict?.processRefund || 'Process Refund'}
-                      </button>
-                    </div>
-                  </>
-                ) : (
-                  <div className="text-center py-6">
-                    <div className="mx-auto mb-3 flex items-center justify-center w-12 h-12 bg-green-100">
-                      <svg className="w-6 h-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                    </div>
-                    <p className="text-base font-semibold text-gray-900">{txDict?.refundSuccess || 'Refund processed successfully'}</p>
-                    <p className="text-sm text-gray-500 mt-1">{txDict?.stockRestored || 'Stock has been restored.'}</p>
-                    <button onClick={closeAdjustModal} className="mt-4 px-6 py-2 bg-gray-800 text-white text-sm font-medium hover:bg-gray-900 transition-colors">
-                      {dict.common?.close || 'Close'}
-                    </button>
+                {manualItems.some((it) => it.price && it.quantity) && (
+                  <div className="mt-3 font-receipt text-sm">
+                    <ReceiptRow strong label={dict.common?.total || 'Total'} value={<Currency amount={manualTotal} />} />
                   </div>
                 )}
               </div>
-            </div>
-          </div>
-        )}
 
-        {/* Pagination - Mobile-first */}
-        {totalPages > 1 && (
-          <div className="mt-4 sm:mt-6 flex flex-col sm:flex-row justify-center items-center gap-3 sm:gap-4">
-            <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page === 1}
-              className="w-full sm:w-auto px-6 py-3 sm:px-4 sm:py-2 border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 active:bg-gray-200 font-medium transition-colors bg-white touch-manipulation min-h-[44px] sm:min-h-0"
-            >
-              {txDict.previous}
-            </button>
-            <span className="px-4 py-2 text-sm sm:text-base text-gray-700 font-medium text-center">
-              {txDict.page} {page} {txDict.of} {totalPages}
-            </span>
-            <button
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page === totalPages}
-              className="w-full sm:w-auto px-6 py-3 sm:px-4 sm:py-2 border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 active:bg-gray-200 font-medium transition-colors bg-white touch-manipulation min-h-[44px] sm:min-h-0"
-            >
-              {txDict.next}
-            </button>
+              <div>
+                <p className={LABEL}>{txDict?.payment || 'Payment Method'}</p>
+                <div className="flex divide-x divide-ink/25 border border-ink/25">
+                  {(['cash', 'card', 'digital'] as const).map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setManualPayment(m)}
+                      aria-pressed={manualPayment === m}
+                      className={`flex min-h-[44px] min-w-0 flex-1 items-center justify-center font-receipt text-xs font-medium uppercase transition-colors ${manualPayment === m ? 'bg-ink text-paper-white' : 'text-ink hover:bg-paper'}`}
+                    >
+                      {paymentLabel(m)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {manualPayment === 'cash' && (
+                <div>
+                  <label htmlFor="manual-cash" className={LABEL}>{txDict?.cash || 'Cash Received'} ({dict.common?.optional || 'optional'})</label>
+                  <input
+                    id="manual-cash"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={manualCash}
+                    onChange={(e) => setManualCash(e.target.value)}
+                    placeholder="0.00"
+                    className={FIELD}
+                  />
+                  {manualCash && (manualChange >= 0 ? (
+                    <div className="mt-2 font-receipt text-sm">
+                      <ReceiptRow label={txDict?.change || 'Change'} value={<Currency amount={manualChange} />} />
+                    </div>
+                  ) : (
+                    <p className="mt-1 font-receipt text-xs text-stamp">{txDict?.insufficientCash || 'Cash received is less than total'}</p>
+                  ))}
+                </div>
+              )}
+
+              <div>
+                <label htmlFor="manual-notes" className={LABEL}>{txDict?.notes || 'Notes'} ({dict.common?.optional || 'optional'})</label>
+                <textarea
+                  id="manual-notes"
+                  value={manualNotes}
+                  onChange={(e) => setManualNotes(e.target.value)}
+                  rows={2}
+                  placeholder={txDict?.notesPlaceholder || 'e.g. walk-in customer, special order…'}
+                  className={`${FIELD} resize-none`}
+                />
+              </div>
+
+              {manualError && <div className={ERROR_NOTE}>{manualError}</div>}
+
+              <div className="flex gap-3 pt-1">
+                <button type="button" onClick={() => setShowAddModal(false)} className={KEY_SECONDARY}>
+                  {dict.common?.cancel || 'Cancel'}
+                </button>
+                <button
+                  type="button"
+                  onClick={submitManualTransaction}
+                  disabled={manualLoading || manualItems.every((it) => !it.name)}
+                  className={KEY_PRIMARY}
+                >
+                  <SaveIcon loading={manualLoading} />
+                  {txDict?.saveTransaction || 'Save Transaction'}
+                </button>
+              </div>
+            </div>
+          )}
+        </SlipModal>
+      )}
+
+      {/* Void Modal */}
+      {voidTransaction && (
+        <SlipModal title={txDict?.voidTitle || 'Void Sale'} closeLabel={closeLabel} onClose={() => setVoidTransaction(null)}>
+          <div className="space-y-4 px-5 py-4">
+            <div className="space-y-1 border-b border-dashed border-ink/30 pb-3 font-receipt text-sm">
+              <ReceiptRow label={txDict?.receipt || 'Receipt'} value={`#${receiptNo(voidTransaction)}`} />
+              <ReceiptRow label={txDict.date} value={<FormattedDate date={voidTransaction.createdAt} includeTime={true} />} />
+              <ReceiptRow strong label={dict.common.total} value={<Currency amount={voidTransaction.total} />} />
+            </div>
+            {voidSuccess ? (
+              <DoneNote
+                message={txDict?.voidSuccess || 'Sale voided'}
+                note={txDict?.voidDone || 'Stock and balances have been restored.'}
+                closeLabel={closeLabel}
+                onClose={() => setVoidTransaction(null)}
+              />
+            ) : (
+              <>
+                <p className="text-sm text-ink/70">
+                  {txDict?.voidNotice || "This cancels the whole sale and can't be undone. Stock, payment records, account balance, loyalty points and discount usage are reversed. Return any money to the customer yourself."}
+                </p>
+                <div>
+                  <label htmlFor="void-reason" className={LABEL}>
+                    {txDict?.voidReason || 'Reason for void'} <span className="text-stamp">*</span>
+                  </label>
+                  <textarea
+                    id="void-reason"
+                    value={voidReason}
+                    onChange={(e) => setVoidReason(e.target.value)}
+                    rows={3}
+                    maxLength={500}
+                    placeholder={txDict?.voidReasonPlaceholder || 'e.g. Wrong item keyed'}
+                    className={`${FIELD} resize-none`}
+                  />
+                </div>
+                {voidError && <div className={ERROR_NOTE}>{voidError}</div>}
+                <div className="flex gap-3 pt-1">
+                  <button type="button" onClick={() => setVoidTransaction(null)} className={KEY_SECONDARY}>
+                    {dict.common?.cancel || 'Cancel'}
+                  </button>
+                  <button type="button" onClick={doVoid} disabled={!voidReason.trim() || voidLoading} className={KEY_STAMP}>
+                    {voidLoading ? <SaveIcon loading /> : <Ban className="h-4 w-4" strokeWidth={1.75} aria-hidden />}
+                    {txDict?.voidTitle || 'Void Sale'}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
-        )}
-      </div>
+        </SlipModal>
+      )}
+
+      {/* Adjustment / Refund Modal */}
+      {adjustTransaction && (
+        <SlipModal title={txDict?.adjustRefund || 'Adjust / Refund Transaction'} closeLabel={closeLabel} onClose={closeAdjustModal}>
+          <div className="space-y-4 px-5 py-4">
+            <div className="space-y-1 border-b border-dashed border-ink/30 pb-3 font-receipt text-sm">
+              <ReceiptRow label={txDict.date} value={<FormattedDate date={adjustTransaction.createdAt} includeTime={true} />} />
+              <ReceiptRow label={txDict.items} value={adjustTransaction.items.length} />
+              <ReceiptRow strong label={dict.common.total} value={<Currency amount={adjustTransaction.total} />} />
+            </div>
+            {!adjustSuccess ? (
+              <>
+                <div>
+                  <label htmlFor="refund-reason" className={LABEL}>
+                    {txDict?.refundReason || 'Reason'} <span className="text-stamp">*</span>
+                  </label>
+                  <select
+                    id="refund-reason"
+                    value={adjustReason}
+                    onChange={(e) => setAdjustReason(e.target.value)}
+                    className={FIELD}
+                  >
+                    <option value="">{txDict?.selectReason || '— Select a reason —'}</option>
+                    <option value="customer_request">{txDict?.reasonCustomerRequest || 'Customer request'}</option>
+                    <option value="defective_item">{txDict?.reasonDefectiveItem || 'Defective item'}</option>
+                    <option value="wrong_item">{txDict?.reasonWrongItem || 'Wrong item'}</option>
+                    <option value="overcharge">{txDict?.reasonOvercharge || 'Overcharge'}</option>
+                    <option value="other">{txDict?.reasonOther || 'Other'}</option>
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="refund-notes" className={LABEL}>
+                    {txDict?.refundNotes || 'Notes (optional)'}
+                  </label>
+                  <textarea
+                    id="refund-notes"
+                    value={adjustNotes}
+                    onChange={(e) => setAdjustNotes(e.target.value)}
+                    rows={3}
+                    placeholder={txDict?.refundNotesPlaceholder || 'Additional details…'}
+                    className={`${FIELD} resize-none`}
+                  />
+                </div>
+                {adjustError && <div className={ERROR_NOTE}>{adjustError}</div>}
+                <div className="flex gap-3 pt-1">
+                  <button type="button" onClick={closeAdjustModal} className={KEY_SECONDARY}>
+                    {dict.common?.cancel || 'Cancel'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={doRefund}
+                    disabled={!adjustReason || adjustLoading}
+                    className={KEY_STAMP}
+                  >
+                    {adjustLoading
+                      ? <SaveIcon loading />
+                      : <RotateCcw className="h-4 w-4" strokeWidth={1.75} aria-hidden />}
+                    {txDict?.processRefund || 'Process Refund'}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <DoneNote
+                message={txDict?.refundSuccess || 'Refund processed successfully'}
+                note={txDict?.stockRestored || 'Stock has been restored.'}
+                closeLabel={closeLabel}
+                onClose={closeAdjustModal}
+              />
+            )}
+          </div>
+        </SlipModal>
+      )}
     </div>
   );
 }
-

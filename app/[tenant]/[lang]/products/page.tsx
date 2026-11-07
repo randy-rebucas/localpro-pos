@@ -6,8 +6,12 @@ import Currency from '@/components/Currency';
 import PageTitle from '@/components/PageTitle';
 import dynamic from 'next/dynamic';
 import Image from 'next/image';
+import { LayoutGrid, List, Package, PackagePlus, Pencil, Pin, Plus, RotateCcw, ScanBarcode, Search, Trash2 } from 'lucide-react';
+import '@/app/marketing.css';
+import { marketingFontClasses } from '@/components/marketing/fonts';
+import { LineTag } from '@/components/marketing/primitives';
 import { normalizeImageUrl } from '@/lib/image-utils';
-import PageLoading from '@/components/ui/PageLoading';
+import { productStockTotal } from '@/lib/product-variations';
 import EmptyState from '@/components/ui/EmptyState';
 import ErrorState from '@/components/ui/ErrorState';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
@@ -19,7 +23,7 @@ import { useConfirm } from '@/lib/confirm';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { getDefaultTenantSettings } from '@/lib/currency';
 import { supportsFeature } from '@/lib/business-type-helpers';
-import { useProductsCatalog, type CatalogProduct } from '@/hooks/useProductsCatalog';
+import { useProductsCatalog, type CatalogActivity, type CatalogProduct, type CatalogSort } from '@/hooks/useProductsCatalog';
 import { usePermissions } from '@/hooks/usePermissions';
 import type { TranslationDict } from '@/types/dictionary';
 
@@ -38,6 +42,77 @@ const BarcodeModal = dynamic(() => import('@/components/BarcodeModal'), {
 
 type Product = CatalogProduct;
 
+const ICON = 'h-[18px] w-[18px]';
+
+const FILTER_LABEL = 'mb-1 block font-receipt text-xs font-medium uppercase tracking-[0.08em] text-white/60';
+const FILTER_FIELD = 'min-h-[44px] w-full border-2 border-transparent bg-paper-white px-3 py-2 font-receipt text-sm text-ink focus:border-[#8fe3d0] focus:outline-none';
+
+function StockTag({ stock, threshold, label }: { stock: number; threshold: number; label?: string }) {
+  const tone =
+    stock > threshold
+      ? 'border-ink/25 text-ink/70'
+      : stock > 0
+        ? 'border-ink bg-paper font-semibold text-ink'
+        : 'border-stamp font-semibold text-stamp';
+  return (
+    <span className={`inline-block whitespace-nowrap border px-2 py-1 font-receipt text-xs ${tone}`}>
+      {stock} {label}
+    </span>
+  );
+}
+
+function ProductPhoto({ product, sizes, className, iconClassName }: {
+  product: Product;
+  sizes: string;
+  className: string;
+  iconClassName: string;
+}) {
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const src = product.image ? normalizeImageUrl(product.image) : null;
+
+  return (
+    <div className={`relative flex shrink-0 items-center justify-center bg-paper ${className}`}>
+      {src && src !== failedSrc ? (
+        <Image
+          src={src}
+          alt={product.name}
+          fill
+          sizes={sizes}
+          loading="lazy"
+          className="object-cover"
+          onError={() => setFailedSrc(src)}
+        />
+      ) : (
+        <Package className={`text-ink/25 ${iconClassName}`} strokeWidth={1.75} aria-hidden />
+      )}
+    </div>
+  );
+}
+
+const categoryName = (product: Product) =>
+  product.category || (product.categoryId && typeof product.categoryId === 'object' ? product.categoryId.name : '') || '';
+
+function InactiveTag({ label }: { label?: string }) {
+  return <span className="shrink-0 border border-dashed border-ink/40 px-1.5 py-0.5 font-receipt text-xs uppercase text-ink/60">{label}</span>;
+}
+
+function ProductMeta({ product, skuLabel, variationCount }: { product: Product; skuLabel?: string; variationCount?: string }) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 font-receipt text-xs text-ink/60">
+      {product.sku && <span>{skuLabel}: {product.sku}</span>}
+      {product.hasVariations && !!product.variations?.length && (
+        <span>{(variationCount || '{count} variations').replace('{count}', String(product.variations.length))}</span>
+      )}
+      {product.barcode && <span>{product.barcode}</span>}
+      {categoryName(product) && <span className="border border-ink/25 px-1.5 py-0.5">{categoryName(product)}</span>}
+    </div>
+  );
+}
+
+function PinMark({ color }: { color: string }) {
+  return <Pin className="h-3.5 w-3.5 shrink-0" style={{ color }} fill="currentColor" strokeWidth={1.75} aria-hidden />;
+}
+
 export default function ProductsPage() {
   const params = useParams();
   const tenant = params.tenant as string;
@@ -52,6 +127,10 @@ export default function ProductsPage() {
   const [barcodeProduct, setBarcodeProduct] = useState<Product | null>(null);
   const [dict, setDict] = useState<TranslationDict | null>(null);
   const [displayMode, setDisplayMode] = useState<'grid' | 'list'>('list');
+  const [category, setCategory] = useState('');
+  const [activity, setActivity] = useState<CatalogActivity>('active');
+  const [sort, setSort] = useState<CatalogSort>('newest');
+  const [categories, setCategories] = useState<string[]>([]);
   const { confirm, Dialog: ConfirmDialog } = useConfirm();
   const { settings } = useTenantSettings();
   const primaryColor = (settings || getDefaultTenantSettings()).primaryColor || '#35979c';
@@ -59,7 +138,23 @@ export default function ProductsPage() {
   const { canAccess } = usePermissions();
   const canManage = canAccess('products.manage');
 
-  const { products, status, error, refetch } = useProductsCatalog(tenant, search);
+  const { products, total, totalPages, status, error, refetch } = useProductsCatalog(tenant, {
+    search,
+    page,
+    pageSize: PRODUCTS_PER_PAGE,
+    category,
+    activity,
+    sort,
+  });
+
+  useEffect(() => {
+    let current = true;
+    fetch(`/api/products/filters?tenant=${tenant}`)
+      .then((res) => res.json())
+      .then((data) => { if (current && data.success) setCategories(data.data.categories); })
+      .catch(() => { /* the page works without the category list */ });
+    return () => { current = false; };
+  }, [tenant]);
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -76,18 +171,26 @@ export default function ProductsPage() {
     localStorage.setItem(`displayMode_${tenant}`, displayMode);
   }, [displayMode, tenant]);
 
-  const sortedProducts = [...products].sort((a, b) => {
-    if (a.pinned && !b.pinned) return -1;
-    if (!a.pinned && b.pinned) return 1;
-    return 0;
+  /** Any filter change starts again from the first page. */
+  const applyFilter = (update: () => void) => {
+    update();
+    setPage(1);
+  };
+
+  const clearFilters = () => applyFilter(() => {
+    setSearch('');
+    setCategory('');
+    setActivity('active');
+    setSort('newest');
   });
 
-  useEffect(() => {
-    setPage(1);
-  }, [search, products.length]);
+  /** After a product leaves the current view, step back if that emptied the last page. */
+  const refreshAfterRemoval = () => {
+    if (products.length === 1 && page > 1) setPage(page - 1);
+    else refetch();
+  };
 
-  const totalPages = Math.max(1, Math.ceil(sortedProducts.length / PRODUCTS_PER_PAGE));
-  const paginatedProducts = sortedProducts.slice((page - 1) * PRODUCTS_PER_PAGE, page * PRODUCTS_PER_PAGE);
+  const lowStockThreshold = (product: Product) => product.lowStockThreshold || (settings?.lowStockThreshold ?? 10);
 
   const handleDelete = async (id: string) => {
     if (!dict) return;
@@ -103,13 +206,37 @@ export default function ProductsPage() {
       const data = await res.json();
       if (data.success) {
         showToast.success(dict.products?.productDeleted || 'Product deleted successfully');
-        refetch();
+        refreshAfterRemoval();
       } else {
         showToast.error(data.error || dict.products?.deleteError || 'Failed to delete product');
       }
     } catch (err) {
       console.error('Error deleting product:', err);
       showToast.error(dict.products?.deleteError || 'Failed to delete product');
+    }
+  };
+
+  const handleReactivate = async (id: string) => {
+    if (!dict) return;
+    const failed = dict.products?.reactivateError || 'Failed to reactivate product';
+    try {
+      const res = await fetch(`/api/products/${id}?tenant=${tenant}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ isActive: true }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast.success(dict.products?.productReactivated || 'Product reactivated');
+        if (activity === 'inactive') refreshAfterRemoval();
+        else refetch();
+      } else {
+        showToast.error(data.error || failed);
+      }
+    } catch (err) {
+      console.error('Error reactivating product:', err);
+      showToast.error(failed);
     }
   };
 
@@ -152,10 +279,89 @@ export default function ProductsPage() {
   };
 
   if (!dict) {
-    return <PageLoading label="Loading..." />;
+    return (
+      <div className="flex min-h-dvh items-center justify-center bg-brand-navy-deep">
+        <LoadingSpinner size="md" color="#8fe3d0" />
+      </div>
+    );
   }
 
   const productsDict = dict.products ?? {};
+  const filtersActive = !!search || !!category || activity !== 'active';
+  const sortOptions: { value: CatalogSort; label: string }[] = [
+    { value: 'newest', label: productsDict.sortNewest || 'Newest' },
+    { value: 'name', label: productsDict.sortName || 'Name (A-Z)' },
+    { value: 'price_asc', label: productsDict.sortPriceLow || 'Price: low to high' },
+    { value: 'price_desc', label: productsDict.sortPriceHigh || 'Price: high to low' },
+    { value: 'stock_asc', label: productsDict.sortStockLow || 'Stock: low to high' },
+    { value: 'stock_desc', label: productsDict.sortStockHigh || 'Stock: high to low' },
+  ];
+  const showStock = (product: Product) => inventoryEnabled && product.trackInventory !== false;
+  const canRefill = inventoryEnabled && canManage;
+  const keyCount = 1 + (canManage ? 2 : 0) + (canRefill ? 1 : 0);
+
+  /** A row of till keys: joined to the row in the list, spanning the bottom edge of a shelf tag. */
+  const renderKeys = (product: Product, layout: 'row' | 'strip') => {
+    const key = `flex min-h-[44px] items-center justify-center text-ink touch-manipulation transition-colors hover:bg-paper ${layout === 'strip' ? 'min-w-0 flex-1' : 'w-11'}`;
+    return (
+      <div className={`actions-touch-visible flex divide-x divide-ink/25 transition-opacity duration-200 ${layout === 'strip' ? 'border-t border-ink/25' : 'border border-ink/25'}`}>
+        {canRefill && (
+          <button
+            type="button"
+            onClick={() => handleRefill(product)}
+            className={key}
+            title={productsDict.refill?.title || 'Refill Stock'}
+            aria-label={productsDict.refill?.title || 'Refill Stock'}
+          >
+            <PackagePlus className={ICON} strokeWidth={1.75} aria-hidden />
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => setBarcodeProduct(product)}
+          className={key}
+          title={productsDict.viewBarcode || 'View Barcode'}
+          aria-label={productsDict.viewBarcode || 'View Barcode'}
+        >
+          <ScanBarcode className={ICON} strokeWidth={1.75} aria-hidden />
+        </button>
+        {canManage && (
+          <>
+            <button
+              type="button"
+              onClick={() => handleEdit(product)}
+              className={key}
+              title={dict.common.edit}
+              aria-label={dict.common.edit}
+            >
+              <Pencil className={ICON} strokeWidth={1.75} aria-hidden />
+            </button>
+            {product.isActive === false ? (
+              <button
+                type="button"
+                onClick={() => handleReactivate(product._id)}
+                className={key}
+                title={productsDict.reactivate || 'Reactivate'}
+                aria-label={productsDict.reactivate || 'Reactivate'}
+              >
+                <RotateCcw className={ICON} strokeWidth={1.75} aria-hidden />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => handleDelete(product._id)}
+                className={`${key} hover:text-stamp`}
+                title={dict.common.delete}
+                aria-label={dict.common.delete}
+              >
+                <Trash2 className={ICON} strokeWidth={1.75} aria-hidden />
+              </button>
+            )}
+          </>
+        )}
+      </div>
+    );
+  };
 
   const renderProductContent = () => {
     if (status === 'loading') {
@@ -164,7 +370,7 @@ export default function ProductsPage() {
 
     if (status === 'error') {
       return (
-        <div className="bg-white border border-gray-300">
+        <div className="bg-paper-white text-ink">
           <ErrorState
             title={productsDict.failedToLoadProducts || 'Failed to load products'}
             description={error || undefined}
@@ -178,460 +384,243 @@ export default function ProductsPage() {
     if (products.length === 0) {
       return (
         <EmptyState
-          icon={search ? 'search' : 'products'}
-          title={search ? (dict.common.noResults || 'No results found') : (productsDict.noProductsYet || 'No products yet')}
+          icon={filtersActive ? 'search' : 'products'}
+          title={filtersActive ? (dict.common.noResults || 'No results found') : (productsDict.noProductsYet || 'No products yet')}
           action={
-            search
-              ? { label: productsDict.clearSearch || 'Clear search', onClick: () => setSearch('') }
+            filtersActive
+              ? { label: productsDict.clearFilters || 'Clear filters', onClick: clearFilters }
               : canManage
                 ? { label: productsDict.addProduct || 'Add Product', onClick: () => setIsModalOpen(true) }
                 : undefined
           }
-          className="bg-white border border-gray-300"
+          className="bg-paper-white text-ink"
         />
       );
     }
 
     if (displayMode === 'grid') {
       return (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 sm:gap-6">
-          {paginatedProducts.map((product) => (
-            <div
-              key={product._id}
-              className="group relative bg-white border border-gray-300 p-4 sm:p-5 transition-all duration-200 flex flex-col"
-              style={{
-                borderColor: '#d1d5db',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = primaryColor;
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = '#d1d5db';
-              }}
-            >
-              <div className="mb-3 -mx-4 -mt-4 sm:-mx-5 sm:-mt-5">
-                {product.image ? (
-                  <div className="relative w-full h-36">
-                    <Image
-                      src={normalizeImageUrl(product.image)}
-                      alt={product.name}
-                      fill
-                      sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 16vw"
-                      loading="lazy"
-                      className="object-cover"
-                      onError={(e) => {
-                        const img = e.target as HTMLImageElement;
-                        img.style.display = 'none';
-                        const placeholder = img.parentElement?.nextElementSibling as HTMLElement | null;
-                        if (placeholder) placeholder.style.display = 'flex';
-                      }}
-                    />
-                  </div>
-                ) : null}
-                <div
-                  className="w-full h-36 bg-gray-100 flex items-center justify-center"
-                  style={{ display: product.image ? 'none' : 'flex' }}
-                >
-                  <svg className="w-10 h-10 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                </div>
-              </div>
-
-              <div className="flex-1 mb-4">
-                <div className="flex items-start justify-between mb-2">
-                  <h3 className="font-semibold text-gray-900 text-lg sm:text-xl pr-2 flex-1">
-                    {product.name}
-                    {product.pinned && (
-                      <svg className="inline-block w-4 h-4 ml-2" style={{ color: primaryColor }} fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M10 2a1 1 0 011 1v1.323l3.954 1.582 1.599-.8a1 1 0 01.894 1.79l-1.233.616 1.738 5.42a1 1 0 01-.285 1.05A3.989 3.989 0 0115 15a3.989 3.989 0 01-2.667-1.019 1 1 0 01-.285-1.05l1.715-5.349L11 6.477V16a1 1 0 11-2 0V6.477L5.237 7.582l1.715 5.349a1 1 0 01-.285 1.05A3.989 3.989 0 013 15a3.989 3.989 0 01-2.667-1.019 1 1 0 01-.285-1.05l1.738-5.42-1.233-.617a1 1 0 01.894-1.788l1.599.799L9 4.323V3a1 1 0 011-1z" />
-                      </svg>
-                    )}
-                  </h3>
-                </div>
-
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+          {products.map((product) => (
+            <article key={product._id} className="group flex min-w-0 flex-col bg-paper-white text-ink">
+              <ProductPhoto
+                product={product}
+                sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, (max-width: 1280px) 25vw, 20vw"
+                className="h-36 w-full"
+                iconClassName="h-10 w-10"
+              />
+              <div className="flex flex-1 flex-col p-3 sm:p-4">
+                <h3 className="flex items-start justify-between gap-2 text-base font-semibold leading-snug">
+                  <span className="min-w-0 break-words">{product.name}</span>
+                  {product.pinned && <PinMark color={primaryColor} />}
+                  {product.isActive === false && <InactiveTag label={productsDict.statusInactive} />}
+                </h3>
                 {product.description && (
-                  <p className="text-sm text-gray-500 mb-3 line-clamp-2">{product.description}</p>
+                  <p className="mt-1 line-clamp-2 text-sm text-ink/60">{product.description}</p>
                 )}
-
-                <div className="flex flex-wrap gap-3 mb-3 text-xs sm:text-sm text-gray-600">
-                  {product.sku && (
-                    <div className="flex items-center gap-1">
-                      <span className="font-medium">{productsDict.sku}:</span>
-                      <span>{product.sku}</span>
-                    </div>
-                  )}
-                  {product.barcode && (
-                    <div className="flex items-center gap-1">
-                      <svg className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h1v12H4V6zm2 0h1v12H6V6zm3 0h2v12H9V6zm3 0h1v12h-1V6zm2 0h2v12h-2V6zm3 0h1v12h-1V6z" />
-                      </svg>
-                      <span className="font-mono">{product.barcode}</span>
-                    </div>
-                  )}
-                  {product.category && (
-                    <div className="flex items-center gap-1">
-                      <span className="font-medium">{productsDict.category}:</span>
-                      <span className="px-2 py-0.5 bg-gray-100 border border-gray-300">{product.category}</span>
-                    </div>
-                  )}
+                <div className="mt-2">
+                  <ProductMeta product={product} skuLabel={productsDict.sku} variationCount={productsDict.variationCount} />
                 </div>
-              </div>
-
-              <div className="border-t border-gray-200 pt-4 mt-auto">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <div className="text-xs text-gray-500 mb-1">{productsDict.price}</div>
-                    <div className="font-bold text-xl sm:text-2xl" style={{ color: primaryColor }}>
-                      <Currency amount={product.price} />
-                    </div>
+                <div className="mt-auto pt-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-t border-dashed border-ink/30 pt-3">
+                    <Currency amount={product.price} className="min-w-0 break-all font-receipt text-lg font-semibold sm:text-xl" />
+                    {showStock(product) && <StockTag stock={productStockTotal(product)} threshold={lowStockThreshold(product)} label={productsDict.inStock} />}
                   </div>
-                  {inventoryEnabled && (
-                    <div className="text-right">
-                      <div className="text-xs text-gray-500 mb-1">{productsDict.stock}</div>
-                      <span
-                        className={`inline-block text-xs font-semibold px-3 py-1.5 border ${
-                          product.stock > 10
-                            ? 'bg-green-100 text-green-800 border-green-300'
-                            : product.stock > 0
-                            ? 'bg-yellow-100 text-yellow-800 border-yellow-300'
-                            : 'bg-red-100 text-red-800 border-red-300'
-                        }`}
-                      >
-                        {product.stock} {productsDict.inStock}
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex gap-2 actions-touch-visible transition-opacity duration-200">
-                  {inventoryEnabled && canManage && (
-                    <button
-                      onClick={() => handleRefill(product)}
-                      className="flex-1 py-2.5 bg-green-600 text-white hover:bg-green-700 active:bg-green-800 transition-all duration-200 border border-green-700 flex items-center justify-center touch-manipulation min-h-[44px]"
-                      title={productsDict.refill?.title || 'Refill Stock'}
-                      aria-label={productsDict.refill?.title || 'Refill Stock'}
-                    >
-                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                      </svg>
-                    </button>
-                  )}
-                  <button
-                    onClick={() => setBarcodeProduct(product)}
-                    className="flex-1 py-2.5 bg-gray-700 text-white hover:bg-gray-800 active:bg-gray-900 transition-all duration-200 border border-gray-800 flex items-center justify-center touch-manipulation min-h-[44px]"
-                    title={productsDict.viewBarcode || 'View Barcode'}
-                    aria-label={productsDict.viewBarcode || 'View Barcode'}
-                  >
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h1v12H4V6zm2 0h1v12H6V6zm3 0h2v12H9V6zm3 0h1v12h-1V6zm2 0h2v12h-2V6zm3 0h1v12h-1V6z" />
-                    </svg>
-                  </button>
-                  {canManage && (
-                    <>
-                      <button
-                        onClick={() => handleEdit(product)}
-                        style={{ backgroundColor: primaryColor, borderColor: primaryColor }}
-                        className="flex-1 py-2.5 text-white active:opacity-80 transition-all duration-200 border flex items-center justify-center touch-manipulation min-h-[44px] hover:opacity-90"
-                        title={dict.common.edit}
-                        aria-label={dict.common.edit}
-                      >
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
-                      </button>
-                      <button
-                        onClick={() => handleDelete(product._id)}
-                        className="flex-1 py-2.5 bg-red-600 text-white hover:bg-red-700 active:bg-red-800 transition-all duration-200 border border-red-700 flex items-center justify-center touch-manipulation min-h-[44px]"
-                        title={dict.common.delete}
-                        aria-label={dict.common.delete}
-                      >
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
-                    </>
-                  )}
                 </div>
               </div>
-            </div>
+              {renderKeys(product, 'strip')}
+            </article>
           ))}
         </div>
       );
     }
 
     return (
-      <div className="bg-white border border-gray-300 divide-y divide-gray-300">
-        {paginatedProducts.map((product) => (
-          <div key={product._id} className="group relative px-4 sm:px-5 py-2.5 sm:py-3 hover:bg-gray-50 transition-colors">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
-              <div className="flex gap-3 flex-1 min-w-0">
-                {product.image ? (
-                  <div className="relative w-10 h-10 flex-shrink-0 self-center">
-                    <Image
-                      src={normalizeImageUrl(product.image)}
-                      alt={product.name}
-                      fill
-                      sizes="40px"
-                      loading="lazy"
-                      className="object-cover border border-gray-200"
-                      onError={(e) => {
-                        const img = e.target as HTMLImageElement;
-                        img.style.display = 'none';
-                        const placeholder = img.parentElement?.nextElementSibling as HTMLElement | null;
-                        if (placeholder) placeholder.style.display = 'flex';
-                      }}
-                    />
-                  </div>
-                ) : null}
-                <div
-                  className="w-10 h-10 bg-gray-100 border border-gray-200 flex-shrink-0 items-center justify-center self-center"
-                  style={{ display: product.image ? 'none' : 'flex' }}
-                >
-                  <svg className="w-4 h-4 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold text-gray-900 text-sm sm:text-base truncate">
-                    {product.name}
-                    {product.pinned && (
-                      <svg className="inline-block w-3.5 h-3.5 ml-1.5" style={{ color: primaryColor }} fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M10 2a1 1 0 011 1v1.323l3.954 1.582 1.599-.8a1 1 0 01.894 1.79l-1.233.616 1.738 5.42a1 1 0 01-.285 1.05A3.989 3.989 0 0115 15a3.989 3.989 0 01-2.667-1.019 1 1 0 01-.285-1.05l1.715-5.349L11 6.477V16a1 1 0 11-2 0V6.477L5.237 7.582l1.715 5.349a1 1 0 01-.285 1.05A3.989 3.989 0 013 15a3.989 3.989 0 01-2.667-1.019 1 1 0 01-.285-1.05l1.738-5.42-1.233-.617a1 1 0 01.894-1.788l1.599.799L9 4.323V3a1 1 0 011-1z" />
-                      </svg>
-                    )}
-                  </h3>
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
-                    {product.sku && <span>{productsDict.sku}: {product.sku}</span>}
-                    {product.barcode && <span className="font-mono">{product.barcode}</span>}
-                    {product.category && (
-                      <span className="px-1.5 py-0.5 bg-gray-100 border border-gray-300">{product.category}</span>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3 sm:gap-4">
-                <div className="font-bold text-base sm:text-lg" style={{ color: primaryColor }}>
-                  <Currency amount={product.price} />
-                </div>
-                {inventoryEnabled && (
-                  <span
-                    className={`inline-block text-xs font-semibold px-2 py-1 border ${
-                      product.stock > 10
-                        ? 'bg-green-100 text-green-800 border-green-300'
-                        : product.stock > 0
-                        ? 'bg-yellow-100 text-yellow-800 border-yellow-300'
-                        : 'bg-red-100 text-red-800 border-red-300'
-                    }`}
-                  >
-                    {product.stock} {productsDict.inStock}
-                  </span>
-                )}
-                <div className="flex gap-1.5 actions-touch-visible transition-opacity duration-200">
-                  {inventoryEnabled && canManage && (
-                    <button
-                      onClick={() => handleRefill(product)}
-                      className="px-2.5 py-1.5 bg-green-600 text-white hover:bg-green-700 active:bg-green-800 transition-all duration-200 border border-green-700 flex items-center justify-center touch-manipulation min-h-[36px] sm:min-h-0"
-                      title={productsDict.refill?.title || 'Refill Stock'}
-                      aria-label={productsDict.refill?.title || 'Refill Stock'}
-                    >
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                      </svg>
-                    </button>
-                  )}
-                  <button
-                    onClick={() => setBarcodeProduct(product)}
-                    className="px-2.5 py-1.5 bg-gray-700 text-white hover:bg-gray-800 active:bg-gray-900 transition-all duration-200 border border-gray-800 flex items-center justify-center touch-manipulation min-h-[36px] sm:min-h-0"
-                    title={productsDict.viewBarcode || 'View Barcode'}
-                    aria-label={productsDict.viewBarcode || 'View Barcode'}
-                  >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h1v12H4V6zm2 0h1v12H6V6zm3 0h2v12H9V6zm3 0h1v12h-1V6zm2 0h2v12h-2V6zm3 0h1v12h-1V6z" />
-                    </svg>
-                  </button>
-                  {canManage && (
-                    <>
-                      <button
-                        onClick={() => handleEdit(product)}
-                        style={{ backgroundColor: primaryColor, borderColor: primaryColor }}
-                        className="px-2.5 py-1.5 text-white active:opacity-80 transition-all duration-200 border flex items-center justify-center touch-manipulation min-h-[36px] sm:min-h-0 hover:opacity-90"
-                        title={dict.common.edit}
-                        aria-label={dict.common.edit}
-                      >
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
-                      </button>
-                      <button
-                        onClick={() => handleDelete(product._id)}
-                        className="px-2.5 py-1.5 bg-red-600 text-white hover:bg-red-700 active:bg-red-800 transition-all duration-200 border border-red-700 flex items-center justify-center touch-manipulation min-h-[36px] sm:min-h-0"
-                        title={dict.common.delete}
-                        aria-label={dict.common.delete}
-                      >
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
+      <div>
+        <div className="bg-paper-white text-ink">
+          <div className="hidden items-center gap-3 border-b border-dashed border-ink/30 px-4 py-2 font-receipt text-xs font-medium uppercase tracking-[0.14em] text-ink/60 md:flex">
+            <span className="flex-1">{productsDict.name}</span>
+            <span className="w-32 text-right">{productsDict.price}</span>
+            {inventoryEnabled && <span className="w-28 text-right">{productsDict.stock}</span>}
+            <span className="shrink-0" style={{ width: keyCount * 44 + 2 }} aria-hidden />
           </div>
-        ))}
+          <div className="divide-y divide-dashed divide-ink/20">
+            {products.map((product) => (
+              <div key={product._id} className="group flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5 transition-colors hover:bg-paper md:flex-nowrap">
+                <div className="flex min-w-0 basis-full items-center gap-3 md:flex-1 md:basis-0">
+                  <ProductPhoto product={product} sizes="40px" className="h-10 w-10" iconClassName="h-4 w-4" />
+                  <div className="min-w-0">
+                    <h3 className="flex items-center gap-1.5 text-sm font-semibold sm:text-base">
+                      <span className="truncate">{product.name}</span>
+                      {product.pinned && <PinMark color={primaryColor} />}
+                      {product.isActive === false && <InactiveTag label={productsDict.statusInactive} />}
+                    </h3>
+                    <ProductMeta product={product} skuLabel={productsDict.sku} variationCount={productsDict.variationCount} />
+                  </div>
+                  <span className="mk-leader hidden md:block" aria-hidden />
+                </div>
+                <Currency amount={product.price} className="whitespace-nowrap font-receipt text-base font-semibold md:w-32 md:text-right" />
+                {inventoryEnabled && (
+                  <div className="md:w-28 md:text-right">
+                    {showStock(product) && <StockTag stock={productStockTotal(product)} threshold={lowStockThreshold(product)} label={productsDict.inStock} />}
+                  </div>
+                )}
+                <div className="ml-auto shrink-0">{renderKeys(product, 'row')}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="mk-tear-b h-3 bg-paper-white" aria-hidden />
       </div>
     );
   };
 
+  const viewModes = [
+    { mode: 'grid', label: dict.common.gridView || 'Grid View', Icon: LayoutGrid },
+    { mode: 'list', label: dict.common.listView || 'List View', Icon: List },
+  ] as const;
+  const pageKey = 'flex min-h-[44px] w-full items-center justify-center border border-white/25 px-5 font-receipt text-xs font-medium uppercase text-paper transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent touch-manipulation sm:w-auto';
+
   return (
-    <div className="min-h-screen bg-gray-50">
+    <>
       {ConfirmDialog}
       <PageTitle />
-      <Navbar />
-      <div className="w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        <div className="mb-6 sm:mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900">{productsDict.title}</h1>
-          {canManage && (
-            <button
-              onClick={() => setIsModalOpen(true)}
-              style={{
-                backgroundColor: primaryColor,
-                borderColor: primaryColor,
-              }}
-              className="w-full sm:w-auto text-white px-5 py-2.5 font-semibold transition-all duration-200 border flex items-center justify-center gap-2 hover:opacity-90"
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              {productsDict.addProduct}
-            </button>
-          )}
+      <div className={`${marketingFontClasses} mk-root pos-register flex min-h-dvh flex-col`}>
+        <Navbar />
+        <div className="flex-1 bg-brand-navy-deep text-paper">
+          <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
+            <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+              <div className="min-w-0">
+                {settings?.companyName && (
+                  <LineTag no="PLU" className="mb-3 text-[#8fe3d0]">{settings.companyName}</LineTag>
+                )}
+                <h1 className="text-5xl text-paper-white sm:text-6xl lg:text-7xl">{productsDict.title}</h1>
+              </div>
+              <div className="flex shrink-0 items-stretch gap-3">
+                <div className="flex items-center gap-3 border border-white/10 bg-black/30 px-4 py-2">
+                  <span className="mk-led-glow font-led text-4xl leading-none text-[#7df0d6]">
+                    {status === 'ready' ? total : '---'}
+                  </span>
+                  <span className="font-receipt text-xs uppercase tracking-[0.14em] text-white/60">{dict.common.items}</span>
+                </div>
+                {canManage && (
+                  <button
+                    type="button"
+                    onClick={() => setIsModalOpen(true)}
+                    className="flex min-h-[44px] flex-1 items-center justify-center gap-2 bg-paper-white px-3 font-receipt text-xs font-medium uppercase text-ink transition-colors hover:bg-paper sm:flex-none sm:px-5 sm:text-sm"
+                  >
+                    <Plus className={ICON} strokeWidth={1.75} aria-hidden />
+                    {productsDict.addProduct}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-6 mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="relative w-full sm:max-w-md">
+                <input
+                  type="text"
+                  placeholder={productsDict.searchPlaceholder}
+                  aria-label={productsDict.searchPlaceholder}
+                  value={search}
+                  onChange={(e) => applyFilter(() => setSearch(e.target.value))}
+                  className="w-full border-2 border-transparent bg-paper-white py-2.5 pl-11 pr-4 font-receipt text-base text-ink placeholder:text-ink/50 focus:border-[#8fe3d0] focus:outline-none"
+                />
+                <Search className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-ink/50" strokeWidth={1.75} aria-hidden />
+              </div>
+              <div className="flex shrink-0 divide-x divide-white/25 border border-white/25">
+                {viewModes.map(({ mode, label, Icon }) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setDisplayMode(mode)}
+                    aria-pressed={displayMode === mode}
+                    title={label}
+                    aria-label={label}
+                    className={`flex min-h-[44px] flex-1 items-center justify-center gap-2 px-4 font-receipt text-xs font-medium uppercase transition-colors sm:flex-none ${
+                      displayMode === mode ? 'bg-paper-white text-ink' : 'text-paper hover:bg-white/10'
+                    }`}
+                  >
+                    <Icon className={ICON} strokeWidth={1.75} aria-hidden />
+                    <span className="hidden lg:inline">{label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-3">
+              <div className="col-span-2 md:col-span-1">
+                <label htmlFor="products-category" className={FILTER_LABEL}>{productsDict.category || 'Category'}</label>
+                <select id="products-category" value={category} onChange={(e) => applyFilter(() => setCategory(e.target.value))} className={FILTER_FIELD}>
+                  <option value="">{productsDict.allCategories || 'All categories'}</option>
+                  {categories.map((name) => <option key={name} value={name}>{name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="products-status" className={FILTER_LABEL}>{productsDict.status || 'Status'}</label>
+                <select id="products-status" value={activity} onChange={(e) => applyFilter(() => setActivity(e.target.value as CatalogActivity))} className={FILTER_FIELD}>
+                  <option value="active">{productsDict.statusActive || 'Active'}</option>
+                  <option value="inactive">{productsDict.statusInactive || 'Inactive'}</option>
+                  <option value="all">{productsDict.statusAll || 'All'}</option>
+                </select>
+              </div>
+              <div>
+                <label htmlFor="products-sort" className={FILTER_LABEL}>{productsDict.sortBy || 'Sort by'}</label>
+                <select id="products-sort" value={sort} onChange={(e) => applyFilter(() => setSort(e.target.value as CatalogSort))} className={FILTER_FIELD}>
+                  {sortOptions.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}
+                </select>
+              </div>
+            </div>
+
+            {renderProductContent()}
+
+            {totalPages > 1 && (
+              <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row sm:gap-4">
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  className={pageKey}
+                >
+                  {dict.common?.previous || 'Previous'}
+                </button>
+                <span className="mk-led-glow px-3 font-led text-2xl leading-none text-[#7df0d6]">
+                  {page}/{totalPages}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages}
+                  className={pageKey}
+                >
+                  {dict.common?.next || 'Next'}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
-
-        <div className="mb-6 flex flex-col sm:flex-row gap-3 sm:gap-4 items-stretch sm:items-center">
-          <div className="relative flex-1 max-w-md">
-            <input
-              type="text"
-              placeholder={productsDict.searchPlaceholder}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              style={{
-                borderWidth: '2px',
-                borderColor: '#d1d5db',
-              }}
-              onFocus={(e) => {
-                e.currentTarget.style.borderColor = primaryColor;
-                e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
-              }}
-              onBlur={(e) => {
-                e.currentTarget.style.borderColor = '#d1d5db';
-                e.currentTarget.style.boxShadow = 'none';
-              }}
-              className="w-full px-4 py-3 pl-11 text-base bg-white transition-all"
-            />
-            <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setDisplayMode('grid')}
-              style={{
-                borderWidth: '2px',
-                ...(displayMode === 'grid'
-                  ? {
-                      borderColor: primaryColor,
-                      backgroundColor: `${primaryColor}10`,
-                      color: primaryColor,
-                    }
-                  : {
-                      borderColor: '#d1d5db',
-                      color: '#374151',
-                    }),
-              }}
-              className="px-4 py-3 bg-white transition-all duration-200 flex items-center justify-center gap-2 text-sm font-medium hover:bg-gray-100"
-              title={dict.common.gridView || 'Grid View'}
-              aria-label={dict.common.gridView || 'Grid View'}
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-              </svg>
-              <span className="hidden sm:inline">{dict.common.gridView || 'Grid'}</span>
-            </button>
-            <button
-              onClick={() => setDisplayMode('list')}
-              style={{
-                borderWidth: '2px',
-                ...(displayMode === 'list'
-                  ? {
-                      borderColor: primaryColor,
-                      backgroundColor: `${primaryColor}10`,
-                      color: primaryColor,
-                    }
-                  : {
-                      borderColor: '#d1d5db',
-                      color: '#374151',
-                    }),
-              }}
-              className="px-4 py-3 bg-white transition-all duration-200 flex items-center justify-center gap-2 text-sm font-medium hover:bg-gray-100"
-              title={dict.common.listView || 'List View'}
-              aria-label={dict.common.listView || 'List View'}
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-              <span className="hidden sm:inline">List</span>
-            </button>
-          </div>
-        </div>
-
-        {renderProductContent()}
-
-        {status === 'ready' && totalPages > 1 && (
-          <div className="mt-4 sm:mt-6 flex flex-col sm:flex-row justify-center items-center gap-3 sm:gap-4">
-            <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page === 1}
-              className="w-full sm:w-auto px-6 py-3 sm:px-4 sm:py-2 border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 active:bg-gray-200 font-medium transition-colors bg-white touch-manipulation min-h-[44px] sm:min-h-0"
-            >
-              {dict.common?.previous || 'Previous'}
-            </button>
-            <span className="px-4 py-2 text-sm sm:text-base text-gray-700 font-medium text-center">
-              {page} / {totalPages}
-            </span>
-            <button
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page === totalPages}
-              className="w-full sm:w-auto px-6 py-3 sm:px-4 sm:py-2 border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 active:bg-gray-200 font-medium transition-colors bg-white touch-manipulation min-h-[44px] sm:min-h-0"
-            >
-              {dict.common?.next || 'Next'}
-            </button>
-          </div>
-        )}
-
-        {isModalOpen && (
-          <ProductModal product={editingProduct} onClose={handleCloseModal} lang={lang} />
-        )}
-
-        {isRefillModalOpen && (
-          <StockRefillModal
-            product={refillingProduct}
-            onClose={handleCloseRefillModal}
-            onSuccess={handleRefillSuccess}
-            lang={lang}
-          />
-        )}
-
-        {barcodeProduct && (
-          <BarcodeModal
-            value={barcodeProduct.barcode || barcodeProduct.sku || barcodeProduct._id}
-            productName={barcodeProduct.name}
-            onClose={() => setBarcodeProduct(null)}
-          />
-        )}
       </div>
-    </div>
+
+      {isModalOpen && (
+        <ProductModal product={editingProduct} onClose={handleCloseModal} lang={lang} />
+      )}
+
+      {isRefillModalOpen && (
+        <StockRefillModal
+          product={refillingProduct}
+          onClose={handleCloseRefillModal}
+          onSuccess={handleRefillSuccess}
+          lang={lang}
+        />
+      )}
+
+      {barcodeProduct && (
+        <BarcodeModal
+          value={barcodeProduct.barcode || barcodeProduct.sku || barcodeProduct._id}
+          productName={barcodeProduct.name}
+          onClose={() => setBarcodeProduct(null)}
+        />
+      )}
+    </>
   );
 }

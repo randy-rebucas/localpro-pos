@@ -4,6 +4,7 @@ import Product from '@/models/Product';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
+import { findVariationBySku } from '@/lib/product-variations';
 
 export async function GET(request: NextRequest) {
   try {
@@ -24,24 +25,25 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'code query param is required' }, { status: 400 });
     }
 
-    // Exact match first — served by the { tenantId, barcode } / { tenantId, sku }
-    // indexes. A case-insensitive regex can't use tight index bounds and walks
-    // every key for the tenant, so it's only the fallback.
+    // Exact matches first, served by the { tenantId, barcode }, { tenantId, sku } and
+    // { tenantId, variations.sku } indexes. A case-insensitive regex can't use tight
+    // index bounds and walks every key for the tenant, so it's only the fallback.
+    // A product's own code beats a variation SKU, which isn't unique across products.
     const trimmedCode = code.trim();
+    const active = { tenantId, isActive: { $ne: false } };
     let product = await Product.findOne({
-      tenantId,
-      isActive: { $ne: false },
+      ...active,
       $or: [{ barcode: trimmedCode }, { sku: trimmedCode }],
     }).lean();
     if (!product) {
+      product = await Product.findOne({ ...active, hasVariations: true, 'variations.sku': trimmedCode }).lean();
+    }
+    if (!product) {
       const escapedCode = trimmedCode.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const anyCase = { $regex: `^${escapedCode}$`, $options: 'i' };
       product = await Product.findOne({
-        tenantId,
-        isActive: { $ne: false },
-        $or: [
-          { barcode: { $regex: `^${escapedCode}$`, $options: 'i' } },
-          { sku: { $regex: `^${escapedCode}$`, $options: 'i' } },
-        ],
+        ...active,
+        $or: [{ barcode: anyCase }, { sku: anyCase }, { hasVariations: true, 'variations.sku': anyCase }],
       }).lean();
     }
 
@@ -49,7 +51,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'NOT_FOUND', data: null }, { status: 404 });
     }
 
-    return NextResponse.json({ success: true, data: { product } });
+    const foldedCode = trimmedCode.toLowerCase();
+    const isProductCode = [product.barcode, product.sku].some((value) => value?.toLowerCase() === foldedCode);
+    const variation = isProductCode ? undefined : findVariationBySku(product, trimmedCode);
+
+    return NextResponse.json({ success: true, data: { product, ...(variation ? { variation } : {}) } });
   } catch (error) {
     return handleApiError(error, 'Failed to look up product by barcode');
   }

@@ -3,6 +3,7 @@ import {
   BUSINESS_TYPE_CONFIGS,
   SIGNUP_CLOSED_BUSINESS_TYPES,
   isBusinessTypeOpenForSignup,
+  isBusinessTypeSelectable,
 } from '@/lib/business-types';
 
 describe('isBusinessTypeOpenForSignup', () => {
@@ -28,5 +29,24 @@ describe('isBusinessTypeOpenForSignup', () => {
     for (const type of SIGNUP_CLOSED_BUSINESS_TYPES) {
       expect(BUSINESS_TYPE_CONFIGS[type]).toBeDefined();
     }
+  });
+});
+
+describe('isBusinessTypeSelectable', () => {
+  it('offers only open types to a tenant on an open type', () => {
+    const offered = Object.keys(BUSINESS_TYPE_CONFIGS).filter((type) => isBusinessTypeSelectable(type, 'retail'));
+
+    expect(offered.sort()).toEqual(['general', 'retail']);
+  });
+
+  it('keeps the saved closed type so the tenant is not silently switched', () => {
+    const offered = Object.keys(BUSINESS_TYPE_CONFIGS).filter((type) => isBusinessTypeSelectable(type, 'Laundry'));
+
+    expect(offered.sort()).toEqual(['general', 'laundry', 'retail']);
+  });
+
+  it('offers only open types when nothing is saved', () => {
+    expect(isBusinessTypeSelectable('restaurant', undefined)).toBe(false);
+    expect(isBusinessTypeSelectable('retail', undefined)).toBe(true);
   });
 });

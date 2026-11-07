@@ -73,7 +73,7 @@ language: "en"
 
 | Setting | Type | Description |
 |---------|------|-------------|
-| `businessType` | String | Industry type: `Retail`, `Restaurant`, `Salon`, `Service`, etc. |
+| `businessType` | String | `retail` or `general`. Stores already on `restaurant`, `laundry`, `service` or `pharmacy` keep it, but no store can move onto those types. |
 | `taxId` | String | Tax Identification Number (TIN) |
 | `registrationNumber` | String | Business registration number |
 

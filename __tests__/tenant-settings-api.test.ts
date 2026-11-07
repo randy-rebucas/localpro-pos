@@ -38,6 +38,7 @@ vi.mock('@/lib/currency', () => ({
 
 vi.mock('@/lib/business-types', () => ({
   applyBusinessTypeDefaults: vi.fn((settings: Record<string, unknown>) => settings),
+  isBusinessTypeOpenForSignup: vi.fn((type: unknown) => ['retail', 'general'].includes(String(type))),
 }));
 
 const mockGetCurrentUser = vi.fn();
@@ -213,6 +214,32 @@ describe('PUT /api/tenants/:slug/settings', () => {
     expect(status).toBe(200);
     expect(body.data).toEqual({ companyName: 'Same', primaryColor: '#111111' });
     expect(mockTenantFindOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  it('rejects a move onto a closed business type', async () => {
+    authAs(TENANT_A_ID, 'owner');
+    mockExistingTenant({ _id: { toString: () => TENANT_A_ID }, slug: SLUG, settings: { businessType: 'retail' } });
+
+    const res = await PUT(createRequest(`/api/tenants/${SLUG}/settings`, 'PUT', { businessType: 'restaurant' }), {
+      params: Promise.resolve({ slug: SLUG }),
+    });
+    const { status } = await parseResponse(res);
+
+    expect(status).toBe(400);
+    expect(mockTenantFindOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  it('lets a tenant already on a closed business type keep saving', async () => {
+    authAs(TENANT_A_ID, 'owner');
+    mockExistingTenant({ _id: { toString: () => TENANT_A_ID }, slug: SLUG, settings: { businessType: 'laundry' } });
+    mockTenantFindOneAndUpdate.mockResolvedValue({ _id: TENANT_A_ID, settings: { businessType: 'laundry' } });
+
+    const res = await PUT(createRequest(`/api/tenants/${SLUG}/settings`, 'PUT', { businessType: 'laundry', primaryColor: '#222222' }), {
+      params: Promise.resolve({ slug: SLUG }),
+    });
+    const { status } = await parseResponse(res);
+
+    expect(status).toBe(200);
   });
 
   it('rejects an invalid hex color', async () => {

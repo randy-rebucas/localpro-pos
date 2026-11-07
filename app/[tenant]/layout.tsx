@@ -77,8 +77,7 @@ export default async function TenantLayout({
   // call sat inside a try/catch that swallowed Next's redirect error, so it never
   // ran. Enforcing it as written would block legitimate flows (bare domain →
   // /default, signing in to a second tenant on the shared cookie, path routing
-  // for tenants with a domain set) and its /{slug}/forbidden target is a 404, so
-  // it was removed rather than switched on. Tenant data access is enforced
+  // for tenants with a domain set), so it was removed rather than switched on. Tenant data access is enforced
   // server-side by the API routes (requireTenantAccess / tenantId scoping).
 
   return <>{children}</>;

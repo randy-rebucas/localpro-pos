@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { isBusinessTypeSelectable } from '@/lib/business-types';
 import { getDefaultTenantSettings } from '@/lib/currency';
 import { usePermissions } from '@/hooks/usePermissions';
 
@@ -453,7 +454,7 @@ function TenantModal({
                       e.currentTarget.style.boxShadow = 'none';
                     }}
                   >
-                    {businessTypes.map((type) => (
+                    {businessTypes.filter((type) => isBusinessTypeSelectable(type.type, tenant?.settings.businessType)).map((type) => (
                       <option key={type.type} value={type.type}>
                         {type.name}
                       </option>

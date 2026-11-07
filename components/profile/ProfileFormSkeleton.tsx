@@ -1,31 +1,44 @@
 'use client';
 
+import type { ReactNode } from 'react';
+
+const PULSE = 'animate-pulse motion-reduce:animate-none';
+
+function SlipSkeleton({ children }: { children: ReactNode }) {
+  return (
+    <div>
+      <div className="bg-paper-white px-4 py-4 sm:px-5">
+        <div className={`space-y-4 ${PULSE}`}>{children}</div>
+      </div>
+      <div className="mk-tear-b h-3 bg-paper-white" aria-hidden />
+    </div>
+  );
+}
+
+/** Holds the layout of the profile page: two slips beside the staff card. */
 export default function ProfileFormSkeleton() {
   return (
-    <div className="bg-white border border-gray-300 overflow-hidden animate-pulse">
-      <div className="p-5 sm:p-6 lg:p-8 space-y-8">
-        <div>
-          <div className="h-6 bg-gray-200 w-48 mb-5" />
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="h-12 bg-gray-200" />
-            <div className="h-12 bg-gray-200" />
+    <div className="mt-6 grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
+      <div className="flex min-w-0 flex-col gap-6 lg:col-span-7">
+        <SlipSkeleton>
+          <div className="h-7 w-56 bg-ink/10" />
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="h-11 bg-ink/10" />
+            <div className="h-11 bg-ink/10" />
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t border-gray-200">
-            <div className="h-12 bg-gray-200" />
-            <div className="h-12 bg-gray-200" />
-          </div>
-          <div className="flex justify-end pt-4">
-            <div className="h-12 bg-gray-200 w-36" />
-          </div>
-        </div>
-        <div className="pt-8 border-t border-gray-200">
-          <div className="h-6 bg-gray-200 w-40 mb-5" />
-          <div className="h-24 bg-gray-100" />
-        </div>
-        <div className="pt-8 border-t border-gray-200">
-          <div className="h-6 bg-gray-200 w-52 mb-2" />
-          <div className="h-4 bg-gray-200 w-72 mb-5" />
-          <div className="h-48 bg-gray-100 max-w-xs mx-auto" />
+          <div className="ml-auto h-11 w-40 bg-ink/10" />
+        </SlipSkeleton>
+        <SlipSkeleton>
+          <div className="h-7 w-48 bg-ink/10" />
+        </SlipSkeleton>
+      </div>
+      <div className="min-w-0 bg-paper-white lg:col-span-5">
+        <div className="h-20 bg-brand" />
+        <div className={`space-y-4 px-4 py-4 sm:px-5 ${PULSE}`}>
+          <div className="h-9 w-2/3 bg-ink/10" />
+          <div className="h-4 bg-ink/10" />
+          <div className="h-4 bg-ink/10" />
+          <div className="mx-auto h-56 w-56 bg-ink/10" />
         </div>
       </div>
     </div>

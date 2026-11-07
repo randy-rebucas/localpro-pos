@@ -19,6 +19,17 @@ export function isBusinessTypeOpenForSignup(businessType: unknown): boolean {
   return !SIGNUP_CLOSED_BUSINESS_TYPES.includes(type);
 }
 
+/**
+ * Whether a type belongs in a tenant's picker: an open type, or the type the
+ * tenant already saved, so a tenant on a closed type is not silently switched.
+ */
+export function isBusinessTypeSelectable(businessType: unknown, savedType?: unknown): boolean {
+  return (
+    isBusinessTypeOpenForSignup(businessType) ||
+    String(businessType ?? '').toLowerCase() === String(savedType ?? '').toLowerCase()
+  );
+}
+
 export interface BusinessTypeConfig {
   type: BusinessType;
   name: string;

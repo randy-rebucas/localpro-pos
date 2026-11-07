@@ -9,6 +9,7 @@ import Expense from '@/models/Expense';
 import CashDrawerSession from '@/models/CashDrawerSession';
 import Product from '@/models/Product';
 import { ITenantSettings } from '@/types/tenant';
+import { DEFAULT_TENANT_TIMEZONE } from '@/lib/timezone';
 
 export interface SalesReport {
   period: string;
@@ -91,7 +92,8 @@ export async function getSalesReport(
   tenantId: string,
   period: 'daily' | 'weekly' | 'monthly',
   startDate?: Date,
-  endDate?: Date
+  endDate?: Date,
+  timezone: string = DEFAULT_TENANT_TIMEZONE
 ): Promise<SalesReport> {
   const now = new Date();
   let start: Date;
@@ -137,7 +139,7 @@ export async function getSalesReport(
             byDay: [
               {
                 $group: {
-                  _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
+                  _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt', timezone } },
                   sales: { $sum: NET_SALE_TOTAL },
                   transactions: { $sum: 1 },
                 },

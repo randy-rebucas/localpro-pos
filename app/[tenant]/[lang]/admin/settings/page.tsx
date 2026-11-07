@@ -3,8 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import toast from 'react-hot-toast';
+import DailyReportRecipients from '@/components/settings/DailyReportRecipients';
 import { Settings } from 'lucide-react';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { isBusinessTypeSelectable } from '@/lib/business-types';
 import type { ITenantSettings } from '@/types/tenant';
 import { usePermissions } from '@/hooks/usePermissions';
 import { getDictionaryClient } from '../../dictionaries-client';
@@ -51,6 +53,7 @@ interface FormData {
   taxEnabled: boolean;
   taxRate: number;
   taxLabel: string;
+  pricesIncludeTax: boolean;
   // Features
   enableInventory: boolean;
   enableCategories: boolean;
@@ -73,7 +76,7 @@ export default function AdminSettingsPage() {
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = params.lang as string;
-  const { ensureSettings, applySettings } = useTenantSettings();
+  const { settings: tenantSettings, ensureSettings, applySettings } = useTenantSettings();
   const { canAccess } = usePermissions();
   const canManage = canAccess('settings.manage');
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -123,7 +126,7 @@ export default function AdminSettingsPage() {
     addressStreet: '', addressCity: '', addressState: '', addressZipCode: '', addressCountry: '',
     receiptHeader: '', receiptFooter: '',
     receiptShowLogo: true, receiptShowAddress: true, receiptShowPhone: true, receiptShowEmail: false,
-    taxEnabled: false, taxRate: 0, taxLabel: 'VAT',
+    taxEnabled: false, taxRate: 0, taxLabel: 'VAT', pricesIncludeTax: false,
     enableInventory: true, enableCategories: true, enableDiscounts: true,
     enableLoyaltyProgram: false, enableCustomerManagement: true,
     enableBookingScheduling: false, enableTableManagement: false, enableOnAccountSales: false,
@@ -176,6 +179,7 @@ export default function AdminSettingsPage() {
           taxEnabled: s.taxEnabled ?? false,
           taxRate: s.taxRate ?? 0,
           taxLabel: s.taxLabel ?? 'VAT',
+          pricesIncludeTax: s.pricesIncludeTax ?? false,
           enableInventory: s.enableInventory ?? true,
           enableCategories: s.enableCategories ?? true,
           enableDiscounts: s.enableDiscounts ?? true,
@@ -211,7 +215,7 @@ export default function AdminSettingsPage() {
     general: ['companyName', 'businessType', 'taxId', 'registrationNumber', 'language', 'timezone', 'currency', 'currencySymbol', 'currencyPosition', 'dateFormat', 'timeFormat'],
     branding: ['primaryColor', 'secondaryColor', 'logo'],
     contact: ['email', 'phone', 'website'],
-    receipt: ['receiptHeader', 'receiptFooter', 'receiptShowLogo', 'receiptShowAddress', 'receiptShowPhone', 'receiptShowEmail', 'taxEnabled', 'taxRate', 'taxLabel'],
+    receipt: ['receiptHeader', 'receiptFooter', 'receiptShowLogo', 'receiptShowAddress', 'receiptShowPhone', 'receiptShowEmail', 'taxEnabled', 'taxRate', 'taxLabel', 'pricesIncludeTax'],
     features: ['enableInventory', 'enableCategories', 'enableDiscounts', 'enableLoyaltyProgram', 'enableCustomerManagement', 'enableBookingScheduling', 'enableTableManagement', 'enableOnAccountSales', 'autoOpenDrawerOnShiftStart', 'autoOpenDrawerOnShiftEnd'],
     notifications: ['lowStockAlert', 'lowStockThreshold', 'emailNotifications', 'smsNotifications'],
   };
@@ -375,7 +379,7 @@ export default function AdminSettingsPage() {
                       <label className={labelCls}>{dict?.settings?.businessType || 'Business Type'}</label>
                       <select value={form.businessType} onChange={e => set('businessType', e.target.value)} className={inputCls}>
                         <option value="">{dict?.settings?.selectTypePlaceholder || 'Select type...'}</option>
-                        {BUSINESS_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                        {BUSINESS_TYPES.filter(t => isBusinessTypeSelectable(t.value, tenantSettings?.businessType)).map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                       </select>
                     </div>
                     <div>
@@ -596,6 +600,9 @@ export default function AdminSettingsPage() {
                         </div>
                       </div>
                     )}
+                    {form.taxEnabled && (
+                      <Toggle label={dict?.settings?.pricesIncludeTax || 'Prices already include tax'} desc={dict?.settings?.pricesIncludeTaxDesc || 'On: a ₱112 item charges ₱112, with the tax inside it. Off: tax is added on top at checkout.'} checked={form.pricesIncludeTax} onChange={v => set('pricesIncludeTax', v)} />
+                    )}
                   </div>
                 </div>
               </div>
@@ -652,6 +659,8 @@ export default function AdminSettingsPage() {
                     )}
                   </div>
                 </div>
+
+                <DailyReportRecipients tenant={tenant} labels={dict?.settings} />
 
                 <div className="bg-white border border-gray-300">
                   <div className="px-5 py-3 border-b border-gray-200 bg-gray-50">

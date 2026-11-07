@@ -11,7 +11,7 @@ Navigate to **Settings** from the sidebar. Settings are organized into sections.
 | Setting | Description |
 |---------|-------------|
 | **Store Name** | Your business display name |
-| **Business Type** | Industry type (Retail, Restaurant, Salon, etc.) |
+| **Business Type** | Retail or General. A store already on an older type keeps it until it switches. |
 | **Address** | Physical store address |
 | **Phone** | Store contact number |
 | **Email** | Store contact email |
@@ -48,6 +48,8 @@ Business hours affect:
 Holidays mark dates as unavailable for bookings.
 
 ## Tax Rules
+
+**Prices already include tax** is under **Settings > General > Tax Settings**. Turn it on if your prices have tax in them, so a PHP 112 item charges PHP 112. Leave it off to add tax at checkout, so a PHP 100 item charges PHP 112. It applies to tax rules as well.
 
 1. Navigate to **Settings > Tax Rules** or **Admin > Tax Rules**
 2. Default rule: **12% VAT** (Philippine standard rate)

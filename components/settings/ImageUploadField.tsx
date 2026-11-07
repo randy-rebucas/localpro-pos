@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import { normalizeImageUrl } from '@/lib/image-utils';
 
 interface ImageUploadFieldProps {
   tenant: string;
@@ -12,6 +13,9 @@ interface ImageUploadFieldProps {
   previewClassName?: string;
   accept?: string;
   maxSizeMB?: number;
+  /** Shown beside the size, so it can match a narrower `accept`. */
+  formats?: string;
+  labels?: Record<string, unknown>;
 }
 
 export default function ImageUploadField({
@@ -24,20 +28,29 @@ export default function ImageUploadField({
   previewClassName = 'h-16 w-16',
   accept = 'image/png,image/jpeg,image/webp,image/gif,image/x-icon',
   maxSizeMB = 2,
+  formats,
+  labels,
 }: ImageUploadFieldProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  const previewFailed = Boolean(value) && failedUrl === value;
+
+  const text = (key: string, fallback: string) => {
+    const copy = labels?.[key];
+    return typeof copy === 'string' ? copy : fallback;
+  };
 
   const handleFile = async (file: File) => {
     setError(null);
 
     if (!file.type.startsWith('image/')) {
-      setError('Please select an image file');
+      setError(text('imageNotFile', 'Please select an image file'));
       return;
     }
     if (file.size > maxSizeMB * 1024 * 1024) {
-      setError(`File too large. Maximum size is ${maxSizeMB}MB`);
+      setError(text('imageTooLarge', 'File too large. Maximum size is {max}MB').replace('{max}', String(maxSizeMB)));
       return;
     }
 
@@ -54,12 +67,12 @@ export default function ImageUploadField({
 
       const data = await res.json();
       if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Failed to upload image');
+        throw new Error(data.error || text('imageUploadFailed', 'Failed to upload image'));
       }
 
       onChange(data.data.url);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to upload image');
+      setError(err instanceof Error ? err.message : text('imageUploadFailed', 'Failed to upload image'));
     } finally {
       setUploading(false);
       if (inputRef.current) inputRef.current.value = '';
@@ -68,16 +81,16 @@ export default function ImageUploadField({
 
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+      <label className="mb-1 block font-receipt text-xs font-medium uppercase tracking-[0.08em] text-ink/70">{label}</label>
       <div className="flex items-start gap-4">
         <div
-          className={`${previewClassName} flex-shrink-0 border-2 border-gray-300 bg-gray-50 flex items-center justify-center overflow-hidden`}
+          className={`${previewClassName} flex-shrink-0 border-2 border-ink/25 bg-paper flex items-center justify-center overflow-hidden`}
         >
-          {value ? (
+          {value && !previewFailed ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={value} alt={label} className="max-h-full max-w-full object-contain" />
+            <img src={normalizeImageUrl(value)} alt={label} className="max-h-full max-w-full object-contain" onError={() => setFailedUrl(value)} />
           ) : (
-            <svg className="w-6 h-6 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="w-6 h-6 text-ink/30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14M14 8h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
           )}
@@ -100,33 +113,27 @@ export default function ImageUploadField({
               type="button"
               onClick={() => inputRef.current?.click()}
               disabled={uploading}
-              className="px-4 py-2 text-sm font-medium text-brand bg-brand-soft hover:bg-brand-soft transition-colors disabled:opacity-50 disabled:cursor-not-allowed border border-teal-300 flex items-center gap-2"
+              className="flex min-h-[44px] items-center px-3 border border-ink/25 font-receipt text-xs font-medium uppercase text-ink transition-colors hover:border-ink disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {uploading ? (
-                <>
-                  <div className="animate-spin h-4 w-4 border-b-2 border-brand"></div>
-                  <span>Uploading...</span>
-                </>
-              ) : (
-                <span>{value ? 'Replace' : 'Upload'} Image</span>
-              )}
+              {uploading ? text('imageUploading', 'Uploading...') : value ? text('imageReplace', 'Replace Image') : text('imageUpload', 'Upload Image')}
             </button>
             {value && (
               <button
                 type="button"
                 onClick={() => onChange('')}
                 disabled={uploading}
-                className="px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors border border-red-200 disabled:opacity-50"
+                className="flex min-h-[44px] items-center border border-stamp/40 px-3 font-receipt text-xs font-medium uppercase text-stamp transition-colors hover:border-stamp disabled:opacity-50"
               >
-                Remove
+                {text('imageRemove', 'Remove')}
               </button>
             )}
           </div>
-          <p className="mt-2 text-xs text-gray-500">{helpText}</p>
-          <p className="text-xs text-gray-400">
-            Recommended: {recommendedSize} &middot; Max {maxSizeMB}MB &middot; PNG, JPG, WEBP, GIF, or ICO
+          <p className="mt-2 text-xs text-ink/60">{helpText}</p>
+          <p className="text-xs text-ink/60">
+            {text('imageRecommended', 'Recommended')}: {recommendedSize} &middot; {text('imageMaxSize', 'Max {max}MB').replace('{max}', String(maxSizeMB))} &middot; {formats || text('imageFormats', 'PNG, JPG, WEBP, GIF, or ICO')}
           </p>
-          {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+          {previewFailed && <p className="mt-1 text-xs text-stamp">{text('imageLoadFailed', 'This image could not be loaded. Replace it or remove it.')}</p>}
+          {error && <p className="mt-1 text-xs text-stamp">{error}</p>}
         </div>
       </div>
     </div>

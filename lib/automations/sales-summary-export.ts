@@ -12,6 +12,7 @@ import Tenant from '@/models/Tenant';
 import { getDailySalesAggregate, startOfBusinessDay } from '@/lib/bir-readings';
 import { formatGrandTotalRegister } from '@/lib/bir-format';
 import { logger } from '@/lib/logger';
+import { DEFAULT_TENANT_TIMEZONE, getTenantDateString } from '@/lib/timezone';
 import { AutomationResult } from './types';
 
 // Lazy-load Node.js fs/path to avoid bundling them into client/edge code paths.
@@ -55,9 +56,9 @@ export interface SalesSummaryPayload {
  * Reuses getDailySalesAggregate so daily and monthly figures are always
  * consistent with each other and with the X/Z-Reading reports.
  */
-async function aggregateMonth(tenantId: string, monthStart: Date) {
-  const monthEnd = new Date(monthStart);
-  monthEnd.setMonth(monthEnd.getMonth() + 1);
+async function aggregateMonth(tenantId: string, firstDay: string, timezone: string) {
+  const day = new Date(`${firstDay}T12:00:00Z`);
+  const month = day.getUTCMonth();
 
   const totals = {
     grossSales: 0, vatableSales: 0, vatAmount: 0, vatExemptSales: 0,
@@ -65,8 +66,8 @@ async function aggregateMonth(tenantId: string, monthStart: Date) {
     refundCount: 0, refundTotal: 0, refundVatAmount: 0, netSales: 0,
   };
 
-  for (let day = new Date(monthStart); day < monthEnd; day.setDate(day.getDate() + 1)) {
-    const daily = await getDailySalesAggregate(tenantId, new Date(day));
+  for (; day.getUTCMonth() === month; day.setUTCDate(day.getUTCDate() + 1)) {
+    const daily = await getDailySalesAggregate(tenantId, day.toISOString().slice(0, 10), timezone);
     totals.grossSales += daily.grossSales;
     totals.vatableSales += daily.vatableSales;
     totals.vatAmount += daily.vatAmount;
@@ -81,7 +82,12 @@ async function aggregateMonth(tenantId: string, monthStart: Date) {
     totals.netSales += daily.netSales;
   }
 
-  return { ...totals, startDate: monthStart, endDate: monthEnd };
+  return {
+    ...totals,
+    startDate: startOfBusinessDay(firstDay, timezone),
+    // The loop has already stepped onto the first of the next month
+    endDate: startOfBusinessDay(day.toISOString().slice(0, 10), timezone),
+  };
 }
 
 export async function generateSalesSummaryExport(
@@ -114,24 +120,23 @@ export async function generateSalesSummaryExport(
 
     for (const tenant of tenants) {
       const tenantId = tenant._id.toString();
+      const timezone = tenant.settings?.timezone || DEFAULT_TENANT_TIMEZONE;
       try {
         let aggregate: { grossSales: number; vatableSales: number; vatAmount: number; vatExemptSales: number; zeroRatedSales: number; discountTotal: number; transactionCount: number; voidCount: number; refundCount: number; refundTotal: number; refundVatAmount: number; netSales: number; startDate: Date; endDate: Date };
 
         if (options.period === 'daily') {
-          const businessDate = options.businessDate ?? (() => {
-            const d = new Date();
-            d.setDate(d.getDate() - 1); // yesterday, by default (full day of data)
-            return d;
-          })();
-          aggregate = await getDailySalesAggregate(tenantId, businessDate);
+          // Yesterday by default, a full day of data
+          const businessDate = options.businessDate ?? getTenantDateString(timezone, 1);
+          aggregate = await getDailySalesAggregate(tenantId, businessDate, timezone);
         } else {
-          const monthStart = options.businessDate
-            ? startOfBusinessDay(new Date(options.businessDate.getFullYear(), options.businessDate.getMonth(), 1))
-            : (() => {
-                const now = new Date();
-                return startOfBusinessDay(new Date(now.getFullYear(), now.getMonth() - 1, 1)); // last month
-              })();
-          aggregate = await aggregateMonth(tenantId, monthStart);
+          let firstDay: string;
+          if (options.businessDate) {
+            firstDay = `${options.businessDate.toLocaleDateString('en-CA', { timeZone: timezone }).slice(0, 7)}-01`;
+          } else {
+            const [year, month] = getTenantDateString(timezone).split('-').map(Number);
+            firstDay = new Date(Date.UTC(year, month - 2, 1)).toISOString().slice(0, 10); // last month
+          }
+          aggregate = await aggregateMonth(tenantId, firstDay, timezone);
         }
 
         const payload: SalesSummaryPayload = {
@@ -157,7 +162,7 @@ export async function generateSalesSummaryExport(
           generatedAt: new Date().toISOString(),
         };
 
-        const fileName = `${tenant.slug}-${options.period}-${aggregate.startDate.toISOString().split('T')[0]}.json`;
+        const fileName = `${tenant.slug}-${options.period}-${aggregate.startDate.toLocaleDateString('en-CA', { timeZone: timezone })}.json`;
         await fs.writeFile(path.join(exportDir, fileName), JSON.stringify(payload, null, 2), 'utf-8');
 
         // Push to tenant-configured endpoint, if any (best-effort — local file is the source of truth).

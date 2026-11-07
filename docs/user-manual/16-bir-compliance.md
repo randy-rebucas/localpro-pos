@@ -30,27 +30,29 @@
    - **Business Name** — Registered business name
    - **TIN** — Tax Identification Number
    - **Address** — Registered business address
-   - **VAT Registration** — VAT-registered or Non-VAT
+   - **Tax Settings** — For a VAT-registered business, turn on **Enable Tax**, set the rate to 12 and the Tax Label to "VAT". For a Non-VAT business, leave **Enable Tax** off.
+   - **Prices already include tax** — Turn this on if your shelf prices have VAT in them
 
 This information appears on all receipts automatically.
 
 ## VAT Computation
 
+### Prices With or Without VAT
+
+Each business chooses how its prices work with **Prices already include tax**, under **Settings > General > Tax Settings**.
+
+| Setting | Product Price | VATable Sales | VAT (12%) | Customer Pays |
+|---------|---------------|---------------|-----------|---------------|
+| **On** (VAT is inside the price) | PHP 1,120.00 | PHP 1,000.00 | PHP 120.00 | **PHP 1,120.00** |
+| **Off** (VAT is added at checkout) | PHP 1,000.00 | PHP 1,000.00 | PHP 120.00 | **PHP 1,120.00** |
+
+The setting is off by default. Changing it changes what customers pay from the next sale onward, so update your product prices at the same time. Past sales, receipts and readings stay as they were.
+
 ### Standard Computation
 
 For a VATable sale:
-- **VATable Sales** = Total / 1.12
-- **VAT Amount** = VATable Sales x 0.12
+- **VATable Sales** = Total less VAT, VAT-exempt and zero-rated sales
 - **Total** = VATable Sales + VAT Amount
-
-### Example
-
-| Item | Amount |
-|------|--------|
-| Product Price | PHP 1,120.00 |
-| VATable Sales | PHP 1,000.00 |
-| VAT (12%) | PHP 120.00 |
-| **Total** | **PHP 1,120.00** |
 
 ### VAT-Exempt Sales
 
@@ -71,6 +73,8 @@ For VAT-exempt items (e.g., basic commodities, Senior/PWD):
    - SC/PWD ID number
    - Discount amount
    - VAT-exempt status
+
+The result is the same in both pricing modes. When prices include VAT, the VAT is removed first and the 20% is taken from what's left.
 
 ### Computation (RA 9994 / RA 10754)
 

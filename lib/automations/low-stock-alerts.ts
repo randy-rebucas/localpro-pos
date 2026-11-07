@@ -70,7 +70,7 @@ export async function sendLowStockAlerts(
         }
 
         // Get low stock products
-        const threshold = options.threshold || tenantSettings?.lowStockThreshold || 10;
+        const threshold = options.threshold ?? tenantSettings?.lowStockThreshold ?? 10;
         const lowStockProducts = await getLowStockProducts(
           tenant._id.toString(),
           undefined,

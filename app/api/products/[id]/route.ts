@@ -3,6 +3,8 @@ import connectDB from '@/lib/mongodb';
 import Product from '@/models/Product';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
+import { findVariationProblem, normalizeVariationRows } from '@/lib/product-variations';
+import { findTakenVariationSku, saveVariationRows, variationProblemMessage } from '@/lib/product-variations-save';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { validateAndSanitize, validateProduct } from '@/lib/validation';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
@@ -120,26 +122,58 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (!oldProduct) {
       return NextResponse.json({ success: false, error: 'Product not found' }, { status: 404 });
     }
-    const product = await Product.findOneAndUpdate(
+
+    // The form sends whatever it holds, so what can't change this way is taken out: a
+    // product can't move tenants, and variations go through their own checks below.
+    const updates: Record<string, unknown> = { ...data };
+    for (const field of ['tenantId', '_id', '__v', 'createdAt', 'updatedAt', 'variations', 'hasVariations']) {
+      delete updates[field];
+    }
+
+    const existingVariations = oldProduct.variations ?? [];
+    const variationRows = normalizeVariationRows(body.variations);
+    if (variationRows) {
+      const problem = findVariationProblem(variationRows, existingVariations);
+      const takenSku = problem ? null : await findTakenVariationSku(tenantId, variationRows, id);
+      const message = problem
+        ? variationProblemMessage(problem.code, problem.label, t)
+        : takenSku ? variationProblemMessage('duplicate_sku', takenSku, t) : null;
+      if (message) {
+        return NextResponse.json({ success: false, errors: [{ field: 'variations', message, code: 'variations' }] }, { status: 400 });
+      }
+    }
+
+    // Variations hold the stock, so a form's copy of the main figure must not overwrite it
+    if (oldProduct.hasVariations || variationRows?.length) delete updates.stock;
+
+    const updated = await Product.findOneAndUpdate(
       { _id: id, tenantId },
-      data,
+      updates,
       { new: true, runValidators: true }
     );
-    
+
+    if (!updated) {
+      return NextResponse.json({ success: false, error: 'Product not found' }, { status: 404 });
+    }
+
+    const variationChanges = variationRows ? await saveVariationRows(tenantId, id, variationRows, existingVariations) : undefined;
+    const product = variationRows ? await Product.findOne({ _id: id, tenantId }) : updated;
+
     if (!product) {
       return NextResponse.json({ success: false, error: 'Product not found' }, { status: 404 });
     }
 
     // Track changes
     const changes: Record<string, any> = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
-    Object.keys(data).forEach(key => {
-      if (oldProduct[key as keyof typeof oldProduct] !== data[key]) {
+    Object.keys(updates).forEach(key => {
+      if (oldProduct[key as keyof typeof oldProduct] !== updates[key]) {
         changes[key] = {
           old: oldProduct[key as keyof typeof oldProduct],
-          new: data[key],
+          new: updates[key],
         };
       }
     });
+    if (variationChanges) changes.variations = variationChanges;
 
     await createAuditLog(request, {
       tenantId,

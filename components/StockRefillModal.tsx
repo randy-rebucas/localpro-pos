@@ -3,12 +3,15 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { getDictionaryClient } from '@/app/[tenant]/[lang]/dictionaries-client';
+import { productStockTotal, variationLabel } from '@/lib/product-variations';
 
 interface Product {
   _id: string;
   name: string;
   stock: number;
   sku?: string;
+  hasVariations?: boolean;
+  variations?: Array<{ _id?: string; size?: string; color?: string; type?: string; sku?: string; stock?: number }>;
 }
 
 interface StockRefillModalProps {
@@ -24,6 +27,7 @@ export default function StockRefillModal({ product, onClose, onSuccess, lang = '
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [quantity, setQuantity] = useState('');
   const [notes, setNotes] = useState('');
+  const [variationId, setVariationId] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -35,9 +39,14 @@ export default function StockRefillModal({ product, onClose, onSuccess, lang = '
     if (product) {
       setQuantity('');
       setNotes('');
+      setVariationId('');
       setError('');
     }
   }, [product]);
+
+  const variations = product?.hasVariations ? product.variations ?? [] : [];
+  const chosen = variations.find((variation) => variation._id === variationId);
+  const currentStock = chosen ? chosen.stock ?? 0 : product ? productStockTotal(product) : 0;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,6 +63,11 @@ export default function StockRefillModal({ product, onClose, onSuccess, lang = '
       return;
     }
 
+    if (variations.length > 0 && !chosen) {
+      setError(dict?.products?.refillChooseVariation || 'Choose which variation to refill');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -63,6 +77,7 @@ export default function StockRefillModal({ product, onClose, onSuccess, lang = '
         body: JSON.stringify({
           quantity: qty,
           notes: notes.trim() || undefined,
+          ...(chosen ? { variationId: chosen._id } : {}),
         }),
       });
 
@@ -117,11 +132,32 @@ export default function StockRefillModal({ product, onClose, onSuccess, lang = '
             <div className="text-xs text-gray-500 mt-1">SKU: {product.sku}</div>
           )}
           <div className="text-sm text-gray-600 mt-2">
-            {dict?.products?.currentStock || dict?.products?.stock || 'Current Stock'}: <span className="font-semibold">{product.stock}</span>
+            {dict?.products?.currentStock || dict?.products?.stock || 'Current Stock'}: <span className="font-semibold">{currentStock}</span>
           </div>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {variations.length > 0 && (
+            <div>
+              <label htmlFor="refill-variation" className="block text-sm font-medium text-gray-700 mb-1">
+                {dict.products.refillVariation || 'Variation'} *
+              </label>
+              <select
+                id="refill-variation"
+                required
+                value={variationId}
+                onChange={(e) => setVariationId(e.target.value)}
+                className="w-full px-3 py-2.5 text-base border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
+              >
+                <option value="">{dict.products.refillChooseVariation || 'Choose which variation to refill'}</option>
+                {variations.map((variation) => (
+                  <option key={variation._id} value={variation._id}>
+                    {variationLabel(variation)} ({variation.stock ?? 0})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               {dict.products.refill?.quantity || 'Quantity to Add'} *
@@ -140,7 +176,7 @@ export default function StockRefillModal({ product, onClose, onSuccess, lang = '
             {quantity && parseInt(quantity) > 0 && (
               <div className="mt-2 text-sm text-gray-600">
                 {dict.products.refill?.newStock || 'New Stock'}: <span className="font-semibold text-brand">
-                  {product.stock + parseInt(quantity)}
+                  {currentStock + parseInt(quantity)}
                 </span>
               </div>
             )}

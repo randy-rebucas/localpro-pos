@@ -6,7 +6,7 @@ import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getDefaultTenantSettings } from '@/lib/currency';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
-import { applyBusinessTypeDefaults } from '@/lib/business-types';
+import { applyBusinessTypeDefaults, isBusinessTypeOpenForSignup } from '@/lib/business-types';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { getTenantBySlug } from '@/lib/tenant';
@@ -89,6 +89,14 @@ export async function PUT(
 
     const currentBusinessType = existingTenant?.settings?.businessType;
     const newBusinessType = settings.businessType;
+
+    // A tenant may stay on a closed type, but cannot move onto one
+    if (newBusinessType && newBusinessType !== currentBusinessType && !isBusinessTypeOpenForSignup(newBusinessType)) {
+      return NextResponse.json(
+        { success: false, error: t('validation.businessTypeUnavailable', 'This business type is no longer available') },
+        { status: 400 }
+      );
+    }
 
     // Apply business type defaults if business type is being set or changed
     let updatedSettings = mergedSettings;

@@ -21,6 +21,8 @@ export interface ITenant extends Document {
   createdBy?: mongoose.Types.ObjectId;
   /** Non-resettable, all-time cumulative sales register (BIR Grand Total Accumulator). Never decremented, including on void/refund. */
   grandTotalSales?: number;
+  /** Who gets the daily sales report. Kept out of `settings`, which is publicly readable. */
+  dailyReport?: { email?: string; phone?: string };
   /** Non-resettable, all-time completed-transaction counter, paired with grandTotalSales. */
   grandTotalTransactionCount?: number;
   createdAt: Date;
@@ -157,6 +159,10 @@ const TenantSchema: Schema = new Schema(
       taxLabel: {
         type: String,
         default: 'Tax',
+      },
+      pricesIncludeTax: {
+        type: Boolean,
+        default: false,
       },
       
       // Business Settings
@@ -559,6 +565,10 @@ const TenantSchema: Schema = new Schema(
     createdBy: {
       type: Schema.Types.ObjectId,
       ref: 'User',
+    },
+    dailyReport: {
+      email: { type: String, trim: true, lowercase: true },
+      phone: { type: String, trim: true },
     },
     grandTotalSales: {
       type: Number,

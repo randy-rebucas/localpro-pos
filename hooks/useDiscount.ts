@@ -1,10 +1,13 @@
 import { useState, useRef, useCallback } from 'react';
 import { getOfflineStorage } from '@/lib/offline-storage';
+import { discountFor, type TaxPricingSettings } from '@/lib/tax-pricing';
 
 export interface Discount {
   code: string;
   amount: number;
   name?: string;
+  /** Senior and PWD sales carry no VAT, so the cart has to know. */
+  category?: string;
 }
 
 interface UseDiscountReturn {
@@ -13,7 +16,7 @@ interface UseDiscountReturn {
   appliedDiscount: Discount | null;
   setAppliedDiscount: (discount: Discount | null) => void;
   applyingDiscount: boolean;
-  applyDiscount: (subtotal: number, tenant: string, onSuccess: (discount: Discount) => void, onError: (msg: string) => void) => Promise<void>;
+  applyDiscount: (subtotal: number, tenant: string, onSuccess: (discount: Discount) => void, onError: (msg: string) => void, settings?: TaxPricingSettings | null) => Promise<void>;
   removeDiscount: () => void;
 }
 
@@ -26,7 +29,7 @@ export function useDiscount(fetchWithTimeout: (url: string, options?: RequestIni
   const discountAbortRef = useRef<AbortController | null>(null);
 
   const applyDiscount = useCallback(
-    async (subtotal: number, tenant: string, onSuccess: (discount: Discount) => void, onError: (msg: string) => void) => {
+    async (subtotal: number, tenant: string, onSuccess: (discount: Discount) => void, onError: (msg: string) => void, settings?: TaxPricingSettings | null) => {
       if (!promoCode.trim() || applyingDiscount) return;
 
       // Clear previous timeout to debounce
@@ -62,6 +65,7 @@ export function useDiscount(fetchWithTimeout: (url: string, options?: RequestIni
                 code: data.data.code,
                 amount: data.data.discountAmount,
                 name: data.data.name,
+                category: data.data.category,
               };
               setAppliedDiscount(discount);
               setPromoCode('');
@@ -95,20 +99,11 @@ export function useDiscount(fetchWithTimeout: (url: string, options?: RequestIni
               return;
             }
 
-            let discountAmount = 0;
-            if (cachedDiscount.type === 'percentage') {
-              discountAmount = (subtotal * cachedDiscount.value) / 100;
-              if (cachedDiscount.maxDiscountAmount) {
-                discountAmount = Math.min(discountAmount, cachedDiscount.maxDiscountAmount);
-              }
-            } else {
-              discountAmount = cachedDiscount.value;
-            }
-
             const discount: Discount = {
               code: cachedDiscount.code,
-              amount: Math.round(discountAmount * 100) / 100,
+              amount: discountFor(cachedDiscount, subtotal, settings, cachedDiscount).amount,
               name: cachedDiscount.name,
+              category: cachedDiscount.category,
             };
 
             setAppliedDiscount(discount);

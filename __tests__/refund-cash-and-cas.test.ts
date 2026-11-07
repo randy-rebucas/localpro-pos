@@ -77,7 +77,7 @@ describe('GET /api/reports/cas', () => {
     const lines = (await res.text()).split('\n');
 
     expect(lines.find((l) => l.includes(',R1,'))).toContain('Sales - cash,112,0');
-    expect(lines.find((l) => l.includes(',REF-R1,'))).toContain('Refund - cash,0,112,-88,-12,0,-112');
+    expect(lines.find((l) => l.includes(',REF-R1,'))).toContain('Refund - cash,0,112,-100,-12,0,-112');
     expect(mockTxFind.mock.calls[0][0]).toMatchObject({ tenantId: 'tenant-a', status: { $in: ['completed', 'refunded'] } });
   });
 });

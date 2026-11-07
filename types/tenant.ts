@@ -51,6 +51,7 @@ export interface ITenantSettings {
   taxEnabled?: boolean;
   taxRate?: number;
   taxLabel?: string;
+  pricesIncludeTax?: boolean; // On: tax is inside the price. Off: tax is added on top.
 
   // Business Settings
   businessType?: string;

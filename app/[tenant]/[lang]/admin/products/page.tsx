@@ -1146,8 +1146,13 @@ function ProductModal({
                     value={formData.stock}
                     onChange={(e) => updateFormData({ stock: parseInt(e.target.value) || 0 })}
                     className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-                    disabled={!formData.trackInventory}
+                    disabled={!formData.trackInventory || product?.hasVariations}
                   />
+                  {product?.hasVariations && (
+                    <p className="mt-1 text-xs text-gray-500">
+                      {dict.products?.restockUseRefill || 'Has variations. Use Refill on the Products page.'}
+                    </p>
+                  )}
                 </div>
               )}
               {businessTypeConfig?.defaultFeatures?.enableInventory !== false && (
@@ -1684,6 +1689,7 @@ function BulkRestockModal({
     setError('');
 
     const items = products
+      .filter((p) => !p.hasVariations)
       .map((p) => {
         const raw = quantities[p._id];
         const quantity = raw ? parseInt(raw, 10) : 0;
@@ -1729,15 +1735,21 @@ function BulkRestockModal({
                     {product.sku || '-'} · {dict.admin?.stock || 'Stock'}: {product.trackInventory ? product.stock : '∞'}
                   </div>
                 </div>
-                <input
-                  type="number"
-                  min={0}
-                  step={1}
-                  placeholder="0"
-                  value={quantities[product._id] || ''}
-                  onChange={(e) => setQuantity(product._id, e.target.value)}
-                  className="w-24 px-2 py-1.5 border border-gray-300 text-sm text-right"
-                />
+                {product.hasVariations ? (
+                  <span className="shrink-0 text-xs text-gray-500">
+                    {dict.products?.restockUseRefill || 'Has variations. Use Refill on the Products page.'}
+                  </span>
+                ) : (
+                  <input
+                    type="number"
+                    min={0}
+                    step={1}
+                    placeholder="0"
+                    value={quantities[product._id] || ''}
+                    onChange={(e) => setQuantity(product._id, e.target.value)}
+                    className="w-24 px-2 py-1.5 border border-gray-300 text-sm text-right"
+                  />
+                )}
               </div>
             ))}
           </div>
@@ -2016,6 +2028,11 @@ function BulkEditModal({
                       placeholder="0"
                     />
                   </div>
+                )}
+                {applyStock && (
+                  <p className="text-xs text-gray-500">
+                    {dict.products?.bulkStockSkipsVariations || 'Products with variations are skipped. Use Refill on the Products page.'}
+                  </p>
                 )}
               </div>
 

@@ -3,15 +3,13 @@ import { planRefund, refundAmountFor, refundedPortion, REFUND_RECEIPT_PREFIX, Re
 import connectDB from '@/lib/mongodb';
 import Transaction from '@/models/Transaction';
 import Payment from '@/models/Payment';
-import Product from '@/models/Product';
 import Customer from '@/models/Customer';
-import ProductBundle from '@/models/ProductBundle';
 import CashDrawerSession from '@/models/CashDrawerSession';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth, getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
-import { updateStock, updateBundleStock, insertStockMovements, STOCK_SNAPSHOT_FIELDS, StockMovementInput, StockProductSnapshot } from '@/lib/stock';
+import { returnStockLines } from '@/lib/stock-returns';
 import { SubscriptionService } from '@/lib/subscription';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkRateLimit } from '@/lib/rate-limit';
@@ -169,69 +167,23 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         );
         refundTransaction = createdRefund;
 
-        // Restore stock for refunded items (only if product tracks inventory).
-        // One batched product read (reused as updateStock snapshots) and one
-        // movement insert, instead of two reads + an insert per item.
-        // A product on several lines is restored once, with the combined quantity.
-        const stockReturns = new Map<string, number>();
-        for (const item of refundItems) {
-          if (item.productId) stockReturns.set(item.productId, (stockReturns.get(item.productId) ?? 0) + item.quantity);
-        }
-        const refundProductsQuery = Product.find({
-          _id: { $in: [...stockReturns.keys()] },
-          tenantId,
-        })
-          .select(STOCK_SNAPSHOT_FIELDS)
-          .lean<Array<StockProductSnapshot & { _id: { toString(): string } }>>();
-        if (session) refundProductsQuery.session(session);
-        const refundProducts = new Map((await refundProductsQuery).map((p) => [p._id.toString(), p]));
-        const refundMovements: StockMovementInput[] = [];
-        for (const [productId, quantity] of stockReturns) {
-          const product = refundProducts.get(productId);
-          if (product && product.trackInventory !== false) {
-            await updateStock(
-              productId,
-              tenantId,
-              quantity, // Positive to restore
-              'return',
-              {
-                transactionId: refundTransaction._id.toString(),
-                reason: reason || 'Transaction refund',
-                notes: notes,
-                product,
-                movements: refundMovements,
-              },
-              session
-            );
-          }
-        }
-
-        // Anything left is a bundle line, which returns its component products
-        const bundleIds = [...stockReturns.keys()].filter((id) => !refundProducts.has(id));
-        if (bundleIds.length > 0) {
-          const bundlesQuery = ProductBundle.find({ _id: { $in: bundleIds }, tenantId })
-            .select('name trackInventory items')
-            .lean();
-          if (session) bundlesQuery.session(session);
-          for (const bundle of await bundlesQuery) {
-            const bundleId = bundle._id.toString();
-            await updateBundleStock(
-              bundleId,
-              tenantId,
-              stockReturns.get(bundleId) ?? 0,
-              'return',
-              {
-                transactionId: refundTransaction._id.toString(),
-                reason: reason || 'Transaction refund',
-                notes: notes,
-                movements: refundMovements,
-              },
-              session,
-              { bundle }
-            );
-          }
-        }
-        await insertStockMovements(refundMovements, session);
+        // Each line goes back to the variation and branch the sale took it from
+        await returnStockLines(
+          {
+            tenantId,
+            lines: refundItems.flatMap((item) => (
+              item.productId
+                ? [{ id: item.productId, quantity: item.quantity, variation: transaction.items[item.lineIndex]?.variation }]
+                : []
+            )),
+            branchId: transaction.branchId?.toString(),
+            transactionId: refundTransaction._id.toString(),
+            userId: authUser.userId,
+            reason: reason || 'Transaction refund',
+            notes,
+          },
+          session
+        );
 
         // Create Payment refund record if original payment exists
         const originalPaymentQuery = Payment.findOne({

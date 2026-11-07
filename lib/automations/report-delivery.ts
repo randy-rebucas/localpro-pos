@@ -17,7 +17,7 @@ export interface ReportDeliveryOptions {
   period?: 'daily' | 'weekly' | 'monthly';
 }
 
-const TENANT_FIELDS = 'settings.emailNotifications settings.email settings.companyName';
+const TENANT_FIELDS = 'settings.emailNotifications settings.email settings.companyName settings.timezone';
 
 /**
  * Generate and send sales report
@@ -100,7 +100,8 @@ export async function sendSalesReport(
           tenant._id.toString(),
           period,
           startDate,
-          endDate
+          endDate,
+          tenantSettings?.timezone
         );
 
         // Format report data

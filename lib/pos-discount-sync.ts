@@ -1,4 +1,5 @@
 import type { Discount } from '@/hooks/useDiscount';
+import { cartTax, cartTotal, type TaxPricingSettings } from '@/lib/tax-pricing';
 
 export async function applyPresetDiscountCode(
   code: 'SC20' | 'PWD20',
@@ -26,7 +27,7 @@ export async function applyPresetDiscountCode(
   if (data.success) {
     return {
       success: true,
-      discount: { code: data.data.code, amount: data.data.discountAmount, name: data.data.name },
+      discount: { code: data.data.code, amount: data.data.discountAmount, name: data.data.name, category: data.data.category },
     };
   }
   return { success: false, error: data.error || 'Failed to apply discount' };
@@ -37,16 +38,12 @@ export function syncDiscountToCustomerDisplay(
   tenant: string,
   discount: Discount,
   subtotal: number,
-  settings?: { taxEnabled?: boolean; taxRate?: number }
+  settings?: TaxPricingSettings
 ): void {
   if (!sessionId) return;
-  const afterDiscount = subtotal - discount.amount;
-  const taxableBase = Math.max(0, afterDiscount);
-  const taxAmount =
-    settings?.taxEnabled && settings?.taxRate
-      ? Math.round(taxableBase * (settings.taxRate / 100) * 100) / 100
-      : 0;
-  const total = afterDiscount + taxAmount;
+  const taxableBase = Math.max(0, subtotal - discount.amount);
+  const taxAmount = cartTax(taxableBase, settings, discount);
+  const total = cartTotal(taxableBase, settings, discount);
   fetch(`/api/pos/session/${sessionId}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

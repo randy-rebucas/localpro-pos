@@ -5,6 +5,7 @@ import Currency from '@/components/Currency';
 import type { Discount } from '@/hooks/useDiscount';
 import type { TranslationDict } from '@/types/dictionary';
 import { applyPresetDiscountCode, syncDiscountToCustomerDisplay } from '@/lib/pos-discount-sync';
+import type { TaxPricingSettings } from '@/lib/tax-pricing';
 
 const MAX_PROMO_CODE_LENGTH = 50;
 
@@ -24,13 +25,14 @@ interface CartDiscountSectionProps {
   setShowDiscountSection: React.Dispatch<React.SetStateAction<boolean>>;
   getSubtotal: () => number;
   sessionId: string | null;
-  settings?: { taxEnabled?: boolean; taxRate?: number } | null;
+  settings?: TaxPricingSettings | null;
   fetchWithTimeout: (url: string, options?: RequestInit, timeoutMs?: number) => Promise<Response>;
   applyDiscount: (
     subtotal: number,
     tenant: string,
     onSuccess: (discount: Discount) => void,
-    onError: (error: string) => void
+    onError: (error: string) => void,
+    settings?: TaxPricingSettings | null
   ) => void;
   setAppliedDiscount: (discount: Discount | null) => void;
   removeDiscount: () => void;
@@ -90,7 +92,8 @@ export default function CartDiscountSection({
       getSubtotal(),
       tenant,
       handleDiscountSuccess,
-      onDiscountError
+      onDiscountError,
+      settings
     );
   };
 

@@ -122,14 +122,14 @@ export default function ReceiptTemplatesManager({ settings, tenant, onUpdate, di
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-gray-900">{dict?.receiptTemplates?.title || 'Receipt Templates'}</h3>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h3 className="text-lg font-semibold text-ink">{dict?.receiptTemplates?.title || 'Receipt Templates'}</h3>
         <button
           onClick={() => {
             setEditing(null);
             setShowEditor(true);
           }}
-          className="px-4 py-2 bg-brand text-white text-sm font-medium hover:bg-brand-hover"
+          className="min-h-[44px] px-4 bg-ink font-receipt text-xs font-medium uppercase text-paper-white transition-colors hover:bg-brand-navy disabled:cursor-not-allowed disabled:opacity-50"
         >
           {dict?.receiptTemplates?.createNew || 'Create New Template'}
         </button>
@@ -137,8 +137,8 @@ export default function ReceiptTemplatesManager({ settings, tenant, onUpdate, di
 
       {message && (
         <div
-          className={`p-3 rounded ${
-            message.type === 'success' ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'
+          className={`border-l-4 bg-paper p-3 font-receipt text-sm text-ink ${
+            message.type === 'success' ? 'border-brand' : 'border-stamp'
           }`}
         >
           {message.text}
@@ -159,21 +159,21 @@ export default function ReceiptTemplatesManager({ settings, tenant, onUpdate, di
 
       <div className="space-y-3">
         {templates.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
+          <div className="text-center py-8 text-ink/60">
             {dict?.receiptTemplates?.noTemplates || 'No templates yet. Create your first template to get started.'}
           </div>
         ) : (
           templates.map((template) => (
             <div
               key={template.id}
-              className="p-4 border-2 border-gray-300 rounded hover:bg-gray-50"
+              className="p-4 border-2 border-ink/25 hover:bg-paper"
             >
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center space-x-3">
                   <div>
-                    <h4 className="font-medium text-gray-900">{template.name}</h4>
+                    <h4 className="font-medium text-ink">{template.name}</h4>
                     {template.isDefault && (
-                      <span className="text-xs text-brand font-medium">{dict?.receiptTemplates?.default || 'Default'}</span>
+                      <span className="text-xs text-brand-hover font-medium">{dict?.receiptTemplates?.default || 'Default'}</span>
                     )}
                   </div>
                 </div>
@@ -181,7 +181,7 @@ export default function ReceiptTemplatesManager({ settings, tenant, onUpdate, di
                   {!template.isDefault && (
                     <button
                       onClick={() => handleSetDefault(template.id)}
-                      className="px-3 py-1 text-xs text-brand hover:text-brand-hover font-medium"
+                      className="flex min-h-[44px] items-center px-2 font-receipt text-xs font-medium uppercase text-ink underline hover:no-underline"
                     >
                       {dict?.receiptTemplates?.setDefault || 'Set Default'}
                     </button>
@@ -191,13 +191,13 @@ export default function ReceiptTemplatesManager({ settings, tenant, onUpdate, di
                       setEditing(template);
                       setShowEditor(true);
                     }}
-                    className="px-3 py-1 text-xs text-gray-600 hover:text-gray-800 font-medium"
+                    className="flex min-h-[44px] items-center px-2 font-receipt text-xs font-medium uppercase text-ink underline hover:no-underline"
                   >
                     {dict?.common?.edit || 'Edit'}
                   </button>
                   <button
                     onClick={() => handleDelete(template.id)}
-                    className="px-3 py-1 text-xs text-red-600 hover:text-red-700 font-medium"
+                    className="flex min-h-[44px] items-center px-2 font-receipt text-xs font-medium uppercase text-stamp underline hover:no-underline"
                   >
                     {dict?.common?.delete || 'Delete'}
                   </button>
@@ -370,19 +370,19 @@ function TemplateEditor({
   };
 
   return (
-    <div className="border-2 border-gray-300 rounded p-6 bg-white">
+    <div className="border-2 border-ink/25 bg-paper-white p-4 sm:p-6">
       <h4 className="text-lg font-semibold mb-4">
         {template ? (dict?.receiptTemplates?.editTemplate || 'Edit Template') : (dict?.receiptTemplates?.createNew || 'Create New Template')}
       </h4>
 
       <div className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">{dict?.receiptTemplates?.templateName || 'Template Name'}</label>
+          <label className="mb-2 block font-receipt text-xs font-medium uppercase tracking-[0.08em] text-ink/70">{dict?.receiptTemplates?.templateName || 'Template Name'}</label>
           <input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand"
+            className="w-full min-h-[44px] border-2 border-ink/25 bg-paper-white px-3 py-2 font-receipt text-sm text-ink placeholder:text-ink/45 focus:border-ink focus:outline-none"
             placeholder={dict?.receiptTemplates?.templateNamePlaceholder || 'My Custom Receipt'}
           />
         </div>
@@ -393,60 +393,60 @@ function TemplateEditor({
             id="isDefault"
             checked={isDefault}
             onChange={(e) => setIsDefault(e.target.checked)}
-            className="w-4 h-4 text-brand border-gray-300 rounded focus:ring-brand"
+            className="checkbox-win8 cursor-pointer"
           />
-          <label htmlFor="isDefault" className="text-sm text-gray-700">
+          <label htmlFor="isDefault" className="text-sm text-ink/80">
             {dict?.receiptTemplates?.setAsDefault || 'Set as default template'}
           </label>
         </div>
 
         <div>
           <div className="flex items-center justify-between mb-2">
-            <label className="block text-sm font-medium text-gray-700">{dict?.receiptTemplates?.templateHtml || 'Template HTML'}</label>
+            <label className="block font-receipt text-xs font-medium uppercase tracking-[0.08em] text-ink/70">{dict?.receiptTemplates?.templateHtml || 'Template HTML'}</label>
             <button
               type="button"
               onClick={() => setPreview(!preview)}
-              className="px-3 py-1 text-xs text-brand hover:text-brand-hover font-medium"
+              className="flex min-h-[44px] items-center px-2 font-receipt text-xs font-medium uppercase text-ink underline hover:no-underline"
             >
               {preview ? (dict?.common?.edit || 'Edit') : (dict?.receiptTemplates?.preview || 'Preview')}
             </button>
           </div>
           {preview ? (
-            <div className="border-2 border-gray-300 rounded p-4 bg-white">
-              <div dangerouslySetInnerHTML={{ __html: renderPreview() }} />
+            <div className="border-2 border-ink/25 p-4 bg-white">
+              <div className="mk-print-preview" dangerouslySetInnerHTML={{ __html: renderPreview() }} />
             </div>
           ) : (
             <textarea
               value={html}
               onChange={(e) => setHtml(e.target.value)}
               rows={20}
-              className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand font-mono text-sm"
+              className="w-full border-2 border-ink/25 bg-paper-white px-3 py-2 font-receipt text-sm text-ink placeholder:text-ink/45 focus:border-ink focus:outline-none"
               placeholder={dict?.receiptTemplates?.htmlPlaceholder || 'Enter HTML template...'}
             />
           )}
         </div>
 
-        <div className="bg-brand-soft border border-teal-200 rounded p-3">
-          <p className="text-xs font-medium text-brand-navy-deep mb-2">{dict?.receiptTemplates?.availableVariables || 'Available Variables:'}</p>
-          <div className="text-xs text-brand-navy space-y-1">
-            <div><code className="bg-brand-soft px-1 rounded">{'{{storeName}}'}</code>, <code className="bg-brand-soft px-1 rounded">{'{{logo}}'}</code>, <code className="bg-brand-soft px-1 rounded">{'{{address}}'}</code>, <code className="bg-brand-soft px-1 rounded">{'{{phone}}'}</code>, <code className="bg-brand-soft px-1 rounded">{'{{email}}'}</code></div>
-            <div><code className="bg-brand-soft px-1 rounded">{'{{receiptNumber}}'}</code>, <code className="bg-brand-soft px-1 rounded">{'{{date}}'}</code>, <code className="bg-brand-soft px-1 rounded">{'{{time}}'}</code></div>
-            <div><code className="bg-brand-soft px-1 rounded">{'{{#each items}}'}</code> - {dict?.receiptTemplates?.loopThroughItems || 'Loop through items'}</div>
-            <div><code className="bg-brand-soft px-1 rounded">{'{{#if condition}}'}</code> - {dict?.receiptTemplates?.conditionalBlocks || 'Conditional blocks'}</div>
-            <div><code className="bg-brand-soft px-1 rounded">{'{{subtotal}}'}</code>, <code className="bg-brand-soft px-1 rounded">{'{{tax}}'}</code>, <code className="bg-brand-soft px-1 rounded">{'{{total}}'}</code></div>
+        <div className="border-l-4 border-brand bg-paper p-3">
+          <p className="mb-2 font-receipt text-xs font-medium uppercase text-ink">{dict?.receiptTemplates?.availableVariables || 'Available Variables:'}</p>
+          <div className="space-y-1 text-xs text-ink/80">
+            <div><code className="bg-paper-white px-1 font-receipt">{'{{storeName}}'}</code>, <code className="bg-paper-white px-1 font-receipt">{'{{logo}}'}</code>, <code className="bg-paper-white px-1 font-receipt">{'{{address}}'}</code>, <code className="bg-paper-white px-1 font-receipt">{'{{phone}}'}</code>, <code className="bg-paper-white px-1 font-receipt">{'{{email}}'}</code></div>
+            <div><code className="bg-paper-white px-1 font-receipt">{'{{receiptNumber}}'}</code>, <code className="bg-paper-white px-1 font-receipt">{'{{date}}'}</code>, <code className="bg-paper-white px-1 font-receipt">{'{{time}}'}</code></div>
+            <div><code className="bg-paper-white px-1 font-receipt">{'{{#each items}}'}</code> - {dict?.receiptTemplates?.loopThroughItems || 'Loop through items'}</div>
+            <div><code className="bg-paper-white px-1 font-receipt">{'{{#if condition}}'}</code> - {dict?.receiptTemplates?.conditionalBlocks || 'Conditional blocks'}</div>
+            <div><code className="bg-paper-white px-1 font-receipt">{'{{subtotal}}'}</code>, <code className="bg-paper-white px-1 font-receipt">{'{{tax}}'}</code>, <code className="bg-paper-white px-1 font-receipt">{'{{total}}'}</code></div>
           </div>
         </div>
 
         <div className="flex items-center space-x-3">
           <button
             onClick={() => onSave({ name, html, isDefault })}
-            className="px-4 py-2 bg-brand text-white font-medium hover:bg-brand-hover"
+            className="min-h-[44px] px-4 bg-ink font-receipt text-xs font-medium uppercase text-paper-white transition-colors hover:bg-brand-navy disabled:cursor-not-allowed disabled:opacity-50"
           >
             {dict?.receiptTemplates?.saveTemplate || 'Save Template'}
           </button>
           <button
             onClick={onCancel}
-            className="px-4 py-2 bg-gray-200 text-gray-700 font-medium hover:bg-gray-300"
+            className="min-h-[44px] px-4 border border-ink/25 font-receipt text-xs font-medium uppercase text-ink transition-colors hover:border-ink disabled:cursor-not-allowed disabled:opacity-50"
           >
             {dict?.common?.cancel || 'Cancel'}
           </button>

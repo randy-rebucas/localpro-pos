@@ -54,6 +54,24 @@ export function getTenantDayBoundaries(
   return { start, end };
 }
 
+/**
+ * The calendar day `daysBack` days before today in `tz`, as 'YYYY-MM-DD'.
+ * Falls back to the default timezone if `tz` isn't one the runtime recognises.
+ */
+export function getTenantDateString(tz: string = DEFAULT_TENANT_TIMEZONE, daysBack = 0): string {
+  const format = (timeZone: string) =>
+    new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+  let today: string;
+  try {
+    today = format(tz);
+  } catch {
+    today = format(DEFAULT_TENANT_TIMEZONE);
+  }
+  const day = new Date(`${today}T12:00:00Z`);
+  day.setUTCDate(day.getUTCDate() - daysBack);
+  return day.toISOString().slice(0, 10);
+}
+
 /** Resolve a startDate/endDate query-param pair to tenant-timezone-aware UTC boundaries. */
 export function resolveTenantDateRange(
   startParam: string | null | undefined,

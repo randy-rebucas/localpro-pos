@@ -19,13 +19,13 @@ export default function MultiCurrencyDisplaySettings({ settings, tenant, lang, o
 
   return (
     <div className="space-y-6">
-      <div className="p-4 bg-brand-soft border border-teal-200">
-        <p className="text-sm text-brand-navy mb-2">
-          <strong>Note:</strong> {dict?.admin?.multiCurrencyNote || 'Exchange rate management has been moved to Admin → Multi-Currency for better access control.'}
+      <div className="border-l-4 border-brand bg-paper p-4">
+        <p className="mb-2 text-sm text-ink/80">
+          <strong>{dict?.settings?.noteLabel || 'Note'}:</strong> {dict?.admin?.multiCurrencyNote || 'Exchange rate management has been moved to Admin → Multi-Currency for better access control.'}
         </p>
         <Link
           href={`/${tenant}/${lang}/admin/multi-currency`}
-          className="text-sm text-brand hover:text-brand-hover font-medium underline"
+          className="inline-flex min-h-[44px] items-center font-receipt text-xs font-medium uppercase text-ink underline hover:no-underline"
         >
           {dict?.admin?.manageExchangeRates || 'Manage Exchange Rates →'}
         </Link>
@@ -46,14 +46,14 @@ export default function MultiCurrencyDisplaySettings({ settings, tenant, lang, o
             }}
             className="checkbox-win8"
           />
-          <span className="text-sm font-medium text-gray-700">{dict?.admin?.enableMultiCurrencyDisplay || 'Enable Multi-Currency Display'}</span>
+          <span className="text-sm font-medium text-ink/80">{dict?.admin?.enableMultiCurrencyDisplay || 'Enable Multi-Currency Display'}</span>
         </label>
-        <p className="mt-1 text-xs text-gray-500">{dict?.admin?.displayPricesInMultipleCurrencies || 'Display prices in multiple currencies'}</p>
+        <p className="mt-1 text-xs text-ink/60">{dict?.admin?.displayPricesInMultipleCurrencies || 'Display prices in multiple currencies'}</p>
       </div>
 
       {multiCurrency.enabled && (
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="mb-2 block font-receipt text-xs font-medium uppercase tracking-[0.08em] text-ink/70">
             {dict?.admin?.displayCurrencies || 'Display Currencies'}
           </label>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
@@ -76,7 +76,7 @@ export default function MultiCurrencyDisplaySettings({ settings, tenant, lang, o
                   }}
                   className="checkbox-win8"
                 />
-                <span className="text-sm text-gray-700">{currency}</span>
+                <span className="font-receipt text-sm text-ink">{currency}</span>
               </label>
             ))}
           </div>

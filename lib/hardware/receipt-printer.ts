@@ -318,9 +318,9 @@ class ReceiptPrinterService {
       const isVAT = data.isVAT ?? ((data.taxLabel || '').toUpperCase().includes('VAT') && !!data.tax);
       const vatAmount = data.tax ?? 0;
       const discountedSubtotal = data.subtotal - (data.discount ?? 0);
-      const vatableSales = isVAT && vatAmount > 0 ? discountedSubtotal - vatAmount : 0;
-      const vatExemptSales = isVAT ? 0 : discountedSubtotal;
       const zeroRatedSales = data.zeroRatedSales ?? 0;
+      const vatableSales = isVAT && vatAmount > 0 ? data.total - vatAmount - zeroRatedSales : 0;
+      const vatExemptSales = isVAT ? 0 : discountedSubtotal;
       const totalItemCount = data.items.reduce((sum, item) => sum + item.quantity, 0);
       const hasScPwd = !!(data.scPwdName || data.scPwdId || data.scPwdDiscount);
       const line = '--------------------------------\n';
@@ -394,7 +394,7 @@ class ReceiptPrinterService {
 
       // Senior Citizen / PWD discount block
       if (hasScPwd) {
-        const grossLessVat = discountedSubtotal - vatAmount;
+        const grossLessVat = data.total + (data.scPwdDiscount ?? 0);
         commands.push(this.encodeText(line));
         commands.push(this.setAlign('center'));
         commands.push(this.setBold(true));
@@ -565,14 +565,14 @@ class ReceiptPrinterService {
     const taxLabel = data.taxLabel || 'Tax';
     const isVAT = data.isVAT ?? (taxLabel.toUpperCase().includes('VAT') && !!data.tax);
     const vatAmount = data.tax ?? 0;
-    // VATable sales = amount before VAT (net of discount)
+    // VATable sales = what was charged, less the VAT in it. Holds for VAT-inclusive and VAT-exclusive prices.
     const discountedSubtotal = data.subtotal - (data.discount ?? 0);
-    const vatableSales = isVAT && vatAmount > 0 ? discountedSubtotal - vatAmount : 0;
-    const vatExemptSales = isVAT ? 0 : discountedSubtotal;
     const zeroRatedSales = data.zeroRatedSales ?? 0;
+    const vatableSales = isVAT && vatAmount > 0 ? data.total - vatAmount - zeroRatedSales : 0;
+    const vatExemptSales = isVAT ? 0 : discountedSubtotal;
     const totalItemCount = data.items.reduce((sum, item) => sum + item.quantity, 0);
     const hasScPwd = !!(data.scPwdName || data.scPwdId || data.scPwdDiscount);
-    const grossLessVat = discountedSubtotal - vatAmount;
+    const grossLessVat = data.total + (data.scPwdDiscount ?? 0);
 
     // Use tenant-configured tax rate; never back-calculate from amounts (rounding errors)
     const vatPct = data.taxRate ? String(data.taxRate) : '12';

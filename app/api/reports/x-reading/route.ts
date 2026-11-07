@@ -1,13 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Tenant from '@/models/Tenant';
-import { getTenantIdFromRequest } from '@/lib/api-tenant';
+import { getTenantIdFromRequest, handleTenantAccessViolation, TenantAccessViolationError } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getDailySalesAggregate, startOfBusinessDay } from '@/lib/bir-readings';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
-import { logger } from '@/lib/logger';
+import { handleApiError } from '@/lib/error-handler';
+import { DEFAULT_TENANT_TIMEZONE } from '@/lib/timezone';
+import { checkRateLimit } from '@/lib/rate-limit';
+
+/** Only a real calendar day, so '2026-02-31' can't roll over into March. */
+function parseBusinessDate(value: string | null): Date | string | null {
+  if (!value) return new Date();
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return !isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value ? value : null;
+}
 
 /**
  * BIR X-Reading: a repeatable shift/day sales summary that does NOT reset or
@@ -28,20 +37,27 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
-    const searchParams = request.nextUrl.searchParams;
-    const businessDate = searchParams.get('date') ? new Date(searchParams.get('date')!) : new Date();
+    // Per user, since each view also writes an audit entry and cashiers can run it
+    const rl = checkRateLimit(`x-reading:${tenantId}:${user.userId}`, 30, 60_000);
+    if (!rl.allowed) {
+      return NextResponse.json({ success: false, error: t('validation.tooManyRequests', 'Too many requests') }, { status: 429 });
+    }
 
-    const [aggregate, tenant] = await Promise.all([
-      getDailySalesAggregate(tenantId, businessDate),
-      Tenant.findById(tenantId).select('grandTotalSales grandTotalTransactionCount').lean(),
-    ]);
+    const businessDate = parseBusinessDate(request.nextUrl.searchParams.get('date'));
+    if (!businessDate) {
+      return NextResponse.json({ success: false, error: t('validation.invalidDate', 'Invalid date') }, { status: 400 });
+    }
+
+    const tenant = await Tenant.findById(tenantId).select('grandTotalSales grandTotalTransactionCount settings.timezone').lean();
+    const timezone = tenant?.settings?.timezone || DEFAULT_TENANT_TIMEZONE;
+    const aggregate = await getDailySalesAggregate(tenantId, businessDate, timezone);
 
     await createAuditLog(request, {
       tenantId,
       userId: user.userId,
       action: AuditActions.X_READING_VIEW,
       entityType: 'x_reading',
-      metadata: { businessDate: startOfBusinessDay(businessDate).toISOString() },
+      metadata: { businessDate: startOfBusinessDay(businessDate, timezone).toISOString() },
     });
 
     return NextResponse.json({
@@ -53,8 +69,9 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error: unknown) {
-    logger.error('Error generating X-Reading:', error);
-    const message = error instanceof Error ? error.message : 'Failed to generate X-Reading';
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
+    if (error instanceof TenantAccessViolationError) {
+      return handleTenantAccessViolation(error, request);
+    }
+    return handleApiError(error, 'Failed to generate X-Reading');
   }
 }

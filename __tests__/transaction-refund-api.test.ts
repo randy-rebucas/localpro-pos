@@ -266,6 +266,34 @@ describe('POST /api/transactions/[id]/refund', () => {
     expect(mockUpdateStock).not.toHaveBeenCalled();
   });
 
+  it('returns stock to the branch and variation the sale took it from', async () => {
+    mockTxFindOne.mockResolvedValue(sale({
+      branchId: 'branch-1',
+      items: [{ product: 'prod-a', name: 'Item A', price: 100, quantity: 3, subtotal: 300, variation: { size: 'L', color: 'Red' } }],
+    }));
+
+    const res = await refund({ reason: 'customer_request' });
+
+    expect(res.status).toBe(201);
+    const [id, tenantId, quantity, type, options] = mockUpdateStock.mock.calls[0];
+    expect([id, tenantId, quantity, type]).toEqual(['prod-a', 'tenant-a', 3, 'return']);
+    expect(options).toMatchObject({ branchId: 'branch-1', variation: { size: 'L', color: 'Red' } });
+  });
+
+  it('keeps two variations of one product apart', async () => {
+    mockTxFindOne.mockResolvedValue(sale({
+      items: [
+        { product: 'prod-a', name: 'Item A', price: 100, quantity: 1, subtotal: 100, variation: { size: 'S' } },
+        { product: 'prod-a', name: 'Item A', price: 100, quantity: 2, subtotal: 200, variation: { size: 'L' } },
+      ],
+    }));
+
+    await refund({ reason: 'customer_request' });
+
+    const returned = mockUpdateStock.mock.calls.map(([, , quantity, , options]) => [quantity, options.variation.size]);
+    expect(returned).toEqual([[1, 'S'], [2, 'L']]);
+  });
+
   it('rejects refunding more than remains', async () => {
     mockTxFindOne.mockResolvedValue(sale({
       refundCount: 1,

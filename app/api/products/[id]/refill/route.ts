@@ -8,6 +8,8 @@ import { createAuditLog, AuditActions } from '@/lib/audit';
 import { handleApiError } from '@/lib/error-handler';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
+const isVariation = (variation: object, id: unknown) => String((variation as { _id?: unknown })._id) === String(id);
+
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     await connectDB();
@@ -15,7 +17,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
     const t = await getValidationTranslatorFromRequest(request);
-    
+
     if (!tenantId) {
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
@@ -25,25 +27,32 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     const body = await request.json();
-    const { quantity, notes } = body;
-    
+    const { quantity, notes, variationId } = body;
+
     if (!quantity || quantity <= 0) {
       return NextResponse.json(
         { success: false, error: t('validation.quantityGreaterThanZero', 'Quantity must be greater than 0') },
         { status: 400 }
       );
     }
-    
+
     // Get product before update to track previous stock
     const Product = (await import('@/models/Product')).default;
     const productBefore = await Product.findOne({ _id: id, tenantId });
-    
+
     if (!productBefore) {
       return NextResponse.json({ success: false, error: t('validation.productNotFound', 'Product not found') }, { status: 404 });
     }
-    
-    const previousStock = productBefore.stock;
-    
+
+    // Stock on a product with variations belongs to one of them, so the refill has to name it
+    const variations = productBefore.hasVariations ? productBefore.variations ?? [] : [];
+    const chosen = variations.find((variation) => isVariation(variation, variationId));
+    if (variations.length > 0 && !chosen) {
+      return NextResponse.json({ success: false, error: t('validation.variationRequired', 'Choose which variation to refill') }, { status: 400 });
+    }
+
+    const previousStock = chosen ? chosen.stock ?? 0 : productBefore.stock;
+
     // Update stock using the stock utility function
     await updateStock(
       id,
@@ -54,16 +63,20 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         userId: user.userId,
         reason: 'Stock refill',
         notes: notes || undefined,
+        ...(chosen ? { variation: { size: chosen.size, color: chosen.color, type: chosen.type } } : {}),
       }
     );
-    
+
     // Get updated product
     const product = await Product.findOne({ _id: id, tenantId });
-    
+    const newStock = chosen
+      ? product?.variations?.find((variation) => isVariation(variation, variationId))?.stock ?? 0
+      : product?.stock;
+
     if (!product) {
       return NextResponse.json({ success: false, error: t('validation.productNotFound', 'Product not found') }, { status: 404 });
     }
-    
+
     // Push updated stock to connected storefronts (fire-and-forget)
     {
       const { pushChannelInventoryForProduct } = await import('@/lib/ecommerce/inventory-push');
@@ -80,18 +93,18 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       changes: {
         stock: {
           old: previousStock,
-          new: product.stock,
+          new: newStock,
         },
         refillQuantity: quantity,
       },
     });
-    
+
     return NextResponse.json({
       success: true,
       data: {
         product,
         refilledQuantity: quantity,
-        newStock: product.stock,
+        newStock,
       },
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any

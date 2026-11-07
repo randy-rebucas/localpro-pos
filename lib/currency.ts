@@ -138,6 +138,7 @@ export function getDefaultTenantSettings(): ITenantSettings {
     taxEnabled: false,
     taxRate: 0,
     taxLabel: 'Tax',
+    pricesIncludeTax: false,
     lowStockThreshold: 10,
     lowStockAlert: true,
     emailNotifications: false,

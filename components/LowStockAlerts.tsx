@@ -6,7 +6,11 @@ import { getDictionaryClient } from '@/app/[tenant]/[lang]/dictionaries-client';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import ErrorState from '@/components/ui/ErrorState';
 import EmptyState from '@/components/ui/EmptyState';
+import SlipPager from '@/components/ui/SlipPager';
 import type { TranslationDict } from '@/types/dictionary';
+
+const ALERTS_PER_PAGE = 8;
+
 interface LowStockProduct {
   _id: string;
   name: string;
@@ -23,6 +27,10 @@ interface LowStockAlertsProps {
   /** Increment to imperatively trigger a refresh (e.g. after an SSE stock update). */
   refreshTrigger?: number;
   onProductClick?: (productId: string) => void;
+  /** Reports how many alerts loaded, or null when the fetch failed. */
+  onCountChange?: (count: number | null) => void;
+  /** Drop the frame and heading so the parent can supply its own. */
+  embedded?: boolean;
 }
 
 export default function LowStockAlerts({
@@ -33,6 +41,8 @@ export default function LowStockAlerts({
   branchId,
   refreshTrigger,
   onProductClick,
+  onCountChange,
+  embedded = false,
 }: LowStockAlertsProps) {
   const params = useParams();
   const tenant = params.tenant as string;
@@ -41,6 +51,11 @@ export default function LowStockAlerts({
   const [alerts, setAlerts] = useState<LowStockProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const frame = embedded ? 'flex flex-1 flex-col' : 'bg-white border border-gray-300';
+  // A refresh can shorten the list, so never stay past the last page
+  const totalPages = Math.max(1, Math.ceil(alerts.length / ALERTS_PER_PAGE));
+  const currentPage = Math.min(page, totalPages);
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -59,15 +74,22 @@ export default function LowStockAlerts({
 
       if (data.success) {
         setAlerts(data.data || []);
+        onCountChange?.((data.data || []).length);
       } else {
         setError(data.error || dict?.common?.failedToFetchAlerts || 'Failed to fetch alerts');
+        onCountChange?.(null);
       }
     } catch (err: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       setError(err.message || dict?.common?.errorFetchingAlerts || 'Error fetching alerts');
+      onCountChange?.(null);
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    setPage(1);
+  }, [branchId]);
 
   useEffect(() => {
     fetchAlerts();
@@ -84,7 +106,7 @@ export default function LowStockAlerts({
 
   if (loading && alerts.length === 0) {
     return (
-      <div className="bg-white border border-gray-300">
+      <div className={frame}>
         <LoadingSpinner size="sm" className="py-8" />
       </div>
     );
@@ -92,7 +114,7 @@ export default function LowStockAlerts({
 
   if (error) {
     return (
-      <div className="bg-white border border-gray-300">
+      <div className={frame}>
         <ErrorState
           title={error}
           onRetry={fetchAlerts}
@@ -106,7 +128,7 @@ export default function LowStockAlerts({
 
   if (alerts.length === 0) {
     return (
-      <div className="bg-white border border-gray-300">
+      <div className={frame}>
         <EmptyState
           icon="products"
           title={
@@ -121,53 +143,65 @@ export default function LowStockAlerts({
   }
 
   return (
-    <div className="bg-white border border-gray-300">
-      <div className="p-4 border-b border-gray-200">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-gray-900">
-            {dict?.components?.lowStockAlerts?.title || 'Low Stock Alerts'}
-          </h3>
-          <span className="bg-red-100 text-red-800 text-xs font-semibold px-2.5 py-0.5 border border-red-300">
-            {alerts.length}
-          </span>
-        </div>
-      </div>
-      <div className="divide-y divide-gray-200 max-h-96 overflow-y-auto">
-        {alerts.map((alert) => (
-          <div
-            key={alert._id}
-            className={`p-4 hover:bg-gray-50 transition-colors ${
-              onProductClick ? 'cursor-pointer' : ''
-            }`}
-            onClick={() => onProductClick?.(alert._id)}
-          >
-            <div className="flex items-start justify-between">
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">
-                  {alert.name}
-                </p>
-                {alert.sku && (
-                  <p className="text-xs text-gray-500 mt-1">SKU: {alert.sku}</p>
-                )}
-              </div>
-              <div className="ml-4 flex-shrink-0 text-right">
-                <div
-                  className={`inline-flex items-center px-2.5 py-0.5 border border-gray-300 text-xs font-semibold ${
-                    alert.currentStock === 0
-                      ? 'bg-red-100 text-red-800'
-                      : 'bg-yellow-100 text-yellow-800'
-                  }`}
-                >
-                  {alert.currentStock} / {alert.threshold}
-                </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  {alert.currentStock === 0 ? (dict?.common?.outOfStock || 'Out of stock') : (dict?.common?.lowStock || 'Low stock')}
-                </p>
-              </div>
-            </div>
+    <div className={frame}>
+      {!embedded && (
+        <div className="p-4 border-b border-gray-200">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-gray-900">
+              {dict?.components?.lowStockAlerts?.title || 'Low Stock Alerts'}
+            </h3>
+            <span className="bg-red-100 text-red-800 text-xs font-semibold px-2.5 py-0.5 border border-red-300">
+              {alerts.length}
+            </span>
           </div>
-        ))}
-      </div>
+        </div>
+      )}
+      <ul className="divide-y divide-dashed divide-ink/20">
+        {alerts.slice((currentPage - 1) * ALERTS_PER_PAGE, currentPage * ALERTS_PER_PAGE).map((alert) => {
+          const outOfStock = alert.currentStock === 0;
+          const line = (
+            <>
+              <span className="flex items-baseline gap-2">
+                <span className="min-w-0 truncate text-sm font-medium">{alert.name}</span>
+                <span className="mk-leader flex-1" aria-hidden />
+                <span className="whitespace-nowrap font-receipt text-sm font-semibold">
+                  {alert.currentStock} / {alert.threshold}
+                </span>
+              </span>
+              <span className="mt-1 flex items-center justify-between gap-3 font-receipt text-xs text-ink/60">
+                <span className="min-w-0 truncate">{alert.sku ? `SKU: ${alert.sku}` : ''}</span>
+                <span className={`shrink-0 whitespace-nowrap border px-2 py-0.5 uppercase ${outOfStock ? 'border-stamp font-semibold text-stamp' : 'border-ink/25 text-ink/70'}`}>
+                  {outOfStock ? (dict?.admin?.outOfStock || 'Out of stock') : (dict?.admin?.lowStock || 'Low stock')}
+                </span>
+              </span>
+            </>
+          );
+
+          return (
+            <li key={alert._id}>
+              {onProductClick ? (
+                <button
+                  type="button"
+                  onClick={() => onProductClick(alert._id)}
+                  className="block w-full px-4 py-3 text-left text-ink transition-colors hover:bg-paper sm:px-5"
+                >
+                  {line}
+                </button>
+              ) : (
+                <div className="px-4 py-3 text-ink sm:px-5">{line}</div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      <SlipPager
+        page={currentPage}
+        totalPages={totalPages}
+        onPageChange={setPage}
+        label={dict?.admin?.page || 'Page'}
+        previousLabel={dict?.common?.previous || 'Previous'}
+        nextLabel={dict?.common?.next || 'Next'}
+      />
     </div>
   );
 }

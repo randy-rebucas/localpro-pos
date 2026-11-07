@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import Transaction from '@/models/Transaction';
 import { isRefundRecord, SALE_AND_REFUND_STATUSES } from '@/lib/refund-plan';
+import { DEFAULT_TENANT_TIMEZONE, getTenantDayBoundaries } from '@/lib/timezone';
 
 export interface DailySalesAggregate {
   startDate: Date;
@@ -22,11 +23,9 @@ export interface DailySalesAggregate {
 
 const roundMoney = (value: number) => Math.round(value * 100) / 100;
 
-/** Normalizes a date to local midnight (start of business day). */
-export function startOfBusinessDay(date: Date): Date {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  return d;
+/** Midnight of a business day in the store's timezone. Pass a day as 'YYYY-MM-DD' to name it exactly. */
+export function startOfBusinessDay(date: Date | string, timezone: string = DEFAULT_TENANT_TIMEZONE): Date {
+  return getTenantDayBoundaries(date, timezone).start;
 }
 
 /**
@@ -38,11 +37,11 @@ export function startOfBusinessDay(date: Date): Date {
  */
 export async function getDailySalesAggregate(
   tenantId: string | mongoose.Types.ObjectId,
-  businessDate: Date
+  businessDate: Date | string,
+  timezone: string = DEFAULT_TENANT_TIMEZONE
 ): Promise<DailySalesAggregate> {
-  const startDate = startOfBusinessDay(businessDate);
-  const endDate = new Date(startDate);
-  endDate.setDate(endDate.getDate() + 1);
+  const { start: startDate, end: lastInstant } = getTenantDayBoundaries(businessDate, timezone);
+  const endDate = new Date(lastInstant.getTime() + 1);
 
   const [transactions, voided] = await Promise.all([
     Transaction.find({
@@ -50,7 +49,7 @@ export async function getDailySalesAggregate(
       status: { $in: SALE_AND_REFUND_STATUSES },
       createdAt: { $gte: startDate, $lt: endDate },
     })
-      .select('subtotal total discountAmount taxAmount taxExemptAmount zeroRatedAmount status receiptNumber')
+      .select('total discountAmount taxAmount taxExemptAmount zeroRatedAmount status receiptNumber')
       .lean(),
     Transaction.countDocuments({
       tenantId,
@@ -64,7 +63,6 @@ export async function getDailySalesAggregate(
   let vatExemptSales = 0;
   let zeroRatedSales = 0;
   let discountTotal = 0;
-  let subtotalAfterDiscount = 0;
   let transactionCount = 0;
   let refundCount = 0;
   let refundTotal = 0;
@@ -78,18 +76,16 @@ export async function getDailySalesAggregate(
       continue;
     }
     transactionCount += 1;
-    const subtotal = tx.subtotal ?? tx.total;
-    const discountAmount = tx.discountAmount ?? 0;
     grossSales += tx.total;
     vatAmount += tx.taxAmount ?? 0;
     vatExemptSales += tx.taxExemptAmount ?? 0;
     zeroRatedSales += tx.zeroRatedAmount ?? 0;
-    discountTotal += discountAmount;
-    subtotalAfterDiscount += subtotal - discountAmount;
+    discountTotal += tx.discountAmount ?? 0;
   }
 
-  // VATable sales = the VAT-exclusive base (subtotal net of discount, exemptions, and zero-rated sales).
-  const vatableSales = Math.max(0, subtotalAfterDiscount - vatExemptSales - zeroRatedSales - vatAmount);
+  // What was charged less VAT, exempt and zero-rated sales. Works off the total because that holds
+  // for VAT-inclusive and VAT-exclusive prices alike, and the four lines always add up to gross sales.
+  const vatableSales = Math.max(0, grossSales - vatAmount - vatExemptSales - zeroRatedSales);
 
   return {
     startDate,
@@ -107,4 +103,30 @@ export async function getDailySalesAggregate(
     refundVatAmount: roundMoney(refundVatAmount),
     netSales: roundMoney(grossSales - refundTotal),
   };
+}
+
+/**
+ * The Grand Total as it stood when a business day ended, worked back from the live figure.
+ * A reading made after midnight would otherwise take in the new day's sales. Only sales rung
+ * up by a cashier count, as manual and channel sales have no userId and never reach the Grand
+ * Total. Voided sales do count, since voiding doesn't take them back off.
+ */
+export async function getGrandTotalAtDayEnd(
+  tenantId: string | mongoose.Types.ObjectId,
+  dayEnd: Date,
+  currentGrandTotal: number,
+  readAt: Date
+): Promise<number> {
+  if (readAt <= dayEnd) return currentGrandTotal;
+
+  const laterSales = await Transaction.find({
+    tenantId,
+    userId: { $exists: true },
+    createdAt: { $gt: dayEnd, $lt: readAt },
+  })
+    .select('total status receiptNumber')
+    .lean();
+
+  const gained = laterSales.reduce((sum, tx) => (isRefundRecord(tx) ? sum : sum + tx.total), 0);
+  return Math.max(0, roundMoney(currentGrandTotal - gained));
 }
