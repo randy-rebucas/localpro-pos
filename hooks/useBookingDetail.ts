@@ -25,7 +25,8 @@ export interface Booking {
 }
 
 export type BookingUpdate = Omit<Partial<Booking>, 'staffId'> & {
-  staffId?: string;
+  /** null unassigns: undefined would be dropped from the request and change nothing. */
+  staffId?: string | null;
 };
 
 export function useBookingDetail(tenant: string, bookingId: string) {

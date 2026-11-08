@@ -1,223 +1,118 @@
 'use client';
 
-import { memo } from 'react';
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { memo, useMemo } from 'react';
+import { useReducedMotion } from 'motion/react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { getDefaultTenantSettings } from '@/lib/currency';
-import { formatDate } from '@/lib/formatting';
+import { toTenantDateString } from '@/lib/timezone';
+import { formatHours } from '@/lib/attendance-helpers';
+import { type TranslationDict } from '@/types/dictionary';
+import { type AttendanceRecord } from '@/hooks/useAttendance';
 
-const formatHours = (value: number) => {
-  const h = Math.floor(value);
-  const m = Math.round((value - h) * 60);
-  return `${h}h ${m}m`;
-};
+const CHART_INK = '#10202b';
+const CHART_BAR = '#2d868a';
+const CHART_TICK = { fontFamily: 'var(--mk-font-receipt)', fontSize: 12, fill: CHART_INK, fillOpacity: 0.6 };
 
-const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ color: string; name: string; value: number; payload: { fullName: string } }>; label?: string }) => {
-  if (active && payload && payload.length) {
-    return (
-      <div className="bg-white border border-gray-300 rounded-lg p-3 shadow-lg">
-        <p className="font-semibold text-gray-900 mb-2">{label || payload[0].payload.fullName}</p>
-        {payload.map((entry, index: number) => (
-          <p key={index} className="text-sm" style={{ color: entry.color }}>
-            {entry.name}: {entry.name.toLowerCase().includes('hours')
-              ? formatHours(entry.value)
-              : entry.value}
-          </p>
-        ))}
-      </div>
-    );
-  }
-  return null;
-};
+interface Day { day: string; label: string; hours: number; shifts: number }
 
-interface Attendance {
-  _id: string;
-  userId: string | { _id: string; name: string; email: string };
-  clockIn: string;
-  clockOut?: string;
-  totalHours?: number;
-  createdAt: string;
+function DayTooltip({ active, payload, shiftsLabel }: {
+  active?: boolean;
+  payload?: readonly { payload?: Day }[];
+  shiftsLabel: string;
+}) {
+  const day = payload?.[0]?.payload;
+  if (!active || !day) return null;
+  return (
+    <div className="border border-ink bg-paper-white px-3 py-2 font-receipt text-xs text-ink">
+      <p className="font-semibold">{day.label}</p>
+      <p className="mt-1 text-sm font-semibold">{formatHours(day.hours)}</p>
+      <p className="text-ink/60">{shiftsLabel}: {day.shifts}</p>
+    </div>
+  );
 }
 
-interface AttendanceTrendsChartsProps {
-  attendances: Attendance[];
-  dict: any; // eslint-disable-line @typescript-eslint/no-explicit-any
-}
-
-export default memo(function AttendanceTrendsCharts({ attendances, dict }: AttendanceTrendsChartsProps) {
+/**
+ * Hours worked over the period: a bar per store day, and the employees who worked the most.
+ * Only finished shifts count, since an open shift has no total yet.
+ */
+export default memo(function AttendanceTrendsCharts({ attendances, dict, lang }: {
+  attendances: AttendanceRecord[];
+  dict: TranslationDict;
+  lang: 'en' | 'es';
+}) {
   const { settings } = useTenantSettings();
-  const tenantSettings = settings || getDefaultTenantSettings();
-  const primaryColor = tenantSettings.primaryColor || '#35979c';
+  const timeZone = (settings || getDefaultTenantSettings()).timezone || 'Asia/Manila';
+  const reduceMotion = useReducedMotion();
 
-  // Process data for daily hours chart
-  const dailyHoursMap = new Map<string, number>();
-  const dailyCountMap = new Map<string, number>();
+  const { days, people } = useMemo(() => {
+    const byDay = new Map<string, Day>();
+    const byPerson = new Map<string, { id: string; name: string; hours: number }>();
+    const fmt = new Intl.DateTimeFormat(lang === 'es' ? 'es-ES' : 'en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+    for (const a of attendances) {
+      if (!a.totalHours) continue;
+      const day = toTenantDateString(a.clockIn, timeZone);
+      const entry = byDay.get(day) || { day, label: fmt.format(new Date(`${day}T12:00:00Z`)), hours: 0, shifts: 0 };
+      entry.hours += a.totalHours;
+      entry.shifts += 1;
+      byDay.set(day, entry);
 
-  attendances.forEach(attendance => {
-    if (attendance.totalHours) {
-      const date = formatDate(new Date(attendance.clockIn), tenantSettings);
-      const currentHours = dailyHoursMap.get(date) || 0;
-      dailyHoursMap.set(date, currentHours + attendance.totalHours);
-      
-      const currentCount = dailyCountMap.get(date) || 0;
-      dailyCountMap.set(date, currentCount + 1);
+      const id = typeof a.userId === 'object' ? a.userId._id : a.userId;
+      const name = typeof a.userId === 'object' ? a.userId.name : dict.admin?.unknown || 'Unknown';
+      const person = byPerson.get(id) || { id, name, hours: 0 };
+      person.hours += a.totalHours;
+      byPerson.set(id, person);
     }
-  });
+    return {
+      // 'YYYY-MM-DD' sorts as text, whatever date format the store prints.
+      days: [...byDay.values()].sort((x, y) => x.day.localeCompare(y.day)).map((d) => ({ ...d, hours: Math.round(d.hours * 100) / 100 })),
+      people: [...byPerson.values()].sort((x, y) => y.hours - x.hours).slice(0, 8),
+    };
+  }, [attendances, timeZone, lang, dict]);
 
-  // Convert to array and sort by date
-  const dailyHoursData = Array.from(dailyHoursMap.entries())
-    .map(([date, hours]) => ({
-      date,
-      hours: Math.round(hours * 10) / 10, // Round to 1 decimal
-    }))
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
-  const dailyCountData = Array.from(dailyCountMap.entries())
-    .map(([date, count]) => ({
-      date,
-      count,
-    }))
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
-  // Process data for hours by employee
-  const employeeHoursMap = new Map<string, { name: string; hours: number }>();
-
-  attendances.forEach(attendance => {
-    if (attendance.totalHours) {
-      const userName = typeof attendance.userId === 'object' 
-        ? attendance.userId.name 
-        : 'Unknown';
-      const userId = typeof attendance.userId === 'object' 
-        ? attendance.userId._id 
-        : attendance.userId;
-      
-      const existing = employeeHoursMap.get(userId);
-      if (existing) {
-        existing.hours += attendance.totalHours;
-      } else {
-        employeeHoursMap.set(userId, { name: userName, hours: attendance.totalHours });
-      }
-    }
-  });
-
-  const employeeHoursData = Array.from(employeeHoursMap.values())
-    .map(emp => ({
-      name: emp.name.length > 15 ? emp.name.substring(0, 15) + '...' : emp.name,
-      fullName: emp.name,
-      hours: Math.round(emp.hours * 10) / 10,
-    }))
-    .sort((a, b) => b.hours - a.hours)
-    .slice(0, 10); // Top 10 employees
-
-  if (attendances.length === 0) {
-    return null;
-  }
+  if (days.length === 0) return null;
+  const top = people[0]?.hours || 1;
 
   return (
-    <div className="space-y-6 mb-6">
-      {/* Daily Hours Worked - Line Chart */}
-      {dailyHoursData.length > 0 && (
-        <div className="bg-gray-50 border border-gray-200 p-4 rounded-lg">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            {dict.admin?.dailyHoursWorked || 'Daily Hours Worked'}
-          </h3>
-          <ResponsiveContainer width="100%" height={350}>
-            <LineChart data={dailyHoursData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis
-                dataKey="date"
-                angle={-45}
-                textAnchor="end"
-                height={80}
-                stroke="#6b7280"
-                style={{ fontSize: '12px' }}
-              />
-              <YAxis
-                stroke="#6b7280"
-                style={{ fontSize: '12px' }}
-                tickFormatter={(value) => `${value}h`}
-              />
-              <Tooltip content={<CustomTooltip />} />
-              <Legend />
-              <Line
-                type="monotone"
-                dataKey="hours"
-                stroke={primaryColor}
-                strokeWidth={2}
-                dot={{ fill: primaryColor, r: 4 }}
-                activeDot={{ r: 6 }}
-                name={dict.admin?.totalHours || 'Total Hours'}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      )}
-
-      {/* Daily Attendance Count - Bar Chart */}
-      {dailyCountData.length > 0 && (
-        <div className="bg-gray-50 border border-gray-200 p-4 rounded-lg">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            {dict.admin?.dailyAttendanceCount || 'Daily Attendance Count'}
-          </h3>
-          <ResponsiveContainer width="100%" height={350}>
-            <BarChart data={dailyCountData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis
-                dataKey="date"
-                angle={-45}
-                textAnchor="end"
-                height={80}
-                stroke="#6b7280"
-                style={{ fontSize: '12px' }}
-              />
-              <YAxis
-                stroke="#6b7280"
-                style={{ fontSize: '12px' }}
-              />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: '#fff',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '8px',
-                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-                }}
-              />
-              <Legend />
-              <Bar dataKey="count" fill="#10b981" name={dict.admin?.attendanceCount || 'Attendance Count'} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      )}
-
-      {/* Hours by Employee - Bar Chart */}
-      {employeeHoursData.length > 0 && (
-        <div className="bg-gray-50 border border-gray-200 p-4 rounded-lg">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            {dict.admin?.hoursByEmployee || 'Hours by Employee'}
-          </h3>
-          <ResponsiveContainer width="100%" height={350}>
-            <BarChart data={employeeHoursData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis
-                dataKey="name"
-                angle={-45}
-                textAnchor="end"
-                height={80}
-                stroke="#6b7280"
-                style={{ fontSize: '12px' }}
-              />
-              <YAxis
-                stroke="#6b7280"
-                style={{ fontSize: '12px' }}
-                tickFormatter={(value) => `${value}h`}
-              />
-              <Tooltip content={<CustomTooltip />} />
-              <Legend />
-              <Bar dataKey="hours" fill="#8b5cf6" name={dict.admin?.totalHours || 'Total Hours'} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      )}
+    <div className="grid grid-cols-1 xl:grid-cols-12">
+      <div className="p-4 sm:p-5 xl:col-span-8">
+        <h3 className="mb-3 font-receipt text-xs uppercase tracking-[0.14em] text-ink/60">{dict.admin?.dailyHoursWorked || 'Daily Hours Worked'}</h3>
+        <ResponsiveContainer width="100%" height={240}>
+          <BarChart data={days} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+            <CartesianGrid vertical={false} stroke={CHART_INK} strokeOpacity={0.12} strokeDasharray="2 4" />
+            <XAxis dataKey="label" tick={CHART_TICK} tickLine={false} axisLine={{ stroke: CHART_INK, strokeOpacity: 0.3 }} minTickGap={16} />
+            <YAxis tickFormatter={(v: number) => `${v}h`} tick={CHART_TICK} tickLine={false} axisLine={false} width={40} allowDecimals={false} />
+            <Tooltip
+              cursor={{ fill: CHART_INK, fillOpacity: 0.06 }}
+              content={(props) => (
+                <DayTooltip
+                  active={props.active}
+                  payload={props.payload as Parameters<typeof DayTooltip>[0]['payload']}
+                  shiftsLabel={dict.admin?.shifts || 'Shifts'}
+                />
+              )}
+            />
+            <Bar dataKey="hours" fill={CHART_BAR} maxBarSize={28} isAnimationActive={!reduceMotion} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+      <div className="border-t border-dashed border-ink/30 p-4 sm:p-5 xl:col-span-4 xl:border-l xl:border-t-0">
+        <h3 className="mb-3 font-receipt text-xs uppercase tracking-[0.14em] text-ink/60">{dict.admin?.hoursByEmployee || 'Hours by Employee'}</h3>
+        <ul className="space-y-3">
+          {people.map((p) => (
+            <li key={p.id} className="font-receipt text-sm">
+              <div className="flex items-baseline gap-2">
+                <span className="min-w-0 truncate" title={p.name}>{p.name}</span>
+                <span className="mk-leader" aria-hidden />
+                <span className="whitespace-nowrap font-medium">{formatHours(p.hours)}</span>
+              </div>
+              <div className="mt-1 h-2 bg-ink/10" aria-hidden>
+                <div className="h-full bg-brand-hover" style={{ width: `${Math.max(2, (p.hours / top) * 100)}%` }} />
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
     </div>
   );
 });

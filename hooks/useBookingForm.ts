@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { tenantWallTimeToDate } from '@/lib/timezone';
 
 export interface BookingFormData {
   customerName: string;
@@ -13,7 +14,8 @@ export interface BookingFormData {
   status: 'pending' | 'confirmed' | 'completed' | 'cancelled' | 'no-show';
 }
 
-export function useBookingForm(tenant: string) {
+/** `timeZone` is the store's: the picked start time is read as a time there. */
+export function useBookingForm(tenant: string, timeZone?: string) {
   const [formData, setFormData] = useState<BookingFormData>({
     customerName: '',
     customerEmail: '',
@@ -42,7 +44,11 @@ export function useBookingForm(tenant: string) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
-          body: JSON.stringify(formData),
+          body: JSON.stringify({
+            ...formData,
+            startTime: formData.startTime ? tenantWallTimeToDate(formData.startTime, timeZone).toISOString() : '',
+            staffId: formData.staffId || undefined,
+          }),
           signal: controller.signal,
         });
 
@@ -64,7 +70,7 @@ export function useBookingForm(tenant: string) {
         setSubmitting(false);
       }
     },
-    [tenant, formData]
+    [tenant, formData, timeZone]
   );
 
   const resetForm = useCallback(() => {

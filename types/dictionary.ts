@@ -17,6 +17,9 @@ export interface TranslationDict {
   admin?: {
     [key: string]: string | undefined;
   };
+  tables?: {
+    [key: string]: string | undefined;
+  };
   validation?: {
     [key: string]: string | undefined;
   };

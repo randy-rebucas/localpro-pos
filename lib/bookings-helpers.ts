@@ -1,6 +1,6 @@
 /**
  * Booking Management Utilities
- * Helper functions for status formatting, date formatting, and UI helpers
+ * Status rules and labels shared by the bookings page, its calendar and the API.
  */
 
 export interface Booking {
@@ -17,38 +17,16 @@ export const BOOKING_STATUSES = [
 
 export type BookingStatus = typeof BOOKING_STATUSES[number]['value'];
 
-/**
- * Get CSS classes for status badge
- */
-export function getStatusColor(status: BookingStatus): string {
-  switch (status) {
-    case 'confirmed':
-      return 'bg-green-100 text-green-800';
-    case 'pending':
-      return 'bg-yellow-100 text-yellow-800';
-    case 'completed':
-      return 'bg-brand-soft text-brand-navy';
-    case 'cancelled':
-      return 'bg-red-100 text-red-800';
-    case 'no-show':
-      return 'bg-gray-100 text-gray-800';
-    default:
-      return 'bg-gray-100 text-gray-800';
-  }
-}
+type Dict = { admin?: Record<string, string | undefined> } | null | undefined;
 
-/**
- * Get status label text
- */
-type Dict = Record<string, Record<string, string | undefined> | undefined>;
-
+/** The status in the page's language. `no-show` lives under `noShow`, since keys can't hold a dash. */
 export function getStatusLabel(status: BookingStatus, dict?: Dict): string {
   const labels: Record<BookingStatus, string> = {
     pending: dict?.admin?.pending || 'Pending',
     confirmed: dict?.admin?.confirmed || 'Confirmed',
     completed: dict?.admin?.completed || 'Completed',
     cancelled: dict?.admin?.cancelled || 'Cancelled',
-    'no-show': 'No Show',
+    'no-show': dict?.admin?.noShow || 'No Show',
   };
   return labels[status] || status;
 }
@@ -79,17 +57,10 @@ export function getStaffName(staffName?: string, staffId?: { _id: string; name: 
 }
 
 /**
- * Check if reminder can be sent
+ * A reminder only makes sense before the appointment has happened or been called off.
  */
 export function canSendReminder(status: BookingStatus): boolean {
   return status === 'pending' || status === 'confirmed';
-}
-
-/**
- * Check if booking can be edited
- */
-export function canEditBooking(status: BookingStatus): boolean {
-  return status !== 'completed' && status !== 'cancelled';
 }
 
 /**
@@ -121,37 +92,4 @@ export function getAllowedNextStatuses(from: BookingStatus): BookingStatus[] {
  */
 export function isBookingStatusEditable(status: BookingStatus): boolean {
   return getAllowedNextStatuses(status).length > 1;
-}
-
-/**
- * Get cancel confirmation message.
- * The "delete" action is actually a soft-cancel (status set to 'cancelled',
- * isActive: false) — the record and its history are preserved, not removed.
- */
-export function getDeleteBookingConfirmMessage(dict?: Dict): string {
-  return dict?.common?.cancelBookingConfirm || 'Are you sure you want to cancel this booking?';
-}
-
-/**
- * Get reminder confirmation message
- */
-export function getSendReminderConfirmMessage(dict?: Dict): string {
-  return dict?.admin?.sendReminderConfirm || 'Send a reminder to the customer?';
-}
-
-/**
- * Format duration with label
- */
-export function formatDuration(duration: number, dict?: Dict): string {
-  return `${duration} ${dict?.admin?.minutes || 'min'}`;
-}
-
-/**
- * Get customer display info
- */
-export function getCustomerInfo(customerEmail?: string, customerPhone?: string): string[] {
-  const info = [];
-  if (customerEmail) info.push(customerEmail);
-  if (customerPhone) info.push(customerPhone);
-  return info;
 }

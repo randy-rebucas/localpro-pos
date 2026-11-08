@@ -1,22 +1,17 @@
 'use client';
 
 import { useState, useCallback } from 'react';
+import { getTenantDateString } from '@/lib/timezone';
 
-export function useAttendanceFilters() {
+/** `timeZone` is the store's, so "the last 30 days" ends on the store's today. */
+export function useAttendanceFilters(timeZone?: string) {
   const [selectedUserId, setSelectedUserId] = useState<string>('');
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
 
   const initializeDateRange = useCallback((): { startDate: string; endDate: string } => {
-    const end = new Date();
-    const start = new Date();
-    start.setDate(start.getDate() - 30);
-
-    const endDate = end.toISOString().split('T')[0];
-    const startDate = start.toISOString().split('T')[0];
-
-    return { startDate, endDate };
-  }, []);
+    return { startDate: getTenantDateString(timeZone, 30), endDate: getTenantDateString(timeZone) };
+  }, [timeZone]);
 
   const resetFilters = useCallback(() => {
     setSelectedUserId('');

@@ -1,213 +1,173 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Attendance from '@/models/Attendance';
-import User from '@/models/User'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
-import { sendEmail } from '@/lib/notifications'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import { hasTenantPermission } from '@/lib/permissions-server';
+import { checkRateLimit } from '@/lib/rate-limit';
+import { getTenantSettingsById } from '@/lib/tenant';
+import { getTenantDayBoundaries } from '@/lib/timezone';
+import { findAttendanceAlerts } from '@/lib/attendance-alerts';
+import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
+
+/**
+ * Resolve the caller and the store, and require attendance.manage: the alerts list
+ * every flagged employee's name and email, and POST emails them.
+ */
+async function authorize(request: NextRequest) {
+  const user = await requireAuth(request);
+  await connectDB();
+  const t = await getValidationTranslatorFromRequest(request);
+  // getTenantIdFromRequest pins this to the signed-in user's tenant.
+  const tenantId = await getTenantIdFromRequest(request);
+  if (!tenantId) {
+    return { error: NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 }) };
+  }
+  if (!(await hasTenantPermission(user.role, tenantId, 'attendance.manage'))) {
+    return { error: NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 }) };
+  }
+  return { user, tenantId, t };
+}
+
+/** Today's alerts for the store, using the query's thresholds or the saved ones. */
+async function buildAlerts(request: NextRequest, tenantId: string) {
+  const settings = await getTenantSettingsById(tenantId);
+  const saved = settings?.attendanceNotifications || {};
+  const params = request.nextUrl.searchParams;
+  const expectedStartTime = params.get('expectedStartTime') || saved.expectedStartTime || '09:00';
+  const parsedMax = parseFloat(params.get('maxHoursWithoutClockOut') || String(saved.maxHoursWithoutClockOut || 12));
+  const maxHoursWithoutClockOut = Number.isFinite(parsedMax) && parsedMax > 0 ? parsedMax : 12;
+  const timeZone = settings?.timezone || 'Asia/Manila';
+
+  const today = getTenantDayBoundaries(undefined, timeZone);
+  const [openSessions, todaysSessions] = await Promise.all([
+    Attendance.find({ tenantId, clockOut: null, isActive: { $ne: false } }).populate('userId', 'name email').lean(),
+    Attendance.find({ tenantId, clockIn: { $gte: today.start, $lte: today.end }, isActive: { $ne: false } }).populate('userId', 'name email').lean(),
+  ]);
+
+  const notifications = findAttendanceAlerts({
+    openSessions,
+    todaysSessions,
+    now: new Date(),
+    timeZone,
+    expectedStartTime,
+    maxHours: maxHoursWithoutClockOut,
+  });
+  return { settings, notifications, expectedStartTime, maxHoursWithoutClockOut };
+}
 
 /**
  * Get attendance notifications - late arrivals, missing clock-outs
  */
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
-    await requireAuth(request);
-    const tenantId = await getTenantIdFromRequest(request);
-    const t = await getValidationTranslatorFromRequest(request);
+    const auth = await authorize(request);
+    if ('error' in auth) return auth.error;
 
-    if (!tenantId) {
-      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
-    }
-
-    // Get tenant settings for notification defaults
-    const Tenant = (await import('@/models/Tenant')).default;
-    const tenant = await Tenant.findById(tenantId).select('settings').lean();
-    
-    const searchParams = request.nextUrl.searchParams;
-    const attendanceSettings = tenant?.settings?.attendanceNotifications || {};
-    const expectedStartTime = searchParams.get('expectedStartTime') || attendanceSettings.expectedStartTime || '09:00'; // Default 9 AM
-    const maxHoursWithoutClockOut = parseFloat(
-      searchParams.get('maxHoursWithoutClockOut') || 
-      String(attendanceSettings.maxHoursWithoutClockOut || 12)
-    ); // Default 12 hours
-
-    // Get all active sessions (clocked in but not out)
-    const activeSessions = await Attendance.find({
-      tenantId,
-      clockOut: null,
-    })
-      .populate('userId', 'name email')
-      .lean();
-
-    const now = new Date();
-    const notifications: any[] = []; // eslint-disable-line @typescript-eslint/no-explicit-any
-
-    // Check for missing clock-outs (sessions that are too long)
-    activeSessions.forEach((session: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-      const clockInTime = new Date(session.clockIn);
-      const hoursSinceClockIn = (now.getTime() - clockInTime.getTime()) / (1000 * 60 * 60);
-
-      if (hoursSinceClockIn > maxHoursWithoutClockOut) {
-        notifications.push({
-          type: 'missing_clock_out',
-          userId: session.userId._id || session.userId,
-          userName: typeof session.userId === 'object' ? session.userId.name : 'Unknown',
-          userEmail: typeof session.userId === 'object' ? session.userId.email : null,
-          attendanceId: session._id,
-          clockInTime: session.clockIn,
-          hoursSinceClockIn: hoursSinceClockIn.toFixed(2),
-          message: `Employee has been clocked in for ${hoursSinceClockIn.toFixed(1)} hours without clocking out`,
-        });
-      }
-    });
-
-    // Get today's attendance records to check for late arrivals
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    const todayEnd = new Date();
-    todayEnd.setHours(23, 59, 59, 999);
-
-    const todayAttendances = await Attendance.find({
-      tenantId,
-      clockIn: { $gte: todayStart, $lte: todayEnd },
-    })
-      .populate('userId', 'name email')
-      .lean();
-
-    // Parse expected start time (HH:MM format)
-    const [expectedHour, expectedMinute] = expectedStartTime.split(':').map(Number);
-
-    todayAttendances.forEach((attendance: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-      const clockInTime = new Date(attendance.clockIn);
-      const expectedClockIn = new Date(clockInTime);
-      expectedClockIn.setHours(expectedHour, expectedMinute, 0, 0);
-
-      // Check if clock-in is more than 15 minutes late
-      if (clockInTime > expectedClockIn) {
-        const minutesLate = (clockInTime.getTime() - expectedClockIn.getTime()) / (1000 * 60);
-        if (minutesLate > 15) {
-          notifications.push({
-            type: 'late_arrival',
-            userId: attendance.userId._id || attendance.userId,
-            userName: typeof attendance.userId === 'object' ? attendance.userId.name : 'Unknown',
-            userEmail: typeof attendance.userId === 'object' ? attendance.userId.email : null,
-            attendanceId: attendance._id,
-            clockInTime: attendance.clockIn,
-            expectedTime: expectedClockIn,
-            minutesLate: Math.round(minutesLate),
-            message: `Employee arrived ${Math.round(minutesLate)} minutes late`,
-          });
-        }
-      }
-    });
-
-    // Count by type
+    const { notifications, expectedStartTime, maxHoursWithoutClockOut } = await buildAlerts(request, auth.tenantId);
     const summary = {
       total: notifications.length,
-      missingClockOut: notifications.filter(n => n.type === 'missing_clock_out').length,
-      lateArrivals: notifications.filter(n => n.type === 'late_arrival').length,
+      missingClockOut: notifications.filter((n) => n.type === 'missing_clock_out').length,
+      lateArrivals: notifications.filter((n) => n.type === 'late_arrival').length,
     };
 
     return NextResponse.json({
       success: true,
-      data: {
-        notifications,
-        summary,
-        settings: {
-          expectedStartTime,
-          maxHoursWithoutClockOut,
-        },
-      },
+      data: { notifications, summary, settings: { expectedStartTime, maxHoursWithoutClockOut } },
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     logger.error('Error fetching attendance notifications:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: error.message || 'Failed to fetch notifications' },
+      { status: error.message === 'Unauthorized' ? 401 : 500 }
+    );
   }
 }
 
 /**
- * Send attendance notification emails
+ * Email the flagged employees. Recipients, names and wording are rebuilt here from the
+ * store's own records; the body may only narrow the list by attendance id. Taking them
+ * from the request would let a caller send any text to any address.
  */
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
-    await requireAuth(request);
-    const tenantId = await getTenantIdFromRequest(request);
-    const t = await getValidationTranslatorFromRequest(request);
-    
-    if (!tenantId) {
-      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
+    const auth = await authorize(request);
+    if ('error' in auth) return auth.error;
+    const { tenantId, t } = auth;
+
+    const ip = request.headers.get('x-forwarded-for') ?? 'unknown';
+    const { allowed } = checkRateLimit(`write:attendance-notify:${tenantId}:${ip}`, 5, 60_000);
+    if (!allowed) {
+      return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
     }
-    
-    const body = await request.json();
-    const { notifications } = body; // Array of notification objects
-    
-    if (!notifications || !Array.isArray(notifications) || notifications.length === 0) {
+
+    const body = await request.json().catch(() => ({}));
+    const requested: string[] | null = Array.isArray(body?.attendanceIds)
+      ? body.attendanceIds.map(String)
+      : Array.isArray(body?.notifications)
+        ? body.notifications.map((n: { attendanceId?: unknown }) => String(n?.attendanceId))
+        : null;
+
+    const { settings, notifications } = await buildAlerts(request, tenantId);
+    if (!settings?.emailNotifications) {
       return NextResponse.json(
-        { success: false, error: t('validation.notificationsArrayRequired', 'Notifications array is required') },
+        { success: false, error: t('validation.emailNotificationsDisabled', 'Email notifications are turned off for this store. Turn them on under Settings → Notifications.') },
         { status: 400 }
       );
     }
-    
-    const searchParams = request.nextUrl.searchParams;
-    const expectedStartTime = searchParams.get('expectedStartTime') || '09:00'; // eslint-disable-line @typescript-eslint/no-unused-vars
-    const maxHoursWithoutClockOut = parseFloat(searchParams.get('maxHoursWithoutClockOut') || '12'); // eslint-disable-line @typescript-eslint/no-unused-vars
-    
-    // Import the sendAttendanceNotification function
+
+    const targets = notifications.filter((n) => n.userEmail && (!requested || requested.includes(n.attendanceId)));
+    if (targets.length === 0) {
+      return NextResponse.json(
+        { success: false, error: t('validation.notificationsArrayRequired', 'No notifications with an email address to send') },
+        { status: 400 }
+      );
+    }
+
     const { sendAttendanceNotification } = await import('@/lib/notifications');
-    
-    const results = {
-      sent: 0,
-      failed: 0,
-      errors: [] as string[],
-    };
-    
-    // Send email for each notification that has an email address
-    for (const notification of notifications) {
-      if (notification.userEmail) {
-        try {
-          const sent = await sendAttendanceNotification({
-            userName: notification.userName,
-            userEmail: notification.userEmail,
-            type: notification.type,
-            clockInTime: notification.clockInTime,
-            hoursSinceClockIn: notification.hoursSinceClockIn ? parseFloat(notification.hoursSinceClockIn) : undefined,
-            minutesLate: notification.minutesLate,
-            expectedTime: notification.expectedTime,
-            message: notification.message,
-          });
-          
-          if (sent) {
-            results.sent++;
-          } else {
-            results.failed++;
-            results.errors.push(`Failed to send email to ${notification.userEmail}`);
-          }
-        } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-          results.failed++;
-          results.errors.push(`Error sending to ${notification.userEmail}: ${error.message}`);
-        }
-      } else {
-        results.failed++;
-        results.errors.push(`No email address for ${notification.userName}`);
+    let sent = 0;
+    let failed = 0;
+    for (const n of targets) {
+      try {
+        const ok = await sendAttendanceNotification({
+          userName: n.userName,
+          userEmail: n.userEmail as string,
+          type: n.type,
+          clockInTime: n.clockInTime,
+          hoursSinceClockIn: n.hoursSinceClockIn ? parseFloat(n.hoursSinceClockIn) : undefined,
+          minutesLate: n.minutesLate,
+          expectedTime: n.expectedTime,
+          message: n.message,
+        }, settings);
+        if (ok) sent++;
+        else failed++;
+      } catch (error) {
+        failed++;
+        logger.error('Attendance notification email failed:', error);
       }
     }
-    
-    return NextResponse.json({
-      success: true,
-      message: `Sent ${results.sent} email(s) successfully${results.failed > 0 ? `, ${results.failed} failed` : ''}`,
-      results: {
-        sent: results.sent,
-        failed: results.failed,
-        total: notifications.length,
-        errors: results.errors.length > 0 ? results.errors : undefined,
-      },
+
+    await createAuditLog(request, {
+      tenantId,
+      action: AuditActions.UPDATE,
+      entityType: 'attendance_notification',
+      entityId: tenantId,
+      changes: { emailed: sent, failed, attendanceIds: targets.map((n) => n.attendanceId) },
     });
+
+    return NextResponse.json({
+      success: sent > 0,
+      ...(sent === 0 ? { error: 'No emails could be sent. Check the email settings.' } : {}),
+      message: `Sent ${sent} email(s)${failed > 0 ? `, ${failed} failed` : ''}`,
+      results: { sent, failed, total: targets.length },
+    }, { status: sent > 0 ? 200 : 502 });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     logger.error('Error sending attendance notifications:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: error.message || 'Failed to send notifications' },
+      { status: error.message === 'Unauthorized' ? 401 : 500 }
+    );
   }
 }

@@ -106,6 +106,28 @@ export function tenantDayEdge(value: string | Date, edge: 'start' | 'end', tz: s
   return new Date(value);
 }
 
+/**
+ * Read a wall-clock time picked in a form ('YYYY-MM-DDTHH:mm', as a
+ * datetime-local input gives it) as that time at the store, and return the
+ * instant. Without this the server reads it in its own zone (UTC on Vercel),
+ * so a 10:00 booking in Manila would land at 18:00. Any other value is read
+ * as a full date and time and kept as is.
+ */
+export function tenantWallTimeToDate(value: string, tz: string = DEFAULT_TENANT_TIMEZONE): Date {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(value);
+  if (!m) return new Date(value);
+  const asUTC = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]), Number(m[6] || 0));
+  let zone = tz;
+  try {
+    tzOffsetMinutes(new Date(asUTC), zone);
+  } catch {
+    zone = DEFAULT_TENANT_TIMEZONE;
+  }
+  // Second pass settles times near a clock change, where the offset differs either side.
+  const first = asUTC - tzOffsetMinutes(new Date(asUTC), zone) * 60000;
+  return new Date(asUTC - tzOffsetMinutes(new Date(first), zone) * 60000);
+}
+
 /** Resolve a startDate/endDate query-param pair to tenant-timezone-aware UTC boundaries. */
 export function resolveTenantDateRange(
   startParam: string | null | undefined,

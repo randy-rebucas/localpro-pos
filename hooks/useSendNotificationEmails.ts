@@ -24,7 +24,7 @@ export function useSendNotificationEmails() {
       notifications: Notification[],
       expectedStartTime: string,
       maxHours: string,
-      onSuccess?: () => void,
+      onSuccess?: (sent: number, failed: number) => void,
       onError?: (msg: string) => void
     ): Promise<boolean> => {
       // Validate there are notifications with emails
@@ -52,21 +52,17 @@ export function useSendNotificationEmails() {
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
           signal: controller.signal,
-          body: JSON.stringify({ notifications: notificationsWithEmail }),
+          // The server rebuilds recipients and wording itself; ids only narrow the list.
+          body: JSON.stringify({ attendanceIds: notificationsWithEmail.map((n) => n.attendanceId) }),
         });
         clearTimeout(timeoutId);
 
-        if (!res.ok) {
-          const errorText = await res.text().catch(() => `HTTP ${res.status}`);
-          throw new Error(`Failed to send emails: ${errorText}`);
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data?.success) {
+          throw new Error(data?.error || `Failed to send emails (HTTP ${res.status})`);
         }
 
-        const data = await res.json();
-        if (!data.success) {
-          throw new Error(data.error || 'Failed to send emails');
-        }
-
-        onSuccess?.();
+        onSuccess?.(data.results?.sent ?? 0, data.results?.failed ?? 0);
         return true;
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to send emails';

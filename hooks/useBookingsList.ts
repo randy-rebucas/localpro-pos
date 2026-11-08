@@ -33,6 +33,7 @@ export function useBookingsList(tenant: string, filters: BookingFilters) {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [truncated, setTruncated] = useState(false);
 
   const fetchBookings = useCallback(async (onError?: (error: string) => void) => {
     setLoading(true);
@@ -59,6 +60,7 @@ export function useBookingsList(tenant: string, filters: BookingFilters) {
 
       if (data.success) {
         setBookings(data.data || []);
+        setTruncated(!!data.truncated);
       } else {
         const errorMsg = data.error || 'Failed to fetch bookings';
         setError(errorMsg);
@@ -135,5 +137,5 @@ export function useBookingsList(tenant: string, filters: BookingFilters) {
     [tenant]
   );
 
-  return { bookings, loading, error, fetchBookings, deleteBooking, sendReminder };
+  return { bookings, loading, error, truncated, fetchBookings, deleteBooking, sendReminder };
 }

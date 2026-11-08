@@ -88,7 +88,6 @@ export const PERMISSIONS: PermissionDef[] = [
   { key: 'integrations.manage', label: 'E-commerce Integrations (also governs Channel Orders)', section: 'operations', defaultMinRole: 'manager' },
   { key: 'integrations.disconnect', label: 'Disconnect Integrations', section: 'operations', defaultMinRole: 'admin' },
 
-  { key: 'compliance.view', label: 'Compliance Status', section: 'compliance', defaultMinRole: 'manager' },
   { key: 'business_permits.manage', label: 'Business Permits', section: 'compliance', defaultMinRole: 'admin' },
   { key: 'bir_compliance.manage', label: 'BIR Compliance', section: 'compliance', defaultMinRole: 'admin' },
   { key: 'restaurant_compliance.manage', label: 'Restaurant Compliance', section: 'compliance', defaultMinRole: 'admin' },
@@ -96,10 +95,6 @@ export const PERMISSIONS: PermissionDef[] = [
   { key: 'laundry_compliance.manage', label: 'Laundry Compliance', section: 'compliance', defaultMinRole: 'admin' },
   { key: 'service_compliance.manage', label: 'Service Compliance', section: 'compliance', defaultMinRole: 'admin' },
   { key: 'pharmacy_compliance.manage', label: 'Pharmacy Compliance', section: 'compliance', defaultMinRole: 'admin' },
-  { key: 'prescriptions.manage', label: 'Prescriptions', section: 'compliance', defaultMinRole: 'manager' },
-  { key: 'prescriptions.create', label: 'Create Prescriptions', section: 'compliance', defaultMinRole: 'cashier' },
-  { key: 'prescriptions.dispense', label: 'Dispense Prescriptions', section: 'compliance', defaultMinRole: 'cashier' },
-  { key: 'prescriptions.delete', label: 'Delete Prescriptions', section: 'compliance', defaultMinRole: 'admin' },
   { key: 'expiry_tracking.manage', label: 'Expiry Tracking', section: 'compliance', defaultMinRole: 'manager' },
 
   { key: 'users.manage', label: 'Users', section: 'configuration', defaultMinRole: 'manager' },

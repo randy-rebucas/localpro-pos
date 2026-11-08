@@ -1,12 +1,12 @@
 /**
- * Notification-related helper functions
+ * Attendance notification helpers shared by the admin notifications page.
  */
 
 export interface Notification {
   type: 'missing_clock_out' | 'late_arrival';
   userId: string;
   userName: string;
-  userEmail?: string;
+  userEmail?: string | null;
   attendanceId: string;
   clockInTime: string;
   hoursSinceClockIn?: string;
@@ -15,61 +15,21 @@ export interface Notification {
   message: string;
 }
 
-export interface NotificationSummary {
-  total: number;
-  missingClockOut: number;
-  lateArrivals: number;
-}
-
 /**
  * Get count of notifications with email addresses
  */
-export function getNotificationsWithEmailCount(notifications: Notification[]): number {
+export function getNotificationsWithEmailCount(notifications: Pick<Notification, 'userEmail'>[]): number {
   return notifications.filter((n) => n.userEmail).length;
 }
 
-/**
- * Check if there are notifications to send
- */
-export function hasNotificationsToSend(notifications: Notification[]): boolean {
-  return getNotificationsWithEmailCount(notifications) > 0;
-}
+type Dict = { admin?: Record<string, string | undefined> } | null | undefined;
 
 /**
  * Format notification type display text
  */
-type Dict = Record<string, Record<string, string | undefined> | undefined>;
-
 export function formatNotificationType(type: Notification['type'], dict: Dict): string {
   if (type === 'missing_clock_out') {
-    return dict.admin?.missingClockOut || 'Missing Clock Out';
+    return dict?.admin?.missingClockOut || 'Missing Clock Out';
   }
-  return dict.admin?.lateArrival || 'Late Arrival';
-}
-
-/**
- * Get badge styling based on notification type
- */
-export function getNotificationBadgeClass(type: Notification['type']): string {
-  if (type === 'missing_clock_out') {
-    return 'bg-red-100 text-red-800 border-red-300';
-  }
-  return 'bg-yellow-100 text-yellow-800 border-yellow-300';
-}
-
-/**
- * Format clock in time with timezone
- */
-export function formatClockInTime(clockInTime: string, timeZone?: string): string {
-  return new Date(clockInTime).toLocaleString(undefined, { timeZone });
-}
-
-/**
- * Confirm before sending emails
- */
-export function confirmSendEmails(count: number, dict: Dict): boolean {
-  const message =
-    dict.admin?.confirmSendEmails?.replace('{count}', count.toString()) ||
-    `Send emails to ${count} recipient(s)?`;
-  return confirm(message);
+  return dict?.admin?.lateArrival || 'Late Arrival';
 }

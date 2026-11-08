@@ -6,8 +6,7 @@ import { useState, useEffect } from 'react';
 import {
   LayoutDashboard, BarChart2, Package, Tag, Layers, Boxes, ArrowUpDown,
   Receipt, Percent, DollarSign, TrendingDown, Users, Heart, Megaphone,
-  CalendarDays, LayoutGrid, UserCheck, ShieldCheck, Building2, FileText,
-  UtensilsCrossed, ShoppingBag, WashingMachine, Briefcase, Pill, CalendarClock,
+  CalendarDays, LayoutGrid, UserCheck,
   Settings, Clock, Users2, GitBranch, Calculator, CreditCard, Monitor, Bell,
   Palette, ToggleLeft, ClipboardList, Database, ChevronDown, ChevronRight,
   LogOut, Store, ShoppingCart, Code2, Sparkles, Lock, Smartphone,
@@ -109,23 +108,6 @@ export default function AdminSidebar() {
         { label: navT('tables', 'Tables'), href: `${base}/admin/tables`, icon: LayoutGrid, permission: 'tables.manage' },
         { label: navT('attendance', 'Attendance'), href: `${base}/admin/attendance`, icon: UserCheck, permission: 'attendance.manage' },
         { label: navT('channelOrders', 'Channel Orders'), href: `${base}/admin/channel-orders`, icon: ShoppingCart, permission: 'integrations.manage' },
-      ],
-    },
-    {
-      id: 'compliance',
-      title: navT('groupCompliance', 'Compliance'),
-      defaultOpen: false,
-      items: [
-        { label: navT('complianceStatus', 'Compliance Status'), href: `${base}/admin/compliance`, icon: ShieldCheck, permission: 'compliance.view' },
-        { label: navT('businessPermits', 'Business Permits'), href: `${base}/admin/business-permits`, icon: Building2, permission: 'business_permits.manage' },
-        { label: navT('birCompliance', 'BIR Compliance'), href: `${base}/admin/bir-compliance`, icon: FileText, permission: 'bir_compliance.manage' },
-        { label: navT('restaurant', 'Restaurant'), href: `${base}/admin/restaurant-compliance`, icon: UtensilsCrossed, permission: 'restaurant_compliance.manage' },
-        { label: navT('retail', 'Retail'), href: `${base}/admin/retail-compliance`, icon: ShoppingBag, permission: 'retail_compliance.manage' },
-        { label: navT('laundry', 'Laundry'), href: `${base}/admin/laundry-compliance`, icon: WashingMachine, permission: 'laundry_compliance.manage' },
-        { label: navT('service', 'Service'), href: `${base}/admin/service-compliance`, icon: Briefcase, permission: 'service_compliance.manage' },
-        { label: navT('pharmacy', 'Pharmacy'), href: `${base}/admin/pharmacy-compliance`, icon: Pill, permission: 'pharmacy_compliance.manage' },
-        { label: navT('prescriptions', 'Prescriptions'), href: `${base}/admin/prescriptions`, icon: FileText, permission: 'prescriptions.manage' },
-        { label: navT('expiryTracking', 'Expiry Tracking'), href: `${base}/admin/expiry-tracking`, icon: CalendarClock, permission: 'expiry_tracking.manage' },
       ],
     },
     {

@@ -29,7 +29,8 @@ export async function GET(request: NextRequest) {
       isActive: true,
     });
     if (!integration?.shopDomain) {
-      return NextResponse.json({ success: false, error: 'No active Shopify integration' }, { status: 400 });
+      // `code` lets the page offer the connect step instead of showing an error.
+      return NextResponse.json({ success: false, code: 'not_connected', error: 'No active Shopify integration' }, { status: 400 });
     }
 
     const sp = request.nextUrl.searchParams;

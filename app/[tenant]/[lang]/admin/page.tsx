@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
-  ArrowRight, AlertTriangle, Receipt, Plus, BarChart2, ShieldCheck, Boxes,
+  ArrowRight, AlertTriangle, Receipt, Plus, BarChart2, Boxes,
   CalendarClock, Loader2, Store,
 } from 'lucide-react';
 import { LineTag, ReceiptRow } from '@/components/marketing/primitives';
@@ -174,7 +174,6 @@ export default function AdminDashboard() {
     { label: dict?.admin?.newTransaction || 'New Transaction', href: base, icon: Store, primary: true },
     { label: dict?.admin?.addProduct || 'Add Product', href: `${base}/admin/products`, icon: Plus, primary: false },
     { label: dict?.admin?.viewReports || 'View Reports', href: `${base}/admin/reports`, icon: BarChart2, primary: false },
-    { label: dict?.admin?.complianceStatus || 'Compliance Status', href: `${base}/admin/compliance`, icon: ShieldCheck, primary: false },
     { label: dict?.admin?.transactions || 'Transactions', href: `${base}/admin/transactions`, icon: Receipt, primary: false },
     { label: dict?.nav?.inventory || 'Inventory', href: `${base}/admin/inventory`, icon: Boxes, primary: false },
   ];
@@ -220,7 +219,7 @@ export default function AdminDashboard() {
             )}
             {data.expiringCount > 0 && (
               <Link
-                href={`${base}/admin/expiry-tracking`}
+                href={`${base}/admin/inventory`}
                 className="flex items-center gap-3 border-l-4 border-stamp bg-paper-white px-4 font-receipt text-sm text-ink hover:bg-white"
               >
                 <CalendarClock className="h-4 w-4 flex-shrink-0 text-stamp" strokeWidth={1.75} aria-hidden />

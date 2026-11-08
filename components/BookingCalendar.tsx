@@ -1,446 +1,252 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
-import { getDictionaryClient } from '@/app/[tenant]/[lang]/dictionaries-client';
+import { useMemo, useState } from 'react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
-import { formatTime as formatTimeUtil } from '@/lib/formatting';
+import { formatTime } from '@/lib/formatting';
 import { getDefaultTenantSettings } from '@/lib/currency';
+import { getTenantDateString, toTenantDateString } from '@/lib/timezone';
+import { BOOKING_STATUSES } from '@/lib/bookings-helpers';
+import { type TranslationDict } from '@/types/dictionary';
+import { type Booking } from '@/hooks/useBookingsList';
+import BookingStatusTag, { STATUS_TONE } from '@/components/bookings/BookingStatusTag';
+import { KEY, ROW_KEY } from '@/components/admin/register-ui';
 
-interface Booking {
-  _id: string;
-  customerName: string;
-  customerEmail?: string;
-  customerPhone?: string;
-  serviceName: string;
-  serviceDescription?: string;
-  startTime: string;
-  endTime: string;
-  duration: number;
-  status: 'pending' | 'confirmed' | 'completed' | 'cancelled' | 'no-show';
-  staffId?: {
-    _id: string;
-    name: string;
-    email: string;
-  };
-  staffName?: string;
-  notes?: string;
-  reminderSent?: boolean;
-  confirmationSent?: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
+type View = 'month' | 'week' | 'day';
 
 interface BookingCalendarProps {
   bookings: Booking[];
-  onDateSelect?: (date: Date) => void;
-  onBookingSelect?: (booking: Booking) => void;
-  selectedDate?: Date;
+  dict: TranslationDict;
+  lang: 'en' | 'es';
+  /** The day picked to narrow the list, as 'YYYY-MM-DD' in the store's zone. */
+  selectedDay: string | null;
+  onDaySelect: (day: string) => void;
+  onBookingSelect: (booking: Booking) => void;
 }
 
-export default function BookingCalendar({
-  bookings,
-  onDateSelect,
-  onBookingSelect,
-  selectedDate,
-}: BookingCalendarProps) {
-  const params = useParams();
-  const lang = (params?.lang as 'en' | 'es') || 'en';
-  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
-  const [currentDate, setCurrentDate] = useState(selectedDate || new Date());
-  const [view, setView] = useState<'month' | 'week' | 'day'>('month');
+// Days are 'YYYY-MM-DD' strings in the store's zone; the arithmetic runs on UTC dates so the browser's zone never shifts them.
+const asDate = (day: string) => new Date(`${day}T12:00:00Z`);
+const dayOf = (d: Date) => d.toISOString().slice(0, 10);
+const addDays = (day: string, n: number) => {
+  const d = asDate(day);
+  d.setUTCDate(d.getUTCDate() + n);
+  return dayOf(d);
+};
+const addMonths = (day: string, n: number) => {
+  const d = asDate(day);
+  return dayOf(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, 1, 12)));
+};
+const weekStart = (day: string) => addDays(day, -asDate(day).getUTCDay());
+
+function monthCells(day: string): (string | null)[] {
+  const d = asDate(day);
+  const year = d.getUTCFullYear();
+  const month = d.getUTCMonth();
+  const lead = new Date(Date.UTC(year, month, 1)).getUTCDay();
+  const count = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  const cells: (string | null)[] = Array(lead).fill(null);
+  for (let i = 1; i <= count; i++) cells.push(dayOf(new Date(Date.UTC(year, month, i, 12))));
+  while (cells.length % 7) cells.push(null);
+  return cells;
+}
+
+const byStart = (a: Booking, b: Booking) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime();
+
+/** The appointment book: a month, week or day of bookings, read in the store's time zone. */
+export default function BookingCalendar({ bookings, dict, lang, selectedDay, onDaySelect, onBookingSelect }: BookingCalendarProps) {
   const { settings } = useTenantSettings();
   const tenantSettings = settings || getDefaultTenantSettings();
+  const timeZone = tenantSettings.timezone || 'Asia/Manila';
+  const t = dict.components?.bookingCalendar;
+  const locale = lang === 'es' ? 'es-ES' : 'en-US';
 
-  useEffect(() => {
-    getDictionaryClient(lang).then(setDict);
-  }, [lang]);
+  const today = getTenantDateString(timeZone);
+  const [cursor, setCursor] = useState(selectedDay || today);
+  const [view, setView] = useState<View>('month');
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const getDaysInMonth = (date: Date) => {
-    const year = date.getFullYear();
-    const month = date.getMonth();
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    const daysInMonth = lastDay.getDate();
-    const startingDayOfWeek = firstDay.getDay();
-
-    const days: (Date | null)[] = [];
-    
-    // Add empty cells for days before the first day of the month
-    for (let i = 0; i < startingDayOfWeek; i++) {
-      days.push(null);
+  const byDay = useMemo(() => {
+    const map = new Map<string, Booking[]>();
+    for (const booking of bookings) {
+      const key = toTenantDateString(booking.startTime, timeZone);
+      const list = map.get(key);
+      if (list) list.push(booking);
+      else map.set(key, [booking]);
     }
-    
-    // Add all days of the month
-    for (let i = 1; i <= daysInMonth; i++) {
-      days.push(new Date(year, month, i));
-    }
-    
-    return days;
+    map.forEach((list) => list.sort(byStart));
+    return map;
+  }, [bookings, timeZone]);
+
+  const format = (day: string, opts: Intl.DateTimeFormatOptions) =>
+    new Intl.DateTimeFormat(locale, { ...opts, timeZone: 'UTC' }).format(asDate(day));
+  const time = (iso: string) => formatTime(iso, tenantSettings);
+  const countLabel = (n: number) =>
+    `${n} ${n === 1 ? (dict.admin?.bookingSingular || 'booking') : (dict.admin?.bookingPlural || 'bookings')}`;
+
+  // A fixed Sunday-to-Saturday week gives the weekday names in the page's language.
+  const weekdays = Array.from({ length: 7 }, (_, i) => addDays('2023-01-01', i));
+
+  const move = (direction: 1 | -1) => {
+    if (view === 'month') setCursor(addMonths(cursor, direction));
+    else setCursor(addDays(cursor, direction * (view === 'week' ? 7 : 1)));
   };
 
-  const getBookingsForDate = (date: Date | null): Booking[] => {
-    if (!date) return [];
-    const dateStr = date.toISOString().split('T')[0];
-    return bookings.filter((booking) => {
-      const bookingDate = new Date(booking.startTime).toISOString().split('T')[0];
-      return bookingDate === dateStr;
-    });
-  };
+  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart(cursor), i));
+  const title =
+    view === 'month'
+      ? format(cursor, { month: 'long', year: 'numeric' })
+      : view === 'week'
+        ? `${format(weekDays[0], { month: 'short', day: 'numeric' })} – ${format(weekDays[6], { month: 'short', day: 'numeric', year: 'numeric' })}`
+        : format(cursor, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
 
-  const getStatusColor = (status: Booking['status']) => {
-    switch (status) {
-      case 'confirmed':
-        return 'bg-green-100 text-green-800 border-green-300';
-      case 'pending':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-300';
-      case 'completed':
-        return `border` // Use dynamic style below
-      case 'cancelled':
-        return 'bg-red-100 text-red-800 border-red-300';
-      case 'no-show':
-        return 'bg-gray-100 text-gray-800 border-gray-300';
-      default:
-        return 'bg-gray-100 text-gray-800 border-gray-300';
-    }
-  };
-
-  const formatTime = (dateString: string) => {
-    return formatTimeUtil(dateString, tenantSettings);
-  };
-
-  const navigateMonth = (direction: 'prev' | 'next') => {
-    const newDate = new Date(currentDate);
-    if (direction === 'prev') {
-      newDate.setMonth(newDate.getMonth() - 1);
-    } else {
-      newDate.setMonth(newDate.getMonth() + 1);
-    }
-    setCurrentDate(newDate);
-  };
-
-  const navigateWeek = (direction: 'prev' | 'next') => {
-    const newDate = new Date(currentDate);
-    newDate.setDate(newDate.getDate() + (direction === 'prev' ? -7 : 7));
-    setCurrentDate(newDate);
-  };
-
-  const navigateDay = (direction: 'prev' | 'next') => {
-    const newDate = new Date(currentDate);
-    newDate.setDate(newDate.getDate() + (direction === 'prev' ? -1 : 1));
-    setCurrentDate(newDate);
-  };
-
-  const navigate = (direction: 'prev' | 'next') => {
-    if (view === 'month') navigateMonth(direction);
-    else if (view === 'week') navigateWeek(direction);
-    else navigateDay(direction);
-  };
-
-  const getWeekDays = (date: Date): Date[] => {
-    const start = new Date(date);
-    start.setDate(start.getDate() - start.getDay());
-    return Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(start);
-      d.setDate(start.getDate() + i);
-      return d;
-    });
-  };
-
-  const sortByStartTime = (a: Booking, b: Booking) =>
-    new Date(a.startTime).getTime() - new Date(b.startTime).getTime();
-
-  const days = getDaysInMonth(currentDate);
-  const monthNames = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'
+  const views: { key: View; label: string }[] = [
+    { key: 'month', label: t?.month || 'Month' },
+    { key: 'week', label: t?.week || 'Week' },
+    { key: 'day', label: t?.day || 'Day' },
   ];
-  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  const entry = (booking: Booking, withEnd = false) => (
+    <button
+      key={booking._id}
+      type="button"
+      onClick={() => onBookingSelect(booking)}
+      className={`flex min-h-[44px] w-full items-center gap-3 border-l-4 bg-paper/60 px-2 py-1.5 text-left transition-colors hover:bg-paper touch-manipulation ${STATUS_TONE[booking.status].bar}`}
+    >
+      <span className="shrink-0 font-receipt text-xs font-semibold">
+        {time(booking.startTime)}
+        {withEnd && <span className="font-normal text-ink/60"> – {time(booking.endTime)}</span>}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className={`block truncate text-sm font-medium ${booking.status === 'cancelled' ? 'line-through' : ''}`}>{booking.customerName}</span>
+        <span className="block truncate text-xs text-ink/60">{booking.serviceName}</span>
+      </span>
+      {withEnd && <BookingStatusTag status={booking.status} dict={dict} className="shrink-0" />}
+    </button>
+  );
+
+  const noBookings = <p className="py-2 font-receipt text-xs text-ink/50">{t?.noBookings || 'No bookings'}</p>;
 
   return (
-    <div className="bg-white border border-gray-300 p-6">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => navigate('prev')}
-            className="p-2 hover:bg-gray-100 transition-colors border border-gray-300 bg-white"
-          >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
+    <div className="bg-paper-white text-ink">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-dashed border-ink/30 px-3 py-3 sm:px-4">
+        <div className="flex min-w-0 items-center gap-1">
+          <button type="button" onClick={() => move(-1)} className={ROW_KEY} aria-label={t?.previous || 'Previous'} title={t?.previous || 'Previous'}>
+            <ChevronLeft className="h-5 w-5" strokeWidth={1.75} aria-hidden />
           </button>
-          <h2 className="text-xl font-bold text-gray-900">
-            {view === 'day'
-              ? currentDate.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })
-              : `${monthNames[currentDate.getMonth()]} ${currentDate.getFullYear()}`}
-          </h2>
-          <button
-            onClick={() => navigate('next')}
-            className="p-2 hover:bg-gray-100 transition-colors border border-gray-300 bg-white"
-          >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
-          <button
-            onClick={() => setCurrentDate(new Date())}
-            className="ml-4 px-4 py-2 text-sm text-white transition-colors border"
-            style={{
-              backgroundColor: settings?.primaryColor || '#35979c',
-              borderColor: settings?.primaryColor || '#35979c'
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = `${settings?.primaryColor || '#35979c'}dd`; }}
-            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = settings?.primaryColor || '#35979c'; }}
-          >
-            {dict?.components?.bookingCalendar?.today || 'Today'}
+          <h2 className="min-w-0 text-center text-2xl sm:text-3xl" aria-live="polite">{title}</h2>
+          <button type="button" onClick={() => move(1)} className={ROW_KEY} aria-label={t?.next || 'Next'} title={t?.next || 'Next'}>
+            <ChevronRight className="h-5 w-5" strokeWidth={1.75} aria-hidden />
           </button>
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setView('month')}
-            className="px-4 py-2 text-sm border border-gray-300 transition-colors font-medium"
-            style={view === 'month' ? {
-              backgroundColor: settings?.primaryColor || '#35979c',
-              color: 'white',
-              borderColor: settings?.primaryColor || '#35979c'
-            } : {
-              backgroundColor: '#f3f4f6',
-              color: '#374151'
-            }}
-            onMouseEnter={(e) => {
-              if (view !== 'month') {
-                e.currentTarget.style.backgroundColor = '#e5e7eb';
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (view !== 'month') {
-                e.currentTarget.style.backgroundColor = '#f3f4f6';
-              }
-            }}
-          >
-            {dict?.components?.bookingCalendar?.month || 'Month'}
-          </button>
-          <button
-            onClick={() => setView('week')}
-            className="px-4 py-2 text-sm border border-gray-300 transition-colors font-medium"
-            style={view === 'week' ? {
-              backgroundColor: settings?.primaryColor || '#35979c',
-              color: 'white',
-              borderColor: settings?.primaryColor || '#35979c'
-            } : {
-              backgroundColor: '#f3f4f6',
-              color: '#374151'
-            }}
-            onMouseEnter={(e) => {
-              if (view !== 'week') {
-                e.currentTarget.style.backgroundColor = '#e5e7eb';
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (view !== 'week') {
-                e.currentTarget.style.backgroundColor = '#f3f4f6';
-              }
-            }}
-          >
-            {dict?.components?.bookingCalendar?.week || 'Week'}
-          </button>
-          <button
-            onClick={() => setView('day')}
-            className="px-4 py-2 text-sm border border-gray-300 transition-colors font-medium"
-            style={view === 'day' ? {
-              backgroundColor: settings?.primaryColor || '#35979c',
-              color: 'white',
-              borderColor: settings?.primaryColor || '#35979c'
-            } : {
-              backgroundColor: '#f3f4f6',
-              color: '#374151'
-            }}
-            onMouseEnter={(e) => {
-              if (view !== 'day') {
-                e.currentTarget.style.backgroundColor = '#e5e7eb';
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (view !== 'day') {
-                e.currentTarget.style.backgroundColor = '#f3f4f6';
-              }
-            }}
-          >
-            {dict?.components?.bookingCalendar?.day || 'Day'}
-          </button>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={() => setCursor(today)} className={KEY}>{t?.today || 'Today'}</button>
+          <div className="flex border-l border-t border-ink/25" role="group" aria-label={t?.view || 'View'}>
+            {views.map((v) => (
+              <button
+                key={v.key}
+                type="button"
+                aria-pressed={view === v.key}
+                onClick={() => setView(v.key)}
+                className={`flex min-h-[44px] items-center border-b border-r border-ink/25 px-3 font-receipt text-xs font-medium uppercase transition-colors touch-manipulation ${view === v.key ? 'bg-ink text-paper-white' : 'hover:bg-paper'}`}
+              >
+                {v.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
-      {view === 'month' && (
-        <div className="grid grid-cols-7 gap-2">
-          {/* Day headers */}
-          {dayNames.map((day) => (
-            <div key={day} className="text-center font-semibold text-gray-700 py-2">
-              {day}
-            </div>
-          ))}
-
-          {/* Calendar days */}
-          {days.map((date, index) => {
-            const dayBookings = getBookingsForDate(date);
-            const isToday = date && date.toDateString() === today.toDateString();
-            const isSelected = date && selectedDate && date.toDateString() === selectedDate.toDateString();
-
-            return (
-              <div
-                key={index}
-                onClick={() => {
-                  if (date && onDateSelect) {
-                    onDateSelect(date);
-                  }
-                }}
-                className="min-h-[100px] p-2 border cursor-pointer transition-colors"
-                style={{
-                  borderColor: !date ? '#f3f4f6' : isToday ? (settings?.primaryColor || '#35979c') : isSelected ? (settings?.primaryColor || '#35979c') : '#e5e7eb',
-                  backgroundColor: !date ? '#f3f4f6' : isToday ? `${settings?.primaryColor || '#35979c'}15` : isSelected ? `${settings?.primaryColor || '#35979c'}25` : '#ffffff'
-                }}
-                onMouseEnter={(e) => {
-                  if (date && !isToday && !isSelected) {
-                    e.currentTarget.style.backgroundColor = '#f9fafb';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = !date ? '#f3f4f6' : isToday ? `${settings?.primaryColor || '#35979c'}15` : isSelected ? `${settings?.primaryColor || '#35979c'}25` : '#ffffff';
-                }}
-              >
-                {date && (
-                  <>
-                    <div className="text-sm font-semibold mb-1" style={{
-                      color: isToday ? (settings?.primaryColor || '#35979c') : '#111827'
-                    }}>
-                      {date.getDate()}
-                    </div>
-                    <div className="space-y-1">
-                      {dayBookings.slice(0, 3).map((booking) => (
-                        <div
-                          key={booking._id}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (onBookingSelect) {
-                              onBookingSelect(booking);
-                            }
-                          }}
-                          className={`text-xs p-1 border ${getStatusColor(booking.status)} truncate`}
-                          title={`${formatTime(booking.startTime)} - ${booking.customerName}: ${booking.serviceName}`}
-                        >
-                          {formatTime(booking.startTime)} {booking.customerName}
-                        </div>
-                      ))}
-                      {dayBookings.length > 3 && (
-                        <div className="text-xs text-gray-500 font-medium">
-                          {(dict?.components?.bookingCalendar?.more || '+{count} more').replace('{count}', (dayBookings.length - 3).toString())}
-                        </div>
-                      )}
-                    </div>
-                  </>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {view === 'week' && (
-        <div className="grid grid-cols-7 gap-2">
-          {getWeekDays(currentDate).map((date) => {
-            const dayBookings = getBookingsForDate(date).sort(sortByStartTime);
-            const isToday = date.toDateString() === today.toDateString();
-            const isSelected = selectedDate && date.toDateString() === selectedDate.toDateString();
-
-            return (
-              <div
-                key={date.toISOString()}
-                onClick={() => onDateSelect?.(date)}
-                className="min-h-[220px] p-2 border cursor-pointer transition-colors"
-                style={{
-                  borderColor: isToday ? (settings?.primaryColor || '#35979c') : isSelected ? (settings?.primaryColor || '#35979c') : '#e5e7eb',
-                  backgroundColor: isToday ? `${settings?.primaryColor || '#35979c'}15` : isSelected ? `${settings?.primaryColor || '#35979c'}25` : '#ffffff'
-                }}
-              >
-                <div className="text-center mb-1">
-                  <div className="text-xs font-semibold text-gray-500">{dayNames[date.getDay()]}</div>
-                  <div className="text-sm font-semibold" style={{ color: isToday ? (settings?.primaryColor || '#35979c') : '#111827' }}>
-                    {date.getDate()}
-                  </div>
+      <div className="px-3 py-3 sm:px-4">
+        {view === 'month' && (
+          <>
+            <div className="grid grid-cols-7" aria-hidden>
+              {weekdays.map((day) => (
+                <div key={day} className="pb-1 text-center font-receipt text-[11px] uppercase tracking-[0.08em] text-ink/60">
+                  <span className="sm:hidden">{format(day, { weekday: 'narrow' })}</span>
+                  <span className="hidden sm:inline">{format(day, { weekday: 'short' })}</span>
                 </div>
-                <div className="space-y-1">
-                  {dayBookings.map((booking) => (
-                    <div
-                      key={booking._id}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onBookingSelect?.(booking);
-                      }}
-                      className={`text-xs p-1 border ${getStatusColor(booking.status)} truncate`}
-                      title={`${formatTime(booking.startTime)} - ${booking.customerName}: ${booking.serviceName}`}
-                    >
-                      {formatTime(booking.startTime)} {booking.customerName}
-                    </div>
-                  ))}
-                  {dayBookings.length === 0 && (
-                    <div className="text-xs text-gray-400">{dict?.components?.bookingCalendar?.noBookings || 'No bookings'}</div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {view === 'day' && (
-        <div className="space-y-2">
-          {getBookingsForDate(currentDate).sort(sortByStartTime).map((booking) => (
-            <div
-              key={booking._id}
-              onClick={() => onBookingSelect?.(booking)}
-              className={`p-3 border cursor-pointer transition-colors ${getStatusColor(booking.status)}`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="font-semibold">{formatTime(booking.startTime)} - {formatTime(booking.endTime)}</span>
-                <span className="text-xs uppercase">{booking.status}</span>
-              </div>
-              <div className="text-sm mt-1">{booking.customerName} — {booking.serviceName}</div>
-              {booking.staffName && (
-                <div className="text-xs text-gray-600 mt-0.5">{booking.staffName}</div>
-              )}
+              ))}
             </div>
-          ))}
-          {getBookingsForDate(currentDate).length === 0 && (
-            <p className="text-gray-500">{dict?.components?.bookingCalendar?.noBookings || 'No bookings'}</p>
-          )}
-        </div>
-      )}
+            <div className="grid grid-cols-7 border-l border-t border-ink/15">
+              {monthCells(cursor).map((day, i) => {
+                if (!day) return <div key={`blank-${i}`} className="border-b border-r border-ink/15 bg-ink/[0.03]" />;
+                const list = byDay.get(day) || [];
+                const isToday = day === today;
+                const isSelected = day === selectedDay;
+                return (
+                  <button
+                    key={day}
+                    type="button"
+                    onClick={() => onDaySelect(day)}
+                    aria-pressed={isSelected}
+                    aria-label={`${format(day, { weekday: 'long', month: 'long', day: 'numeric' })}, ${countLabel(list.length)}`}
+                    className={`flex min-h-[3.25rem] min-w-0 flex-col items-stretch justify-start gap-0.5 border-b border-r border-ink/15 p-1 text-left transition-colors touch-manipulation sm:min-h-[5.75rem] sm:p-1.5 ${isSelected ? 'bg-brand/25 ring-2 ring-inset ring-ink' : 'hover:bg-paper'}`}
+                  >
+                    <span className={`self-start font-receipt text-xs font-semibold ${isToday ? 'bg-ink px-1 text-paper-white' : ''}`}>
+                      {asDate(day).getUTCDate()}
+                    </span>
+                    {list.length > 0 && (
+                      <>
+                        <span className="mt-auto self-end bg-brand px-1 font-receipt text-[11px] font-semibold sm:hidden">{list.length}</span>
+                        <span className="hidden min-w-0 space-y-0.5 sm:block">
+                          {list.slice(0, 2).map((booking) => (
+                            <span
+                              key={booking._id}
+                              className={`block truncate border-l-2 pl-1 font-receipt text-[11px] leading-tight ${STATUS_TONE[booking.status].bar} ${booking.status === 'cancelled' ? 'text-ink/50 line-through' : ''}`}
+                            >
+                              {time(booking.startTime)} {booking.customerName}
+                            </span>
+                          ))}
+                          {list.length > 2 && (
+                            <span className="block font-receipt text-[11px] text-ink/60">
+                              {(t?.more || '+{count} more').replace('{count}', String(list.length - 2))}
+                            </span>
+                          )}
+                        </span>
+                      </>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
 
-      {/* Legend */}
-      <div className="mt-6 pt-6 border-t border-gray-200">
-        <div className="flex flex-wrap gap-4 text-sm">
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 bg-green-100 border border-green-300"></div>
-            <span>{dict?.components?.bookingCalendar?.confirmed || 'Confirmed'}</span>
+        {view === 'week' && (
+          <ul className="divide-y divide-dashed divide-ink/20">
+            {weekDays.map((day) => {
+              const list = byDay.get(day) || [];
+              const isSelected = day === selectedDay;
+              return (
+                <li key={day} className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-3 py-2">
+                  <button
+                    type="button"
+                    onClick={() => onDaySelect(day)}
+                    aria-pressed={isSelected}
+                    aria-label={`${format(day, { weekday: 'long', month: 'long', day: 'numeric' })}, ${countLabel(list.length)}`}
+                    className={`flex flex-col items-center justify-center self-start py-1 transition-colors touch-manipulation ${isSelected ? 'bg-ink text-paper-white' : day === today ? 'bg-brand/25' : 'hover:bg-paper'}`}
+                  >
+                    <span className="font-receipt text-[11px] uppercase tracking-[0.08em] opacity-70">{format(day, { weekday: 'short' })}</span>
+                    <span className="font-led text-3xl leading-none">{asDate(day).getUTCDate()}</span>
+                  </button>
+                  <div className="space-y-1">{list.length ? list.map((b) => entry(b)) : noBookings}</div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+
+        {view === 'day' && (
+          <div className="space-y-1">
+            {(byDay.get(cursor) || []).length ? (byDay.get(cursor) || []).map((b) => entry(b, true)) : noBookings}
           </div>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 bg-yellow-100 border border-yellow-300"></div>
-            <span>{dict?.components?.bookingCalendar?.pending || 'Pending'}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 bg-brand-soft border border-teal-300"></div>
-            <span>{dict?.components?.bookingCalendar?.completed || 'Completed'}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 bg-red-100 border border-red-300"></div>
-            <span>{dict?.components?.bookingCalendar?.cancelled || 'Cancelled'}</span>
-          </div>
-        </div>
+        )}
       </div>
+
+      <ul className="flex flex-wrap gap-2 border-t border-dashed border-ink/30 px-3 py-3 sm:px-4" aria-label={t?.legend || 'Status key'}>
+        {BOOKING_STATUSES.map(({ value }) => (
+          <li key={value}><BookingStatusTag status={value} dict={dict} /></li>
+        ))}
+      </ul>
     </div>
   );
 }
-

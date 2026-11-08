@@ -21,13 +21,35 @@ export function getUserName(
   return users.find((u) => u._id === attendance.userId)?.name || 'Unknown';
 }
 
+/** Column headings for an export, in the page's language. */
+export const EXPORT_LABELS = {
+  employee: 'Employee',
+  clockIn: 'Clock In',
+  clockOut: 'Clock Out',
+  breakStart: 'Break Start',
+  breakEnd: 'Break End',
+  totalHours: 'Total Hours',
+  notes: 'Notes',
+  date: 'Date',
+  active: 'Active',
+};
+
+export type ExportLabels = typeof EXPORT_LABELS;
+
+/** The headings in export order (everything but the word for a still-open shift). */
+export function exportHeaders(labels: ExportLabels = EXPORT_LABELS): string[] {
+  return [labels.employee, labels.clockIn, labels.clockOut, labels.breakStart, labels.breakEnd, labels.totalHours, labels.notes, labels.date];
+}
+
 /**
- * Build export data from attendance records
+ * Build export data from attendance records, keyed by `labels` so the file's headings
+ * match the page's language.
  */
 export function buildExportData(
   attendances: AttendanceRecord[],
   users: User[],
-  settings: ITenantSettings
+  settings: ITenantSettings,
+  labels: ExportLabels = EXPORT_LABELS
 ): Record<string, string | number>[] {
   return attendances.map((attendance) => {
     const userName = getUserName(attendance, users);
@@ -37,16 +59,23 @@ export function buildExportData(
     const breakEnd = attendance.breakEnd ? new Date(attendance.breakEnd) : null;
 
     return {
-      Employee: userName,
-      'Clock In': formatDateTime(clockIn, settings),
-      'Clock Out': clockOut ? formatDateTime(clockOut, settings) : 'Active',
-      'Break Start': breakStart ? formatTime(breakStart, settings) : '',
-      'Break End': breakEnd ? formatTime(breakEnd, settings) : '',
-      'Total Hours': formatHours(attendance.totalHours),
-      Notes: attendance.notes || '',
-      Date: formatDate(clockIn, settings),
+      [labels.employee]: userName,
+      [labels.clockIn]: formatDateTime(clockIn, settings),
+      [labels.clockOut]: clockOut ? formatDateTime(clockOut, settings) : labels.active,
+      [labels.breakStart]: breakStart ? formatTime(breakStart, settings) : '',
+      [labels.breakEnd]: breakEnd ? formatTime(breakEnd, settings) : '',
+      [labels.totalHours]: formatHours(attendance.totalHours),
+      [labels.notes]: attendance.notes || '',
+      [labels.date]: formatDate(clockIn, settings),
     };
   });
+}
+
+/** Average hours over finished shifts only; an open shift has no total yet. */
+export function calculateAverageFinishedHours(attendances: AttendanceRecord[]): number {
+  const finished = attendances.filter((a) => a.clockOut && a.totalHours);
+  if (finished.length === 0) return 0;
+  return calculateTotalHours(finished) / finished.length;
 }
 
 /**
@@ -66,12 +95,3 @@ export function calculateTotalHours(attendances: AttendanceRecord[]): number {
   return attendances.reduce((total, att) => total + (att.totalHours || 0), 0);
 }
 
-/**
- * Calculate average hours per record
- */
-export function calculateAverageHours(
-  attendances: AttendanceRecord[]
-): number {
-  if (attendances.length === 0) return 0;
-  return calculateTotalHours(attendances) / attendances.length;
-}

@@ -6,6 +6,8 @@ import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
+import { getTenantSettingsById } from '@/lib/tenant';
+import { tenantDayEdge } from '@/lib/timezone';
 
 /**
  * GET - Get attendance records for current user or all users (if manager+)
@@ -37,15 +39,15 @@ export async function GET(request: NextRequest) {
     // Manager+ with no userId filter: show all tenant records (no userId constraint)
 
     // Date range filter
+    // A picked 'YYYY-MM-DD' is a whole day at the store, not UTC midnight or the server's day.
     if (startDate || endDate) {
+      const timeZone = (await getTenantSettingsById(String(user.tenantId)))?.timezone || 'Asia/Manila';
       query.clockIn = {};
       if (startDate) {
-        query.clockIn.$gte = new Date(startDate);
+        query.clockIn.$gte = tenantDayEdge(startDate, 'start', timeZone);
       }
       if (endDate) {
-        const endOfDay = new Date(endDate);
-        endOfDay.setHours(23, 59, 59, 999);
-        query.clockIn.$lte = endOfDay;
+        query.clockIn.$lte = tenantDayEdge(endDate, 'end', timeZone);
       }
     }
 
