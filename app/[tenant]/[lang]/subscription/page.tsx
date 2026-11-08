@@ -1,40 +1,76 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import { useState, useEffect, type ReactNode } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { ArrowLeft, Check } from 'lucide-react';
+import '@/app/marketing.css';
+import { marketingFontClasses } from '@/components/marketing/fonts';
+import { LineTag, ReceiptRow } from '@/components/marketing/primitives';
 import { getDictionaryClient } from '../dictionaries-client';
 import { showToast } from '@/lib/toast';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
-import { getDefaultTenantSettings } from '@/lib/currency';
 import Navbar from '@/components/Navbar';
-import Link from 'next/link';
-import PageLoading from '@/components/ui/PageLoading';
+import PageTitle from '@/components/PageTitle';
+import StatusSlip, { slipSecondaryKey } from '@/components/StatusSlip';
 import ErrorState from '@/components/ui/ErrorState';
 import EmptyState from '@/components/ui/EmptyState';
+import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import SubscriptionPlansSkeleton from '@/components/subscription/SubscriptionPlansSkeleton';
+import { STORED_CHECKOUT_KEY } from '@/components/subscription/storedCheckout';
 import { useSubscriptionPlans } from '@/hooks/useSubscriptionPlans';
 import { usePermissions } from '@/hooks/usePermissions';
 import type { TranslationDict } from '@/types/dictionary';
-import {
-  Users,
-  Building,
-  Package,
-  CheckCircle,
-  ArrowUp,
-  Star,
-  Zap,
-  CreditCard,
-  Loader2,
-} from 'lucide-react';
+
+type BillingCycle = 'monthly' | 'yearly';
+
+const KEY = 'flex min-h-[44px] w-full items-center justify-center gap-2 px-4 font-receipt text-xs font-medium uppercase transition-colors touch-manipulation disabled:cursor-not-allowed disabled:opacity-50';
+const PRIMARY_KEY = `${KEY} bg-ink text-paper-white hover:bg-brand-navy`;
+const SECONDARY_KEY = `${KEY} border border-ink/25 text-ink hover:border-ink`;
+const FEATURE = 'flex items-start gap-2 text-sm';
+
+function Feature({ children }: { children: ReactNode }) {
+  return (
+    <li className={FEATURE}>
+      <Check className="mt-0.5 h-4 w-4 shrink-0 text-brand-hover" strokeWidth={1.75} aria-hidden />
+      <span>{children}</span>
+    </li>
+  );
+}
+
+function SubscriptionShell({ tag, title, subtitle, back, children }: {
+  tag?: string;
+  title: string;
+  subtitle: string;
+  back: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <div className={`${marketingFontClasses} mk-root pos-register flex min-h-dvh flex-col`}>
+      <PageTitle />
+      <Navbar />
+      <div className="flex-1 bg-brand-navy-deep text-paper">
+        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
+          {back}
+          {tag && <LineTag no="SUB" className="mb-3 mt-4 text-[#8fe3d0]">{tag}</LineTag>}
+          <h1 className="text-5xl text-paper-white sm:text-6xl lg:text-7xl">{title}</h1>
+          <p className="mt-3 text-paper/70">{subtitle}</p>
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function SubscriptionPage() {
   const params = useParams();
+  const router = useRouter();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
   const [dict, setDict] = useState<TranslationDict | null>(null);
   const { plans, currentPlanName, status, error, refetch } = useSubscriptionPlans();
   const [selectedPlan, setSelectedPlan] = useState<string>('');
-  const [upgrading, setUpgrading] = useState(false);
+  const [upgrading, setUpgrading] = useState<BillingCycle | null>(null);
   const [couponCode, setCouponCode] = useState('');
   const [couponError, setCouponError] = useState<string | null>(null);
   const [couponApplying, setCouponApplying] = useState(false);
@@ -46,8 +82,6 @@ export default function SubscriptionPage() {
     planIds: string[];
   } | null>(null);
   const { settings } = useTenantSettings();
-  const tenantSettings = settings || getDefaultTenantSettings();
-  const primaryColor = tenantSettings.primaryColor || '#35979c';
   const { canAccess } = usePermissions();
   const canManageSubscription = canAccess('subscriptions.manage');
 
@@ -64,6 +98,8 @@ export default function SubscriptionPage() {
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
   }, [lang]);
+
+  const subCopy = (dict?.subscription ?? {}) as Record<string, string | undefined>;
 
   const applyCoupon = async () => {
     const trimmed = couponCode.trim();
@@ -82,33 +118,42 @@ export default function SubscriptionPage() {
         setAppliedCoupon(data.data);
       } else {
         setAppliedCoupon(null);
-        setCouponError(data.error || 'Invalid coupon code');
+        setCouponError(data.error || subCopy.couponInvalid || 'Invalid coupon code');
       }
     } catch {
       setAppliedCoupon(null);
-      setCouponError('Failed to validate coupon');
+      setCouponError(subCopy.couponValidateFailed || 'Failed to validate coupon');
     } finally {
       setCouponApplying(false);
     }
   };
 
-  // Preview only — the server independently re-validates and re-computes
-  // this in create-payment/activate, so a stale/tampered client value here
-  // can't actually change what gets charged.
-  const discountedPrice = (plan: { _id: string; price: { monthly: number } }): number | null => {
-    if (!appliedCoupon) return null;
-    if (appliedCoupon.appliesTo === 'specific_plans' && !appliedCoupon.planIds.includes(plan._id)) return null;
+  // Preview only, mirroring create-payment: yearly is 12 months less 10%, then
+  // the coupon comes off that amount. The server re-validates and re-computes,
+  // so a stale or tampered value here can't change what gets charged.
+  const couponCovers = (planId: string) =>
+    !!appliedCoupon && (appliedCoupon.appliesTo !== 'specific_plans' || appliedCoupon.planIds.includes(planId));
+
+  const priceFor = (plan: { _id: string; price: { monthly: number } }, cycle: BillingCycle, withCoupon = true): number => {
+    const base = cycle === 'yearly' ? plan.price.monthly * 12 * 0.9 : plan.price.monthly;
+    if (!withCoupon || !appliedCoupon || !couponCovers(plan._id)) return base;
     const discount = appliedCoupon.discountType === 'percentage'
-      ? plan.price.monthly * (appliedCoupon.discountValue / 100)
+      ? base * (appliedCoupon.discountValue / 100)
       : appliedCoupon.discountValue;
-    return Math.max(0, Math.round((plan.price.monthly - discount) * 100) / 100);
+    return Math.max(0, Math.round((base - discount) * 100) / 100);
   };
 
-  const handleUpgrade = async (planId: string, billingCycle: 'monthly' | 'yearly' = 'monthly') => {
+  const money = (currency: string, amount: number) =>
+    `${currency} ${amount.toLocaleString(lang, {
+      minimumFractionDigits: Number.isInteger(amount) ? 0 : 2,
+      maximumFractionDigits: 2,
+    })}`;
+
+  const handleUpgrade = async (planId: string, billingCycle: BillingCycle = 'monthly') => {
     const selectedPlanData = plans.find((p) => p._id === planId);
     if (!selectedPlanData) return;
 
-    setUpgrading(true);
+    setUpgrading(billingCycle);
     setCouponError(null);
     try {
       const trimmedCoupon = couponCode.trim();
@@ -122,540 +167,337 @@ export default function SubscriptionPage() {
       const data = await response.json();
 
       if (data.success) {
-        localStorage.setItem(
-          'paypal_subscription_plan',
-          JSON.stringify({
-            planId,
-            billingCycle,
-            amount: data.data.amount,
-            currency: data.data.currency,
-            couponCode: data.data.couponCode,
-          })
-        );
-
-        const approveLink = data.data.paypalOrder.links.find(
+        const approveLink = data.data?.paypalOrder?.links?.find(
           (link: { rel: string; href: string }) => link.rel === 'approve'
         );
+        if (!approveLink?.href) {
+          showToast.error(subCopy.paypalLinkMissing || 'PayPal did not return a payment page. Please try again.');
+          setUpgrading(null);
+          return;
+        }
+        try {
+          localStorage.setItem(
+            STORED_CHECKOUT_KEY,
+            JSON.stringify({
+              planId,
+              billingCycle,
+              amount: data.data.amount,
+              currency: data.data.currency,
+              couponCode: data.data.couponCode,
+            })
+          );
+        } catch {
+          // Storage blocked: the success page falls back to the query string
+        }
+        // Keep the keys disabled while the browser leaves for PayPal
         window.location.href = approveLink.href;
+        return;
       } else if (trimmedCoupon) {
-        setCouponError(data.error || 'Invalid coupon code');
+        setCouponError(data.error || subCopy.couponInvalid || 'Invalid coupon code');
       } else {
         showToast.error(
-          data.error || dict?.subscription?.failedToCreatePayment || 'Failed to create payment'
+          data.error || subCopy.failedToCreatePayment || 'Failed to create payment'
         );
       }
     } catch (err) {
       console.error('Error creating payment:', err);
-      showToast.error(dict?.subscription?.failedToInitiatePayment || 'Failed to initiate payment');
-    } finally {
-      setUpgrading(false);
+      showToast.error(subCopy.failedToInitiatePayment || 'Failed to initiate payment');
     }
+    setUpgrading(null);
   };
 
   if (!dict) {
-    return <PageLoading label="Loading..." />;
-  }
-
-  const subDict = dict.subscription ?? {};
-
-  if (!canManageSubscription) {
     return (
-      <div>
-        <Navbar />
-        <div className="w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-          <div className="min-h-[40vh] flex items-center justify-center">
-            <div className="text-center max-w-md">
-              <div className="text-6xl mb-4">🔒</div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-2">
-                {dict?.components?.protectedRoute?.accessDenied || 'Access Denied'}
-              </h1>
-              <p className="text-gray-600 mb-4">
-                {subDict.noPermission || 'You don\'t have permission to manage the subscription. Required role: admin or higher.'}
-              </p>
-            </div>
-          </div>
-        </div>
+      <div className="flex min-h-dvh items-center justify-center bg-brand-navy-deep">
+        <LoadingSpinner size="md" color="#8fe3d0" />
       </div>
     );
   }
 
-  const formatLimit = (value: number, label: string) =>
-    value === -1 ? `${subDict.unlimited || 'Unlimited'} ${label}` : `${value} ${label}`;
+  if (!canManageSubscription) {
+    const forbidden = dict.components?.forbidden;
+    return (
+      <StatusSlip
+        code="403"
+        stamp={forbidden?.stamp || 'Denied'}
+        title={dict.components?.protectedRoute?.accessDenied || 'Access Denied'}
+        message={subCopy.noPermission || 'You don\'t have permission to manage the subscription. Required role: admin or higher.'}
+      >
+        <button type="button" onClick={() => router.back()} className={slipSecondaryKey}>
+          {forbidden?.goBack || 'Go Back'}
+        </button>
+      </StatusSlip>
+    );
+  }
 
-  const pageHeader = (
-    <div className="mb-6 sm:mb-8">
+  const formatLimit = (value: number) => (value === -1 ? subCopy.unlimited || 'Unlimited' : value.toLocaleString(lang));
+
+  const shell = {
+    tag: settings?.companyName,
+    title: subCopy.upgradeTitle || 'Upgrade Your Subscription',
+    subtitle: subCopy.upgradeMessage || 'Choose a plan that fits your business needs.',
+    back: (
       <Link
         href={`/${tenant}/${lang}/admin/subscriptions`}
-        className="inline-flex items-center text-sm font-medium text-gray-500 hover:text-gray-700 mb-4"
+        className="inline-flex min-h-[44px] items-center gap-1 font-receipt text-xs font-medium uppercase text-paper/70 transition-colors hover:text-paper-white"
       >
-        <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-        </svg>
+        <ArrowLeft className="h-4 w-4" strokeWidth={1.75} aria-hidden />
         {dict.common.back || 'Back'}
       </Link>
-      <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
-        {subDict.upgradeTitle || 'Upgrade Your Subscription'}
-      </h1>
-      <p className="text-gray-600">
-        {subDict.upgradeMessage || 'Choose a plan that fits your business needs.'}
-      </p>
-    </div>
-  );
+    ),
+  };
 
   if (status === 'loading') {
     return (
-      <div>
-        <Navbar />
-        <div className="w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-          {pageHeader}
-          <SubscriptionPlansSkeleton />
-        </div>
-      </div>
+      <SubscriptionShell {...shell}>
+        <SubscriptionPlansSkeleton />
+      </SubscriptionShell>
     );
   }
 
   if (status === 'error') {
     return (
-      <div>
-        <Navbar />
-        <div className="w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-          {pageHeader}
-          <div className="bg-white border border-gray-300">
+      <SubscriptionShell {...shell}>
+        <div className="mt-6 max-w-2xl">
+          <div className="bg-paper-white text-ink">
             <ErrorState
-              title={subDict.failedToLoadPlans || 'Failed to load subscription plans'}
+              title={subCopy.failedToLoadPlans || 'Failed to load subscription plans'}
               description={error || undefined}
               onRetry={refetch}
               retryLabel={dict.common.retry || 'Retry'}
             />
           </div>
+          <div className="mk-tear-b h-3 bg-paper-white" aria-hidden />
         </div>
-      </div>
+      </SubscriptionShell>
     );
   }
 
+  const couponCurrency = visiblePlans[0]?.price.currency || 'PHP';
+
   return (
-    <div>
-      <Navbar />
-      <div className="w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        {pageHeader}
-
-        <div className="mb-6 max-w-sm">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            {subDict.couponCode || 'Coupon code'}
-          </label>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={couponCode}
-              onChange={(e) => {
-                setCouponCode(e.target.value.toUpperCase());
-                setCouponError(null);
-                if (appliedCoupon) setAppliedCoupon(null);
-              }}
-              placeholder={subDict.couponCodePlaceholder || 'Optional'}
-              className="flex-1 px-3 py-2 border border-gray-300 text-sm uppercase focus:ring-2 focus:ring-brand"
-            />
-            <button
-              type="button"
-              onClick={applyCoupon}
-              disabled={couponApplying || !couponCode.trim() || !!appliedCoupon}
-              className="px-4 py-2 text-sm font-medium border disabled:opacity-50"
-              style={{ borderColor: primaryColor, color: primaryColor }}
-            >
-              {couponApplying ? '…' : appliedCoupon ? subDict.applied || 'Applied' : subDict.apply || 'Apply'}
-            </button>
-          </div>
-          {couponError && <p className="mt-1 text-sm text-red-600">{couponError}</p>}
-          {appliedCoupon && (
-            <p className="mt-1 text-sm text-green-600">
-              {subDict.couponApplied || 'Coupon applied'}: {appliedCoupon.code} (
-              {appliedCoupon.discountType === 'percentage' ? `${appliedCoupon.discountValue}%` : `₱${appliedCoupon.discountValue}`}
-              {' '}{subDict.off || 'off'})
-            </p>
-          )}
+    <SubscriptionShell {...shell}>
+      {/* Discount code, keyed in like one at the register */}
+      <div className="mt-6 max-w-xl border border-white/10 bg-black/20 p-3">
+        <label htmlFor="coupon-code" className="mb-1 block font-receipt text-xs font-medium uppercase tracking-[0.08em] text-white/60">
+          {subCopy.couponCode || 'Coupon code'}
+        </label>
+        <div className="flex gap-2">
+          <input
+            id="coupon-code"
+            type="text"
+            value={couponCode}
+            onChange={(e) => {
+              setCouponCode(e.target.value.toUpperCase());
+              setCouponError(null);
+              if (appliedCoupon) setAppliedCoupon(null);
+            }}
+            placeholder={subCopy.couponCodePlaceholder || 'Optional'}
+            className="min-h-[44px] min-w-0 flex-1 border-2 border-transparent bg-paper-white px-3 py-2 font-receipt text-sm uppercase text-ink placeholder:normal-case placeholder:text-ink/45 focus:border-[#8fe3d0] focus:outline-none"
+          />
+          <button
+            type="button"
+            onClick={applyCoupon}
+            disabled={couponApplying || !couponCode.trim() || !!appliedCoupon}
+            className="flex min-h-[44px] shrink-0 items-center bg-paper-white px-5 font-receipt text-xs font-medium uppercase text-ink transition-colors hover:bg-paper disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {couponApplying ? '…' : appliedCoupon ? subCopy.applied || 'Applied' : subCopy.apply || 'Apply'}
+          </button>
         </div>
+        {couponError && (
+          <p role="alert" className="mt-2 border-l-4 border-stamp bg-paper-white px-3 py-2 font-receipt text-sm text-ink">{couponError}</p>
+        )}
+        {appliedCoupon && (
+          <p role="status" className="mt-2 border-l-4 border-brand bg-paper-white px-3 py-2 font-receipt text-sm text-ink">
+            {subCopy.couponApplied || 'Coupon applied'}: {appliedCoupon.code} (
+            {appliedCoupon.discountType === 'percentage'
+              ? `${appliedCoupon.discountValue}%`
+              : money(couponCurrency, appliedCoupon.discountValue)}{' '}
+            {subCopy.off || 'off'})
+          </p>
+        )}
+      </div>
 
-        {visiblePlans.length === 0 ? (
-          <div className="bg-white border border-gray-300">
-            <EmptyState
-              icon="products"
-              title={subDict.noPlansAvailable || 'No subscription plans available'}
-            />
+      {visiblePlans.length === 0 ? (
+        <div className="mt-6 max-w-2xl">
+          <div className="bg-paper-white text-ink">
+            <EmptyState icon="products" title={subCopy.noPlansAvailable || 'No subscription plans available'} />
           </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 items-stretch">
-            {visiblePlans.map((plan) => {
-              const isCurrent = plan._id === currentPlanId;
-              return (
-                <div
-                  key={plan._id}
-                  className="flex flex-col h-full bg-white border transition-all duration-200 relative"
-                  style={{
-                    borderColor:
-                      isCurrent ? primaryColor : selectedPlan === plan._id ? primaryColor : '#d1d5db',
-                    boxShadow: isCurrent
-                      ? `0 0 0 2px ${primaryColor}55`
-                      : selectedPlan === plan._id
-                      ? `0 0 0 2px ${primaryColor}33`
-                      : undefined,
-                  }}
-                >
+          <div className="mk-tear-b h-3 bg-paper-white" aria-hidden />
+        </div>
+      ) : (
+        <div className="mt-8 grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-4">
+          {visiblePlans.map((plan) => {
+            const isCurrent = plan._id === currentPlanId;
+            const isSelected = selectedPlan === plan._id;
+            const monthly = priceFor(plan, 'monthly');
+            const discounted = couponCovers(plan._id);
+            return (
+              <article key={plan._id} className="flex min-w-0 flex-col">
+                <div className={`relative flex flex-1 flex-col bg-paper-white text-ink ${isSelected ? 'outline outline-4 outline-offset-0 outline-[#8fe3d0]' : ''}`}>
                   {isCurrent && (
-                    <div
-                      className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 px-3 py-1 text-xs font-semibold text-white whitespace-nowrap"
-                      style={{ background: primaryColor }}
-                    >
-                      {subDict.currentPlan || 'Current Plan'}
-                    </div>
+                    <span className="mk-stamp absolute right-3 top-4 border-4 border-stamp px-2 py-1 font-display text-lg font-extrabold uppercase leading-none text-stamp">
+                      {subCopy.currentPlan || 'Current Plan'}
+                    </span>
                   )}
-                  <div className="flex-1 flex flex-col p-6 justify-between">
-                    <div>
-                      <div className="mb-5">
-                        <div
-                          className="inline-flex p-3 border mb-4"
-                          style={{
-                            background: `${primaryColor}11`,
-                            color: primaryColor,
-                            borderColor: primaryColor,
-                          }}
-                        >
-                          <CreditCard className="w-6 h-6" />
-                        </div>
-                        <h3 className="text-lg font-bold text-gray-900">{plan.name}</h3>
-                        <div className="mt-1">
-                          {(() => {
-                            const discounted = discountedPrice(plan);
-                            if (discounted === null) {
-                              return (
-                                <span className="text-3xl font-bold text-gray-900">
-                                  {plan.price.currency} {plan.price.monthly.toLocaleString()}
-                                </span>
-                              );
-                            }
-                            return (
-                              <>
-                                <span className="text-base text-gray-400 line-through mr-2">
-                                  {plan.price.currency} {plan.price.monthly.toLocaleString()}
-                                </span>
-                                <span className="text-3xl font-bold text-green-600">
-                                  {plan.price.currency} {discounted.toLocaleString()}
-                                </span>
-                              </>
-                            );
-                          })()}
-                          <span className="text-sm text-gray-500 ml-1">
-                            {subDict.perMonth || '/month'}
-                          </span>
-                        </div>
-                        {plan.price.setupFee ? (
-                          <div className="mt-1">
-                            <span className="text-sm text-gray-500">
-                              + {plan.price.currency} {plan.price.setupFee.toLocaleString()}{' '}
-                              {subDict.oneTimeSetup || 'one-time setup'}
-                            </span>
-                          </div>
-                        ) : null}
-                      </div>
-
-                      <ul className="space-y-2 mb-4">
-                        <li className="flex items-center">
-                          <Users className="h-4 w-4 text-green-600 mr-2 flex-shrink-0" />
-                          <span className="text-sm text-gray-600">
-                            {formatLimit(plan.features.maxUsers, subDict.users || 'users')}
-                          </span>
-                        </li>
-                        <li className="flex items-center">
-                          <Building className="h-4 w-4 text-green-600 mr-2 flex-shrink-0" />
-                          <span className="text-sm text-gray-600">
-                            {formatLimit(plan.features.maxBranches, subDict.branches || 'branches')}
-                          </span>
-                        </li>
-                        <li className="flex items-center">
-                          <Package className="h-4 w-4 text-green-600 mr-2 flex-shrink-0" />
-                          <span className="text-sm text-gray-600">
-                            {formatLimit(plan.features.maxProducts, subDict.products || 'products')}
-                          </span>
-                        </li>
-                        {plan.features.enableDiscounts && (
-                          <li className="flex items-center">
-                            <CheckCircle className="h-4 w-4 text-green-600 mr-2 flex-shrink-0" />
-                            <span className="text-sm text-gray-600">
-                              {subDict.discountsPromotions || 'Discounts & Promotions'}
-                            </span>
-                          </li>
-                        )}
-                        {plan.features.enableMultiBranch && (
-                          <li className="flex items-center">
-                            <CheckCircle className="h-4 w-4 text-green-600 mr-2 flex-shrink-0" />
-                            <span className="text-sm text-gray-600">
-                              {subDict.multiBranchSupport || 'Multi-Branch Support'}
-                            </span>
-                          </li>
-                        )}
-                        {plan.features.prioritySupport && (
-                          <li className="flex items-center">
-                            <CheckCircle className="h-4 w-4 text-green-600 mr-2 flex-shrink-0" />
-                            <span className="text-sm text-gray-600">
-                              {subDict.prioritySupport || 'Priority Support'}
-                            </span>
-                          </li>
-                        )}
-                      </ul>
-
-                      {plan.birCompliance && (
-                        <div className="pt-3 mb-4 border-t border-gray-200">
-                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-                            {subDict.birCompliance || 'BIR Compliance'}
-                          </p>
-                          <ul className="space-y-1.5">
-                            {plan.birCompliance.auditTrailSystem && (
-                              <li className="flex items-center">
-                                <CheckCircle
-                                  className="h-3.5 w-3.5 mr-2 flex-shrink-0"
-                                  style={{ color: primaryColor }}
-                                />
-                                <span className="text-xs text-gray-600">
-                                  {subDict.auditTrailSystem || 'Audit Trail System'}
-                                </span>
-                              </li>
-                            )}
-                            {plan.birCompliance.ptuAssistance && (
-                              <li className="flex items-center">
-                                <CheckCircle
-                                  className="h-3.5 w-3.5 mr-2 flex-shrink-0"
-                                  style={{ color: primaryColor }}
-                                />
-                                <span className="text-xs text-gray-600">
-                                  {subDict.ptuAssistance || 'PTU Assistance'}
-                                </span>
-                              </li>
-                            )}
-                            {plan.birCompliance.receiptFormatting && (
-                              <li className="flex items-center">
-                                <CheckCircle
-                                  className="h-3.5 w-3.5 mr-2 flex-shrink-0"
-                                  style={{ color: primaryColor }}
-                                />
-                                <span className="text-xs text-gray-600">
-                                  {subDict.birReceiptFormatting || 'BIR Receipt Formatting'}
-                                </span>
-                              </li>
-                            )}
-                            {plan.birCompliance.birDocumentation && (
-                              <li className="flex items-center">
-                                <CheckCircle
-                                  className="h-3.5 w-3.5 mr-2 flex-shrink-0"
-                                  style={{ color: primaryColor }}
-                                />
-                                <span className="text-xs text-gray-600">
-                                  {subDict.birDocumentation || 'BIR Documentation'}
-                                </span>
-                              </li>
-                            )}
-                            {plan.birCompliance.casReporting && (
-                              <li className="flex items-center">
-                                <CheckCircle
-                                  className="h-3.5 w-3.5 mr-2 flex-shrink-0"
-                                  style={{ color: primaryColor }}
-                                />
-                                <span className="text-xs text-gray-600">
-                                  {subDict.casReporting || 'CAS-Ready Reporting'}
-                                </span>
-                              </li>
-                            )}
-                            {plan.birCompliance.monthlySupport && (
-                              <li className="flex items-center">
-                                <CheckCircle
-                                  className="h-3.5 w-3.5 mr-2 flex-shrink-0"
-                                  style={{ color: primaryColor }}
-                                />
-                                <span className="text-xs text-gray-600">
-                                  {subDict.monthlyComplianceSupport || 'Monthly Compliance Support'}
-                                </span>
-                              </li>
-                            )}
-                          </ul>
-                        </div>
+                  <div className="px-5 pb-4 pt-5">
+                    <h2 className={`text-4xl ${isCurrent ? 'pr-24' : ''}`}>{plan.name}</h2>
+                    <p className="mt-3 font-receipt">
+                      {discounted && (
+                        <span className="mr-2 text-base text-ink/50 line-through">{money(plan.price.currency, plan.price.monthly)}</span>
                       )}
-                    </div>
-                    <div>
-                      {selectedPlan === plan._id ? (
-                        <div className="space-y-2">
-                          <p className="text-xs font-medium text-gray-600 mb-1">
-                            {subDict.chooseBilling || 'Choose Billing Cycle'}:
-                          </p>
-                          <div className="grid grid-cols-2 gap-2">
-                            <button
-                              type="button"
-                              onClick={() => handleUpgrade(plan._id, 'monthly')}
-                              disabled={upgrading}
-                              className="px-3 py-2 text-white text-sm font-medium disabled:opacity-50 transition-opacity"
-                              style={{ background: primaryColor }}
-                            >
-                              {upgrading ? (
-                                <Loader2 className="h-4 w-4 animate-spin mx-auto" />
-                              ) : (
-                                <>
-                                  <div>
-                                    {plan.price.currency} {plan.price.monthly.toLocaleString()}
-                                  </div>
-                                  <div className="text-xs opacity-80">
-                                    {subDict.monthly || 'Monthly'}
-                                  </div>
-                                </>
-                              )}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleUpgrade(plan._id, 'yearly')}
-                              disabled={upgrading}
-                              className="px-3 py-2 bg-green-600 text-white text-sm font-medium disabled:opacity-50 transition-opacity"
-                            >
-                              {upgrading ? (
-                                <Loader2 className="h-4 w-4 animate-spin mx-auto" />
-                              ) : (
-                                <>
-                                  <div>
-                                    {plan.price.currency}{' '}
-                                    {(plan.price.monthly * 12 * 0.9).toFixed(0)}
-                                  </div>
-                                  <div className="text-xs opacity-80">
-                                    {subDict.yearlyDiscount || 'Yearly (10% off)'}
-                                  </div>
-                                </>
-                              )}
-                            </button>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => setSelectedPlan('')}
-                            className="w-full px-3 py-2 bg-gray-100 text-gray-700 text-sm font-medium hover:bg-gray-200 transition-colors"
-                          >
-                            {dict.common.cancel || 'Cancel'}
-                          </button>
-                        </div>
-                      ) : isCurrent ? (
-                        <button
-                          type="button"
-                          disabled
-                          className="w-full px-4 py-2 text-sm font-medium border cursor-default"
-                          style={{
-                            borderColor: primaryColor,
-                            color: primaryColor,
-                            background: `${primaryColor}11`,
-                          }}
-                        >
-                          <CheckCircle className="inline h-4 w-4 mr-1.5 mb-0.5" />
-                          {subDict.currentPlan || 'Current Plan'}
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setSelectedPlan(plan._id)}
-                          className="w-full px-4 py-2 text-white text-sm font-medium transition-opacity"
-                          style={{ background: primaryColor }}
-                        >
-                          <ArrowUp className="inline h-4 w-4 mr-1.5 mb-0.5" />
-                          {subDict.selectPlan || 'Select Plan'}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-
-            <div className="flex flex-col h-full bg-gray-900 border border-gray-800 text-white">
-              <div className="flex-1 flex flex-col p-6 justify-between">
-                <div>
-                  <div className="mb-5">
-                    <div className="inline-flex p-3 border border-yellow-400 bg-yellow-400/10 text-yellow-400 mb-4">
-                      <Star className="w-6 h-6" />
-                    </div>
-                    <h3 className="text-lg font-bold">{subDict.enterprise || 'Enterprise'}</h3>
-                    <div className="mt-1">
-                      <span className="text-2xl font-bold">
-                        {subDict.customPricing || 'Custom Pricing'}
-                      </span>
-                    </div>
-                  </div>
-                  <ul className="space-y-2 mb-4">
-                    <li className="flex items-center">
-                      <Star className="h-4 w-4 text-yellow-400 mr-2 flex-shrink-0" />
-                      <span className="text-sm text-gray-300">
-                        {subDict.enterpriseUsers || 'Unlimited users, branches, products'}
-                      </span>
-                    </li>
-                    <li className="flex items-center">
-                      <Zap className="h-4 w-4 text-yellow-400 mr-2 flex-shrink-0" />
-                      <span className="text-sm text-gray-300">
-                        {subDict.enterpriseSupport || 'Dedicated support & integrations'}
-                      </span>
-                    </li>
-                    <li className="flex items-center">
-                      <CreditCard className="h-4 w-4 text-yellow-400 mr-2 flex-shrink-0" />
-                      <span className="text-sm text-gray-300">
-                        {subDict.enterpriseBilling || 'Custom billing & account manager'}
-                      </span>
-                    </li>
-                  </ul>
-                  <div className="pt-3 mb-4 border-t border-gray-700">
-                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
-                      {subDict.fullBirCompliance || 'Full BIR Compliance'}
+                      <span className="text-3xl font-semibold">{money(plan.price.currency, monthly)}</span>
+                      <span className="ml-1 text-sm text-ink/60">{subCopy.perMonth || '/month'}</span>
                     </p>
-                    <ul className="space-y-1.5">
-                      <li className="flex items-center">
-                        <CheckCircle className="h-3.5 w-3.5 text-yellow-400 mr-2 flex-shrink-0" />
-                        <span className="text-xs text-gray-400">
-                          {subDict.enterpriseBirPtu || 'PTU + CAS + Audit Trail'}
-                        </span>
-                      </li>
-                      <li className="flex items-center">
-                        <CheckCircle className="h-3.5 w-3.5 text-yellow-400 mr-2 flex-shrink-0" />
-                        <span className="text-xs text-gray-400">
-                          {subDict.enterpriseBirDocs || 'BIR Documentation & Receipts'}
-                        </span>
-                      </li>
-                      <li className="flex items-center">
-                        <CheckCircle className="h-3.5 w-3.5 text-yellow-400 mr-2 flex-shrink-0" />
-                        <span className="text-xs text-gray-400">
-                          {subDict.monthlyComplianceSupport || 'Monthly Compliance Support'}
-                        </span>
-                      </li>
-                    </ul>
+                    {plan.price.setupFee ? (
+                      <p className="mt-1 font-receipt text-xs text-ink/60">
+                        + {money(plan.price.currency, plan.price.setupFee)} {subCopy.oneTimeSetup || 'one-time setup'}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  <div className="flex-1 border-t border-dashed border-ink/30 px-5 py-4">
+                    <div className="space-y-1 font-receipt text-sm uppercase">
+                      <ReceiptRow label={subCopy.users || 'users'} value={formatLimit(plan.features.maxUsers)} />
+                      <ReceiptRow label={subCopy.branches || 'branches'} value={formatLimit(plan.features.maxBranches)} />
+                      <ReceiptRow label={subCopy.products || 'products'} value={formatLimit(plan.features.maxProducts)} />
+                    </div>
+                    {(plan.features.enableDiscounts || plan.features.enableMultiBranch || plan.features.prioritySupport) && (
+                      <ul className="mt-4 space-y-2">
+                        {plan.features.enableDiscounts && <Feature>{subCopy.discountsPromotions || 'Discounts & Promotions'}</Feature>}
+                        {plan.features.enableMultiBranch && <Feature>{subCopy.multiBranchSupport || 'Multi-Branch Support'}</Feature>}
+                        {plan.features.prioritySupport && <Feature>{subCopy.prioritySupport || 'Priority Support'}</Feature>}
+                      </ul>
+                    )}
+                    {plan.birCompliance && (
+                      <div className="mt-4 border-t border-dashed border-ink/30 pt-4">
+                        <p className="mb-2 font-receipt text-xs font-medium uppercase tracking-[0.08em] text-ink/60">
+                          {subCopy.birCompliance || 'BIR Compliance'}
+                        </p>
+                        <ul className="space-y-1.5">
+                          {plan.birCompliance.auditTrailSystem && <Feature>{subCopy.auditTrailSystem || 'Audit Trail System'}</Feature>}
+                          {plan.birCompliance.ptuAssistance && <Feature>{subCopy.ptuAssistance || 'PTU Assistance'}</Feature>}
+                          {plan.birCompliance.receiptFormatting && <Feature>{subCopy.birReceiptFormatting || 'BIR Receipt Formatting'}</Feature>}
+                          {plan.birCompliance.birDocumentation && <Feature>{subCopy.birDocumentation || 'BIR Documentation'}</Feature>}
+                          {plan.birCompliance.casReporting && <Feature>{subCopy.casReporting || 'CAS-Ready Reporting'}</Feature>}
+                          {plan.birCompliance.monthlySupport && <Feature>{subCopy.monthlyComplianceSupport || 'Monthly Compliance Support'}</Feature>}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="border-t border-dashed border-ink/30 px-5 py-4">
+                    {isSelected ? (
+                      <div className="space-y-2">
+                        <p className="font-receipt text-xs font-medium uppercase tracking-[0.08em] text-ink/70">
+                          {subCopy.chooseBilling || 'Choose Billing Cycle'}
+                        </p>
+                        {(['monthly', 'yearly'] as const).map((cycle) => (
+                          <button
+                            key={cycle}
+                            type="button"
+                            onClick={() => handleUpgrade(plan._id, cycle)}
+                            disabled={upgrading !== null}
+                            className={`${cycle === 'monthly' ? PRIMARY_KEY : SECONDARY_KEY} min-h-[56px] justify-between text-left`}
+                          >
+                            <span>
+                              {cycle === 'monthly' ? subCopy.monthly || 'Monthly' : subCopy.yearlyDiscount || 'Yearly (10% off)'}
+                            </span>
+                            <span className="whitespace-nowrap text-sm normal-case">
+                              {upgrading === cycle ? subCopy.openingPayPal || 'Opening PayPal…' : money(plan.price.currency, priceFor(plan, cycle))}
+                            </span>
+                          </button>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() => setSelectedPlan('')}
+                          disabled={upgrading !== null}
+                          className="flex min-h-[44px] w-full items-center justify-center font-receipt text-xs uppercase text-ink/70 underline hover:text-ink disabled:opacity-50"
+                        >
+                          {dict.common.cancel || 'Cancel'}
+                        </button>
+                      </div>
+                    ) : isCurrent ? (
+                      <p className="flex min-h-[44px] items-center justify-center gap-2 border border-ink/25 font-receipt text-xs font-medium uppercase text-ink/70">
+                        <Check className="h-4 w-4" strokeWidth={1.75} aria-hidden />
+                        {subCopy.currentPlan || 'Current Plan'}
+                      </p>
+                    ) : (
+                      <button type="button" onClick={() => setSelectedPlan(plan._id)} className={PRIMARY_KEY}>
+                        {subCopy.selectPlan || 'Select Plan'}
+                      </button>
+                    )}
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    window.location.href =
-                      'mailto:admin@localpro.asia?subject=Enterprise%20Plan%20Inquiry';
-                  }}
-                  className="w-full px-4 py-2 border border-white text-white text-sm font-medium hover:bg-white hover:text-gray-900 transition-colors"
+                <div className="mk-tear-b h-3 bg-paper-white" aria-hidden />
+              </article>
+            );
+          })}
+
+          <article className="flex min-w-0 flex-col">
+            <div className="flex flex-1 flex-col bg-ink text-paper">
+              <div className="px-5 pb-4 pt-5">
+                <h2 className="text-4xl text-paper-white">{subCopy.enterprise || 'Enterprise'}</h2>
+                <p className="mt-3 font-receipt text-2xl font-semibold text-[#8fe3d0]">{subCopy.customPricing || 'Custom Pricing'}</p>
+              </div>
+              <div className="flex-1 border-t border-dashed border-white/25 px-5 py-4">
+                <ul className="space-y-2 text-sm">
+                  {[
+                    subCopy.enterpriseUsers || 'Unlimited users, branches, products',
+                    subCopy.enterpriseSupport || 'Dedicated support & integrations',
+                    subCopy.enterpriseBilling || 'Custom billing & account manager',
+                  ].map((line) => (
+                    <li key={line} className={FEATURE}>
+                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-[#8fe3d0]" strokeWidth={1.75} aria-hidden />
+                      <span>{line}</span>
+                    </li>
+                  ))}
+                </ul>
+                <div className="mt-4 border-t border-dashed border-white/25 pt-4">
+                  <p className="mb-2 font-receipt text-xs font-medium uppercase tracking-[0.08em] text-paper/60">
+                    {subCopy.fullBirCompliance || 'Full BIR Compliance'}
+                  </p>
+                  <ul className="space-y-1.5">
+                    {[
+                      subCopy.enterpriseBirPtu || 'PTU + CAS + Audit Trail',
+                      subCopy.enterpriseBirDocs || 'BIR Documentation & Receipts',
+                      subCopy.monthlyComplianceSupport || 'Monthly Compliance Support',
+                    ].map((line) => (
+                      <li key={line} className={FEATURE}>
+                        <Check className="mt-0.5 h-4 w-4 shrink-0 text-[#8fe3d0]" strokeWidth={1.75} aria-hidden />
+                        <span>{line}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+              <div className="border-t border-dashed border-white/25 px-5 py-4">
+                <a
+                  href="mailto:admin@localpro.asia?subject=Enterprise%20Plan%20Inquiry"
+                  className={`${KEY} bg-paper-white text-ink hover:bg-paper`}
                 >
-                  {subDict.contactUs || 'Contact Us'}
-                </button>
+                  {subCopy.contactUs || 'Contact Us'}
+                </a>
               </div>
             </div>
-          </div>
-        )}
-
-        <div className="mt-10 pt-8 border-t border-gray-200">
-          <div className="flex flex-wrap justify-center gap-6">
-            {[
-              subDict.securePayments || 'Secure Payments',
-              subDict.birCompliant || 'BIR Compliant',
-              subDict.moneyBack || '30-Day Money Back',
-              subDict.dataRetention || '10-Year Data Retention',
-            ].map((label) => (
-              <div key={label} className="flex items-center gap-2">
-                <CheckCircle className="h-4 w-4 text-green-600" />
-                <span className="text-sm text-gray-600">{label}</span>
-              </div>
-            ))}
-          </div>
+            <div className="mk-tear-b h-3 bg-ink" aria-hidden />
+          </article>
         </div>
-      </div>
-    </div>
+      )}
+
+      <ul className="mt-10 flex flex-wrap gap-x-8 gap-y-3 border-t border-dashed border-white/20 pt-6">
+        {[
+          subCopy.securePayments || 'Secure Payments',
+          subCopy.birCompliant || 'BIR Compliant',
+          subCopy.moneyBack || '30-Day Money Back',
+          subCopy.dataRetention || '10-Year Data Retention',
+        ].map((label) => (
+          <li key={label} className="flex items-center gap-2 font-receipt text-xs uppercase tracking-[0.08em] text-paper/70">
+            <Check className="h-4 w-4 text-[#8fe3d0]" strokeWidth={1.75} aria-hidden />
+            {label}
+          </li>
+        ))}
+      </ul>
+    </SubscriptionShell>
   );
 }

@@ -422,6 +422,7 @@
     "shiftActive": "Shift Active"
   },
   "customerDisplay": {
+    "paidStamp": "Paid",
     "noSessionFound": "No Session Found",
     "noSessionMessage": "Please open this page with a valid session ID",
     "connectionError": "Connection Error",
@@ -2581,6 +2582,22 @@
     }
   },
   "subscription": {
+    "noPermission": "You don't have permission to manage the subscription. Required role: admin or higher.",
+    "couponCode": "Coupon code",
+    "couponCodePlaceholder": "Optional",
+    "apply": "Apply",
+    "applied": "Applied",
+    "couponApplied": "Coupon applied",
+    "off": "off",
+    "couponInvalid": "Invalid coupon code",
+    "couponValidateFailed": "Failed to validate coupon",
+    "openingPayPal": "Opening PayPal…",
+    "paypalLinkMissing": "PayPal did not return a payment page. Please try again.",
+    "stampVoid": "Void",
+    "stampDeclined": "Declined",
+    "stampPaid": "Paid",
+    "goToDashboard": "Go to Dashboard",
+    "unknownActivationError": "Unknown backend error.",
     "upgradeTitle": "Upgrade Your Subscription",
     "upgradeMessage": "Choose a plan that fits your business needs.",
     "chooseBilling": "Choose Billing Cycle",

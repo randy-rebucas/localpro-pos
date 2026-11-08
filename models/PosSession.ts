@@ -10,6 +10,8 @@ const posSessionSchema = new mongoose.Schema({
   taxAmount: { type: Number },
   taxRate: { type: Number },
   taxLabel: { type: String },
+  // VAT-inclusive prices: the tax is already inside the total, not added on top
+  taxIncluded: { type: Boolean },
   tip: { type: Number, default: 0 },
   total: { type: Number, default: 0 },
   paymentMethod: { type: String, default: null },

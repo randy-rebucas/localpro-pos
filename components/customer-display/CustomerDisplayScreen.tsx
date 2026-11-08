@@ -1,144 +1,141 @@
 'use client';
 
-import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import type { ReactNode } from 'react';
+import '@/app/marketing.css';
+import { marketingFontClasses } from '@/components/marketing/fonts';
+import { Barcode } from '@/components/marketing/primitives';
+import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { formatNumber, getCurrencySymbol, getDefaultTenantSettings } from '@/lib/currency';
 
 type ScreenVariant = 'loading' | 'error' | 'empty' | 'no-session' | 'success';
 
-const BACKGROUND: Record<ScreenVariant, string> = {
-  loading: 'bg-gray-900',
-  error: 'bg-red-900',
-  empty: 'bg-gray-900',
-  'no-session': 'bg-gray-900',
-  success: 'bg-green-800',
-};
+/** Fonts and the dark counter surface shared by every customer display state. */
+export const DISPLAY_SHELL = `${marketingFontClasses} mk-root pos-register bg-brand-navy-deep! text-paper!`;
+
+/**
+ * An amount on the pole display. Doto has no peso glyph, so the symbol is set
+ * in the receipt face beside the LED numerals.
+ */
+export function LedAmount({ amount, className = '' }: { amount: number; className?: string }) {
+  const { settings } = useTenantSettings();
+  const s = settings || getDefaultTenantSettings();
+  const symbol = s.currencySymbol || getCurrencySymbol(s.currency || 'USD');
+  const number = formatNumber(amount, s.numberFormat || getDefaultTenantSettings().numberFormat);
+  const sign = <span className="font-receipt text-[0.4em] font-medium">{symbol}</span>;
+  const digits = <span className="mk-led-glow font-led leading-none">{number}</span>;
+
+  return (
+    <span className={`inline-flex items-baseline gap-2 whitespace-nowrap ${className}`}>
+      {s.currencyPosition === 'after' ? (
+        <>
+          {digits}
+          {sign}
+        </>
+      ) : (
+        <>
+          {sign}
+          {digits}
+        </>
+      )}
+    </span>
+  );
+}
 
 interface CustomerDisplayScreenProps {
   variant: ScreenVariant;
   title: string;
   description?: string;
   sessionId?: string;
+  sessionLabel?: string;
   onRetry?: () => void;
   retryLabel?: string;
-  children?: React.ReactNode;
+  /** Shown on the pole display for a completed sale. */
+  amount?: number;
+  stamp?: string;
+  children?: ReactNode;
 }
 
+/** Full-screen states of the customer display: waiting, loading, problems and a completed sale. */
 export default function CustomerDisplayScreen({
   variant,
   title,
   description,
   sessionId,
+  sessionLabel = 'Session',
   onRetry,
   retryLabel = 'Retry',
+  amount,
+  stamp,
   children,
 }: CustomerDisplayScreenProps) {
+  const isProblem = variant === 'error' || variant === 'no-session';
+
   return (
     <div
-      className={`w-screen h-screen flex items-center justify-center ${BACKGROUND[variant]}`}
-      role={variant === 'error' || variant === 'no-session' ? 'alert' : 'status'}
+      className={`${DISPLAY_SHELL} flex min-h-dvh items-center justify-center px-4 py-10`}
+      role={isProblem ? 'alert' : 'status'}
       aria-live={variant === 'error' ? 'assertive' : 'polite'}
     >
-      <div className="text-center max-w-lg px-6">
-        {variant === 'loading' && (
-          <LoadingSpinner
-            size="lg"
-            label={title}
-            color="#ffffff"
-            className="[&_p]:text-white [&_p]:text-lg"
-          />
-        )}
+      {variant === 'loading' && (
+        <p className="font-receipt text-lg uppercase tracking-[0.14em] text-[#8fe3d0]">{title}</p>
+      )}
 
-        {variant === 'error' && (
-          <svg
-            className="mx-auto h-24 w-24 text-red-300 mb-6"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={1.5}
-            aria-hidden
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-            />
-          </svg>
-        )}
+      {variant === 'empty' && (
+        <div className="w-full max-w-2xl text-center">
+          <h1 className="text-6xl text-paper-white sm:text-7xl lg:text-8xl">{title}</h1>
+          {description && <p className="mt-4 text-xl text-paper/70 sm:text-2xl">{description}</p>}
+          {/* A scanner beam waiting for the first item */}
+          <div className="relative mx-auto mt-12 w-72 max-w-full overflow-hidden border border-white/10 bg-black/30 px-8 py-8" aria-hidden>
+            <Barcode className="h-24 w-full text-paper/80" />
+            <div className="mk-sweep" />
+          </div>
+        </div>
+      )}
 
-        {variant === 'empty' && (
-          <svg
-            className="mx-auto h-24 w-24 text-gray-600 mb-6"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={1.5}
-            aria-hidden
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"
-            />
-          </svg>
-        )}
+      {variant === 'success' && (
+        <div className="w-full max-w-3xl text-center">
+          <div className="relative inline-block">
+            <h1 className="text-7xl text-paper-white sm:text-8xl lg:text-9xl">{title}</h1>
+            {stamp && (
+              <span className="mk-stamp absolute -right-6 -top-8 border-4 border-stamp bg-brand-navy-deep px-3 py-1 font-display text-3xl font-extrabold uppercase leading-none text-stamp sm:-right-12">
+                {stamp}
+              </span>
+            )}
+          </div>
+          {description && <p className="mt-4 text-2xl text-paper/80">{description}</p>}
+          {amount !== undefined && (
+            <div className="mx-auto mt-10 inline-block border border-white/10 bg-black/40 px-8 py-6">
+              <LedAmount amount={amount} className="text-6xl text-[#7df0d6] sm:text-7xl" />
+            </div>
+          )}
+          {children}
+        </div>
+      )}
 
-        {variant === 'success' && (
-          <svg
-            className="mx-auto h-32 w-32 text-white mb-6 animate-bounce"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={1}
-            aria-hidden
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-            />
-          </svg>
-        )}
-
-        {variant !== 'loading' && (
-          <>
-            <h1
-              className={`font-bold text-white mb-4 ${
-                variant === 'success' ? 'text-5xl' : variant === 'error' ? 'text-3xl' : 'text-4xl'
-              }`}
-            >
-              {title}
-            </h1>
-            {description && (
-              <p
-                className={`text-lg mb-6 ${
-                  variant === 'error'
-                    ? 'text-red-200'
-                    : variant === 'success'
-                    ? 'text-green-100 text-2xl'
-                    : 'text-gray-400 text-xl'
-                }`}
-              >
-                {description}
+      {isProblem && (
+        <div className="w-full max-w-lg">
+          <div className="bg-paper-white p-6 text-ink sm:p-8">
+            <h1 className="text-5xl">{title}</h1>
+            {description && <p className="mt-3 text-lg text-ink/70">{description}</p>}
+            {sessionId && (
+              <p className="mt-4 break-all font-receipt text-xs uppercase text-ink/60">
+                {sessionLabel}: {sessionId.substring(0, 20)}…
               </p>
             )}
-          </>
-        )}
-
-        {sessionId && variant === 'error' && (
-          <p className="text-red-300 text-sm mb-4">Session ID: {sessionId.substring(0, 20)}...</p>
-        )}
-
-        {onRetry && variant === 'error' && (
-          <button
-            type="button"
-            onClick={onRetry}
-            className="mt-2 px-6 py-3 bg-white text-red-700 font-bold border border-red-200 hover:bg-red-50 transition-colors"
-          >
-            {retryLabel}
-          </button>
-        )}
-
-        {children}
-      </div>
+            {onRetry && (
+              <button
+                type="button"
+                onClick={onRetry}
+                className="mt-6 flex min-h-[44px] w-full items-center justify-center bg-ink px-5 font-receipt text-sm font-medium uppercase text-paper-white transition-colors hover:bg-brand-navy"
+              >
+                {retryLabel}
+              </button>
+            )}
+            {children}
+          </div>
+          <div className="mk-tear-b h-3 bg-paper-white" aria-hidden />
+        </div>
+      )}
     </div>
   );
 }

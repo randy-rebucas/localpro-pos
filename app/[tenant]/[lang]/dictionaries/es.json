@@ -422,6 +422,7 @@
     "shiftActive": "Turno activo"
   },
   "customerDisplay": {
+    "paidStamp": "Pagado",
     "noSessionFound": "Sesión No Encontrada",
     "noSessionMessage": "Por favor abra esta página con un ID de sesión válido",
     "connectionError": "Error de Conexión",
@@ -2586,6 +2587,22 @@
     "displayCurrencies": "Monedas de Visualización"
   },
   "subscription": {
+    "noPermission": "No tiene permiso para administrar la suscripción. Rol requerido: administrador o superior.",
+    "couponCode": "Código de cupón",
+    "couponCodePlaceholder": "Opcional",
+    "apply": "Aplicar",
+    "applied": "Aplicado",
+    "couponApplied": "Cupón aplicado",
+    "off": "de descuento",
+    "couponInvalid": "Código de cupón no válido",
+    "couponValidateFailed": "No se pudo validar el cupón",
+    "openingPayPal": "Abriendo PayPal…",
+    "paypalLinkMissing": "PayPal no devolvió una página de pago. Inténtelo de nuevo.",
+    "stampVoid": "Anulado",
+    "stampDeclined": "Rechazado",
+    "stampPaid": "Pagado",
+    "goToDashboard": "Ir al Panel",
+    "unknownActivationError": "Error desconocido del servidor.",
     "upgradeTitle": "Mejore su Suscripción",
     "upgradeMessage": "Elija un plan que se adapte a las necesidades de su negocio.",
     "chooseBilling": "Elija el Ciclo de Facturación",
@@ -2632,14 +2649,14 @@
     "paymentFailedMessage": "Su pago no pudo ser procesado. Por favor intente nuevamente o contacte soporte.",
     "tryAgain": "Intentar de Nuevo",
     "processingPayment": "Procesando Pago",
-    "activatingSubscription": "Por favor espere mientras activamos su suscripcion...",
+    "activatingSubscription": "Por favor espere mientras activamos su suscripción...",
     "paymentSuccess": "Pago Exitoso!",
-    "subscriptionActivated": "Su suscripcion ha sido activada exitosamente.",
-    "activationFailed": "Activacion Fallida",
-    "activationFailedMessage": "Hubo un problema al activar su suscripcion. Por favor contacte soporte.",
+    "subscriptionActivated": "Su suscripción ha sido activada exitosamente.",
+    "activationFailed": "Activación Fallida",
+    "activationFailedMessage": "Hubo un problema al activar su suscripción. Por favor contacte soporte.",
     "paymentCancelled": "Pago Cancelado",
-    "paymentCancelledMessage": "Su pago fue cancelado. No se han realizado cambios en su suscripcion.",
-    "backToSubscription": "Volver a Suscripcion"
+    "paymentCancelledMessage": "Su pago fue cancelado. No se han realizado cambios en su suscripción.",
+    "backToSubscription": "Volver a Suscripción"
   },
   "documentation": {
     "tableOfContents": "Tabla de Contenidos",

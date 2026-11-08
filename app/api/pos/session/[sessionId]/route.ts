@@ -39,6 +39,7 @@ export async function GET(
         taxAmount: session.taxAmount,
         taxRate: session.taxRate,
         taxLabel: session.taxLabel,
+        taxIncluded: !!session.taxIncluded,
         tip: session.tip,
         total: session.total,
         paymentMethod: session.paymentMethod,
@@ -125,6 +126,7 @@ export async function POST(
               taxAmount: data?.taxAmount,
               taxRate: data?.taxRate,
               taxLabel: data?.taxLabel,
+              taxIncluded: !!data?.taxIncluded,
               tip: data?.tip || 0,
               total: data?.total || 0,
               paymentMethod: data?.paymentMethod || null,
@@ -142,6 +144,7 @@ export async function POST(
         if (data.taxAmount != null) updates.taxAmount = data.taxAmount;
         if (data.taxRate != null) updates.taxRate = data.taxRate;
         if (data.taxLabel != null) updates.taxLabel = data.taxLabel;
+        if (data.taxIncluded != null) updates.taxIncluded = !!data.taxIncluded;
         if (data.total != null) updates.total = data.total;
       } else if (action === 'update-discount' && data) {
         updates.discount = data.discount;
@@ -161,6 +164,7 @@ export async function POST(
         updates.taxAmount = 0;
         updates.taxRate = undefined;
         updates.taxLabel = undefined;
+        updates.taxIncluded = false;
         updates.tip = 0;
         updates.total = 0;
         updates.paymentMethod = null;
@@ -170,7 +174,7 @@ export async function POST(
       if (action === 'update-cart') {
         // Auto-create session if it doesn't exist (handles race condition where cart syncs before init completes)
         const insertDefaults: Record<string, unknown> = {
-          cart: [], subtotal: 0, discount: null, taxAmount: 0, taxRate: 0, taxLabel: 'Tax',
+          cart: [], subtotal: 0, discount: null, taxAmount: 0, taxRate: 0, taxLabel: 'Tax', taxIncluded: false,
           tip: 0, total: 0, paymentMethod: null, paymentStatus: 'pending',
         };
         for (const key of Object.keys(updates)) delete insertDefaults[key];
@@ -201,6 +205,7 @@ export async function POST(
         taxAmount: session.taxAmount,
         taxRate: session.taxRate,
         taxLabel: session.taxLabel,
+        taxIncluded: !!session.taxIncluded,
         tip: session.tip,
         total: session.total,
         paymentMethod: session.paymentMethod,

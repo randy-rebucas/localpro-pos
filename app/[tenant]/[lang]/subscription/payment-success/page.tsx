@@ -1,12 +1,10 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { getDictionaryClient } from '../../dictionaries-client';
-import { CheckCircle } from 'lucide-react';
-import PageLoading from '@/components/ui/PageLoading';
-import LoadingSpinner from '@/components/ui/LoadingSpinner';
-import ErrorState from '@/components/ui/ErrorState';
+import StatusSlip, { StatusLoading, slipPrimaryKey, slipSecondaryKey } from '@/components/StatusSlip';
+import { checkoutAmountCode, clearStoredCheckout, readStoredCheckout } from '@/components/subscription/storedCheckout';
 import type { TranslationDict } from '@/types/dictionary';
 
 export default function PaymentSuccessPage() {
@@ -19,35 +17,30 @@ export default function PaymentSuccessPage() {
   const [activating, setActivating] = useState(true);
   const [success, setSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  // Read before activation clears it
+  const [amountCode] = useState(() => (typeof window === 'undefined' ? '--' : checkoutAmountCode(readStoredCheckout())));
+  // Development runs effects twice; two captures of one order would race and
+  // could report a failure for a payment that went through.
+  const startedRef = useRef(false);
 
   const orderId = searchParams.get('orderId') || searchParams.get('token');
 
   const activateSubscription = useCallback(async () => {
+    const subDict = dict?.subscription;
+    setActivating(true);
     if (!orderId) {
       setActivating(false);
-      setErrorMsg(dict?.subscription?.missingOrderId || 'Missing PayPal order ID.');
+      setErrorMsg(subDict?.missingOrderId || 'Missing PayPal order ID.');
       return;
     }
 
-    let planId: string | null = null;
-    let billingCycle: string | null = null;
-    let couponCode: string | null = null;
-    const planData = localStorage.getItem('paypal_subscription_plan');
-    if (planData) {
-      const parsed = JSON.parse(planData);
-      planId = parsed.planId;
-      billingCycle = parsed.billingCycle;
-      couponCode = parsed.couponCode || null;
-    } else {
-      planId = searchParams.get('planId');
-      billingCycle = searchParams.get('billingCycle') || 'monthly';
-    }
+    const stored = readStoredCheckout();
+    const planId = stored?.planId ?? searchParams.get('planId');
+    const billingCycle = stored?.billingCycle ?? (searchParams.get('billingCycle') || 'monthly');
+    const couponCode = stored?.couponCode ?? null;
 
     if (!planId) {
-      setErrorMsg(
-        dict?.subscription?.missingPlanId ||
-          'Plan ID not found. Please try selecting a plan again.'
-      );
+      setErrorMsg(subDict?.missingPlanId || 'Plan ID not found. Please try selecting a plan again.');
       setActivating(false);
       return;
     }
@@ -68,14 +61,14 @@ export default function PaymentSuccessPage() {
       if (data.success) {
         setSuccess(true);
         setErrorMsg(null);
-        localStorage.removeItem('paypal_subscription_plan');
+        clearStoredCheckout();
         router.replace(`/${tenant}/${lang}/admin`);
         return;
       }
-      setErrorMsg(data.error || 'Unknown backend error.');
+      setErrorMsg(data.error || (subDict as Record<string, string | undefined> | undefined)?.unknownActivationError || 'Unknown backend error.');
     } catch (err) {
       console.error('Error activating subscription:', err);
-      setErrorMsg(dict?.subscription?.activationFailedMessage || 'Activation failed.');
+      setErrorMsg(subDict?.activationFailedMessage || 'Activation failed.');
     } finally {
       setActivating(false);
     }
@@ -86,65 +79,55 @@ export default function PaymentSuccessPage() {
   }, [lang]);
 
   useEffect(() => {
-    if (dict) {
+    if (dict && !startedRef.current) {
+      startedRef.current = true;
       activateSubscription();
     }
   }, [dict, activateSubscription]);
 
-  if (!dict) {
-    return <PageLoading label="Loading..." />;
+  const subDict = (dict?.subscription ?? {}) as Record<string, string | undefined>;
+
+  if (!dict || activating) {
+    return (
+      <StatusLoading
+        label={dict ? subDict.activatingSubscription || 'Please wait while we activate your subscription...' : 'Loading...'}
+      />
+    );
   }
 
-  const subDict = dict.subscription ?? {};
+  const dashboard = () => router.push(`/${tenant}/${lang}/admin`);
+
+  if (success) {
+    return (
+      <StatusSlip
+        code={amountCode}
+        stamp={subDict.stampPaid || 'Paid'}
+        title={subDict.paymentSuccess || 'Payment Successful!'}
+        message={subDict.subscriptionActivated || 'Your subscription has been activated successfully.'}
+      >
+        <button type="button" onClick={dashboard} className={slipPrimaryKey}>
+          {subDict.goToDashboard || 'Go to Dashboard'}
+        </button>
+      </StatusSlip>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-white border border-gray-300 p-8 text-center">
-        {activating ? (
-          <>
-            <LoadingSpinner size="lg" className="mb-6" />
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">
-              {subDict.processingPayment || 'Processing Payment'}
-            </h1>
-            <p className="text-gray-500 text-sm">
-              {subDict.activatingSubscription ||
-                'Please wait while we activate your subscription...'}
-            </p>
-          </>
-        ) : success ? (
-          <>
-            <div className="inline-flex p-4 border border-green-200 bg-green-50 mb-6">
-              <CheckCircle className="h-10 w-10 text-green-600" />
-            </div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">
-              {subDict.paymentSuccess || 'Payment Successful!'}
-            </h1>
-            <p className="text-gray-500 text-sm mb-8">
-              {subDict.subscriptionActivated ||
-                'Your subscription has been activated successfully.'}
-            </p>
-            <button
-              type="button"
-              onClick={() => router.push(`/${tenant}/${lang}/admin`)}
-              className="w-full py-2 px-4 bg-brand text-white font-medium hover:bg-brand-hover transition-colors border border-brand-hover"
-            >
-              {dict.admin?.dashboard || 'Go to Dashboard'}
-            </button>
-          </>
-        ) : (
-          <ErrorState
-            title={subDict.activationFailed || 'Activation Failed'}
-            description={
-              errorMsg ||
-              subDict.activationFailedMessage ||
-              'There was an issue activating your subscription. Please contact support.'
-            }
-            onRetry={activateSubscription}
-            retryLabel={subDict.tryAgain || 'Try Again'}
-            compact
-          />
-        )}
-      </div>
-    </div>
+    <StatusSlip
+      code={amountCode}
+      title={subDict.activationFailed || 'Activation Failed'}
+      message={
+        errorMsg ||
+        subDict.activationFailedMessage ||
+        'There was an issue activating your subscription. Please contact support.'
+      }
+    >
+      <button type="button" onClick={activateSubscription} className={slipPrimaryKey}>
+        {subDict.tryAgain || 'Try Again'}
+      </button>
+      <button type="button" onClick={dashboard} className={slipSecondaryKey}>
+        {subDict.goToDashboard || 'Go to Dashboard'}
+      </button>
+    </StatusSlip>
   );
 }

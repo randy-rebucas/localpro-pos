@@ -16,6 +16,8 @@ export interface SessionData {
   taxAmount?: number;
   taxRate?: number;
   taxLabel?: string;
+  /** True when prices already include the tax, so it is shown but not added. */
+  taxIncluded?: boolean;
   tip: number;
   total: number;
   paymentMethod: string | null;
@@ -63,7 +65,8 @@ function isValidSessionData(data: unknown): data is SessionData {
     typeof obj.total === 'number' &&
     (obj.taxAmount === undefined || typeof obj.taxAmount === 'number') &&
     (obj.taxRate === undefined || typeof obj.taxRate === 'number') &&
-    (obj.taxLabel === undefined || typeof obj.taxLabel === 'string')
+    (obj.taxLabel === undefined || typeof obj.taxLabel === 'string') &&
+    (obj.taxIncluded === undefined || obj.taxIncluded === null || typeof obj.taxIncluded === 'boolean')
   );
 }
 
