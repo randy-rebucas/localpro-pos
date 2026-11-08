@@ -29,6 +29,7 @@ import {
 } from '@/hooks/useTransactionsCatalog';
 import type { TranslationDict } from '@/types/dictionary';
 import { receiptStoreInfo } from '@/lib/receipt-store-info';
+import { getTenantDateString } from '@/lib/timezone';
 
 type Transaction = CatalogTransaction;
 type Expense = CatalogExpense;
@@ -197,7 +198,8 @@ export default function TransactionsWorkspace({ requireView = false }: Transacti
   const [expenseName, setExpenseName] = useState('');
   const [expenseDescription, setExpenseDescription] = useState('');
   const [expenseAmount, setExpenseAmount] = useState('');
-  const [expenseDate, setExpenseDate] = useState(() => new Date().toISOString().slice(0, 10));
+  // Store day, not the UTC day (seeded with the default zone; reset uses the store's)
+  const [expenseDate, setExpenseDate] = useState(() => getTenantDateString());
   const [expensePayment, setExpensePayment] = useState<'cash' | 'card' | 'digital' | 'other'>('cash');
   const [expenseNotes, setExpenseNotes] = useState('');
   const [expenseLoading, setExpenseLoading] = useState(false);
@@ -226,6 +228,8 @@ export default function TransactionsWorkspace({ requireView = false }: Transacti
   const canVoid = canAccess('transactions.edit');
   const canExport = canAccess('reports.view');
   const canView = canAccess('transactions.view');
+  // Manual entry is its own permission; hide the key instead of failing with a 403 after the form
+  const canCreateManual = canAccess('transactions.create_manual');
 
   const {
     items,
@@ -415,7 +419,7 @@ export default function TransactionsWorkspace({ requireView = false }: Transacti
           name: expenseName.trim(),
           description: expenseDescription.trim(),
           amount: parsedAmount,
-          date: expenseDate || new Date().toISOString(),
+          date: expenseDate || getTenantDateString(tenantSettings?.timezone),
           paymentMethod: expensePayment,
           notes: expenseNotes.trim() || undefined,
         }),
@@ -539,7 +543,7 @@ export default function TransactionsWorkspace({ requireView = false }: Transacti
     setExpenseName('');
     setExpenseDescription('');
     setExpenseAmount('');
-    setExpenseDate(new Date().toISOString().slice(0, 10));
+    setExpenseDate(getTenantDateString(tenantSettings?.timezone));
     setExpensePayment('cash');
     setExpenseNotes('');
     setExpenseError('');
@@ -762,7 +766,7 @@ export default function TransactionsWorkspace({ requireView = false }: Transacti
               ? undefined
               : viewType === 'expenses'
               ? (canManageExpenses ? { label: txDict.addExpense || 'Add Expense', onClick: openExpenseModal } : undefined)
-              : { label: txDict.addManual || 'Add Transaction', onClick: openManualModal }
+              : (canCreateManual ? { label: txDict.addManual || 'Add Transaction', onClick: openManualModal } : undefined)
           }
           className="bg-paper-white text-ink"
         />
@@ -929,6 +933,7 @@ export default function TransactionsWorkspace({ requireView = false }: Transacti
                   <span className="sm:hidden">{txDict?.expense || 'Expense'}</span>
                 </button>
               )}
+              {canCreateManual && (
               <button
                 type="button"
                 onClick={openManualModal}
@@ -938,6 +943,7 @@ export default function TransactionsWorkspace({ requireView = false }: Transacti
                 <span className="hidden sm:inline">{txDict?.addManual || 'Add Transaction'}</span>
                 <span className="sm:hidden">{txDict?.sale || 'Sale'}</span>
               </button>
+              )}
             </div>
           </div>
 
@@ -1492,7 +1498,20 @@ export default function TransactionsWorkspace({ requireView = false }: Transacti
             <div className="space-y-1 border-b border-dashed border-ink/30 pb-3 font-receipt text-sm">
               <ReceiptRow label={txDict.date} value={<FormattedDate date={adjustTransaction.createdAt} includeTime={true} />} />
               <ReceiptRow label={txDict.items} value={adjustTransaction.items.length} />
-              <ReceiptRow strong label={dict.common.total} value={<Currency amount={adjustTransaction.total} />} />
+              {(adjustTransaction.refundedAmount ?? 0) > 0 ? (
+                <>
+                  {/* The server refunds what is left (total − already refunded); show that, so staff hand back the right amount */}
+                  <ReceiptRow label={dict.common.total} value={<Currency amount={adjustTransaction.total} />} />
+                  <ReceiptRow label={txDict?.alreadyRefunded || 'Already refunded'} value={<Currency amount={-(adjustTransaction.refundedAmount ?? 0)} />} />
+                  <ReceiptRow
+                    strong
+                    label={txDict?.refundDue || 'To refund'}
+                    value={<Currency amount={Math.max(0, Math.round((adjustTransaction.total - (adjustTransaction.refundedAmount ?? 0)) * 100) / 100)} />}
+                  />
+                </>
+              ) : (
+                <ReceiptRow strong label={dict.common.total} value={<Currency amount={adjustTransaction.total} />} />
+              )}
             </div>
             {!adjustSuccess ? (
               <>

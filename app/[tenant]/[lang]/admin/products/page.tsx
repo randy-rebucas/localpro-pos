@@ -19,8 +19,10 @@ import SlipPager from '@/components/ui/SlipPager';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { showToast } from '@/lib/toast';
 import { useConfirm } from '@/lib/confirm';
-import { getBusinessTypeConfig, getAllowedProductTypes } from '@/lib/business-types'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import { getBusinessTypeConfig } from '@/lib/business-types';
 import { getBusinessType } from '@/lib/business-type-helpers';
+// Variation products keep their stock on the variations; the main figure is unused there
+import { productStockTotal } from '@/lib/product-variations';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
   Barcode, Check, Download, ImageUp, Package, Pencil, Plus, RefreshCw, RotateCcw, Search, Trash2, Upload, X,
@@ -136,7 +138,7 @@ export default function ProductsPage() {
     fetchCategories,
     deleteProduct,
     bulkUpdateProducts,
-  } = useProductsList(tenant);
+  } = useProductsList(tenant, dict);
 
   const loadProducts = useCallback(() => {
     fetchProducts({
@@ -310,12 +312,15 @@ export default function ProductsPage() {
       if (selectedProducts.size > 0) {
         exportProducts = products.filter((p) => selectedProducts.has(p._id));
       } else {
+        // Everything the list is showing: same search, tab and status, all pages
         const params = new URLSearchParams();
         if (debouncedSearch) params.set('search', debouncedSearch);
+        if (productFilter !== 'all') params.set('filter', productFilter);
+        params.set('isActive', statusFilter === 'active' ? 'true' : statusFilter === 'inactive' ? 'false' : 'all');
         const res = await fetch(`/api/products?${params}`, { credentials: 'include' });
         const data = await res.json();
         if (!data.success) {
-          throw new Error(data.error || 'Failed to fetch products');
+          throw new Error(data.error || dict.products?.exportError || 'Export failed');
         }
         exportProducts = data.data || [];
       }
@@ -618,7 +623,7 @@ export default function ProductsPage() {
                 <ul className="divide-y divide-dashed divide-ink/20">
                   {products.map((product) => {
                     const selected = selectedProducts.has(product._id);
-                    const low = product.trackInventory && product.stock < (product.lowStockThreshold || 10);
+                    const low = product.trackInventory && productStockTotal(product) <= (product.lowStockThreshold || 10);
                     const category = typeof product.categoryId === 'object' && product.categoryId?.name ? product.categoryId.name : product.category;
                     return (
                       <li key={product._id} className={`px-4 pb-1 pt-3 ${selected ? 'bg-[#8fe3d0]/25' : ''}`}>
@@ -646,7 +651,7 @@ export default function ProductsPage() {
                           <div className="shrink-0 text-right font-receipt">
                             <p className="text-sm font-semibold"><Currency amount={product.price} /></p>
                             <p className={`text-xs ${low ? 'font-semibold text-stamp' : 'text-ink/60'}`}>
-                              {dict.admin?.stock || 'Stock'} {product.trackInventory ? product.stock : '∞'}
+                              {dict.admin?.stock || 'Stock'} {product.trackInventory ? productStockTotal(product) : '∞'}
                             </p>
                           </div>
                         </div>
@@ -684,7 +689,7 @@ export default function ProductsPage() {
                   <tbody className="divide-y divide-dashed divide-ink/20">
                     {products.map((product) => {
                       const selected = selectedProducts.has(product._id);
-                      const low = product.trackInventory && product.stock < (product.lowStockThreshold || 10);
+                      const low = product.trackInventory && productStockTotal(product) <= (product.lowStockThreshold || 10);
                       return (
                         <tr key={product._id} className={`transition-colors ${selected ? 'bg-[#8fe3d0]/25' : 'hover:bg-paper'}`}>
                           <td className="w-12 py-1 pl-2 pr-0 align-middle">
@@ -749,7 +754,7 @@ export default function ProductsPage() {
                             <Currency amount={product.price} />
                           </td>
                           <td className={`${TD} whitespace-nowrap text-right ${low ? 'font-semibold text-stamp' : ''}`}>
-                            {product.trackInventory ? product.stock : '∞'}
+                            {product.trackInventory ? productStockTotal(product) : '∞'}
                           </td>
                           <td className="whitespace-nowrap px-2 py-1 text-right">
                             {renderActions(product)}
@@ -1353,7 +1358,7 @@ function ProductModal({
                     updateFormData({ allergens });
                   }}
                   className={INPUT}
-                  placeholder="e.g., gluten, dairy, nuts"
+                  placeholder={dict.products?.allergensPlaceholder || 'e.g., gluten, dairy, nuts'}
                 />
               </div>
 
@@ -1416,7 +1421,7 @@ function ProductModal({
                             mods[gi] = { ...mods[gi], name: e.target.value };
                             updateModifiers(mods);
                           }}
-                          placeholder="Group name (e.g. Temperature)"
+                          placeholder={dict.products?.modifierGroupPlaceholder || 'Group name (e.g. Temperature)'}
                           aria-label={dict.products?.modifierGroups || 'Modifier group name'}
                           className={`${INPUT_BASE} min-w-0 flex-1`}
                         />
@@ -1441,8 +1446,8 @@ function ProductModal({
                             updateModifiers(mods);
                           }}
                           className={`${ROW_KEY} hover:text-stamp`}
-                          title="Remove group"
-                          aria-label="Remove group"
+                          title={dict.products?.removeModifierGroup || 'Remove group'}
+                          aria-label={dict.products?.removeModifierGroup || 'Remove group'}
                         >
                           <X className={ICON} strokeWidth={1.75} aria-hidden />
                         </button>
@@ -1461,8 +1466,8 @@ function ProductModal({
                                 mods[gi] = { ...mods[gi], options: opts };
                                 updateModifiers(mods);
                               }}
-                              placeholder="Option (e.g. Rare)"
-                              aria-label="Option name"
+                              placeholder={dict.products?.modifierOptionPlaceholder || 'Option (e.g. Rare)'}
+                              aria-label={dict.products?.modifierOptionName || 'Option name'}
                               className={`${INPUT_BASE} min-w-0 flex-1`}
                             />
                             <span className="flex-shrink-0 font-receipt text-xs text-ink/50">+{currencySymbol}</span>
@@ -1479,7 +1484,7 @@ function ProductModal({
                                 updateModifiers(mods);
                               }}
                               placeholder="0.00"
-                              aria-label="Option price"
+                              aria-label={dict.products?.modifierOptionPrice || 'Option price'}
                               className={`${INPUT_BASE} w-24 font-receipt`}
                             />
                             <button
@@ -1492,8 +1497,8 @@ function ProductModal({
                                 updateModifiers(mods);
                               }}
                               className={`${ROW_KEY} hover:text-stamp`}
-                              title="Remove option"
-                              aria-label="Remove option"
+                              title={dict.products?.removeModifierOption || 'Remove option'}
+                              aria-label={dict.products?.removeModifierOption || 'Remove option'}
                             >
                               <X className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
                             </button>
@@ -1615,7 +1620,7 @@ function ProductModal({
                     updateFormData({ equipmentRequired: equipment });
                   }}
                   className={INPUT}
-                  placeholder="e.g., scissors, clippers, styling chair"
+                  placeholder={dict.products?.equipmentPlaceholder || 'e.g., scissors, clippers, styling chair'}
                 />
               </div>
             </div>
@@ -1776,7 +1781,7 @@ function BulkRestockModal({
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium">{product.name}</p>
                 <p className="font-receipt text-xs text-ink/60">
-                  {product.sku || '-'} · {dict.admin?.stock || 'Stock'}: {product.trackInventory ? product.stock : '∞'}
+                  {product.sku || '-'} · {dict.admin?.stock || 'Stock'}: {product.trackInventory ? productStockTotal(product) : '∞'}
                 </p>
               </div>
               {product.hasVariations ? (

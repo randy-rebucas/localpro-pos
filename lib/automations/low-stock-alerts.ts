@@ -71,11 +71,13 @@ export async function sendLowStockAlerts(
         }
 
         // Get low stock products
+        // options.threshold overrides; otherwise per-product thresholds, then the store's
         const threshold = options.threshold ?? tenantSettings?.lowStockThreshold ?? 10;
         const lowStockProducts = await getLowStockProducts(
           tenant._id.toString(),
           undefined,
-          threshold
+          options.threshold,
+          tenantSettings?.lowStockThreshold ?? 10
         );
 
         if (lowStockProducts.length === 0) {

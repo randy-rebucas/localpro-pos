@@ -8,6 +8,9 @@ import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
+import { getTenantSettingsById } from '@/lib/tenant';
+import { tenantDayEdge } from '@/lib/timezone';
+import { expenseDateFromInput } from '@/lib/expense-date';
 
 export async function GET(request: NextRequest) {
   try {
@@ -24,9 +27,11 @@ export async function GET(request: NextRequest) {
     const query: any = { tenantId, isActive: { $ne: false } }; // eslint-disable-line @typescript-eslint/no-explicit-any
 
     if (startDate || endDate) {
+      // Picked days run from the start of startDate to the end of endDate at the store
+      const timezone = (await getTenantSettingsById(tenantId))?.timezone;
       query.date = {};
-      if (startDate) query.date.$gte = new Date(startDate);
-      if (endDate) query.date.$lte = new Date(endDate);
+      if (startDate) query.date.$gte = tenantDayEdge(startDate, 'start', timezone);
+      if (endDate) query.date.$lte = tenantDayEdge(endDate, 'end', timezone);
     }
 
     if (name) {
@@ -101,12 +106,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const timezone = (await getTenantSettingsById(tenantId))?.timezone;
+    const expenseDate = date ? expenseDateFromInput(date, timezone) : new Date();
+    if (!expenseDate) {
+      return NextResponse.json({ success: false, error: t('validation.invalidDate', 'Invalid date') }, { status: 400 });
+    }
+
     const expense = await Expense.create({
       tenantId,
       name: name.trim(),
       description: description.trim(),
-      amount: amountValue,
-      date: date ? new Date(date) : new Date(),
+      amount: Math.round(amountValue * 100) / 100,
+      date: expenseDate,
       paymentMethod: paymentMethod || 'cash',
       receipt: receipt?.trim() || undefined,
       notes: notes?.trim() || undefined,

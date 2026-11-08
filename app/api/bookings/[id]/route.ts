@@ -14,6 +14,8 @@ import { requireBookingSchedulingAccess } from '@/lib/booking-scheduling-access'
 import { getClosedHolidayForDate } from '@/lib/holidays';
 import { isValidBookingStatusTransition, type BookingStatus } from '@/lib/bookings-helpers';
 import { logger } from '@/lib/logger';
+import { ensureBookingLock, takeBookingLock } from '@/lib/booking-lock';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 class BookingConflictError extends Error {
   conflicts: unknown;
@@ -210,10 +212,13 @@ export async function PUT(
     if (notes !== undefined) updateData.notes = notes;
     if (status !== undefined) updateData.status = status;
 
+    await ensureBookingLock(String(tenantId));
     const session = await mongoose.startSession();
     let updatedBooking;
     try {
       await session.withTransaction(async () => {
+        // Serialise with any other booking write for this store (see lib/booking-lock.ts)
+        await takeBookingLock(String(tenantId), session);
         if (startTime || duration) {
           const conflictingBookings = await Booking.find({
             tenantId,
@@ -353,9 +358,27 @@ export async function DELETE(
       );
     }
 
+    // Cancel follows the same status rules as an edit: a completed or no-show
+    // booking stays as it is.
+    if (booking.status !== 'cancelled' && !isValidBookingStatusTransition(booking.status as BookingStatus, 'cancelled')) {
+      return NextResponse.json(
+        { success: false, error: t('validation.bookingCannotBeCancelled', 'This booking can no longer be cancelled') },
+        { status: 400 }
+      );
+    }
+
+    const ip = request.headers.get('x-forwarded-for') ?? 'unknown';
+    const { allowed } = checkRateLimit(`write:bookings:${tenantId}:${ip}`, 30, 60_000);
+    if (!allowed) {
+      return NextResponse.json({ success: false, error: t('validation.tooManyRequests', 'Too many requests') }, { status: 429 });
+    }
+
     // Send cancellation notification if booking was confirmed
     if (booking.status === 'confirmed' || booking.status === 'pending') {
       try {
+        // The store's settings decide which channels are on (and the wording);
+        // without them the defaults have email and SMS off and nothing is sent.
+        const tenantSettings = await getTenantSettingsById(tenantId);
         await sendBookingCancellation({
           customerName: booking.customerName,
           customerEmail: booking.customerEmail,
@@ -366,7 +389,7 @@ export async function DELETE(
           staffName: booking.staffName,
           notes: booking.notes,
           bookingId: id,
-        });
+        }, tenantSettings || undefined);
       } catch (notificationError) {
         logger.error('Failed to send cancellation notification:', notificationError);
       }

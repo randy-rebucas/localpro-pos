@@ -7,9 +7,12 @@ import {
   ArrowRight, AlertTriangle, Receipt, Plus, BarChart2, Boxes,
   CalendarClock, Loader2, Store,
 } from 'lucide-react';
-import { LineTag, ReceiptRow } from '@/components/marketing/primitives';
+import { ReceiptRow } from '@/components/marketing/primitives';
+import { DARK_KEY_PRIMARY, ICON, KEY, RegisterPage } from '@/components/admin/register-ui';
+import Currency from '@/components/Currency';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
-import { getDefaultTenantSettings } from '@/lib/currency';
+import { formatCurrency, getDefaultTenantSettings } from '@/lib/currency';
+import { formatDate, formatDateTime } from '@/lib/formatting';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { getDictionaryClient } from '../dictionaries-client';
@@ -33,19 +36,29 @@ interface DashboardData {
   expiringCount: number;
 }
 
-function fmt(n: number | undefined | null, symbol: string) {
-  const safe = isFinite(Number(n)) ? Number(n) : 0;
-  return `${symbol ?? ''}${safe.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+/** How many of the latest sales the till roll shows. */
+const RECENT_LIMIT = 10;
+
+/** The hour of day (0–23) at the store, not in the browser's zone. */
+function storeHour(timeZone: string): number {
+  const read = (zone: string) =>
+    Number(new Intl.DateTimeFormat('en-US', { hour: 'numeric', hourCycle: 'h23', timeZone: zone }).format(new Date()));
+  try {
+    return read(timeZone);
+  } catch {
+    return read('Asia/Manila');
+  }
 }
 
-function greeting(dict: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-  const h = new Date().getHours();
+function greeting(dict: any, timeZone: string) { // eslint-disable-line @typescript-eslint/no-explicit-any
+  const h = storeHour(timeZone);
   if (h < 12) return dict?.admin?.goodMorning || 'Good morning';
   if (h < 17) return dict?.admin?.goodAfternoon || 'Good afternoon';
   return dict?.admin?.goodEvening || 'Good evening';
 }
 
-const KEY = 'flex min-h-[44px] items-center gap-2.5 px-3 font-receipt text-xs font-medium uppercase tracking-[0.08em] transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink';
+/** A function key on the dark page. */
+const FN_KEY = 'flex min-h-16 items-center gap-2.5 px-3 font-receipt text-xs font-medium uppercase tracking-[0.08em] transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8fe3d0]';
 
 export default function AdminDashboard() {
   const params = useParams();
@@ -56,11 +69,11 @@ export default function AdminDashboard() {
   const { subscriptionStatus } = useSubscription();
 
   const tenantSettings = settings || getDefaultTenantSettings();
-  const currencySymbol = tenantSettings.currencySymbol || '₱';
   const businessType = tenantSettings.businessType;
   const base = `/${tenant}/${lang}`;
   const dateLocale = lang === 'es' ? 'es' : 'en-PH';
   const timeZone = tenantSettings.timezone || 'Asia/Manila';
+  const count = new Intl.NumberFormat(dateLocale);
 
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -78,7 +91,7 @@ export default function AdminDashboard() {
     try {
       const [statsRes, txRes, productsRes, customersRes, lowStockRes] = await Promise.allSettled([
         fetch(`/api/transactions/stats?period=today`),
-        fetch(`/api/transactions?limit=10`),
+        fetch(`/api/transactions?limit=${RECENT_LIMIT}`),
         fetch(`/api/products?page=1&limit=1`),
         fetch(`/api/customers?limit=1`),
         fetch(`/api/inventory/low-stock`),
@@ -101,7 +114,7 @@ export default function AdminDashboard() {
       if (txRes.status === 'fulfilled' && txRes.value.ok) {
         const json = await txRes.value.json();
         if (json.success) {
-          recentTransactions = (json.data || []).slice(0, 10);
+          recentTransactions = (json.data || []).slice(0, RECENT_LIMIT);
         }
       }
       if (productsRes.status === 'fulfilled' && productsRes.value.ok) {
@@ -138,32 +151,32 @@ export default function AdminDashboard() {
 
   useEffect(() => { fetchDashboard(); }, [fetchDashboard]);
 
-  /** The LED readout. Peso amounts use the receipt face, since the LED font has no ₱ glyph. */
+  /** The LED readout. Money uses the receipt face, since the LED font has no currency glyphs. */
   const readouts = [
     {
       label: dict?.admin?.todaysRevenue || "Today's Revenue",
-      value: data ? fmt(data.todayRevenue, currencySymbol) : '—',
-      sub: `${data?.todayTransactions ?? 0} ${dict?.admin?.transactionsSuffix || 'transactions'}`,
+      value: data ? formatCurrency(data.todayRevenue || 0, tenantSettings) : '—',
+      sub: `${count.format(data?.todayTransactions ?? 0)} ${dict?.admin?.transactionsSuffix || 'transactions'}`,
       money: true,
       alert: false,
     },
     {
       label: dict?.admin?.transactionsToday || 'Transactions Today',
-      value: data ? data.todayTransactions.toLocaleString() : '—',
+      value: data ? count.format(data.todayTransactions) : '—',
       sub: dict?.admin?.completedSales || 'Completed sales',
       money: false,
       alert: false,
     },
     {
       label: dict?.admin?.totalProducts || 'Total Products',
-      value: data ? data.totalProducts.toLocaleString() : '—',
-      sub: data?.lowStockCount ? `${data.lowStockCount} ${dict?.admin?.lowStockSuffix || 'low stock'}` : (dict?.admin?.allStocked || 'All stocked'),
+      value: data ? count.format(data.totalProducts) : '—',
+      sub: data?.lowStockCount ? `${count.format(data.lowStockCount)} ${dict?.admin?.lowStockSuffix || 'low stock'}` : (dict?.admin?.allStocked || 'All stocked'),
       money: false,
       alert: !!data?.lowStockCount,
     },
     {
       label: dict?.admin?.totalCustomers || 'Total Customers',
-      value: data ? data.totalCustomers.toLocaleString() : '—',
+      value: data ? count.format(data.totalCustomers) : '—',
       sub: dict?.admin?.registeredAccounts || 'Registered accounts',
       money: false,
       alert: false,
@@ -184,203 +197,203 @@ export default function AdminDashboard() {
       ? (dict?.admin?.activeStatus || 'Active')
       : (dict?.admin?.inactiveStatus || 'Inactive');
 
+  const firstName = user?.name?.split(' ')[0] || dict?.admin?.greetingFallbackName || 'there';
+
   return (
-    <div className="mk-root pos-register min-h-full">
-      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
-        {/* Greeting */}
-        <div className="flex flex-wrap items-end justify-between gap-5">
-          <div className="min-w-0">
-            <LineTag no="00" className="mb-3 text-brand-hover">{todayStr}</LineTag>
-            <h1 className="text-5xl text-ink sm:text-6xl">
-              {greeting(dict)}, {user?.name?.split(' ')[0] || 'there'}
-            </h1>
-          </div>
-          <Link
-            href={base}
-            className="hidden items-center gap-2 bg-ink px-5 font-receipt text-sm font-semibold uppercase tracking-[0.08em] text-paper-white transition-colors hover:bg-brand-navy sm:flex"
-          >
-            <Store className="h-4 w-4" strokeWidth={1.75} aria-hidden />
-            {dict?.admin?.openPos || 'Open POS'}
-          </Link>
-        </div>
-
-        {/* Alerts, stamped on a strip of paper */}
-        {data && (data.lowStockCount > 0 || data.expiringCount > 0) && (
-          <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-            {data.lowStockCount > 0 && (
-              <Link
-                href={`${base}/admin/inventory`}
-                className="flex items-center gap-3 border-l-4 border-stamp bg-paper-white px-4 font-receipt text-sm text-ink hover:bg-white"
-              >
-                <AlertTriangle className="h-4 w-4 flex-shrink-0 text-stamp" strokeWidth={1.75} aria-hidden />
-                {(dict?.admin?.lowStockAlertMsg || '{count} product(s) low on stock').replace('{count}', String(data.lowStockCount))}
-                <ArrowRight className="ml-auto h-4 w-4 flex-shrink-0" strokeWidth={1.75} aria-hidden />
-              </Link>
-            )}
-            {data.expiringCount > 0 && (
-              <Link
-                href={`${base}/admin/inventory`}
-                className="flex items-center gap-3 border-l-4 border-stamp bg-paper-white px-4 font-receipt text-sm text-ink hover:bg-white"
-              >
-                <CalendarClock className="h-4 w-4 flex-shrink-0 text-stamp" strokeWidth={1.75} aria-hidden />
-                {(dict?.admin?.expiringAlertMsg || '{count} item(s) expiring soon').replace('{count}', String(data.expiringCount))}
-                <ArrowRight className="ml-auto h-4 w-4 flex-shrink-0" strokeWidth={1.75} aria-hidden />
-              </Link>
-            )}
-          </div>
-        )}
-
-        {/* Today's reading, as the till's LED display shows it */}
-        <section className="mt-8 grid grid-cols-2 bg-ink text-paper xl:grid-cols-4" aria-busy={loading}>
-          {readouts.map((r, i) => (
-            <div
-              key={r.label}
-              className={`min-w-0 border-dashed border-white/15 p-4 sm:p-5 ${i % 2 === 1 ? 'border-l' : ''} ${i >= 2 ? 'border-t xl:border-t-0' : ''} ${i === 2 ? 'xl:border-l' : ''}`}
+    <RegisterPage
+      tagNo="00"
+      tag={todayStr}
+      title={`${greeting(dict, timeZone)}, ${firstName}`}
+      side={
+        <Link href={base} className={`${DARK_KEY_PRIMARY} hidden sm:flex`}>
+          <Store className={ICON} strokeWidth={1.75} aria-hidden />
+          {dict?.admin?.openPos || 'Open POS'}
+        </Link>
+      }
+    >
+      {/* Alerts, stamped on strips of paper */}
+      {data && (data.lowStockCount > 0 || data.expiringCount > 0) && (
+        <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+          {data.lowStockCount > 0 && (
+            <Link
+              href={`${base}/admin/inventory`}
+              className="flex min-h-[44px] items-center gap-3 border-l-4 border-stamp bg-paper-white px-4 font-receipt text-sm text-ink hover:bg-white"
             >
-              <p className="font-receipt text-[11px] uppercase tracking-[0.14em] text-paper/60">{r.label}</p>
-              {loading ? (
-                <div className="mt-3 h-9 w-24 animate-pulse bg-white/10 motion-reduce:animate-none" />
-              ) : r.money ? (
-                <p className="mt-2 truncate font-receipt text-2xl font-semibold text-[#7df0d6] sm:text-3xl">{r.value}</p>
-              ) : (
-                <p className="mk-led-glow mt-2 font-led text-4xl leading-none text-[#7df0d6] sm:text-5xl">{r.value}</p>
-              )}
-              <p className={`mt-2 inline-block font-receipt text-xs ${r.alert ? 'bg-stamp px-1.5 py-0.5 text-paper-white' : 'text-paper/55'}`}>
-                {r.sub}
-              </p>
+              <AlertTriangle className={`${ICON} text-stamp`} strokeWidth={1.75} aria-hidden />
+              {(dict?.admin?.lowStockAlertMsg || '{count} product(s) low on stock').replace('{count}', String(data.lowStockCount))}
+              <ArrowRight className={`${ICON} ml-auto`} strokeWidth={1.75} aria-hidden />
+            </Link>
+          )}
+          {data.expiringCount > 0 && (
+            <Link
+              href={`${base}/admin/inventory`}
+              className="flex min-h-[44px] items-center gap-3 border-l-4 border-stamp bg-paper-white px-4 font-receipt text-sm text-ink hover:bg-white"
+            >
+              <CalendarClock className={`${ICON} text-stamp`} strokeWidth={1.75} aria-hidden />
+              {(dict?.admin?.expiringAlertMsg || '{count} item(s) expiring soon').replace('{count}', String(data.expiringCount))}
+              <ArrowRight className={`${ICON} ml-auto`} strokeWidth={1.75} aria-hidden />
+            </Link>
+          )}
+        </div>
+      )}
+
+      {/* Today's reading, as the till's LED display shows it */}
+      <section
+        className="mt-8 grid grid-cols-2 border border-white/10 bg-black/30 text-paper xl:grid-cols-4"
+        aria-busy={loading}
+        aria-label={dict?.admin?.todaysReading || "Today's reading"}
+      >
+        {readouts.map((r, i) => (
+          <div
+            key={r.label}
+            className={`min-w-0 border-dashed border-white/15 p-4 sm:p-5 ${i % 2 === 1 ? 'border-l' : ''} ${i >= 2 ? 'border-t xl:border-t-0' : ''} ${i === 2 ? 'xl:border-l' : ''}`}
+          >
+            <p className="font-receipt text-[11px] uppercase tracking-[0.14em] text-paper/60">{r.label}</p>
+            {loading ? (
+              <div className="mt-3 h-9 w-24 animate-pulse bg-white/10 motion-reduce:animate-none" />
+            ) : r.money ? (
+              <p className="mt-2 truncate font-receipt text-2xl font-semibold text-[#7df0d6] sm:text-3xl">{r.value}</p>
+            ) : (
+              <p className="mk-led-glow mt-2 font-led text-4xl leading-none text-[#7df0d6] sm:text-5xl">{r.value}</p>
+            )}
+            <p className={`mt-2 inline-block font-receipt text-xs ${r.alert ? 'bg-stamp px-1.5 py-0.5 text-paper-white' : 'text-paper/55'}`}>
+              {r.sub}
+            </p>
+          </div>
+        ))}
+      </section>
+
+      <div className="mt-8 grid grid-cols-1 gap-6 xl:grid-cols-3">
+        {/* Latest sales, printed as a till roll */}
+        <section className="min-w-0 xl:col-span-2">
+          <div className="bg-paper-white text-ink">
+            <div className="flex items-center justify-between gap-3 border-b border-dashed border-ink/30 px-4 py-3 sm:px-5">
+              <div className="min-w-0">
+                <h2 className="text-3xl">{dict?.admin?.recentTransactions || 'Recent Transactions'}</h2>
+                <p className="font-receipt text-xs text-ink/60">
+                  {(dict?.admin?.latestSalesHint || 'The last {count} sales').replace('{count}', String(RECENT_LIMIT))}
+                </p>
+              </div>
+              <Link
+                href={`${base}/admin/transactions`}
+                className="flex min-h-[44px] flex-shrink-0 items-center gap-1.5 whitespace-nowrap font-receipt text-xs font-medium uppercase tracking-[0.08em] text-brand-hover hover:underline"
+              >
+                {dict?.admin?.viewAll || 'View all'}
+                <ArrowRight className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+              </Link>
             </div>
-          ))}
+
+            {loading ? (
+              <div className="flex items-center justify-center py-14">
+                <Loader2 className="h-5 w-5 animate-spin text-ink/30 motion-reduce:animate-none" strokeWidth={1.75} aria-hidden />
+              </div>
+            ) : !data?.recentTransactions.length ? (
+              <div className="py-14 text-center">
+                <Receipt className="mx-auto mb-2 h-8 w-8 text-ink/20" strokeWidth={1.75} aria-hidden />
+                {/* The list is the latest sales of all time, so the empty state says none yet — not "none today" */}
+                <p className="font-receipt text-sm text-ink/60">{dict?.admin?.noSalesYet || 'No sales recorded yet'}</p>
+              </div>
+            ) : (
+              <>
+                <div className="hidden grid-cols-[minmax(0,1fr)_auto] gap-3 border-b border-ink/10 px-4 py-2 font-receipt text-[11px] uppercase tracking-[0.12em] text-ink/50 sm:grid sm:px-5">
+                  <span>{dict?.admin?.receiptCol || 'Receipt'} · {dict?.admin?.customerCol || 'Customer'} · {dict?.admin?.methodCol || 'Method'}</span>
+                  <span className="text-right">{dict?.admin?.amountCol || 'Amount'}</span>
+                </div>
+                <ul className="divide-y divide-dashed divide-ink/20">
+                  {data.recentTransactions.map(tx => {
+                    const customer = (typeof tx.customerId === 'object' && tx.customerId
+                      ? `${tx.customerId.firstName ?? ''} ${tx.customerId.lastName ?? ''}`.trim()
+                      : '') || (dict?.admin?.walkIn || 'Walk-in');
+                    return (
+                      <li key={tx._id} className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-3 px-4 py-3 sm:px-5">
+                        <div className="min-w-0">
+                          <p className="truncate font-receipt text-sm font-medium">
+                            {tx.receiptNumber || tx._id.slice(-6).toUpperCase()}
+                          </p>
+                          <p className="truncate text-sm text-ink/65">
+                            {customer}
+                            <span className="mx-1.5 text-ink/30">·</span>
+                            <span className="font-receipt text-xs uppercase">{tx.paymentMethod}</span>
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <Currency amount={tx.total || 0} className="whitespace-nowrap font-receipt text-sm font-semibold" />
+                          <p className="whitespace-nowrap font-receipt text-[11px] text-ink/50">
+                            {formatDateTime(tx.createdAt, tenantSettings)}
+                          </p>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </>
+            )}
+          </div>
+          <div className="mk-tear-b h-3 bg-paper-white" aria-hidden />
         </section>
 
-        <div className="mt-8 grid grid-cols-1 gap-6 xl:grid-cols-3">
-          {/* Recent transactions, printed as a till roll */}
-          <section className="min-w-0 drop-shadow-[0_1px_0_rgb(16_32_43/0.12)] xl:col-span-2">
-            <div className="bg-paper-white text-ink">
-              <div className="flex items-center justify-between gap-3 border-b border-dashed border-ink/30 px-4 py-3 sm:px-5">
-                <h2 className="text-3xl">{dict?.admin?.recentTransactions || 'Recent Transactions'}</h2>
-                <Link
-                  href={`${base}/admin/transactions`}
-                  className="flex flex-shrink-0 items-center gap-1.5 whitespace-nowrap font-receipt text-xs font-medium uppercase tracking-[0.08em] text-brand-hover hover:underline"
-                >
-                  {dict?.admin?.viewAll || 'View all'}
-                  <ArrowRight className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
-                </Link>
-              </div>
-
-              {loading ? (
-                <div className="flex items-center justify-center py-14">
-                  <Loader2 className="h-5 w-5 animate-spin text-ink/30 motion-reduce:animate-none" strokeWidth={1.75} aria-hidden />
-                </div>
-              ) : !data?.recentTransactions.length ? (
-                <div className="py-14 text-center">
-                  <Receipt className="mx-auto mb-2 h-8 w-8 text-ink/20" strokeWidth={1.75} aria-hidden />
-                  <p className="font-receipt text-sm text-ink/50">{dict?.admin?.noTransactionsToday || 'No transactions today'}</p>
-                </div>
-              ) : (
-                <>
-                  <div className="hidden grid-cols-[minmax(0,1fr)_auto] gap-3 border-b border-ink/10 px-4 py-2 font-receipt text-[11px] uppercase tracking-[0.12em] text-ink/50 sm:grid sm:px-5">
-                    <span>{dict?.admin?.receiptCol || 'Receipt'} · {dict?.admin?.customerCol || 'Customer'} · {dict?.admin?.methodCol || 'Method'}</span>
-                    <span className="text-right">{dict?.admin?.amountCol || 'Amount'}</span>
-                  </div>
-                  <ul className="divide-y divide-dashed divide-ink/20">
-                    {data.recentTransactions.map(tx => {
-                      const customer = (typeof tx.customerId === 'object' && tx.customerId
-                        ? `${tx.customerId.firstName ?? ''} ${tx.customerId.lastName ?? ''}`.trim()
-                        : '') || (dict?.admin?.walkIn || 'Walk-in');
-                      return (
-                        <li key={tx._id} className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-3 px-4 py-3 sm:px-5">
-                          <div className="min-w-0">
-                            <p className="truncate font-receipt text-sm font-medium">
-                              {tx.receiptNumber || tx._id.slice(-6).toUpperCase()}
-                            </p>
-                            <p className="truncate text-sm text-ink/65">
-                              {customer}
-                              <span className="mx-1.5 text-ink/30">·</span>
-                              <span className="font-receipt text-xs uppercase">{tx.paymentMethod}</span>
-                            </p>
-                          </div>
-                          <div className="text-right">
-                            <p className="whitespace-nowrap font-receipt text-sm font-semibold">{fmt(tx.total, currencySymbol)}</p>
-                            <p className="whitespace-nowrap font-receipt text-[11px] text-ink/50">
-                              {new Date(tx.createdAt).toLocaleString(dateLocale, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone })}
-                            </p>
-                          </div>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </>
-              )}
+        <div className="grid min-w-0 grid-cols-1 content-start gap-6 md:grid-cols-2 xl:grid-cols-1">
+          {/* Quick actions, as function keys */}
+          <section>
+            <h2 className="mb-3 text-3xl text-paper-white">{dict?.admin?.quickActionsTitle || 'Quick Actions'}</h2>
+            <div className="grid grid-cols-2 gap-px border border-white/15 bg-white/15">
+              {quickActions.map(a => {
+                const Icon = a.icon;
+                return (
+                  <Link
+                    key={a.href}
+                    href={a.href}
+                    className={`${FN_KEY} ${
+                      a.primary
+                        ? 'bg-brand text-ink hover:bg-[#8fe3d0]'
+                        : 'bg-brand-navy-deep text-paper hover:bg-white/10'
+                    }`}
+                  >
+                    <Icon className={ICON} strokeWidth={1.75} aria-hidden />
+                    <span className="min-w-0 [overflow-wrap:anywhere]">{a.label}</span>
+                  </Link>
+                );
+              })}
             </div>
-            <div className="mk-tear-b h-3 bg-paper-white" aria-hidden />
           </section>
 
-          <div className="grid min-w-0 grid-cols-1 content-start gap-6 md:grid-cols-2 xl:grid-cols-1">
-            {/* Quick actions, as function keys */}
+          {/* Plan, as receipt lines */}
+          {subscriptionStatus && (
             <section>
-              <h2 className="mb-3 text-3xl text-ink">{dict?.admin?.quickActionsTitle || 'Quick Actions'}</h2>
-              <div className="grid grid-cols-2 gap-px border border-ink bg-ink">
-                {quickActions.map(a => {
-                  const Icon = a.icon;
-                  return (
-                    <Link
-                      key={a.href}
-                      href={a.href}
-                      className={`${KEY} min-h-16! ${
-                        a.primary
-                          ? 'bg-brand text-ink hover:bg-[#8fe3d0]'
-                          : 'bg-paper-white text-ink hover:bg-paper'
-                      }`}
-                    >
-                      <Icon className="h-4 w-4 flex-shrink-0" strokeWidth={1.75} aria-hidden />
-                      <span className="min-w-0 [overflow-wrap:anywhere]">{a.label}</span>
-                    </Link>
-                  );
-                })}
-              </div>
-            </section>
-
-            {/* Plan, as receipt lines */}
-            {subscriptionStatus && (
-              <section className="drop-shadow-[0_1px_0_rgb(16_32_43/0.12)]">
-                <div className="bg-paper-white px-4 pb-4 pt-3 text-ink sm:px-5">
-                  <h2 className="border-b border-dashed border-ink/30 pb-3 text-3xl">{dict?.admin?.subscriptionLabel || 'Subscription'}</h2>
-                  <div className="mt-3 space-y-2 font-receipt text-sm">
-                    <ReceiptRow label={dict?.admin?.planLabel || 'Plan'} value={<span className="capitalize">{subscriptionStatus.planName || 'Free'}</span>} />
+              <div className="bg-paper-white px-4 pb-4 pt-3 text-ink sm:px-5">
+                <h2 className="border-b border-dashed border-ink/30 pb-3 text-3xl">{dict?.admin?.subscriptionLabel || 'Subscription'}</h2>
+                <div className="mt-3 space-y-2 font-receipt text-sm">
+                  <ReceiptRow label={dict?.admin?.planLabel || 'Plan'} value={<span className="capitalize">{subscriptionStatus.planName || 'Free'}</span>} />
+                  <ReceiptRow
+                    label={dict?.admin?.statusLabel || 'Status'}
+                    value={
+                      <span className={`px-1.5 py-0.5 text-xs font-semibold uppercase ${
+                        subscriptionStatus.isTrial ? 'bg-ink text-[#7df0d6]' : subscriptionStatus.isActive ? 'bg-brand text-ink' : 'bg-stamp text-paper-white'
+                      }`}>
+                        {statusText}
+                      </span>
+                    }
+                  />
+                  {businessType && (
+                    <ReceiptRow label={dict?.admin?.businessTypeLabel || 'Business Type'} value={<span className="capitalize">{businessType}</span>} />
+                  )}
+                  {subscriptionStatus.isTrial && subscriptionStatus.trialEndDate && (
                     <ReceiptRow
-                      label={dict?.admin?.statusLabel || 'Status'}
-                      value={
-                        <span className={`px-1.5 py-0.5 text-xs font-semibold uppercase ${
-                          subscriptionStatus.isTrial ? 'bg-ink text-[#7df0d6]' : subscriptionStatus.isActive ? 'bg-brand text-ink' : 'bg-stamp text-paper-white'
-                        }`}>
-                          {statusText}
-                        </span>
-                      }
+                      label={dict?.admin?.trialEnds || 'Trial ends'}
+                      value={formatDate(subscriptionStatus.trialEndDate, tenantSettings)}
+                      strong
                     />
-                    {businessType && (
-                      <ReceiptRow label={dict?.admin?.businessTypeLabel || 'Business Type'} value={<span className="capitalize">{businessType}</span>} />
-                    )}
-                    {subscriptionStatus.isTrial && subscriptionStatus.trialEndDate && (
-                      <ReceiptRow
-                        label={dict?.admin?.trialEnds || 'Trial ends'}
-                        value={new Date(subscriptionStatus.trialEndDate).toLocaleDateString(dateLocale, { month: 'short', day: 'numeric', timeZone })}
-                        strong
-                      />
-                    )}
-                  </div>
-                  <Link
-                    href={`${base}/admin/subscriptions`}
-                    className={`${KEY} mt-4 justify-center border border-ink text-ink hover:bg-ink hover:text-paper-white`}
-                  >
-                    {dict?.admin?.managePlan || 'Manage Plan'}
-                  </Link>
+                  )}
                 </div>
-                <div className="mk-tear-b h-3 bg-paper-white" aria-hidden />
-              </section>
-            )}
-          </div>
+                <Link href={`${base}/admin/subscriptions`} className={`${KEY} mt-4 w-full border-ink`}>
+                  {dict?.admin?.managePlan || 'Manage Plan'}
+                </Link>
+              </div>
+              <div className="mk-tear-b h-3 bg-paper-white" aria-hidden />
+            </section>
+          )}
         </div>
       </div>
-    </div>
+    </RegisterPage>
   );
 }

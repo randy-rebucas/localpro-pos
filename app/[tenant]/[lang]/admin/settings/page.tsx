@@ -427,7 +427,7 @@ export default function AdminSettingsPage() {
                   <div>
                     <label htmlFor="set-businessType" className={LABEL}>{s.businessType || 'Business Type'}</label>
                     <select id="set-businessType" value={form.businessType} onChange={e => set('businessType', e.target.value)} className={SELECT}>
-                      <option value="">{s.selectTypePlaceholder || 'Select type...'}</option>
+                      <option value="" disabled>{s.selectTypePlaceholder || 'Select type...'}</option>
                       {BUSINESS_TYPES.filter(t => isBusinessTypeSelectable(t.value, tenantSettings?.businessType)).map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                     </select>
                   </div>

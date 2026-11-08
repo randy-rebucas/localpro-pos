@@ -47,7 +47,7 @@ export async function sendDailySalesReport(
   const [emailSent, smsSent] = await Promise.all([
     email
       ? buildEmail(tenant, reading, businessDate, timezone, settings, companyName, dateLabel).then((message) =>
-        sendEmail({ to: email, subject: `Daily Sales Report - ${companyName} - ${dateLabel}`, message, type: 'email' })
+        sendEmail({ to: email, subject: `Daily Sales Report - ${companyName} - ${dateLabel}`, message, type: 'email', html: true })
       )
       : undefined,
     phone

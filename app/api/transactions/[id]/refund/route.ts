@@ -144,6 +144,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           [{
             tenantId,
             userId: openDrawer?.userId ?? authUser.userId,
+            // Same branch (and terminal) as the sale, so branch-filtered lists,
+            // exports and net sales include the refund
+            ...(transaction.branchId ? { branchId: transaction.branchId } : {}),
+            ...(transaction.terminalId ? { terminalId: transaction.terminalId } : {}),
             items: refundItems.map((item) => ({
               product: item.productId,
               name: item.name,

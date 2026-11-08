@@ -19,6 +19,40 @@ import { usePermissions } from '@/hooks/usePermissions';
 type Dict = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
 /** One figure on the display panel: LED for counts, printed type for money. */
+/**
+ * A number field that keeps what is being typed ("0", "0.", "0.2") instead of
+ * snapping to a fallback on every keystroke; the fallback only applies when the
+ * field is left empty or invalid.
+ */
+function NumberField({ value, onChange, fallback, integer = false, ...rest }: {
+  value: number;
+  onChange: (value: number) => void;
+  fallback: number;
+  integer?: boolean;
+} & Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'type'>) {
+  const [draft, setDraft] = useState(String(value));
+  const [focused, setFocused] = useState(false);
+  const parse = (text: string) => (integer ? parseInt(text, 10) : parseFloat(text));
+  return (
+    <input
+      {...rest}
+      type="number"
+      value={focused ? draft : String(value)}
+      onFocus={() => { setDraft(String(value)); setFocused(true); }}
+      onChange={(e) => {
+        setDraft(e.target.value);
+        const n = parse(e.target.value);
+        if (Number.isFinite(n) && n > 0) onChange(n);
+      }}
+      onBlur={() => {
+        setFocused(false);
+        const n = parse(draft);
+        onChange(Number.isFinite(n) && n > 0 ? n : fallback);
+      }}
+    />
+  );
+}
+
 function Readout({ label, children, led = false }: { label: string; children: React.ReactNode; led?: boolean }) {
   return (
     <div className="border-b border-r border-white/15 px-4 py-3">
@@ -123,14 +157,14 @@ export default function LoyaltyPage() {
               <fieldset disabled={!canManage} className="space-y-4">
                 <div>
                   <label htmlFor="loyalty-earn" className={LABEL}>{dict.loyalty?.pointsPerPeso || 'Points per ₱1 spent'}</label>
-                  <input
+                  <NumberField
                     id="loyalty-earn"
-                    type="number"
                     inputMode="decimal"
                     step="0.01"
                     min="0.01"
                     value={configForm.pointsPerPeso}
-                    onChange={e => updateConfigForm({ pointsPerPeso: parseFloat(e.target.value) || 1 })}
+                    fallback={1}
+                    onChange={(v) => updateConfigForm({ pointsPerPeso: v })}
                     className={`${INPUT} font-receipt`}
                   />
                   <p className={HINT}>{dict.loyalty?.pointsPerPesoHint || 'e.g. 1 = earn 1 pt per ₱1'}</p>
@@ -138,14 +172,14 @@ export default function LoyaltyPage() {
 
                 <div>
                   <label htmlFor="loyalty-value" className={LABEL}>{dict.loyalty?.pesoPerPoint || '₱ value per point'}</label>
-                  <input
+                  <NumberField
                     id="loyalty-value"
-                    type="number"
                     inputMode="decimal"
                     step="0.01"
                     min="0.01"
                     value={configForm.pesoPerPoint}
-                    onChange={e => updateConfigForm({ pesoPerPoint: parseFloat(e.target.value) || 0.1 })}
+                    fallback={0.1}
+                    onChange={(v) => updateConfigForm({ pesoPerPoint: v })}
                     className={`${INPUT} font-receipt`}
                   />
                   <p className={HINT}>{dict.loyalty?.pesoPerPointHint || 'e.g. 0.10 = 100 pts = ₱10'}</p>
@@ -153,14 +187,15 @@ export default function LoyaltyPage() {
 
                 <div>
                   <label htmlFor="loyalty-min" className={LABEL}>{dict.loyalty?.minRedemption || 'Minimum pts to redeem'}</label>
-                  <input
+                  <NumberField
                     id="loyalty-min"
-                    type="number"
                     inputMode="numeric"
                     min="1"
                     step="1"
+                    integer
                     value={configForm.minRedemption}
-                    onChange={e => updateConfigForm({ minRedemption: parseInt(e.target.value) || 100 })}
+                    fallback={100}
+                    onChange={(v) => updateConfigForm({ minRedemption: v })}
                     className={`${INPUT} font-receipt`}
                   />
                 </div>

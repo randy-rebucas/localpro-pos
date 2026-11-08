@@ -3,6 +3,9 @@
 import { useState, useCallback } from 'react';
 import { Expense } from './useExpensesList';
 import { type TranslationDict } from '@/types/dictionary';
+import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { getTenantDateString } from '@/lib/timezone';
+import { expenseDayString } from '@/lib/expense-date';
 
 export interface ExpenseFormData {
   name: string;
@@ -24,18 +27,22 @@ interface UseExpensesFormReturn {
   initializeForm: (expense: Expense) => void;
 }
 
-const emptyForm: ExpenseFormData = {
+// Today at the store (not the UTC day: before 08:00 in Manila that was yesterday),
+// worked out when the form opens rather than when the module loaded.
+const emptyForm = (timeZone?: string): ExpenseFormData => ({
   name: '',
   description: '',
   amount: '',
-  date: new Date().toISOString().split('T')[0],
+  date: getTenantDateString(timeZone),
   paymentMethod: 'cash',
   receipt: '',
   notes: '',
-};
+});
 
 export function useExpensesForm(dict?: TranslationDict | null): UseExpensesFormReturn {
-  const [formData, setFormDataState] = useState<ExpenseFormData>(emptyForm);
+  const { settings } = useTenantSettings();
+  const timeZone = settings?.timezone;
+  const [formData, setFormDataState] = useState<ExpenseFormData>(() => emptyForm(timeZone));
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const t = (key: string, fallback: string) => dict?.validation?.[key] || fallback;
@@ -45,22 +52,22 @@ export function useExpensesForm(dict?: TranslationDict | null): UseExpensesFormR
   }, []);
 
   const resetForm = useCallback(() => {
-    setFormDataState(emptyForm);
+    setFormDataState(emptyForm(timeZone));
     setError('');
-  }, []);
+  }, [timeZone]);
 
   const initializeForm = useCallback((expense: Expense) => {
     setFormDataState({
       name: expense.name,
       description: expense.description,
       amount: expense.amount.toString(),
-      date: new Date(expense.date).toISOString().split('T')[0],
+      date: expenseDayString(expense.date, timeZone),
       paymentMethod: expense.paymentMethod,
       receipt: expense.receipt || '',
       notes: expense.notes || '',
     });
     setError('');
-  }, []);
+  }, [timeZone]);
 
   const handleSubmit = useCallback(
     async (onSubmit: (data: ExpenseFormData) => Promise<true | string>) => {
@@ -108,7 +115,7 @@ export function useExpensesForm(dict?: TranslationDict | null): UseExpensesFormR
           setError(result);
         }
       } catch {
-        setError('An error occurred while saving');
+        setError(dict?.common?.errorWhileSaving || 'An error occurred while saving');
       } finally {
         setSubmitting(false);
       }

@@ -10,40 +10,10 @@ import { handleApiError } from '@/lib/error-handler';
 import { sendEmail, sendSMS } from '@/lib/notifications';
 import mongoose from 'mongoose';
 import { cacheWrap, TTL } from '@/lib/cache';
+import { isInSegment } from '@/lib/crm-segments';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 const SEND_BATCH_SIZE = 25;
-
-// Segment filter helpers (mirrors the /api/crm/segments logic)
-const LAPSED_DAYS = 90;
-const AT_RISK_DAYS = 30;
-const VIP_SPEND = 5000;
-const VIP_POINTS = 500;
-
-function matchesSegment(
-  segment: string,
-  c: { lastPurchaseDate?: Date; loyaltyPointsBalance?: number; totalSpent?: number },
-  orderCount: number
-): boolean {
-  if (segment === 'all') return true;
-  const now = Date.now();
-  const lastBuy = c.lastPurchaseDate ? new Date(c.lastPurchaseDate).getTime() : null;
-  const daysSince = lastBuy ? Math.floor((now - lastBuy) / 86400000) : null;
-
-  switch (segment) {
-    case 'vip':
-      return (c.totalSpent ?? 0) >= VIP_SPEND || (c.loyaltyPointsBalance ?? 0) >= VIP_POINTS || orderCount >= 20;
-    case 'lapsed':
-      return orderCount > 0 && daysSince !== null && daysSince > LAPSED_DAYS;
-    case 'at_risk':
-      return orderCount > 0 && daysSince !== null && daysSince > AT_RISK_DAYS && daysSince <= LAPSED_DAYS && orderCount < 5;
-    case 'new':
-      return orderCount > 0 && orderCount <= 2;
-    case 'regular':
-      return orderCount > 2 && (c.totalSpent ?? 0) < VIP_SPEND && (c.loyaltyPointsBalance ?? 0) < VIP_POINTS && orderCount < 20;
-    default:
-      return false;
-  }
-}
 
 export async function POST(
   request: NextRequest,
@@ -57,6 +27,12 @@ export async function POST(
     const { tenantId, user } = authResult;
     if (!(await hasTenantPermission(user.role, tenantId, 'crm.manage'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
+    }
+
+    // A send emails/texts every customer in the segment; a few per hour per store is plenty
+    const { allowed } = checkRateLimit(`crm:send:${tenantId}`, 5, 60 * 60_000);
+    if (!allowed) {
+      return NextResponse.json({ success: false, error: 'Too many campaigns sent recently. Try again later.' }, { status: 429 });
     }
 
     const { id } = await params;
@@ -100,14 +76,12 @@ export async function POST(
         { $group: { _id: '$customerId', orderCount: { $sum: 1 }, totalSpent: { $sum: '$total' } } },
       ])
     );
-    const orderCountMap = new Map<string, number>(
-      orderStats.filter((s) => s._id != null).map((s) => [String(s._id), s.orderCount])
+    const statsMap = new Map(
+      orderStats.filter((s) => s._id != null).map((s) => [String(s._id), { orderCount: s.orderCount, totalSpent: s.totalSpent }])
     );
 
-    const recipients = candidates.filter((c) => {
-      const orderCount = orderCountMap.get(String(c._id)) ?? 0;
-      return matchesSegment(campaign.segment, c, orderCount);
-    });
+    const now = new Date();
+    const recipients = candidates.filter((c) => isInSegment(campaign.segment, c, statsMap.get(String(c._id)), now));
 
     // Deliver via the existing multi-provider notification layer (lib/notifications.ts),
     // in small batches so we don't fire hundreds of provider calls at once.

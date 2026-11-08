@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { ITenantSettings } from '@/types/tenant';
 import { pickChangedSettings, useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { useMessages } from '@/hooks/useMessages';
 
 export interface MultiCurrencySettings {
   enabled: boolean;
@@ -14,6 +15,7 @@ export interface MultiCurrencySettings {
 }
 
 export const useMultiCurrencySettings = (tenant: string) => {
+  const t = useMessages();
   const { settings: contextSettings, ensureSettings, applySettings } = useTenantSettings();
   const [settings, setSettings] = useState<ITenantSettings | null>(null);
   const [loading, setLoading] = useState(true);
@@ -94,28 +96,36 @@ export const useMultiCurrencySettings = (tenant: string) => {
         } else {
           const errorMessage =
             res.status === 401 || res.status === 403
-              ? 'Unauthorized. Please login with admin account.'
-              : data.error || 'Failed to save settings';
+              ? t('admin.settingsForbidden', 'You do not have permission to change these settings.')
+              : data.error || t('admin.failedToSaveSettings', 'Failed to save settings');
           setMessage({ type: 'error', text: errorMessage });
           return { success: false, error: errorMessage };
         }
       } catch (error: unknown) {
-        if (error instanceof Error && error.name !== 'AbortError') {
+        // A timeout aborts too (the controller fires after 20s); only an
+        // unmount abort is silent.
+        const timedOut = error instanceof Error && error.name === 'AbortError' && !unmountedRef.current;
+        if (timedOut || (error instanceof Error && error.name !== 'AbortError')) {
           console.error('Error saving settings:', error);
-          const errorText = 'Failed to save settings. Please check your connection.';
+          const errorText = timedOut
+            ? t('common.requestTimedOut', 'The request timed out. Please try again.')
+            : t('admin.saveSettingsConnection', 'Failed to save settings. Please check your connection.');
           setMessage({ type: 'error', text: errorText });
           return { success: false, error: errorText };
         }
-        return { success: false, error: 'Request cancelled' };
+        return { success: false, error: '' };
       } finally {
         setSaving(false);
       }
     },
-    [tenant, contextSettings, applySettings]
+    [tenant, contextSettings, applySettings, t]
   );
 
+  const unmountedRef = useRef(false);
   useEffect(() => {
+    unmountedRef.current = false;
     return () => {
+      unmountedRef.current = true;
       abortControllerRef.current?.abort();
     };
   }, []);

@@ -26,14 +26,16 @@ export async function GET(request: NextRequest) {
     // Get tenant settings for default threshold
     const tenant = await Tenant.findById(tenantId).select('settings.lowStockThreshold').lean();
     const defaultThreshold = tenant?.settings?.lowStockThreshold ?? 10;
-    const finalThreshold = threshold !== undefined && !Number.isNaN(threshold) ? threshold : defaultThreshold;
+    // An explicit ?threshold= applies to every product; otherwise each product's
+    // own threshold wins and the store setting covers the rest
+    const override = threshold !== undefined && !Number.isNaN(threshold) ? threshold : undefined;
 
-    const lowStockProducts = await getLowStockProducts(tenantId, branchId, finalThreshold);
+    const lowStockProducts = await getLowStockProducts(tenantId, branchId, override, defaultThreshold);
 
     return NextResponse.json({
       success: true,
       data: lowStockProducts,
-      threshold: finalThreshold,
+      threshold: override ?? defaultThreshold,
       count: lowStockProducts.length,
     });
   } catch (error) {

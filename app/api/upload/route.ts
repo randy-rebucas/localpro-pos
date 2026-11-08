@@ -309,6 +309,13 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ success: false, error: t('validation.fileNotFound', 'File not found') }, { status: 404 });
     }
 
+    // Deleting needs the same permission as uploading that kind of asset: a
+    // products-only manager can't remove the store's logo (branding).
+    const assetType: AssetType = isAssetType(file.assetType ?? '') ? (file.assetType as AssetType) : 'files';
+    if (!(await hasAnyPermission(user.role, tenantId, ASSET_RULES[assetType].permissions))) {
+      return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
+    }
+
     // Delete from Cloudinary first, and keep the record if that fails: on the
     // shared account an asset whose record is gone can never be cleaned up.
     try {

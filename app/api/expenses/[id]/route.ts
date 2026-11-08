@@ -7,6 +7,8 @@ import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
+import { getTenantSettingsById } from '@/lib/tenant';
+import { expenseDateFromInput } from '@/lib/expense-date';
 
 export async function GET(
   request: NextRequest,
@@ -56,7 +58,8 @@ export async function PUT(
       return NextResponse.json({ success: false, error: t('validation.tooManyRequests', 'Too many requests') }, { status: 429 });
     }
 
-    const expense = await Expense.findOne({ _id: id, tenantId });
+    // Deleted (soft) expenses are not edited back into the totals
+    const expense = await Expense.findOne({ _id: id, tenantId, isActive: { $ne: false } });
     if (!expense) {
       return NextResponse.json({ success: false, error: t('validation.expenseNotFound', 'Expense not found') }, { status: 404 });
     }
@@ -66,10 +69,25 @@ export async function PUT(
 
     const oldData = expense.toObject();
 
-    if (name) expense.name = name;
-    if (description) expense.description = description;
-    if (amount !== undefined) expense.amount = parseFloat(amount);
-    if (date) expense.date = new Date(date);
+    if (amount !== undefined) {
+      const amountValue = typeof amount === 'number' ? amount : parseFloat(amount);
+      if (!Number.isFinite(amountValue) || amountValue < 0) {
+        return NextResponse.json(
+          { success: false, error: t('validation.amountPositive', 'Amount must be a valid positive number') },
+          { status: 400 }
+        );
+      }
+      expense.amount = Math.round(amountValue * 100) / 100;
+    }
+    if (date) {
+      const parsed = expenseDateFromInput(date, (await getTenantSettingsById(tenantId))?.timezone);
+      if (!parsed) {
+        return NextResponse.json({ success: false, error: t('validation.invalidDate', 'Invalid date') }, { status: 400 });
+      }
+      expense.date = parsed;
+    }
+    if (typeof name === 'string' && name.trim()) expense.name = name.trim();
+    if (typeof description === 'string' && description.trim()) expense.description = description.trim();
     if (paymentMethod) expense.paymentMethod = paymentMethod;
     if (receipt !== undefined) expense.receipt = receipt;
     if (notes !== undefined) expense.notes = notes;
@@ -78,6 +96,7 @@ export async function PUT(
 
     await createAuditLog(request, {
       tenantId,
+      userId: authResult.user.userId,
       action: AuditActions.UPDATE,
       entityType: 'expense',
       entityId: expense._id.toString(),

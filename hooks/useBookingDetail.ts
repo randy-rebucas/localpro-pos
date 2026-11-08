@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { useMessages } from '@/hooks/useMessages';
 
 export interface Booking {
   _id: string;
@@ -30,6 +31,7 @@ export type BookingUpdate = Omit<Partial<Booking>, 'staffId'> & {
 };
 
 export function useBookingDetail(tenant: string, bookingId: string) {
+  const t = useMessages();
   const [updating, setUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -53,14 +55,16 @@ export function useBookingDetail(tenant: string, bookingId: string) {
         const data = await res.json();
 
         if (data.success) {
-          onSuccess?.(data.message || 'Booking updated successfully');
+          onSuccess?.(data.message || t('common.bookingUpdatedSuccess', 'Booking updated successfully'));
         } else {
-          const errorMsg = data.error || 'Failed to update booking';
+          const errorMsg = data.error || t('common.failedToUpdateBooking', 'Failed to update booking');
           setError(errorMsg);
           onError?.(errorMsg);
         }
       } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'Failed to update booking';
+        const errorMsg = err instanceof Error && err.name === 'AbortError'
+          ? t('common.requestTimedOut', 'The request timed out. Please try again.')
+          : t('common.failedToUpdateBooking', 'Failed to update booking');
         setError(errorMsg);
         onError?.(errorMsg);
       } finally {
@@ -68,7 +72,7 @@ export function useBookingDetail(tenant: string, bookingId: string) {
         setUpdating(false);
       }
     },
-    [tenant, bookingId]
+    [tenant, bookingId, t]
   );
 
   return { updating, error, updateBooking };

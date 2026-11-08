@@ -1,13 +1,22 @@
 ﻿'use client';
 
-import { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
+import { useCallback, useEffect, useState } from 'react';
+import { useParams } from 'next/navigation';
+import toast from 'react-hot-toast';
+import { Building2, Globe, Pencil } from 'lucide-react';
+import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import { ReceiptRow } from '@/components/marketing/primitives';
+import {
+  ICON, DARK_KEY_PRIMARY, HINT, INPUT, KEY, KEY_PRIMARY, LABEL,
+  RegisterPage, Sheet, Strip,
+} from '@/components/admin/register-ui';
 import { getDictionaryClient } from '../../dictionaries-client';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { isBusinessTypeSelectable } from '@/lib/business-types';
-import { getDefaultTenantSettings } from '@/lib/currency';
+import { formatDate } from '@/lib/formatting';
 import { usePermissions } from '@/hooks/usePermissions';
+
+type Dict = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
 interface Tenant {
   _id: string;
@@ -27,252 +36,233 @@ interface Tenant {
   };
 }
 
+interface BusinessTypeOption {
+  type: string;
+  name: string;
+  description?: string;
+}
+
+/** The store's own profile: this page only ever shows and edits the current tenant. */
 export default function TenantsPage() {
   const params = useParams();
-  const router = useRouter(); // eslint-disable-line @typescript-eslint/no-unused-vars
-  const tenant = params.tenant as string;
+  const slug = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
-  const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [dict, setDict] = useState<Dict>(null);
+  const [tenant, setTenant] = useState<Tenant | null>(null);
   const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null); // eslint-disable-line @typescript-eslint/no-unused-vars
-  const [showTenantModal, setShowTenantModal] = useState(false);
-  const [editingTenant, setEditingTenant] = useState<Tenant | null>(null);
-  const { settings: tenantSettings } = useTenantSettings();
-  const primaryColor = (tenantSettings || getDefaultTenantSettings()).primaryColor || '#35979c';
+  const [loadError, setLoadError] = useState('');
+  const [editing, setEditing] = useState(false);
+  const [businessTypes, setBusinessTypes] = useState<BusinessTypeOption[]>([]);
+  const [businessTypesState, setBusinessTypesState] = useState<'loading' | 'ready' | 'failed'>('loading');
+  const { settings } = useTenantSettings();
   const { canAccess } = usePermissions();
   const canManage = canAccess('tenant_profile.manage');
 
+  const t = (key: string, fallback: string): string => dict?.admin?.[key] || fallback;
+
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
-    fetchTenants();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lang, tenant]);
+  }, [lang]);
 
-  const fetchTenants = async () => {
+  const fetchTenant = useCallback(async () => {
     try {
-      // Fetch current tenant only (tenant-level admin)
-      const res = await fetch(`/api/tenants/${tenant}`, { credentials: 'include' });
+      const res = await fetch(`/api/tenants/${slug}`, { credentials: 'include' });
       const data = await res.json();
-      if (data.success) {
-        // Set as single-item array for consistency with existing UI
-        setTenants([data.data]);
+      if (data.success && data.data?.settings) {
+        setTenant(data.data);
+        setLoadError('');
+      } else {
+        setLoadError(data.error || '');
       }
-    } catch (error) {
-      console.error('Error fetching tenant:', error);
+    } catch {
+      setLoadError('');
     } finally {
       setLoading(false);
     }
-  };
+  }, [slug]);
 
+  useEffect(() => {
+    fetchTenant();
+  }, [fetchTenant]);
+
+  // Loaded once for both the tile (type name) and the edit sheet
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/business-types')
+      .then((res) => res.json())
+      .then((data) => {
+        if (cancelled) return;
+        if (data.success && Array.isArray(data.data)) {
+          setBusinessTypes(data.data);
+          setBusinessTypesState('ready');
+        } else {
+          setBusinessTypesState('failed');
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setBusinessTypesState('failed');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   if (!dict || loading) {
     return (
-      <div className="flex items-center justify-center py-24">
-        <div className="text-center">
-          <div
-            className="inline-block animate-spin h-8 w-8"
-            style={{
-              borderTop: `2px solid ${primaryColor}`,
-              borderRight: `2px solid ${primaryColor}`,
-              borderBottom: '2px solid transparent',
-              borderLeft: `2px solid ${primaryColor}`,
-              borderRadius: '50%',
-            }}
-          />
-          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
+      <div className="mk-root pos-register">
+        <div className="flex min-h-[calc(100dvh-3.5rem)] items-center justify-center bg-brand-navy-deep lg:min-h-dvh">
+          <LoadingSpinner size="md" color="#8fe3d0" />
         </div>
       </div>
     );
   }
 
+  const notSet = t('notSet', 'Not set');
+  const typeName = (type?: string) => (type ? businessTypes.find((b) => b.type === type)?.name || type : notSet);
+  const languageName = (code?: string) => (code === 'es' ? 'Español' : code === 'en' ? 'English' : notSet);
+  const hosts = tenant ? [tenant.domain, tenant.subdomain ? `${tenant.subdomain}.*` : ''].filter(Boolean) : [];
+
   return (
-    <div>
-      <div className="px-4 sm:px-6 py-6">
-        <div className="mb-6 sm:mb-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-2">
-                {dict.admin?.tenants || 'Tenants'}
-              </h1>
-              <p className="text-gray-600">{dict.admin?.tenantsSubtitle || 'View and manage your organization settings'}</p>
+    <RegisterPage
+      tagNo="TN"
+      tag={settings?.companyName || tenant?.name}
+      title={t('tenantInfo', 'Tenant Information')}
+      subtitle={t('tenantProfileSubtitle', 'Your store’s name, web address, currency and contact details')}
+    >
+      {canManage && tenant && (
+        <div className="mt-6 flex justify-end">
+          <button type="button" onClick={() => setEditing(true)} className={DARK_KEY_PRIMARY}>
+            <Pencil className={ICON} strokeWidth={1.75} aria-hidden />
+            {t('editTenant', 'Edit Tenant')}
+          </button>
+        </div>
+      )}
+
+      {!tenant ? (
+        <div className="mt-6">
+          <div className="bg-paper-white px-4 py-14 text-center text-ink">
+            <Building2 className="mx-auto mb-2 h-8 w-8 text-ink/20" strokeWidth={1.75} aria-hidden />
+            <p className="font-receipt text-sm text-ink/60">
+              {loadError || dict.common?.noData || 'No tenant information available'}
+            </p>
+          </div>
+          <div className="mk-tear-b h-3 bg-paper-white" aria-hidden />
+        </div>
+      ) : (
+        <div className="mt-6 grid gap-4 lg:grid-cols-2">
+          {/* The store, printed like the head of its own receipt */}
+          <div className="min-w-0 text-ink">
+            <div className="bg-paper-white">
+              <div className={`flex items-center justify-between gap-2 px-4 py-1.5 font-receipt text-[11px] font-medium uppercase tracking-[0.08em] ${tenant.isActive ? 'bg-brand text-ink' : 'bg-stamp text-paper-white'}`}>
+                <span>{typeName(tenant.settings.businessType)}</span>
+                <span>{tenant.isActive ? t('active', 'Active') : t('inactive', 'Inactive')}</span>
+              </div>
+              <div className="px-4 pb-4 pt-3">
+                <h2 className="break-words font-display text-4xl font-bold uppercase leading-none sm:text-5xl">{tenant.name}</h2>
+                {tenant.settings.companyName && tenant.settings.companyName !== tenant.name && (
+                  <p className="mt-1 text-sm text-ink/70">{tenant.settings.companyName}</p>
+                )}
+                <div className="mt-3 space-y-1 border-t border-dashed border-ink/30 pt-3 font-receipt text-xs">
+                  <ReceiptRow label={t('slug', 'Slug')} value={tenant.slug} />
+                  <ReceiptRow label={t('currency', 'Currency')} value={tenant.settings.currency || notSet} />
+                  <ReceiptRow label={t('language', 'Language')} value={languageName(tenant.settings.language)} />
+                  {tenant.createdAt && settings && (
+                    <ReceiptRow label={t('storeSince', 'Since')} value={formatDate(tenant.createdAt, settings)} />
+                  )}
+                </div>
+              </div>
             </div>
+            <div className="mk-tear-b h-3 bg-paper-white" aria-hidden />
+          </div>
+
+          {/* How customers reach the store */}
+          <div className="min-w-0 text-ink">
+            <div className="bg-paper-white">
+              <div className="flex items-center gap-2 bg-ink/10 px-4 py-1.5 font-receipt text-[11px] font-medium uppercase tracking-[0.08em] text-ink/70">
+                <Globe className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+                <span>{t('contactAndAddress', 'Contact & web address')}</span>
+              </div>
+              <div className="space-y-1 px-4 py-4 font-receipt text-xs">
+                <ReceiptRow label={t('domain', 'Domain')} value={tenant.domain || notSet} />
+                <ReceiptRow label={t('subdomain', 'Subdomain')} value={tenant.subdomain || notSet} />
+                <ReceiptRow
+                  label={t('email', 'Email')}
+                  value={<span className="block max-w-[14rem] truncate" title={tenant.settings.email}>{tenant.settings.email || notSet}</span>}
+                />
+                <ReceiptRow label={t('phone', 'Phone')} value={tenant.settings.phone || notSet} />
+                {hosts.length === 0 && (
+                  <p className={HINT}>{t('noCustomHost', 'No custom domain or subdomain: the store is reached through its link.')}</p>
+                )}
+              </div>
+            </div>
+            <div className="mk-tear-b h-3 bg-paper-white" aria-hidden />
           </div>
         </div>
+      )}
 
-        {message && (
-          <div className={`mb-6 p-4 border ${message.type === 'success' ? 'bg-green-50 text-green-800 border-green-300' : 'bg-red-50 text-red-800 border-red-300'}`}>
-            {message.text}
-          </div>
-        )}
-
-        <div className="bg-white border border-gray-300 p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-bold text-gray-900">{dict.admin?.tenantInfo || 'Tenant Information'}</h2>
-            {canManage && tenants.length > 0 && (
-              <button
-                onClick={() => {
-                  setEditingTenant(tenants[0]);
-                  setShowTenantModal(true);
-                }}
-                className="px-4 py-2 text-white font-medium transition-opacity hover:opacity-80"
-                style={{
-                  backgroundColor: primaryColor,
-                  borderColor: primaryColor,
-                  border: `1px solid ${primaryColor}`,
-                }}
-              >
-                {dict.common?.edit || 'Edit'} {dict.admin?.settings || 'Settings'}
-              </button>
-            )}
-          </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.name || 'Name'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.slug || 'Slug'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.businessType || 'Business Type'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.currency || 'Currency'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.status || 'Status'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.common?.actions || 'Actions'}</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {tenants.map((tenantItem) => (
-                  <tr key={tenantItem._id}>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{tenantItem.name}</td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{tenantItem.slug}</td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {tenantItem.settings.businessType ? (
-                        <span
-                          className="px-2 py-1 text-xs font-medium border"
-                          style={{
-                            backgroundColor: `${primaryColor}20`,
-                            color: primaryColor,
-                            borderColor: primaryColor,
-                          }}
-                        >
-                          {tenantItem.settings.businessType}
-                        </span>
-                      ) : (
-                        <span className="text-gray-400 italic">{dict.admin?.notSet || 'Not set'}</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{tenantItem.settings.currency}</td>
-                    <td className="px-4 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 text-xs font-semibold border ${tenantItem.isActive ? 'bg-green-100 text-green-800 border-green-300' : 'bg-red-100 text-red-800 border-red-300'}`}>
-                        {tenantItem.isActive ? (dict.admin?.active || 'Active') : (dict.admin?.inactive || 'Inactive')}
-                      </span>
-                    </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
-                      {canManage && (
-                        <button
-                          onClick={() => {
-                            setEditingTenant(tenantItem);
-                            setShowTenantModal(true);
-                          }}
-                          style={{ color: primaryColor }}
-                          className="hover:opacity-70 transition-opacity"
-                        >
-                          {dict.common?.edit || 'Edit'}
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {tenants.length === 0 && (
-              <div className="text-center py-8 text-gray-500">{dict.common?.noData || 'No tenant information available'}</div>
-            )}
-          </div>
-        </div>
-
-        {showTenantModal && (
-          <TenantModal
-            tenant={editingTenant}
-            primaryColor={primaryColor}
-            onClose={() => {
-              setShowTenantModal(false);
-              setEditingTenant(null);
-            }}
-            onSave={() => {
-              fetchTenants();
-              setShowTenantModal(false);
-              setEditingTenant(null);
-            }}
-            dict={dict}
-          />
-        )}
-      </div>
-    </div>
+      {editing && tenant && (
+        <TenantSheet
+          tenant={tenant}
+          businessTypes={businessTypes}
+          businessTypesState={businessTypesState}
+          dict={dict}
+          onClose={() => setEditing(false)}
+          onSaved={() => {
+            setEditing(false);
+            toast.success(t('tenantSaved', 'Store details saved'));
+            fetchTenant();
+          }}
+        />
+      )}
+    </RegisterPage>
   );
 }
 
-function TenantModal({
+function TenantSheet({
   tenant,
-  primaryColor = '#35979c',
-  onClose,
-  onSave,
+  businessTypes,
+  businessTypesState,
   dict,
+  onClose,
+  onSaved,
 }: {
-  tenant: Tenant | null;
-  primaryColor?: string;
+  tenant: Tenant;
+  businessTypes: BusinessTypeOption[];
+  businessTypesState: 'loading' | 'ready' | 'failed';
+  dict: Dict;
   onClose: () => void;
-  onSave: () => void;
-  dict: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+  onSaved: () => void;
 }) {
+  const t = (key: string, fallback: string): string => dict?.admin?.[key] || fallback;
+  const optional = t('optionalField', 'optional');
   const [formData, setFormData] = useState({
-    slug: tenant?.slug || '',
-    name: tenant?.name || '',
-    domain: tenant?.domain || '',
-    subdomain: tenant?.subdomain || '',
-    currency: tenant?.settings.currency || 'USD',
-    language: tenant?.settings.language || 'en',
-    email: tenant?.settings.email || '',
-    phone: tenant?.settings.phone || '',
-    companyName: tenant?.settings.companyName || '',
-    businessType: tenant?.settings.businessType || 'general',
+    name: tenant.name || '',
+    domain: tenant.domain || '',
+    subdomain: tenant.subdomain || '',
+    currency: tenant.settings.currency || 'PHP',
+    language: tenant.settings.language || 'en',
+    email: tenant.settings.email || '',
+    phone: tenant.settings.phone || '',
+    companyName: tenant.settings.companyName || '',
+    // The tenant's own type; never a guessed default the user didn't pick
+    businessType: tenant.settings.businessType || '',
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [businessTypes, setBusinessTypes] = useState<any[]>([]); // eslint-disable-line @typescript-eslint/no-explicit-any
-  const [loadingBusinessTypes, setLoadingBusinessTypes] = useState(true);
-  const [businessTypeWarning, setBusinessTypeWarning] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadBusinessTypes();
-  }, []);
-
-  const loadBusinessTypes = async () => {
-    try {
-      setLoadingBusinessTypes(true);
-      const res = await fetch('/api/business-types');
-      const data = await res.json();
-      if (data.success) {
-        setBusinessTypes(data.data);
-      }
-    } catch (err) {
-      console.error('Failed to load business types:', err);
-    } finally {
-      setLoadingBusinessTypes(false);
-    }
-  };
+  const update = (patch: Partial<typeof formData>) => setFormData((prev) => ({ ...prev, ...patch }));
+  const typesReady = businessTypesState === 'ready';
+  const choices = businessTypes.filter((type) => isBusinessTypeSelectable(type.type, tenant.settings.businessType));
+  const chosen = businessTypes.find((type) => type.type === formData.businessType);
+  const typeChanged = !!formData.businessType && formData.businessType !== tenant.settings.businessType;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (saving) return;
     setError('');
     setSaving(true);
     try {
-      // Tenant-level: only allow editing current tenant
-      if (!tenant) {
-        setError(dict?.admin?.cannotEditTenant || 'Cannot edit: tenant information not available');
-        return;
-      }
-      const url = `/api/tenants/${tenant.slug}`;
-      const method = 'PUT';
-      const body: any = { // eslint-disable-line @typescript-eslint/no-explicit-any
+      const body = {
         name: formData.name,
         settings: {
           currency: formData.currency,
@@ -281,311 +271,199 @@ function TenantModal({
           email: formData.email,
           phone: formData.phone,
           companyName: formData.companyName,
-          businessType: formData.businessType || undefined,
+          // Only sent once the list loaded and a type is picked, so a failed
+          // list can't change the store's type behind the user's back
+          businessType: typesReady && formData.businessType ? formData.businessType : undefined,
         },
         domain: formData.domain,
         subdomain: formData.subdomain,
       };
 
-      const res = await fetch(url, {
-        method,
+      const res = await fetch(`/api/tenants/${tenant.slug}`, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify(body),
       });
-
       const data = await res.json();
       if (data.success) {
-        onSave();
+        onSaved();
       } else {
-        setError(data.error || dict?.admin?.failedToSaveTenant || 'Failed to save tenant');
+        setError(data.error || t('failedToSaveTenant', 'Failed to save tenant'));
       }
-    } catch (error) {
-      setError(dict?.admin?.failedToSaveTenant || 'Failed to save tenant');
+    } catch {
+      setError(t('failedToSaveTenant', 'Failed to save tenant'));
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-gray-900/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white border border-gray-300 max-w-md w-full max-h-[90vh] overflow-y-auto">
-        <div className="p-6">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">
-            {tenant ? (dict.admin?.editTenant || 'Edit Tenant') : (dict.admin?.addTenant || 'Add Tenant')}
-          </h2>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.name || 'Name'}
-              </label>
-              <input
-                type="text"
-                required
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 bg-white"
-                onFocus={(e) => {
-                  e.currentTarget.style.borderColor = primaryColor;
-                  e.currentTarget.style.outline = 'none';
-                  e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
-                }}
-                onBlur={(e) => {
-                  e.currentTarget.style.borderColor = '#d1d5db';
-                  e.currentTarget.style.boxShadow = 'none';
-                }}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.domain || 'Domain'} (optional)
-              </label>
-              <input
-                type="text"
-                value={formData.domain}
-                onChange={(e) => setFormData({ ...formData, domain: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 bg-white"
-                onFocus={(e) => {
-                  e.currentTarget.style.borderColor = primaryColor;
-                  e.currentTarget.style.outline = 'none';
-                  e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
-                }}
-                onBlur={(e) => {
-                  e.currentTarget.style.borderColor = '#d1d5db';
-                  e.currentTarget.style.boxShadow = 'none';
-                }}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.subdomain || 'Subdomain'} (optional)
-              </label>
-              <input
-                type="text"
-                value={formData.subdomain}
-                onChange={(e) => setFormData({ ...formData, subdomain: e.target.value.toLowerCase() })}
-                className="w-full px-3 py-2 border border-gray-300 bg-white"
-                onFocus={(e) => {
-                  e.currentTarget.style.borderColor = primaryColor;
-                  e.currentTarget.style.outline = 'none';
-                  e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
-                }}
-                onBlur={(e) => {
-                  e.currentTarget.style.borderColor = '#d1d5db';
-                  e.currentTarget.style.boxShadow = 'none';
-                }}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.currency || 'Currency'}
-              </label>
-              <input
-                type="text"
-                required
-                value={formData.currency}
-                onChange={(e) => setFormData({ ...formData, currency: e.target.value.toUpperCase() })}
-                className="w-full px-3 py-2 border border-gray-300 bg-white"
-                maxLength={3}
-                onFocus={(e) => {
-                  e.currentTarget.style.borderColor = primaryColor;
-                  e.currentTarget.style.outline = 'none';
-                  e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
-                }}
-                onBlur={(e) => {
-                  e.currentTarget.style.borderColor = '#d1d5db';
-                  e.currentTarget.style.boxShadow = 'none';
-                }}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.language || 'Language'}
-              </label>
-              <select
-                value={formData.language}
-                onChange={(e) => setFormData({ ...formData, language: e.target.value as 'en' | 'es' })}
-                className="w-full px-3 py-2 border border-gray-300 bg-white"
-                onFocus={(e) => {
-                  e.currentTarget.style.borderColor = primaryColor;
-                  e.currentTarget.style.outline = 'none';
-                  e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
-                }}
-                onBlur={(e) => {
-                  e.currentTarget.style.borderColor = '#d1d5db';
-                  e.currentTarget.style.boxShadow = 'none';
-                }}
-              >
-                <option value="en">English</option>
-                <option value="es">Español</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.businessType || 'Business Type'} <span className="text-red-500">*</span>
-              </label>
-              {loadingBusinessTypes ? (
-                <div className="w-full px-3 py-2 border border-gray-300 bg-gray-50 flex items-center gap-2">
-                  <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent animate-spin"></div>
-                  <span className="text-xs text-gray-600">{dict.settings?.loadingBusinessTypes || 'Loading business types...'}</span>
-                </div>
-              ) : (
-                <>
-                  <select
-                    value={formData.businessType}
-                    onChange={(e) => {
-                      const newType = e.target.value;
-                      if (newType !== tenant?.settings.businessType) {
-                        setBusinessTypeWarning(
-                          (dict.admin?.businessTypeWarning || 'Changing business type to "{type}" will automatically configure features. This may enable or disable certain features based on the business type.').replace('{type}', newType)
-                        );
-                      } else {
-                        setBusinessTypeWarning(null);
-                      }
-                      setFormData({ ...formData, businessType: newType });
-                    }}
-                    className="w-full px-3 py-2 border border-gray-300 bg-white"
-                    onFocus={(e) => {
-                      e.currentTarget.style.borderColor = primaryColor;
-                      e.currentTarget.style.outline = 'none';
-                      e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
-                    }}
-                    onBlur={(e) => {
-                      e.currentTarget.style.borderColor = '#d1d5db';
-                      e.currentTarget.style.boxShadow = 'none';
-                    }}
-                  >
-                    {businessTypes.filter((type) => isBusinessTypeSelectable(type.type, tenant?.settings.businessType)).map((type) => (
-                      <option key={type.type} value={type.type}>
-                        {type.name}
-                      </option>
-                    ))}
-                  </select>
-                  {businessTypeWarning && (
-                    <div className="mt-2 p-2 bg-yellow-50 border border-yellow-300 text-yellow-800 text-xs">
-                      <div className="flex items-start gap-2">
-                        <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                        </svg>
-                        <span>{businessTypeWarning}</span>
-                      </div>
-                    </div>
-                  )}
-                  {formData.businessType && !loadingBusinessTypes && (
-                    <div
-                      className="mt-2 p-3 border"
-                      style={{
-                        backgroundColor: `${primaryColor}10`,
-                        borderColor: `${primaryColor}40`,
-                      }}
-                    >
-                      <p
-                        className="text-xs font-medium mb-1"
-                        style={{ color: primaryColor }}
-                      >
-                        {businessTypes.find((t) => t.type === formData.businessType)?.name || 'Business Type'}
-                      </p>
-                      <p
-                        className="text-xs"
-                        style={{ color: primaryColor }}
-                      >
-                        {businessTypes.find((t) => t.type === formData.businessType)?.description || ''}
-                      </p>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.email || 'Email'} (optional)
-              </label>
-              <input
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 bg-white"
-                onFocus={(e) => {
-                  e.currentTarget.style.borderColor = primaryColor;
-                  e.currentTarget.style.outline = 'none';
-                  e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
-                }}
-                onBlur={(e) => {
-                  e.currentTarget.style.borderColor = '#d1d5db';
-                  e.currentTarget.style.boxShadow = 'none';
-                }}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.phone || 'Phone'} (optional)
-              </label>
-              <input
-                type="tel"
-                value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 bg-white"
-                onFocus={(e) => {
-                  e.currentTarget.style.borderColor = primaryColor;
-                  e.currentTarget.style.outline = 'none';
-                  e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
-                }}
-                onBlur={(e) => {
-                  e.currentTarget.style.borderColor = '#d1d5db';
-                  e.currentTarget.style.boxShadow = 'none';
-                }}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.companyName || 'Company Name'} (optional)
-              </label>
-              <input
-                type="text"
-                value={formData.companyName}
-                onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 bg-white"
-                onFocus={(e) => {
-                  e.currentTarget.style.borderColor = primaryColor;
-                  e.currentTarget.style.outline = 'none';
-                  e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
-                }}
-                onBlur={(e) => {
-                  e.currentTarget.style.borderColor = '#d1d5db';
-                  e.currentTarget.style.boxShadow = 'none';
-                }}
-              />
-            </div>
-            {error && (
-              <div className="bg-red-50 text-red-800 border border-red-300 p-3">
-                {error}
-              </div>
-            )}
-            <div className="flex gap-3 justify-end pt-4">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 bg-white"
-              >
-                {dict.common?.cancel || 'Cancel'}
-              </button>
-              <button
-                type="submit"
-                disabled={saving}
-                className="px-4 py-2 text-white disabled:opacity-50 transition-opacity hover:opacity-90"
-                style={{
-                  backgroundColor: primaryColor,
-                  borderColor: primaryColor,
-                  border: `1px solid ${primaryColor}`,
-                }}
-              >
-                {saving ? (dict.common?.loading || 'Saving...') : (dict.common?.save || 'Save')}
-              </button>
-            </div>
-          </form>
+    <Sheet
+      title={t('editTenant', 'Edit Tenant')}
+      subtitle={tenant.slug}
+      onClose={onClose}
+      closeLabel={dict.common?.close || 'Close'}
+      wide
+      footer={
+        <>
+          <button type="button" onClick={onClose} className={KEY}>
+            {dict.common?.cancel || 'Cancel'}
+          </button>
+          <button type="submit" form="tenant-form" disabled={saving} className={KEY_PRIMARY}>
+            {saving ? (dict.common?.saving || 'Saving...') : (dict.common?.save || 'Save')}
+          </button>
+        </>
+      }
+    >
+      <form id="tenant-form" onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label htmlFor="tenant-name" className={LABEL}>{t('name', 'Name')} *</label>
+          <input
+            id="tenant-name"
+            type="text"
+            required
+            maxLength={120}
+            value={formData.name}
+            onChange={(e) => update({ name: e.target.value })}
+            className={INPUT}
+          />
         </div>
-      </div>
-    </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <label htmlFor="tenant-domain" className={LABEL}>{t('domain', 'Domain')} ({optional})</label>
+            <input
+              id="tenant-domain"
+              type="text"
+              inputMode="url"
+              autoComplete="off"
+              placeholder="shop.example.com"
+              value={formData.domain}
+              onChange={(e) => update({ domain: e.target.value.trim().toLowerCase() })}
+              className={`${INPUT} font-receipt`}
+            />
+          </div>
+          <div>
+            <label htmlFor="tenant-subdomain" className={LABEL}>{t('subdomain', 'Subdomain')} ({optional})</label>
+            <input
+              id="tenant-subdomain"
+              type="text"
+              autoComplete="off"
+              value={formData.subdomain}
+              onChange={(e) => update({ subdomain: e.target.value.trim().toLowerCase() })}
+              className={`${INPUT} font-receipt`}
+            />
+          </div>
+        </div>
+        <p className={HINT}>{t('hostHint', 'Leave empty to remove. Letters, numbers and hyphens only.')}</p>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <label htmlFor="tenant-currency" className={LABEL}>{t('currency', 'Currency')} *</label>
+            <input
+              id="tenant-currency"
+              type="text"
+              required
+              minLength={3}
+              maxLength={3}
+              pattern="[A-Za-z]{3}"
+              value={formData.currency}
+              onChange={(e) => update({ currency: e.target.value.toUpperCase() })}
+              className={`${INPUT} font-receipt uppercase tracking-[0.08em]`}
+            />
+          </div>
+          <div>
+            <label htmlFor="tenant-language" className={LABEL}>{t('language', 'Language')}</label>
+            <select
+              id="tenant-language"
+              value={formData.language}
+              onChange={(e) => update({ language: e.target.value as 'en' | 'es' })}
+              className={INPUT}
+            >
+              <option value="en">English</option>
+              <option value="es">Español</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label htmlFor="tenant-type" className={LABEL}>{t('businessType', 'Business Type')}</label>
+          {businessTypesState === 'loading' ? (
+            <div className={`${INPUT} flex items-center gap-2 text-ink/60`}>
+              <LoadingSpinner size="sm" />
+              <span className="font-receipt text-xs">{dict.settings?.loadingBusinessTypes || 'Loading business types...'}</span>
+            </div>
+          ) : (
+            <select
+              id="tenant-type"
+              value={formData.businessType}
+              disabled={!typesReady}
+              onChange={(e) => update({ businessType: e.target.value })}
+              className={INPUT}
+              aria-describedby="tenant-type-hint"
+            >
+              {!formData.businessType && <option value="">{t('notSet', 'Not set')}</option>}
+              {!typesReady && formData.businessType && (
+                <option value={formData.businessType}>{formData.businessType}</option>
+              )}
+              {choices.map((type) => (
+                <option key={type.type} value={type.type}>{type.name}</option>
+              ))}
+            </select>
+          )}
+          <div id="tenant-type-hint">
+            {businessTypesState === 'failed' && (
+              <p className={HINT}>{t('businessTypesUnavailable', 'Business types could not be loaded, so the type stays as it is.')}</p>
+            )}
+            {typesReady && chosen?.description && <p className={HINT}>{chosen.description}</p>}
+          </div>
+          {typesReady && typeChanged && (
+            <div className="mt-2">
+              <Strip tone="error">
+                {t('businessTypeWarning', 'Changing business type to "{type}" will automatically configure features. This may enable or disable certain features based on the business type.')
+                  .replace('{type}', chosen?.name || formData.businessType)}
+              </Strip>
+            </div>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 border-t border-dashed border-ink/30 pt-4 sm:grid-cols-2">
+          <div>
+            <label htmlFor="tenant-email" className={LABEL}>{t('email', 'Email')} ({optional})</label>
+            <input
+              id="tenant-email"
+              type="email"
+              value={formData.email}
+              onChange={(e) => update({ email: e.target.value })}
+              className={INPUT}
+            />
+          </div>
+          <div>
+            <label htmlFor="tenant-phone" className={LABEL}>{t('phone', 'Phone')} ({optional})</label>
+            <input
+              id="tenant-phone"
+              type="tel"
+              value={formData.phone}
+              onChange={(e) => update({ phone: e.target.value })}
+              className={INPUT}
+            />
+          </div>
+        </div>
+        <div>
+          <label htmlFor="tenant-company" className={LABEL}>{t('companyName', 'Company Name')} ({optional})</label>
+          <input
+            id="tenant-company"
+            type="text"
+            maxLength={200}
+            value={formData.companyName}
+            onChange={(e) => update({ companyName: e.target.value })}
+            className={INPUT}
+          />
+        </div>
+
+        {error && <Strip tone="error">{error}</Strip>}
+      </form>
+    </Sheet>
   );
 }
-

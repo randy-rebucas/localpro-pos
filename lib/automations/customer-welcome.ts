@@ -6,6 +6,7 @@
 import connectDB from '@/lib/mongodb';
 import Customer from '@/models/Customer';
 import Tenant from '@/models/Tenant';
+import { escapeHtml } from '@/lib/html-escape';
 import { sendEmail } from '@/lib/notifications';
 import { getTenantSettingsById } from '@/lib/tenant';
 import { AutomationResult } from './types';
@@ -80,11 +81,11 @@ export async function sendCustomerWelcomeEmail(
 <body>
   <div class="container">
     <div class="header">
-      <h2>Welcome to ${companyName}!</h2>
+      <h2>Welcome to ${escapeHtml(companyName)}!</h2>
     </div>
 
     <div class="content">
-      <p>Hello ${customerName},</p>
+      <p>Hello ${escapeHtml(customerName)},</p>
       
       <p>Thank you for joining us! We're excited to have you as a valued customer.</p>
       
@@ -94,22 +95,22 @@ export async function sendCustomerWelcomeEmail(
       
       <p>We're here to serve you and provide the best experience possible. If you have any questions or need assistance, please don't hesitate to reach out to us.</p>
       
-      ${tenantSettings?.phone ? `<p><strong>Contact Us:</strong> ${tenantSettings.phone}</p>` : ''}
-      ${tenantSettings?.email ? `<p><strong>Email:</strong> ${tenantSettings.email}</p>` : ''}
+      ${tenantSettings?.phone ? `<p><strong>Contact Us:</strong> ${escapeHtml(tenantSettings.phone)}</p>` : ''}
+      ${tenantSettings?.email ? `<p><strong>Email:</strong> ${escapeHtml(tenantSettings.email)}</p>` : ''}
       ${tenantSettings?.address ? `
       <p><strong>Address:</strong><br>
-      ${[tenantSettings.address.street, tenantSettings.address.city, tenantSettings.address.state, tenantSettings.address.zipCode].filter(Boolean).join('<br>')}
+      ${[tenantSettings.address.street, tenantSettings.address.city, tenantSettings.address.state, tenantSettings.address.zipCode].filter(Boolean).map(escapeHtml).join('<br>')}
       </p>
       ` : ''}
       
       <p>We look forward to serving you!</p>
       
       <p>Best regards,<br>
-      The ${companyName} Team</p>
+      The ${escapeHtml(companyName)} Team</p>
     </div>
 
     <div class="footer">
-      <p>This is an automated welcome email from ${companyName}.</p>
+      <p>This is an automated welcome email from ${escapeHtml(companyName)}.</p>
       <p>If you did not create an account, please ignore this email.</p>
     </div>
   </div>
@@ -122,6 +123,7 @@ export async function sendCustomerWelcomeEmail(
       subject: `Welcome to ${companyName}!`,
       message: welcomeHtml,
       type: 'email',
+      html: true, // already HTML; its values are escaped where it is built
     });
 
     results.processed = 1;

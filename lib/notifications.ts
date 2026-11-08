@@ -9,12 +9,25 @@ import { formatDate, formatTime } from '@/lib/formatting';
 import { getDefaultTenantSettings } from '@/lib/currency';
 import { renderNotificationTemplate, getDefaultTemplate } from '@/lib/notification-templates';
 import { logger } from '@/lib/logger';
+import { escapeHtml } from '@/lib/html-escape';
 
 export interface NotificationOptions {
   to: string;
   subject?: string;
   message: string;
   type: 'email' | 'sms';
+  /**
+   * The message is already HTML (built with its values escaped). Otherwise it
+   * is plain text — campaign bodies, templates filled with customer names —
+   * and is escaped before going into the email's HTML part, so a customer
+   * named `<a href=…>` can't put a link into mail sent from our domain.
+   */
+  html?: boolean;
+}
+
+/** The HTML part of an email: the message as is when it is HTML, else escaped text with line breaks. */
+export function emailHtmlBody(options: Pick<NotificationOptions, 'message' | 'html'>): string {
+  return options.html ? options.message : escapeHtml(options.message).replace(/\r?\n/g, '<br>');
 }
 
 export interface BookingNotificationData {
@@ -65,7 +78,7 @@ export async function sendEmail(options: NotificationOptions): Promise<boolean> 
         to: options.to,
         subject: options.subject || 'Notification',
         text: options.message,
-        html: options.message.replace(/\n/g, '<br>'),
+        html: emailHtmlBody(options),
       });
 
       if (result.error) {
@@ -90,7 +103,7 @@ export async function sendEmail(options: NotificationOptions): Promise<boolean> 
         from: fromEmail,
         subject: options.subject || 'Notification',
         text: options.message,
-        html: options.message.replace(/\n/g, '<br>'),
+        html: emailHtmlBody(options),
       });
 
       return true;
@@ -115,7 +128,7 @@ export async function sendEmail(options: NotificationOptions): Promise<boolean> 
         to: options.to,
         subject: options.subject || 'Notification',
         text: options.message,
-        html: options.message.replace(/\n/g, '<br>'),
+        html: emailHtmlBody(options),
       });
 
       return true;

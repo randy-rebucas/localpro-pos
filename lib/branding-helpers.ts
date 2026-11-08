@@ -54,3 +54,14 @@ export function isGoogleFontUrl(value?: string): boolean {
   if (!isHttpsUrl(value)) return false;
   return new URL(value!).hostname === 'fonts.googleapis.com';
 }
+
+/**
+ * A font URL ready to go inside CSS `url(...)`: the parsed https URL, as a
+ * double-quoted CSS string. URL serialisation percent-encodes `"`, spaces and
+ * line breaks, so nothing in it can close the string or the rule. Null when
+ * the value is not an https URL.
+ */
+export function cssFontUrl(value?: string): string | null {
+  if (!isHttpsUrl(value)) return null;
+  return JSON.stringify(new URL(value!).href);
+}

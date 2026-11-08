@@ -7,7 +7,7 @@ import { hasTenantPermission } from '@/lib/permissions-server';
 import { generateReceiptNumber } from '@/lib/receipt';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { createAuditLog, AuditActions } from '@/lib/audit';
-import { SubscriptionService } from '@/lib/subscription';
+import { SubscriptionService, checkSubscriptionLimit } from '@/lib/subscription';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 interface ManualItem {
@@ -22,10 +22,12 @@ export async function POST(request: NextRequest) {
     const t = await getValidationTranslatorFromRequest(request);
 
     let tenantId: string;
+    let userId: string;
     try {
       tenantId = (await getTenantIdFromRequest(request)) as string;
       if (!tenantId) throw new Error('Tenant not found');
       const user = await requireAuth(request);
+      userId = user.userId;
       if (!(await hasTenantPermission(user.role, tenantId, 'transactions.create_manual'))) {
         throw new Error('Forbidden: Insufficient permissions');
       }
@@ -99,7 +101,22 @@ export async function POST(request: NextRequest) {
 
     let change = 0;
     if (paymentMethod === 'cash' && cashReceived != null) {
+      // Cash handed over must cover the sale (a short count would book a sale
+      // the drawer never received)
+      if (typeof cashReceived !== 'number' || !Number.isFinite(cashReceived) || Math.round(cashReceived * 100) < Math.round(total * 100)) {
+        return NextResponse.json({ success: false, error: t('validation.insufficientCashReceived', 'Insufficient cash received') }, { status: 400 });
+      }
       change = parseFloat(Math.max(0, cashReceived - total).toFixed(2));
+    }
+
+    // A manual sale counts against the plan's monthly limit like a register sale
+    const currentTransactionCount =
+      (await SubscriptionService.getMonthlyTransactionCount(String(tenantId))) ??
+      (await SubscriptionService.countTransactionsThisMonth(String(tenantId)));
+    try {
+      await checkSubscriptionLimit(String(tenantId), 'maxTransactions', currentTransactionCount);
+    } catch (limitError: unknown) {
+      return NextResponse.json({ success: false, error: (limitError as Error).message }, { status: 403 });
     }
 
     let receiptNumber: string | undefined;
@@ -113,6 +130,9 @@ export async function POST(request: NextRequest) {
     try {
       transaction = await Transaction.create({
         tenantId,
+        // Who rang it up: the drawer close counts cash sales per cashier, so a
+        // sale without a userId was never in the drawer's expected cash
+        userId,
         items: transactionItems,
         subtotal: total,
         total,

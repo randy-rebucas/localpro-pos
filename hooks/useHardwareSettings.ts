@@ -4,10 +4,11 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { ITenantSettings } from '@/types/tenant';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import type { HardwareConfig } from '@/lib/hardware';
+import { useMessages } from '@/hooks/useMessages';
 
 export type HardwareSaveResult =
   | { success: true }
-  | { success: false; reason: 'forbidden' | 'server' | 'network' | 'cancelled'; error?: string };
+  | { success: false; reason: 'forbidden' | 'server' | 'network' | 'timeout' | 'cancelled'; error?: string };
 
 /**
  * The tenant's saved hardware setup plus a working copy the page edits. Saving sends
@@ -15,6 +16,7 @@ export type HardwareSaveResult =
  * register reads first) is what was saved.
  */
 export const useHardwareSettings = (tenant: string) => {
+  const t = useMessages();
   const { ensureSettings, applySettings } = useTenantSettings();
   const [saved, setSaved] = useState<HardwareConfig | null>(null);
   const [draft, setDraft] = useState<HardwareConfig | null>(null);
@@ -29,19 +31,24 @@ export const useHardwareSettings = (tenant: string) => {
     setLoadError(null);
     const result = await ensureSettings();
     if (result.error || !result.settings) {
-      setLoadError(result.error || 'Unable to load settings');
+      setLoadError(result.error || t('admin.unableToLoadSettings', 'Unable to load settings'));
     } else {
       const config = ((result.settings as ITenantSettings).hardwareConfig || {}) as HardwareConfig;
       setSaved(config);
       setDraft(config);
     }
     setLoading(false);
-  }, [ensureSettings]);
+  }, [ensureSettings, t]);
 
   const saveSettings = useCallback(async (): Promise<HardwareSaveResult> => {
     if (!draft) return { success: false, reason: 'cancelled' };
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 20000);
+    // A timeout is reported to the user; an abort from leaving the page is not
+    let timedOut = false;
+    const timeoutId = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, 20000);
     abortControllerRef.current = controller;
     setSaving(true);
     try {
@@ -69,7 +76,7 @@ export const useHardwareSettings = (tenant: string) => {
       }
       return { success: true };
     } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') return { success: false, reason: 'cancelled' };
+      if (error instanceof Error && error.name === 'AbortError') return { success: false, reason: timedOut ? 'timeout' : 'cancelled' };
       return { success: false, reason: 'network' };
     } finally {
       clearTimeout(timeoutId);

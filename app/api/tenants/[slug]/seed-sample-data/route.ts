@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { checkSubscriptionLimit } from '@/lib/subscription';
 import connectDB from '@/lib/mongodb';
 import Tenant from '@/models/Tenant';
 import Category from '@/models/Category';
@@ -170,6 +171,8 @@ export async function POST(
 
     // ── Products ────────────────────────────────────────────────────────────
     if (requestedItems.has('products')) {
+      // Sample products count against the plan like any other product
+      let activeProducts = await Product.countDocuments({ tenantId, isActive: true });
       for (const prodDef of config.products) {
         const { category: catName, ...rest } = prodDef;
         const existing = await Product.findOne({ tenantId, name: rest.name });
@@ -177,13 +180,30 @@ export async function POST(
           results.products.skipped++;
           continue;
         }
+        try {
+          await checkSubscriptionLimit(String(tenantId), 'maxProducts', activeProducts);
+        } catch {
+          results.products.skipped++; // plan full: stop adding, keep what was added
+          continue;
+        }
 
-        await Product.create({
-          ...rest,
-          tenantId,
-          categoryId: categoryMap[catName],
-          category:   catName,
-        });
+        try {
+          await Product.create({
+            ...rest,
+            tenantId,
+            categoryId: categoryMap[catName],
+            category:   catName,
+          });
+        } catch (createError) {
+          // A store product already uses this sample's SKU/barcode: skip it
+          // instead of failing the whole load half-way
+          if ((createError as { code?: number }).code === 11000) {
+            results.products.skipped++;
+            continue;
+          }
+          throw createError;
+        }
+        activeProducts++;
         results.products.created++;
       }
     }
@@ -212,15 +232,23 @@ export async function POST(
           results.discounts.skipped++;
           continue;
         }
-        await Discount.create({
-          ...discDef,
-          tenantId,
-          code:       discDef.code.toUpperCase(),
-          usageCount: 0,
-          isActive:   true,
-          validFrom:  now,
-          validUntil: oneYear,
-        });
+        try {
+          await Discount.create({
+            ...discDef,
+            tenantId,
+            code:       discDef.code.toUpperCase(),
+            usageCount: 0,
+            isActive:   true,
+            validFrom:  now,
+            validUntil: oneYear,
+          });
+        } catch (createError) {
+          if ((createError as { code?: number }).code === 11000) {
+            results.discounts.skipped++;
+            continue;
+          }
+          throw createError;
+        }
         results.discounts.created++;
       }
     }

@@ -55,8 +55,9 @@ export function handleApiError(error: any, defaultMessage: string = 'An error oc
     );
   }
 
-  // Authentication/Authorization errors
-  if (error.message === 'Unauthorized') {
+  // Authentication/Authorization errors ('Unauthorized' from requireAuth,
+  // 'Unauthorized: Authentication required' from requireTenantAccess)
+  if (error.message === 'Unauthorized' || error.message.startsWith('Unauthorized:')) {
     return NextResponse.json(
       {
         success: false,

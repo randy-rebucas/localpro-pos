@@ -7,6 +7,7 @@ import { createAuditLog, AuditActions } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
 import { getTenantSettingsById } from '@/lib/tenant';
+import { checkFeatureAccess } from '@/lib/subscription';
 
 export async function GET(request: NextRequest) {
   try {
@@ -61,6 +62,14 @@ export async function POST(request: NextRequest) {
     const { tenantId, user } = authResult;
     if (!(await hasTenantPermission(user.role, tenantId, 'tables.configure'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
+    }
+
+    // The plan must include table management: the store's own switch (Feature
+    // Flags) can't turn on what the subscription doesn't cover
+    try {
+      await checkFeatureAccess(String(tenantId), 'enableTableManagement');
+    } catch (featureError: unknown) {
+      return NextResponse.json({ success: false, error: (featureError as Error).message }, { status: 403 });
     }
 
     const tenantSettings = await getTenantSettingsById(tenantId);

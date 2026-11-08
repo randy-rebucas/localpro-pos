@@ -103,6 +103,15 @@ function parseProductType(value: string | undefined): 'regular' | 'service' | nu
   return null;
 }
 
+/**
+ * Undo the export's formula guard (lib/export.ts csvCell): a cell exported as
+ * `'=Name` comes back as `=Name`, so an exported file re-imports unchanged.
+ * Values are only ever stored as text, so they never run as formulas here.
+ */
+function unguardCell(cell: string): string {
+  return /^'[=+\-@\t\r]/.test(cell) ? cell.slice(1) : cell;
+}
+
 export function parseCSV(text: string): string[][] {
   const normalized = text.replace(/^\uFEFF/, '');
   const rows: string[][] = [];
@@ -126,10 +135,10 @@ export function parseCSV(text: string): string[][] {
     } else if (c === '"') {
       inQuotes = true;
     } else if (c === ',') {
-      row.push(current);
+      row.push(unguardCell(current));
       current = '';
     } else if (c === '\n' || (c === '\r' && next === '\n')) {
-      row.push(current);
+      row.push(unguardCell(current));
       if (row.some((cell) => cell.trim() !== '')) rows.push(row);
       row = [];
       current = '';
@@ -139,7 +148,7 @@ export function parseCSV(text: string): string[][] {
     }
   }
 
-  row.push(current);
+  row.push(unguardCell(current));
   if (row.some((cell) => cell.trim() !== '')) rows.push(row);
   return rows;
 }

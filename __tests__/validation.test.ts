@@ -268,10 +268,9 @@ describe('sanitizeString', () => {
     expect(sanitizeString('onclick = alert(1)')).not.toContain('onclick');
   });
 
-  it('encodes bare ampersands but preserves entities', () => {
-    expect(sanitizeString('Tom & Jerry')).toBe('Tom &amp; Jerry');
+  it('stores ampersands as typed (no HTML entity encoding; React escapes on output)', () => {
+    expect(sanitizeString('Tom & Jerry')).toBe('Tom & Jerry');
     expect(sanitizeString('&amp;')).toBe('&amp;');
-    expect(sanitizeString('&lt;')).toBe('&lt;');
   });
 });
 

@@ -9,6 +9,7 @@ import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
+import { isLegalDiscountCode, LOCKED_LEGAL_DISCOUNT_FIELDS } from '@/lib/legal-discounts';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -52,6 +53,26 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const body = await request.json();
     const updates: any = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
 
+    // SC20 / PWD20: the 20% rate, its category and ID check are set by law
+    // (RA 9994, RA 10754) and the discount must stay available; only the
+    // wording can be edited.
+    if (isLegalDiscountCode(discount.code)) {
+      const locked = LOCKED_LEGAL_DISCOUNT_FIELDS.find((field) => {
+        if (body[field] === undefined) return false;
+        const current = (discount as unknown as Record<string, unknown>)[field];
+        if (field === 'validUntil' || field === 'validFrom') return true;
+        // Turning a switched-off statutory discount back on is always allowed
+        if (field === 'isActive' && body.isActive === true) return false;
+        return String(body[field]) !== String(current);
+      });
+      if (locked) {
+        return NextResponse.json(
+          { success: false, error: t('validation.legalDiscountLocked', 'This discount is required by law; only its name and description can be changed') },
+          { status: 400 }
+        );
+      }
+    }
+
     // Code is immutable after creation — prevent accidental duplicate codes
     if (body.code !== undefined && body.code !== discount.code) {
       return NextResponse.json(
@@ -75,20 +96,33 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
     if (body.category !== undefined) updates.category = body.category;
     if (body.requiresIdVerification !== undefined) updates.requiresIdVerification = body.requiresIdVerification;
-    if (body.value !== undefined) {
-      if (discount.type === 'percentage' && (body.value < 0 || body.value > 100)) {
+    // The edit form can switch between percentage and fixed; check the value
+    // against the type it will have after this save, not the old one.
+    if (body.type !== undefined) {
+      if (body.type !== 'percentage' && body.type !== 'fixed') {
+        return NextResponse.json({ success: false, error: t('validation.invalidDiscountType', 'Invalid discount type') }, { status: 400 });
+      }
+      updates.type = body.type;
+    }
+    if (body.value !== undefined || updates.type !== undefined) {
+      const type = updates.type ?? discount.type;
+      const value = body.value !== undefined ? Number(body.value) : discount.value;
+      if (!Number.isFinite(value)) {
+        return NextResponse.json({ success: false, error: t('validation.invalidValue', 'Invalid value') }, { status: 400 });
+      }
+      if (type === 'percentage' && (value < 0 || value > 100)) {
         return NextResponse.json(
           { success: false, error: t('validation.percentageDiscountRange', 'Percentage discount must be between 0 and 100') },
           { status: 400 }
         );
       }
-      if (discount.type === 'fixed' && body.value < 0) {
+      if (type === 'fixed' && value < 0) {
         return NextResponse.json(
           { success: false, error: t('validation.fixedDiscountPositive', 'Fixed discount must be positive') },
           { status: 400 }
         );
       }
-      updates.value = body.value;
+      if (body.value !== undefined) updates.value = value;
     }
     if (body.minPurchaseAmount !== undefined) updates.minPurchaseAmount = body.minPurchaseAmount;
     if (body.maxDiscountAmount !== undefined) updates.maxDiscountAmount = body.maxDiscountAmount;
@@ -150,6 +184,13 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     const discount = await Discount.findOne({ _id: id, tenantId });
     if (!discount) {
       return NextResponse.json({ success: false, error: t('validation.discountNotFound', 'Discount not found') }, { status: 404 });
+    }
+
+    if (isLegalDiscountCode(discount.code)) {
+      return NextResponse.json(
+        { success: false, error: t('validation.legalDiscountLocked', 'This discount is required by law; only its name and description can be changed') },
+        { status: 400 }
+      );
     }
 
     // Preserve audit trail: a discount already applied to past transactions must not be hard-deleted.

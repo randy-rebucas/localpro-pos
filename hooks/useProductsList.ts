@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { BulkProductUpdates } from '@/lib/validation';
 
 export interface Product {
@@ -63,7 +63,16 @@ export interface FetchProductsOptions {
   filter?: 'all' | 'missing-barcode' | 'missing-image';
 }
 
-export const useProductsList = (_tenant: string) => {
+type Dict = { products?: Record<string, string | undefined>; common?: Record<string, string | undefined> } | null | undefined;
+
+export const useProductsList = (_tenant: string, dict?: Dict) => {
+  // Read through a ref so the dictionary arriving doesn't recreate the callbacks (and refetch)
+  const dictRef = useRef<Dict>(dict);
+  useEffect(() => {
+    dictRef.current = dict;
+  }, [dict]);
+  const text = useCallback((key: string, fallback: string) => dictRef.current?.products?.[key] || fallback, []);
+
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
@@ -81,6 +90,9 @@ export const useProductsList = (_tenant: string) => {
     const limit = options.limit ?? 20;
     const search = options.search?.trim() ?? '';
 
+    // A newer search supersedes the one in flight: cancel it, so a slow
+    // response for "ab" can't land after the one for "abc"
+    abortControllerRef.current?.abort();
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 20000);
     abortControllerRef.current = controller;
@@ -104,6 +116,7 @@ export const useProductsList = (_tenant: string) => {
 
       const res = await fetch(`/api/products?${params}`, { credentials: 'include', signal: controller.signal });
       const data = await res.json();
+      if (abortControllerRef.current !== controller) return; // superseded
       if (data.success) {
         setProducts(data.data);
         if (data.pagination) {
@@ -118,22 +131,23 @@ export const useProductsList = (_tenant: string) => {
         }
         setMessage(null);
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to fetch products' });
+        setMessage({ type: 'error', text: data.error || text('fetchError', 'Failed to fetch products') });
       }
     } catch (error) {
-      if ((error as Error).name !== 'AbortError') {
-        setMessage({ type: 'error', text: 'Failed to fetch products' });
-      }
+      if (abortControllerRef.current !== controller) return; // superseded: the newer request reports
+      setMessage({
+        type: 'error',
+        text: (error as Error).name === 'AbortError' ? text('requestTimeout', 'Request timed out') : text('fetchError', 'Failed to fetch products'),
+      });
     } finally {
       clearTimeout(timeoutId);
-      setLoading(false);
+      if (abortControllerRef.current === controller) setLoading(false);
     }
-  }, []);
+  }, [text]);
 
   const fetchCategories = useCallback(async () => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 20000);
-    abortControllerRef.current = controller;
 
     try {
       const res = await fetch('/api/categories', { credentials: 'include', signal: controller.signal });
@@ -165,17 +179,17 @@ export const useProductsList = (_tenant: string) => {
         setProducts((prev) => prev.filter((p) => p._id !== productId));
         return { success: true };
       } else {
-        return { success: false, error: data.error || 'Failed to delete product' };
+        return { success: false, error: data.error || text('deleteError', 'Failed to delete product') };
       }
     } catch (error) {
       if ((error as Error).name !== 'AbortError') {
-        return { success: false, error: 'Failed to delete product' };
+        return { success: false, error: text('deleteError', 'Failed to delete product') };
       }
-      return { success: false, error: 'Request timeout' };
+      return { success: false, error: text('requestTimeout', 'Request timed out') };
     } finally {
       clearTimeout(timeoutId);
     }
-  }, []);
+  }, [text]);
 
   const updateMessage = useCallback((msg: { type: 'success' | 'error'; text: string } | null) => {
     setMessage(msg);
@@ -200,17 +214,17 @@ export const useProductsList = (_tenant: string) => {
       const errorMsg =
         data.error ||
         (Array.isArray(data.errors) ? data.errors.map((e: { message: string }) => e.message).join(', ') : null) ||
-        'Failed to update products';
+        text('bulkUpdateError', 'Failed to update products');
       return { success: false as const, error: errorMsg };
     } catch (error) {
       if ((error as Error).name !== 'AbortError') {
-        return { success: false as const, error: 'Failed to update products' };
+        return { success: false as const, error: text('bulkUpdateError', 'Failed to update products') };
       }
-      return { success: false as const, error: 'Request timeout' };
+      return { success: false as const, error: text('requestTimeout', 'Request timed out') };
     } finally {
       clearTimeout(timeoutId);
     }
-  }, []);
+  }, [text]);
 
   return {
     products,

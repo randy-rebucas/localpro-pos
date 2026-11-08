@@ -205,10 +205,11 @@ export default function ReportsWorkspace() {
     getDictionaryClient(lang).then(setDict);
   }, [lang]);
 
-  // Default to the last 30 days of the store's calendar, not the browser's or UTC's
+  // Default to the last 30 days of the store's calendar (today and 29 before, the
+  // same window as the 30-day preset, so the Period select doesn't open on "Custom")
   useEffect(() => {
     setEndDate(getTenantDateString(timezone));
-    setStartDate(getTenantDateString(timezone, 30));
+    setStartDate(getTenantDateString(timezone, 29));
   }, [timezone]);
 
   useEffect(() => {
@@ -242,10 +243,29 @@ export default function ReportsWorkspace() {
     ];
     const { downloadExcel, downloadPDF } = await import('@/lib/export');
     const filename = `sales-journal-${startDate}-to-${endDate}`;
+    // Readable, translated column headings (the export reads each heading as a
+    // key, so rows are re-keyed by label; labels must not contain dots)
+    const r = (dict?.reports ?? {}) as Record<string, string | undefined>;
+    const headingFallback: Record<string, string> = {
+      receiptNumber: 'Receipt No', date: 'Date', time: 'Time', items: 'Items', itemCount: 'Item Count',
+      subtotal: 'Subtotal', discountCategory: 'Discount Type', discountAmount: 'Discount',
+      taxExemptAmount: 'VAT Exempt', taxAmount: 'VAT', total: 'Total', paymentMethod: 'Payment',
+      status: 'Status', entryType: 'Entry',
+    };
+    const labelKey: Record<string, string> = {
+      receiptNumber: 'journalReceiptNo', itemCount: 'journalItemCount', discountCategory: 'journalDiscountType',
+      discountAmount: 'journalDiscount', taxExemptAmount: 'journalVatExempt', taxAmount: 'journalVat',
+      paymentMethod: 'journalPayment', entryType: 'journalEntry',
+    };
+    const labels = headers.map((h) => (r[labelKey[h] ?? h] || headingFallback[h]).replace(/\./g, ''));
+    const rows = (salesJournal.entries as unknown as Record<string, unknown>[]).map((entry) =>
+      Object.fromEntries(headers.map((h, i) => [labels[i], entry[h]]))
+    );
+    const title = r.salesJournal || 'Sales Journal';
     if (format === 'excel') {
-      await downloadExcel(salesJournal.entries, headers, filename);
+      await downloadExcel(rows, labels, filename);
     } else {
-      await downloadPDF(salesJournal.entries, headers, filename, 'Sales Journal');
+      await downloadPDF(rows, labels, filename, title);
     }
   };
 
@@ -269,7 +289,7 @@ export default function ReportsWorkspace() {
           : ((dict?.reports?.zReadingGenerated as string | undefined) || 'Z-Reading generated')
       );
     } else {
-      toast.error(result.error || 'Failed to generate Z-Reading');
+      toast.error(result.error || (dict?.reports?.zReadingGenerationFailed as string | undefined) || 'Failed to generate Z-Reading');
     }
   };
 

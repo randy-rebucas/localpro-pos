@@ -10,7 +10,8 @@ import {
   Settings, Clock, Users2, GitBranch, Calculator, CreditCard, Monitor, Bell,
   Palette, ToggleLeft, ClipboardList, Database, ChevronDown, ChevronRight,
   LogOut, Store, ShoppingCart, Code2, Sparkles, Lock, Smartphone,
-  PanelLeftClose, PanelLeftOpen
+  PanelLeftClose, PanelLeftOpen,
+  Building2,
 } from 'lucide-react';
 import LedClock from '@/components/admin/LedClock';
 import { useAuth } from '@/contexts/AuthContext';
@@ -115,6 +116,7 @@ export default function AdminSidebar() {
       title: navT('groupConfiguration', 'Configuration'),
       defaultOpen: false,
       items: [
+        { label: navT('storeProfile', 'Store profile'), href: `${base}/admin/tenants`, icon: Building2, permission: 'tenant_profile.manage' },
         { label: navT('users', 'Users'), href: `${base}/admin/users`, icon: Users2, permission: 'users.manage' },
         { label: navT('branches', 'Branches'), href: `${base}/admin/branches`, icon: GitBranch, permission: 'branches.manage' },
         { label: navT('businessType', 'Business Type'), href: `${base}/admin/business-types`, icon: Store, permission: 'settings.manage' },
@@ -214,7 +216,10 @@ export default function AdminSidebar() {
     </button>
   );
 
-  const SidebarContent = ({ collapsed, desktop = false }: { collapsed: boolean; desktop?: boolean }) => (
+  // A render function, not a component: declared inside AdminSidebar, a
+  // component would be a new type on every render and remount the whole panel
+  // (nav scroll position reset, clock restarted, keyboard focus lost).
+  const renderSidebarContent = ({ collapsed, desktop = false }: { collapsed: boolean; desktop?: boolean }) => (
     <div className="flex h-full flex-col font-body">
       {/* Brand, clock and collapse key. Desktop only: on phones the top bar carries the brand. */}
       {desktop && (
@@ -260,7 +265,7 @@ export default function AdminSidebar() {
           {!collapsed && (
             <div className="min-w-0">
               <p className="font-receipt text-[10px] uppercase tracking-[0.18em] text-[#8fe3d0]">{navT('operator', 'Operator')}</p>
-              <p className="truncate text-sm font-semibold text-paper-white">{user?.name || 'User'}</p>
+              <p className="truncate text-sm font-semibold text-paper-white">{user?.name || navT('userFallback', 'User')}</p>
               <p className="truncate font-receipt text-[11px] uppercase tracking-[0.1em] text-paper/55">
                 {roleLabel[user?.role ?? ''] || user?.role}
               </p>
@@ -368,7 +373,7 @@ export default function AdminSidebar() {
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <SidebarContent collapsed={false} />
+        {renderSidebarContent({ collapsed: false })}
       </aside>
 
       {/* Desktop sidebar */}
@@ -377,7 +382,7 @@ export default function AdminSidebar() {
           sidebarCollapsed ? 'w-16' : 'w-64'
         }`}
       >
-        <SidebarContent collapsed={sidebarCollapsed} desktop />
+        {renderSidebarContent({ collapsed: sidebarCollapsed, desktop: true })}
       </aside>
     </>
   );

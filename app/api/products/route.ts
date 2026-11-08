@@ -12,6 +12,7 @@ import { logger } from '@/lib/logger';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
 import { findVariationProblem, normalizeVariationRows } from '@/lib/product-variations';
+import { pickProductFields, findTenantCategory } from '@/lib/product-input';
 import { findTakenVariationSku, newVariation, variationProblemMessage } from '@/lib/product-variations-save';
 
 // _id keeps equal values in a fixed order, so paging can't repeat or skip a product
@@ -218,9 +219,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Variations only come in through the checked rows below
-    const { variations: rawVariations, hasVariations: _ignored, ...fields } = data;
-    const variationRows = normalizeVariationRows(rawVariations) ?? [];
+    // Only the product's own fields (lib/product-input.ts) plus the opening
+    // stock; variations only come in through the checked rows below.
+    const { set: fields } = pickProductFields(data as Record<string, unknown>);
+    fields.stock = data.stock;
+    if (fields.categoryId !== undefined) {
+      const category = await findTenantCategory(tenantId, fields.categoryId);
+      if (!category) {
+        return NextResponse.json({ success: false, errors: [{ field: 'categoryId', message: t('validation.categoryNotFound', 'Category not found'), code: 'categoryNotFound' }] }, { status: 400 });
+      }
+      fields.category = category.name;
+    }
+    const variationRows = normalizeVariationRows(data.variations) ?? [];
     const problem = findVariationProblem(variationRows);
     const message = problem
       ? variationProblemMessage(problem.code, problem.label, t)

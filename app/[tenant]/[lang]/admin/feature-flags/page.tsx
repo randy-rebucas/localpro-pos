@@ -26,7 +26,7 @@ type Dict = Record<string, Record<string, string | undefined> | undefined>;
 
 const flagValue = (s: ITenantSettings | null | undefined, key: FeatureFlagKey): boolean => {
   const v = (s as Record<string, unknown> | null | undefined)?.[key];
-  return typeof v === 'boolean' ? v : getFeatureFlagDefault(key);
+  return typeof v === 'boolean' ? v : getFeatureFlagDefault(key, getBusinessType(s ?? undefined));
 };
 
 export default function FeatureFlagsPage() {

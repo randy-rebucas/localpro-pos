@@ -31,6 +31,8 @@ export interface CatalogTransaction {
   change?: number;
   status: 'completed' | 'cancelled' | 'refunded';
   refundCount?: number;
+  /** Running total already refunded against this sale */
+  refundedAmount?: number;
   salesChannel?: string;
   voidReason?: string;
   customerId?: string | { firstName?: string; lastName?: string } | null;

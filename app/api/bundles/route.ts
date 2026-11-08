@@ -8,6 +8,11 @@ import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
+import { parseBundleInput } from '@/lib/bundle-input';
+import { getTenantSettingsById } from '@/lib/tenant';
+import { tenantDayEdge } from '@/lib/timezone';
+import mongoose from 'mongoose';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 export async function GET(request: NextRequest) {
   try {
@@ -50,13 +55,14 @@ export async function GET(request: NextRequest) {
       if (maxPrice) query.price.$lte = parseFloat(maxPrice);
     }
     if (startDate || endDate) {
+      // Picked days at the store, not UTC / the server's zone
+      const timezone = (await getTenantSettingsById(tenantId))?.timezone;
       query.createdAt = {};
-      if (startDate) query.createdAt.$gte = new Date(startDate);
-      if (endDate) {
-        const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999);
-        query.createdAt.$lte = end;
-      }
+      if (startDate) query.createdAt.$gte = tenantDayEdge(startDate, 'start', timezone);
+      if (endDate) query.createdAt.$lte = tenantDayEdge(endDate, 'end', timezone);
+    }
+    if (categoryId && !mongoose.isValidObjectId(categoryId)) {
+      return NextResponse.json({ success: true, data: [] });
     }
 
     const bundles = await ProductBundle.find(query)
@@ -87,26 +93,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
     }
 
-    const body = await request.json();
-    const { name, description, price, items, sku, categoryId, image, trackInventory } = body;
+    const { allowed } = checkRateLimit(`write:bundles:${tenantId}:${user.userId}`, 30, 60_000);
+    if (!allowed) {
+      return NextResponse.json({ success: false, error: t('validation.tooManyRequests', 'Too many requests') }, { status: 429 });
+    }
 
-    if (!name || !price || !items || items.length === 0) {
-      return NextResponse.json(
-        { success: false, error: t('validation.bundleFieldsRequired', 'Name, price, and at least one item are required') },
-        { status: 400 }
-      );
+    const body = await request.json();
+    const parsed = await parseBundleInput(body ?? {}, tenantId, t, { partial: false });
+    if (!parsed.ok) {
+      return NextResponse.json({ success: false, error: parsed.error }, { status: 400 });
     }
 
     const bundle = await ProductBundle.create({
+      ...parsed.value.set,
       tenantId,
-      name,
-      description,
-      price,
-      items,
-      sku,
-      categoryId,
-      image,
-      trackInventory: trackInventory !== false,
       isActive: true,
     });
 
@@ -115,7 +115,7 @@ export async function POST(request: NextRequest) {
       action: AuditActions.CREATE,
       entityType: 'bundle',
       entityId: bundle._id.toString(),
-      changes: body,
+      changes: parsed.value.set,
     });
 
     return NextResponse.json({ success: true, data: bundle }, { status: 201 });

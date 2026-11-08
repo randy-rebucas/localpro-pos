@@ -50,33 +50,49 @@ export async function POST(request: NextRequest) {
     if (!customerId) {
       return NextResponse.json({ success: false, error: 'customerId is required' }, { status: 400 });
     }
-    if (typeof points !== 'number' || points === 0) {
-      return NextResponse.json({ success: false, error: 'points must be a non-zero number' }, { status: 400 });
+    if (typeof points !== 'number' || !Number.isInteger(points) || points === 0 || Math.abs(points) > 1_000_000) {
+      return NextResponse.json({ success: false, error: 'points must be a non-zero whole number' }, { status: 400 });
+    }
+    if (!mongoose.isValidObjectId(customerId)) {
+      return NextResponse.json({ success: false, error: 'Customer not found' }, { status: 404 });
     }
     if (!description || typeof description !== 'string' || !description.trim()) {
       return NextResponse.json({ success: false, error: 'description is required' }, { status: 400 });
     }
 
-    const customer = await Customer.findOne({ _id: customerId, tenantId });
-    if (!customer) {
-      return NextResponse.json({ success: false, error: 'Customer not found' }, { status: 404 });
-    }
-
-    const balanceBefore = customer.loyaltyPointsBalance ?? 0;
-    const balanceAfter = Math.max(0, balanceBefore + points);
-
     const session = await mongoose.startSession();
     session.startTransaction();
 
     try {
-      customer.loyaltyPointsBalance = balanceAfter;
-      await customer.save({ session });
+      // One atomic update (never below 0) instead of read-then-save: a POS
+      // earn landing between the read and the save used to be wiped out.
+      // new:false hands back the balance this update started from.
+      const before = await Customer.findOneAndUpdate(
+        { _id: customerId, tenantId },
+        [{ $set: { loyaltyPointsBalance: { $max: [0, { $add: [{ $ifNull: ['$loyaltyPointsBalance', 0] }, points] }] } } }],
+        { new: false, session, projection: { loyaltyPointsBalance: 1 } }
+      ).lean<{ _id: mongoose.Types.ObjectId; loyaltyPointsBalance?: number }>();
+      if (!before) {
+        await session.abortTransaction();
+        return NextResponse.json({ success: false, error: 'Customer not found' }, { status: 404 });
+      }
+
+      const balanceBefore = before.loyaltyPointsBalance ?? 0;
+      const balanceAfter = Math.max(0, balanceBefore + points);
+      // What actually moved: deducting 500 from 100 takes 100, and the ledger
+      // must say so for the history to add up to the balance.
+      const applied = balanceAfter - balanceBefore;
+      if (applied === 0) {
+        await session.abortTransaction();
+        return NextResponse.json({ success: false, error: 'This customer has no points to deduct' }, { status: 400 });
+      }
+      const customer = before;
 
       const loyaltyTx = await LoyaltyTransaction.create([{
         tenantId,
         customerId: customer._id,
         type: 'adjust',
-        points,
+        points: applied,
         balanceBefore,
         balanceAfter,
         description: description.trim(),
@@ -91,7 +107,7 @@ export async function POST(request: NextRequest) {
         action: AuditActions.UPDATE,
         entityType: 'loyalty_adjust',
         entityId: loyaltyTx[0]._id.toString(),
-        changes: { customerId, points, balanceBefore, balanceAfter, description },
+        changes: { customerId, requested: points, points: applied, balanceBefore, balanceAfter, description },
       });
 
       return NextResponse.json({
@@ -100,7 +116,7 @@ export async function POST(request: NextRequest) {
           customerId,
           balanceBefore,
           balanceAfter,
-          pointsAdjusted: points,
+          pointsAdjusted: applied,
           loyaltyTransactionId: loyaltyTx[0]._id,
         },
       });

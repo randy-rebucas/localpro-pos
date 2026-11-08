@@ -11,6 +11,7 @@ import Tenant from '@/models/Tenant';
 import type { ITenantSettings } from '@/models/Tenant';
 import Transaction from '@/models/Transaction';
 import Expense from '@/models/Expense';
+import { escapeHtml } from '@/lib/html-escape';
 import { sendEmail } from '@/lib/notifications';
 import { getActiveTenants, type ActiveTenant } from '@/lib/tenant-active-query';
 import { AutomationResult } from './types';
@@ -295,7 +296,7 @@ export async function autoCloseCashDrawers(
   <div class="report">
     <div class="header">
       <h2>End of Day Cash Drawer Report</h2>
-      <p>${companyName}</p>
+      <p>${escapeHtml(companyName)}</p>
       <p>${sessionEnd.toLocaleDateString()} ${sessionEnd.toLocaleTimeString()}</p>
     </div>
 
@@ -303,7 +304,7 @@ export async function autoCloseCashDrawers(
       <h3>Session Summary</h3>
       <div class="summary-item">
         <span><strong>Cashier:</strong></span>
-        <span>${user?.name || 'Unknown'}</span>
+        <span>${escapeHtml(user?.name || 'Unknown')}</span>
       </div>
       <div class="summary-item">
         <span><strong>Opening Amount:</strong></span>
@@ -352,6 +353,7 @@ export async function autoCloseCashDrawers(
                 subject,
                 message: reportHtml,
                 type: 'email',
+                html: true, // already HTML; its values are escaped where it is built
               }).catch(() => {
                 // Don't fail if email fails
               });

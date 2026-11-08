@@ -8,6 +8,8 @@ import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
+import { parseBundleInput } from '@/lib/bundle-input';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 export async function GET(
   request: NextRequest,
@@ -63,18 +65,27 @@ export async function PUT(
       return NextResponse.json({ success: false, error: 'Bundle not found' }, { status: 404 });
     }
 
+    const t = await getValidationTranslatorFromRequest(request);
+    const { allowed } = checkRateLimit(`write:bundles:${tenantId}:${user.userId}`, 30, 60_000);
+    if (!allowed) {
+      return NextResponse.json({ success: false, error: t('validation.tooManyRequests', 'Too many requests') }, { status: 429 });
+    }
+
     const body = await request.json();
     const oldData = bundle.toObject();
 
-    if (body.name) bundle.name = body.name;
-    if (body.description !== undefined) bundle.description = body.description;
-    if (body.price !== undefined) bundle.price = body.price;
-    if (body.items) bundle.items = body.items;
-    if (body.sku !== undefined) bundle.sku = body.sku;
-    if (body.categoryId !== undefined) bundle.categoryId = body.categoryId;
-    if (body.image !== undefined) bundle.image = body.image;
-    if (body.trackInventory !== undefined) bundle.trackInventory = body.trackInventory;
-    if (body.isActive !== undefined) bundle.isActive = body.isActive;
+    const parsed = await parseBundleInput(body ?? {}, tenantId, t, { partial: true });
+    if (!parsed.ok) {
+      return NextResponse.json({ success: false, error: parsed.error }, { status: 400 });
+    }
+    bundle.set(parsed.value.set);
+    for (const field of parsed.value.unset) bundle.set(field, undefined);
+    if (body?.isActive !== undefined) {
+      if (typeof body.isActive !== 'boolean') {
+        return NextResponse.json({ success: false, error: t('validation.invalidValue', 'Invalid value') }, { status: 400 });
+      }
+      bundle.isActive = body.isActive;
+    }
 
     await bundle.save();
 
@@ -96,7 +107,7 @@ export async function PUT(
       );
     }
     logger.error('Error updating bundle:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+    return NextResponse.json({ success: false, error: 'Failed to update bundle' }, { status: 500 });
   }
 }
 

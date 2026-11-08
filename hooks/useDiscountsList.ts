@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from 'react';
 import { DiscountFormData } from './useDiscountsForm';
+import { useMessages } from '@/hooks/useMessages';
 
 export interface Discount {
   _id: string;
@@ -38,6 +39,7 @@ interface UseDiscountsListReturn {
 }
 
 export function useDiscountsList(): UseDiscountsListReturn {
+  const t = useMessages();
   const [discounts, setDiscounts] = useState<Discount[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -63,17 +65,17 @@ export function useDiscountsList(): UseDiscountsListReturn {
         // (delete, toggle, save), and clearing it here would wipe that
         // feedback out from under them. Use clearMessage() explicitly instead.
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to fetch discounts' });
+        setMessage({ type: 'error', text: data.error || t('common.failedToFetchDiscounts', 'Failed to fetch discounts') });
       }
     } catch (error) {
       if (error instanceof Error && error.name !== 'AbortError') {
         console.error('Failed to fetch discounts:', error);
-        setMessage({ type: 'error', text: 'Failed to fetch discounts' });
+        setMessage({ type: 'error', text: t('common.failedToFetchDiscounts', 'Failed to fetch discounts') });
       }
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   const createDiscount = useCallback(async (form: DiscountFormData) => {
     try {
@@ -86,18 +88,18 @@ export function useDiscountsList(): UseDiscountsListReturn {
 
       const data = await res.json();
       if (data.success) {
-        setMessage({ type: 'success', text: 'Discount created successfully' });
+        setMessage({ type: 'success', text: t('admin.discountCreated', 'Discount created successfully') });
         return true;
       }
-      const errorText = data.error || 'Failed to save discount';
+      const errorText = data.error || t('admin.saveError', 'Failed to save discount');
       setMessage({ type: 'error', text: errorText });
       return errorText;
     } catch {
-      const errorText = 'Failed to save discount';
+      const errorText = t('admin.saveError', 'Failed to save discount');
       setMessage({ type: 'error', text: errorText });
       return errorText;
     }
-  }, []);
+  }, [t]);
 
   const updateDiscount = useCallback(async (id: string, form: DiscountFormData) => {
     try {
@@ -110,18 +112,18 @@ export function useDiscountsList(): UseDiscountsListReturn {
 
       const data = await res.json();
       if (data.success) {
-        setMessage({ type: 'success', text: 'Discount updated successfully' });
+        setMessage({ type: 'success', text: t('admin.discountUpdated', 'Discount updated successfully') });
         return true;
       }
-      const errorText = data.error || 'Failed to update discount';
+      const errorText = data.error || t('admin.updateError', 'Failed to update discount');
       setMessage({ type: 'error', text: errorText });
       return errorText;
     } catch {
-      const errorText = 'Failed to update discount';
+      const errorText = t('admin.updateError', 'Failed to update discount');
       setMessage({ type: 'error', text: errorText });
       return errorText;
     }
-  }, []);
+  }, [t]);
 
   const deleteDiscount = useCallback(async (id: string) => {
     try {
@@ -132,16 +134,16 @@ export function useDiscountsList(): UseDiscountsListReturn {
 
       const data = await res.json();
       if (data.success) {
-        setMessage({ type: 'success', text: 'Discount deleted successfully' });
+        setMessage({ type: 'success', text: t('admin.deleteSuccess', 'Discount deleted successfully') });
         return true;
       }
-      setMessage({ type: 'error', text: data.error || 'Failed to delete discount' });
+      setMessage({ type: 'error', text: data.error || t('admin.deleteError', 'Failed to delete discount') });
       return false;
     } catch {
-      setMessage({ type: 'error', text: 'Failed to delete discount' });
+      setMessage({ type: 'error', text: t('admin.deleteError', 'Failed to delete discount') });
       return false;
     }
-  }, []);
+  }, [t]);
 
   const toggleDiscountStatus = useCallback(async (id: string, isActive: boolean) => {
     try {
@@ -156,17 +158,17 @@ export function useDiscountsList(): UseDiscountsListReturn {
       if (data.success) {
         setMessage({
           type: 'success',
-          text: isActive ? 'Discount activated successfully' : 'Discount deactivated successfully',
+          text: isActive ? t('admin.discountActivated', 'Discount activated successfully') : t('admin.discountDeactivated', 'Discount deactivated successfully'),
         });
         return true;
       }
-      setMessage({ type: 'error', text: data.error || 'Failed to update discount' });
+      setMessage({ type: 'error', text: data.error || t('admin.updateError', 'Failed to update discount') });
       return false;
     } catch {
-      setMessage({ type: 'error', text: 'Failed to update discount' });
+      setMessage({ type: 'error', text: t('admin.updateError', 'Failed to update discount') });
       return false;
     }
-  }, []);
+  }, [t]);
 
   const clearMessage = useCallback(() => setMessage(null), []);
 

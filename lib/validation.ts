@@ -306,15 +306,18 @@ export function validateCategory(data: Record<string, unknown>, t?: TranslationF
 }
 
 /**
- * Sanitize string input
+ * Sanitize string input. Strips markup characters and inline handlers, but
+ * stores text as typed otherwise: no HTML entity encoding. React escapes on
+ * output, so encoding `&` here made "Salt & Pepper" show as "Salt &amp; Pepper"
+ * (and differ from the same name imported by CSV). HTML built by hand must
+ * escape at the point it is built (lib/html-escape.ts).
  */
 export function sanitizeString(input: string): string {
   return input
     .trim()
     .replace(/[<>]/g, '')
     .replace(/javascript:/gi, '')
-    .replace(/on\w+\s*=/gi, '')
-    .replace(/&(?!amp;|lt;|gt;|quot;|#\d+;)/g, '&amp;');
+    .replace(/on\w+\s*=/gi, '');
 }
 
 /**

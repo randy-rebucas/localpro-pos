@@ -16,6 +16,7 @@ import { requireBookingSchedulingAccess } from '@/lib/booking-scheduling-access'
 import { getClosedHolidayForDate } from '@/lib/holidays';
 import { bookingFitsHours } from '@/lib/booking-hours';
 import { logger } from '@/lib/logger';
+import { ensureBookingLock, takeBookingLock } from '@/lib/booking-lock';
 
 class BookingConflictError extends Error {
   conflicts: unknown;
@@ -172,8 +173,13 @@ export async function POST(request: NextRequest) {
       duration,
       staffId,
       notes,
-      status = 'pending',
     } = body;
+    // A customer's booking always waits for the store to confirm it; staff may
+    // book straight in as confirmed.
+    const status: 'pending' | 'confirmed' = !isCustomer && body.status === 'confirmed' ? 'confirmed' : 'pending';
+    if (!isCustomer && body.status !== undefined && !['pending', 'confirmed'].includes(body.status)) {
+      return NextResponse.json({ success: false, error: t('validation.invalidStatus', 'Invalid status') }, { status: 400 });
+    }
     let {
       customerName,
       customerEmail,
@@ -199,8 +205,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const minutes = Number(duration);
     const start = new Date(startTime);
-    const end = new Date(start.getTime() + duration * 60000);
+    if (!Number.isInteger(minutes) || minutes < 5 || minutes > 24 * 60 || Number.isNaN(start.getTime())) {
+      return NextResponse.json({ success: false, error: t('validation.invalidBookingTime', 'Invalid booking time or duration') }, { status: 400 });
+    }
+    const end = new Date(start.getTime() + minutes * 60000);
 
     // Block bookings on days the tenant has marked the business closed
     // (Admin → Holidays) — this is the whole point of that calendar.
@@ -230,9 +240,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Verify staff exists if provided (only for staff-created bookings, not customer bookings)
-    if (staffId && !isCustomer) {
-      const staff = await User.findOne({ _id: staffId, tenantId, isActive: true });
+    // Verify staff belongs to this store and is active — for customer bookings
+    // too: the response populates the staff member's name and email.
+    if (staffId) {
+      const staff = mongoose.isValidObjectId(staffId)
+        ? await User.findOne({ _id: staffId, tenantId, isActive: true }).select('_id').lean()
+        : null;
       if (!staff) {
         return NextResponse.json(
           { success: false, error: t('validation.staffNotFound', 'Staff member not found or inactive') },
@@ -246,10 +259,13 @@ export async function POST(request: NextRequest) {
     // model's pre('save') hook) share one snapshot — a plain read-then-create
     // would let two concurrent bookings both pass the conflict check before
     // either insert commits, double-booking the same staff/slot.
+    await ensureBookingLock(String(tenantId));
     const session = await mongoose.startSession();
     let booking: InstanceType<typeof Booking> | undefined;
     try {
       await session.withTransaction(async () => {
+        // Serialise with any other booking write for this store (see lib/booking-lock.ts)
+        await takeBookingLock(String(tenantId), session);
         const conflictingBookings = await Booking.find({
           tenantId,
           status: { $in: ['pending', 'confirmed'] },
@@ -283,7 +299,7 @@ export async function POST(request: NextRequest) {
           serviceDescription,
           startTime: start,
           endTime: end,
-          duration,
+          duration: minutes,
           staffId,
           notes,
           status,
@@ -292,8 +308,9 @@ export async function POST(request: NextRequest) {
       });
     } catch (txError) {
       if (txError instanceof BookingConflictError) {
+        // Conflicting bookings carry other customers' names and contacts — staff only
         return NextResponse.json(
-          { success: false, error: txError.message, conflicts: txError.conflicts },
+          { success: false, error: txError.message, ...(isCustomer ? {} : { conflicts: txError.conflicts }) },
           { status: 409 }
         );
       }
@@ -341,7 +358,7 @@ export async function POST(request: NextRequest) {
     });
 
     const bookingData = await Booking.findById(booking._id)
-      .populate('staffId', 'name email')
+      .populate('staffId', isCustomer ? 'name' : 'name email')
       .lean();
 
     return NextResponse.json(

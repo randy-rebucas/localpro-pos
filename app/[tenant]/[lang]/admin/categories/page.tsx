@@ -9,6 +9,7 @@ import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { useCategoriesList, type Category } from '@/hooks/useCategoriesList';
 import { useCategoryForm } from '@/hooks/useCategoryForm';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useConfirm } from '@/lib/confirm';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import {
   ICON, DARK_KEY_PRIMARY, LABEL, INPUT, KEY, KEY_PRIMARY, ROW_KEY,
@@ -28,6 +29,7 @@ export default function CategoriesPage() {
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const { confirm, Dialog: ConfirmDialog } = useConfirm();
   const { canAccess } = usePermissions();
   const canManage = canAccess('categories.manage');
 
@@ -46,6 +48,15 @@ export default function CategoriesPage() {
     if (!dict) return;
 
     const newStatus = !category.isActive;
+    // Ask before switching a category off (bundles and products already ask)
+    if (!newStatus) {
+      const ok = await confirm(
+        (dict.admin?.deactivateCategoryTitle || 'Deactivate {name}?').replace('{name}', category.name),
+        dict.admin?.deactivateCategoryConfirm || 'You can turn it back on at any time. Its products are not changed.',
+        { variant: 'warning', confirmText: dict.admin?.deactivate || 'Deactivate', cancelText: dict.common?.cancel || 'Cancel' }
+      );
+      if (!ok) return;
+    }
     setTogglingId(category._id);
     try {
       await toggleCategoryStatus(
@@ -184,6 +195,7 @@ export default function CategoriesPage() {
           dict={dict}
         />
       )}
+      {ConfirmDialog}
     </RegisterPage>
   );
 }

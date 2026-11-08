@@ -185,7 +185,8 @@ describe('PUT /api/expenses/:id', () => {
     const { status } = await parseResponse(res);
 
     expect(status).toBe(404);
-    expect(mockExpenseFindOne).toHaveBeenCalledWith({ _id: 'e1', tenantId: TENANT_B });
+    // Tenant-scoped, and deleted (soft) expenses are not editable
+    expect(mockExpenseFindOne).toHaveBeenCalledWith({ _id: 'e1', tenantId: TENANT_B, isActive: { $ne: false } });
   });
 
   it('rejects update when the caller lacks expenses.manage', async () => {

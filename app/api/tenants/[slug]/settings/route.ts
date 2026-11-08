@@ -11,6 +11,7 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { getTenantBySlug } from '@/lib/tenant';
 import { assertPublicHttpUrl, UnsafeOutboundUrlError } from '@/lib/net/outbound-url';
+import { cleanFontFamily, findBrandingProblems } from '@/lib/branding-helpers';
 import { LOCKED_SETTINGS_KEYS, permissionForSettingsKey, stripSecretSettings } from '@/lib/tenant-settings-access';
 
 export async function GET(
@@ -120,6 +121,14 @@ export async function PUT(
     const currentBusinessType = existingTenant?.settings?.businessType;
     const newBusinessType = settings.businessType;
 
+    // The "Select type…" placeholder must not blank the store's business type
+    if (settings.businessType !== undefined && (typeof settings.businessType !== 'string' || !settings.businessType.trim())) {
+      return NextResponse.json(
+        { success: false, error: t('validation.businessTypeRequired', 'Choose a business type') },
+        { status: 400 }
+      );
+    }
+
     // A tenant may stay on a closed type, but cannot move onto one
     if (newBusinessType && newBusinessType !== currentBusinessType && !isBusinessTypeOpenForSignup(newBusinessType)) {
       return NextResponse.json(
@@ -154,6 +163,19 @@ export async function PUT(
           { status: 400 }
         );
       }
+    }
+
+    // Branding fonts end up inside CSS on every page: only well-formed values
+    if (settings.advancedBranding !== undefined && updatedSettings.advancedBranding) {
+      const branding = updatedSettings.advancedBranding as Parameters<typeof findBrandingProblems>[0];
+      const problems = findBrandingProblems(branding);
+      if (problems.some((p) => p !== 'cssBraces')) {
+        return NextResponse.json(
+          { success: false, error: t('validation.invalidBrandingFont', 'Check the font settings: the family name and an https font URL are required') },
+          { status: 400 }
+        );
+      }
+      if (branding.fontFamily) branding.fontFamily = cleanFontFamily(branding.fontFamily);
     }
 
     // Validate color format (hex)

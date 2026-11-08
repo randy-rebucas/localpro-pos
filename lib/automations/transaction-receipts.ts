@@ -6,6 +6,7 @@
 import connectDB from '@/lib/mongodb';
 import Transaction from '@/models/Transaction';
 import Tenant from '@/models/Tenant'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import { escapeHtml } from '@/lib/html-escape';
 import { sendEmail } from '@/lib/notifications';
 import { getTenantSettingsById } from '@/lib/tenant';
 import { formatDate, formatTime } from '@/lib/formatting';
@@ -79,7 +80,7 @@ export async function sendTransactionReceipt(
       .map(
         (item) =>
           `  <tr>
-    <td>${item.name}</td>
+    <td>${escapeHtml(item.name)}</td>
     <td style="text-align: center;">${item.quantity}</td>
     <td style="text-align: right;">${formatCurrency(item.price, tenantSettings)}</td>
     <td style="text-align: right;">${formatCurrency(item.subtotal, tenantSettings)}</td>
@@ -108,13 +109,13 @@ export async function sendTransactionReceipt(
 <body>
   <div class="receipt">
     <div class="header">
-      <h2>${companyName}</h2>
-      ${tenantSettings?.address ? `<p>${[tenantSettings.address.street, tenantSettings.address.city, tenantSettings.address.state, tenantSettings.address.zipCode].filter(Boolean).join(', ')}</p>` : ''}
-      ${tenantSettings?.phone ? `<p>${tenantSettings.phone}</p>` : ''}
+      <h2>${escapeHtml(companyName)}</h2>
+      ${tenantSettings?.address ? `<p>${[tenantSettings.address.street, tenantSettings.address.city, tenantSettings.address.state, tenantSettings.address.zipCode].filter(Boolean).map(escapeHtml).join(', ')}</p>` : ''}
+      ${tenantSettings?.phone ? `<p>${escapeHtml(tenantSettings.phone)}</p>` : ''}
     </div>
     
     <div class="info">
-      <p><strong>Receipt Number:</strong> ${receiptNumber}</p>
+      <p><strong>Receipt Number:</strong> ${escapeHtml(receiptNumber)}</p>
       <p><strong>Date:</strong> ${formattedDate}</p>
       <p><strong>Time:</strong> ${formattedTime}</p>
     </div>
@@ -136,7 +137,7 @@ ${itemsList}
     <div class="total">
       <p><strong>Subtotal:</strong> ${formatCurrency(transaction.subtotal, tenantSettings)}</p>
       ${transaction.discountAmount ? `<p><strong>Discount:</strong> -${formatCurrency(transaction.discountAmount, tenantSettings)}</p>` : ''}
-      ${transaction.taxAmount ? `<p><strong>${tenantSettings?.taxLabel || 'Tax'}:</strong> ${formatCurrency(transaction.taxAmount, tenantSettings)}</p>` : ''}
+      ${transaction.taxAmount ? `<p><strong>${escapeHtml(tenantSettings?.taxLabel || 'Tax')}:</strong> ${formatCurrency(transaction.taxAmount, tenantSettings)}</p>` : ''}
       <p class="total-row"><strong>Total:</strong> ${formatCurrency(transaction.total, tenantSettings)}</p>
       <p><strong>Payment Method:</strong> ${transaction.paymentMethod.toUpperCase()}</p>
       ${transaction.cashReceived ? `<p><strong>Cash Received:</strong> ${formatCurrency(transaction.cashReceived, tenantSettings)}</p>` : ''}
@@ -158,6 +159,7 @@ ${itemsList}
       subject: `Receipt from ${companyName} - ${receiptNumber}`,
       message: receiptHtml,
       type: 'email',
+      html: true, // already HTML; its values are escaped where it is built
     });
 
     results.processed = 1;

@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from 'react';
 import { ExpenseFormData } from './useExpensesForm';
+import { useMessages } from '@/hooks/useMessages';
 
 export interface Expense {
   _id: string;
@@ -48,6 +49,7 @@ interface UseExpensesListReturn {
 }
 
 export function useExpensesList(): UseExpensesListReturn {
+  const t = useMessages();
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -93,17 +95,17 @@ export function useExpensesList(): UseExpensesListReturn {
         // (delete, save), and clearing it here would wipe that feedback out
         // from under them.
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to fetch expenses' });
+        setMessage({ type: 'error', text: data.error || t('common.failedToFetchExpenses', 'Failed to fetch expenses') });
       }
     } catch (error) {
       if (error instanceof Error && error.name !== 'AbortError') {
         console.error('Failed to fetch expenses:', error);
-        setMessage({ type: 'error', text: 'Failed to fetch expenses' });
+        setMessage({ type: 'error', text: t('common.failedToFetchExpenses', 'Failed to fetch expenses') });
       }
     } finally {
       setLoading(false);
     }
-  }, [filters]);
+  }, [filters, t]);
 
   const createExpense = useCallback(async (form: ExpenseFormData) => {
     try {
@@ -118,15 +120,15 @@ export function useExpensesList(): UseExpensesListReturn {
       if (data.success) {
         return true;
       }
-      const errorText = data.error || 'Failed to save expense';
+      const errorText = data.error || t('admin.failedToSaveExpense', 'Failed to save expense');
       setMessage({ type: 'error', text: errorText });
       return errorText;
     } catch {
-      const errorText = 'Failed to save expense';
+      const errorText = t('admin.failedToSaveExpense', 'Failed to save expense');
       setMessage({ type: 'error', text: errorText });
       return errorText;
     }
-  }, []);
+  }, [t]);
 
   const updateExpense = useCallback(async (id: string, form: ExpenseFormData) => {
     try {
@@ -141,15 +143,15 @@ export function useExpensesList(): UseExpensesListReturn {
       if (data.success) {
         return true;
       }
-      const errorText = data.error || 'Failed to update expense';
+      const errorText = data.error || t('admin.failedToUpdateExpense', 'Failed to update expense');
       setMessage({ type: 'error', text: errorText });
       return errorText;
     } catch {
-      const errorText = 'Failed to update expense';
+      const errorText = t('admin.failedToUpdateExpense', 'Failed to update expense');
       setMessage({ type: 'error', text: errorText });
       return errorText;
     }
-  }, []);
+  }, [t]);
 
   const deleteExpense = useCallback(async (id: string) => {
     try {
@@ -162,13 +164,13 @@ export function useExpensesList(): UseExpensesListReturn {
       if (data.success) {
         return true;
       }
-      setMessage({ type: 'error', text: data.error || 'Failed to delete expense' });
+      setMessage({ type: 'error', text: data.error || t('admin.failedToDeleteExpense', 'Failed to delete expense') });
       return false;
     } catch {
-      setMessage({ type: 'error', text: 'Failed to delete expense' });
+      setMessage({ type: 'error', text: t('admin.failedToDeleteExpense', 'Failed to delete expense') });
       return false;
     }
-  }, []);
+  }, [t]);
 
   return {
     expenses,

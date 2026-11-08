@@ -24,6 +24,7 @@ import { useBundlesAnalytics } from '@/hooks/useBundlesAnalytics';
 import { getDeleteConfirmMessage } from '@/lib/bundles-helpers';
 import { getDefaultTenantSettings } from '@/lib/currency';
 import { formatDateTime } from '@/lib/formatting';
+import { variationLabel, type VariationAttributes, type VariationRow } from '@/lib/product-variations';
 
 interface Product {
   _id: string;
@@ -47,6 +48,7 @@ const TH = 'whitespace-nowrap px-4 py-2 text-left font-receipt text-xs font-medi
 const TD = 'whitespace-nowrap px-4 py-2.5 font-receipt text-sm';
 
 const itemId = (item: BundleItem) => (typeof item.productId === 'string' ? item.productId : item.productId._id);
+const variationKey = (v: VariationAttributes) => [v.size ?? '', v.color ?? '', v.type ?? ''].join('|');
 const categoryName = (bundle: Bundle) =>
   typeof bundle.categoryId === 'object' && bundle.categoryId?.name ? bundle.categoryId.name : '';
 
@@ -589,7 +591,12 @@ export default function BundlesPage() {
                       {bundle.items.map((item, index) => (
                         <li key={`${itemId(item)}-${index}`} className="flex items-baseline gap-2">
                           <span className="w-8 shrink-0 text-right text-ink/60">{item.quantity}×</span>
-                          <span className="min-w-0 truncate" title={item.productName}>{item.productName}</span>
+                          <span className="min-w-0 truncate" title={item.productName}>
+                            {item.productName}
+                            {item.variation && variationLabel(item.variation) && (
+                              <span className="text-ink/60"> · {variationLabel(item.variation)}</span>
+                            )}
+                          </span>
                         </li>
                       ))}
                       {bundle.items.length === 0 && <li className="text-ink/50">—</li>}
@@ -886,7 +893,8 @@ function BundleModal({
   };
 
   const addProduct = (productToAdd: Product) => {
-    if (formData.items.some(item => itemId(item) === productToAdd._id)) {
+    // A product with variations may go in more than once (say, one Small and one Large)
+    if (!productToAdd.hasVariations && formData.items.some(item => itemId(item) === productToAdd._id)) {
       flagDuplicate();
       return;
     }
@@ -950,6 +958,25 @@ function BundleModal({
       setShowProductSuggestions(false);
       setHighlightedIndex(-1);
     }
+  };
+
+  // Bundle stock comes out of the chosen variation, so one must be picked for
+  // a product that has them (the server refuses the bundle otherwise).
+  const variationsOf = (item: BundleItem): VariationRow[] => {
+    const product = products.find((p) => p._id === itemId(item));
+    return product?.hasVariations ? ((product.variations ?? []) as VariationRow[]) : [];
+  };
+  const setItemVariation = (index: number, key: string) => {
+    const item = formData.items[index];
+    const chosen = variationsOf(item).find((v) => variationKey(v) === key);
+    setFormData({
+      ...formData,
+      items: formData.items.map((it, i) =>
+        i === index
+          ? { ...it, variation: chosen ? { size: chosen.size, color: chosen.color, type: chosen.type } : undefined }
+          : it
+      ),
+    });
   };
 
   const handleRemoveItem = (index: number) => {
@@ -1176,6 +1203,20 @@ function BundleModal({
               <li key={`${itemId(item)}-${index}`} className="flex items-center gap-2 py-1 font-receipt text-sm">
                 <span className="w-10 shrink-0 text-right text-ink/60">{item.quantity}×</span>
                 <span className="min-w-0 flex-1 truncate">{item.productName}</span>
+                {variationsOf(item).length > 0 && (
+                  <select
+                    value={item.variation ? variationKey(item.variation) : ''}
+                    onChange={(e) => setItemVariation(index, e.target.value)}
+                    aria-label={`${dict.admin?.bundleVariation || 'Variation'}: ${item.productName}`}
+                    aria-invalid={!item.variation}
+                    className={`min-h-[36px] max-w-[45%] border bg-paper-white px-2 font-receipt text-xs ${item.variation ? 'border-ink/30' : 'border-stamp text-stamp'}`}
+                  >
+                    <option value="">{dict.admin?.bundleChooseVariation || 'Choose variation'}</option>
+                    {variationsOf(item).map((v) => (
+                      <option key={variationKey(v)} value={variationKey(v)}>{variationLabel(v)}</option>
+                    ))}
+                  </select>
+                )}
                 <button
                   type="button"
                   onClick={() => handleRemoveItem(index)}

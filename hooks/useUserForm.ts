@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { useMessages } from '@/hooks/useMessages';
 
 export interface UserFormData {
   email: string;
@@ -16,6 +17,7 @@ export interface User {
 }
 
 export function useUserForm(editingUser: User | null) {
+  const t = useMessages();
   const [formData, setFormData] = useState<UserFormData>({
     email: editingUser?.email || '',
     name: editingUser?.name || '',
@@ -60,12 +62,20 @@ export function useUserForm(editingUser: User | null) {
         if (data.success) {
           onSuccess?.();
         } else {
-          const errorMsg = data.error || 'Failed to save user';
+          // Password rules come back one per line in errors[]; say which failed
+          const reasons = Array.isArray(data.errors)
+            ? data.errors.map((e: unknown) => (typeof e === 'string' ? e : (e as { message?: string })?.message)).filter(Boolean)
+            : [];
+          const errorMsg = reasons.length
+            ? `${data.error ? `${data.error}: ` : ''}${reasons.join(' ')}`
+            : data.error || t('admin.failedToSaveUser', 'Failed to save user');
           setError(errorMsg);
           onError?.(errorMsg);
         }
       } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'Failed to save user';
+        const errorMsg = err instanceof Error && err.name === 'AbortError'
+          ? t('common.requestTimedOut', 'The request timed out. Please try again.')
+          : t('admin.failedToSaveUser', 'Failed to save user');
         setError(errorMsg);
         onError?.(errorMsg);
       } finally {
@@ -73,7 +83,7 @@ export function useUserForm(editingUser: User | null) {
         setSaving(false);
       }
     },
-    [editingUser, formData]
+    [editingUser, formData, t]
   );
 
   const resetForm = useCallback(() => {

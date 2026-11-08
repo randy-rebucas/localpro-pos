@@ -7,6 +7,9 @@ import { createAuditLog, AuditActions } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
 import { getTenantSettingsById } from '@/lib/tenant';
+import { checkFeatureAccess } from '@/lib/subscription';
+import mongoose from 'mongoose';
+import Transaction from '@/models/Transaction';
 
 export async function GET(
   request: NextRequest,
@@ -55,6 +58,14 @@ export async function PATCH(
     }
 
     if (isConfigChange) {
+      // The plan must include table management: the store's own switch (Feature
+      // Flags) can't turn on what the subscription doesn't cover
+      try {
+        await checkFeatureAccess(String(tenantId), 'enableTableManagement');
+      } catch (featureError: unknown) {
+        return NextResponse.json({ success: false, error: (featureError as Error).message }, { status: 403 });
+      }
+
       const tenantSettings = await getTenantSettingsById(tenantId);
       if (tenantSettings?.enableTableManagement === false) {
         return NextResponse.json(
@@ -99,6 +110,22 @@ export async function PATCH(
       if (!validStatuses.includes(status)) {
         return NextResponse.json({ success: false, error: `Status must be one of: ${validStatuses.join(', ')}` }, { status: 400 });
       }
+    }
+
+    // A linked order must be one of this store's own sales (or null to clear it)
+    if (currentOrderId) {
+      const ownOrder =
+        typeof currentOrderId === 'string' &&
+        mongoose.isValidObjectId(currentOrderId) &&
+        (await Transaction.exists({ _id: currentOrderId, tenantId }));
+      if (!ownOrder) {
+        return NextResponse.json({ success: false, error: 'Order not found' }, { status: 400 });
+      }
+    }
+
+    // Taking a table out of service while guests are seated would orphan its order
+    if (isActive === false && table.isActive !== false && (table.status !== 'open' || table.currentOrderId)) {
+      return NextResponse.json({ success: false, error: 'Free the table (reset it to open) before deactivating it' }, { status: 409 });
     }
 
     const oldData = table.toObject() as unknown as Record<string, unknown>;
@@ -161,6 +188,10 @@ export async function DELETE(
     const table = await Table.findOne({ _id: id, tenantId });
     if (!table) {
       return NextResponse.json({ success: false, error: 'Table not found' }, { status: 404 });
+    }
+
+    if (table.status !== 'open' || table.currentOrderId) {
+      return NextResponse.json({ success: false, error: 'Free the table (reset it to open) before deactivating it' }, { status: 409 });
     }
 
     table.isActive = false;

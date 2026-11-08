@@ -464,4 +464,21 @@ describe('getLowStockProducts', () => {
 
     expect(result.map((p) => [p._id, p.threshold])).toEqual([['out', 5], ['few', 5], ['unset', 10]]);
   });
+
+  it("uses the store's threshold only for products without their own", async () => {
+    // Store setting 0 = "only when out of stock": products with their own 5 keep it
+    const result = await getLowStockProducts('tenant-1', undefined, undefined, 0);
+
+    expect(result.map((p) => [p._id, p.threshold])).toEqual([['out', 5], ['few', 5]]);
+  });
+
+  it('reports the lowest low variation, even when it is 0', async () => {
+    ProductMock.find.mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        lean: vi.fn().mockResolvedValue([{ _id: 'v', name: 'Shirt', hasVariations: true, lowStockThreshold: 5, variations: [{ stock: 0 }, { stock: 4 }, { stock: 50 }] }]),
+      }),
+    });
+    const result = await getLowStockProducts('tenant-1');
+    expect(result[0].currentStock).toBe(0);
+  });
 });

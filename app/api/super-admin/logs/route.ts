@@ -1,3 +1,4 @@
+import { csvCell } from '@/lib/export';
 import { NextRequest, NextResponse } from 'next/server';
 import { escapeRegex } from '@/lib/query-utils';
 import connectDB from '@/lib/mongodb';
@@ -84,7 +85,7 @@ export async function GET(request: NextRequest) {
           const ts = new Date(log.createdAt).toISOString();
           const tenant = log.tenantId ? `${(log.tenantId as { slug?: string }).slug || ''}` : '';
           const user = log.userId ? `${(log.userId as { email?: string }).email || ''}` : '';
-          return `"${ts}","${tenant}","${log.action || ''}","${log.entityType || ''}","${log.entityId || ''}","${user}","${log.ipAddress || ''}"`;
+          return [ts, tenant, log.action, log.entityType, log.entityId, user, log.ipAddress].map(csvCell).join(',');
         }),
       ].join('\n');
 

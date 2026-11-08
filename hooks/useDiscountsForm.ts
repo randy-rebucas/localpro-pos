@@ -1,8 +1,10 @@
 'use client';
 
+import { isLegalDiscountCode, LOCKED_LEGAL_DISCOUNT_FIELDS } from '@/lib/legal-discounts';
 import { useState, useCallback } from 'react';
 import { Discount } from './useDiscountsList';
 import { getTenantDateString, toTenantDateString, DEFAULT_TENANT_TIMEZONE } from '@/lib/timezone';
+import { useMessages } from '@/hooks/useMessages';
 
 export interface DiscountFormData {
   code: string;
@@ -48,6 +50,7 @@ const emptyForm = (tz: string): DiscountFormData => ({
 });
 
 export function useDiscountsForm(timezone: string = DEFAULT_TENANT_TIMEZONE): UseDiscountsFormReturn {
+  const t = useMessages();
   const [formData, setFormDataState] = useState<DiscountFormData>(() => emptyForm(timezone));
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -86,11 +89,11 @@ export function useDiscountsForm(timezone: string = DEFAULT_TENANT_TIMEZONE): Us
 
       // Validate required fields
       if (!formData.code.trim()) {
-        setError('Code is required');
+        setError(t('admin.discountCodeRequired', 'Code is required'));
         return;
       }
       if (!formData.value) {
-        setError('Value is required');
+        setError(t('admin.discountValueRequired', 'Value is required'));
         return;
       }
 
@@ -112,17 +115,22 @@ export function useDiscountsForm(timezone: string = DEFAULT_TENANT_TIMEZONE): Us
           isActive: formData.isActive,
         };
 
+        // SC20 / PWD20 are fixed by law; only the wording is sent for them
+        if (isLegalDiscountCode(payload.code)) {
+          for (const field of LOCKED_LEGAL_DISCOUNT_FIELDS) delete (payload as Partial<DiscountFormData>)[field];
+        }
+
         const result = await onSubmit(payload);
         if (result !== true) {
           setError(result);
         }
       } catch {
-        setError('An error occurred while saving');
+        setError(t('common.errorWhileSaving', 'An error occurred while saving'));
       } finally {
         setSubmitting(false);
       }
     },
-    [formData]
+    [formData, t]
   );
 
   return {

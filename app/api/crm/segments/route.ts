@@ -6,13 +6,8 @@ import { requireTenantAccess } from '@/lib/api-tenant';
 import { handleApiError } from '@/lib/error-handler';
 import mongoose from 'mongoose';
 import { cacheWrap, TTL } from '@/lib/cache';
-
-// RFM thresholds
-const VIP_SPEND_THRESHOLD = 5000;
-const VIP_ORDERS_THRESHOLD = 20;
-const VIP_POINTS_THRESHOLD = 500;
-const LAPSED_DAYS = 90;
-const AT_RISK_DAYS = 30;
+import { hasTenantPermission } from '@/lib/permissions-server';
+import { classifyCustomerSegment } from '@/lib/crm-segments';
 
 export async function GET(request: NextRequest) {
   try {
@@ -20,7 +15,11 @@ export async function GET(request: NextRequest) {
 
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
-    const { tenantId } = authResult;
+    const { tenantId, user } = authResult;
+    // Every customer's name, email and phone, page by page — CRM staff only
+    if (!(await hasTenantPermission(user.role, tenantId, 'crm.manage'))) {
+      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
+    }
 
     const searchParams = request.nextUrl.searchParams;
     const segment = searchParams.get('segment') ?? 'all';
@@ -57,28 +56,8 @@ export async function GET(request: NextRequest) {
     );
 
     const now = new Date();
-    const lapsedCutoff = new Date(now.getTime() - LAPSED_DAYS * 86400000);
-    const atRiskCutoff = new Date(now.getTime() - AT_RISK_DAYS * 86400000);
-
-    // Classify each customer
-    const classifySegment = (c: {
-      _id: mongoose.Types.ObjectId;
-      lastPurchaseDate?: Date;
-      loyaltyPointsBalance?: number;
-    }): string => {
-      const stats = orderMap.get(String(c._id));
-      const orderCount = stats?.orderCount ?? 0;
-      const totalSpent = stats?.totalSpent ?? 0;
-      const lp = c.loyaltyPointsBalance ?? 0;
-      const lastBuy = c.lastPurchaseDate ? new Date(c.lastPurchaseDate) : null;
-
-      if (orderCount === 0) return 'prospect';
-      if (lastBuy && lastBuy < lapsedCutoff) return 'lapsed';
-      if (lastBuy && lastBuy < atRiskCutoff && orderCount < 5) return 'at_risk';
-      if (totalSpent >= VIP_SPEND_THRESHOLD || lp >= VIP_POINTS_THRESHOLD || orderCount >= VIP_ORDERS_THRESHOLD) return 'vip';
-      if (orderCount <= 2) return 'new';
-      return 'regular';
-    };
+    const classifySegment = (c: { _id: mongoose.Types.ObjectId; lastPurchaseDate?: Date; loyaltyPointsBalance?: number }): string =>
+      classifyCustomerSegment(c, orderMap.get(String(c._id)), now);
 
     // Fetch all active customers (for counts)
     const allCustomers = await Customer.find(

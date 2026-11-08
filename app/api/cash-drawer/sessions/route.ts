@@ -10,6 +10,9 @@ import Transaction from '@/models/Transaction';
 import Expense from '@/models/Expense';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
+import { checkRateLimit } from '@/lib/rate-limit';
+import { getTenantSettingsById } from '@/lib/tenant';
+import { tenantDayEdge, toTenantDateString } from '@/lib/timezone';
 
 export async function GET(request: NextRequest) {
   try {
@@ -67,6 +70,16 @@ export async function POST(request: NextRequest) {
 
     if (!tenantId) {
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
+    }
+
+    // Opening or counting the store's drawer is till work — not for view-only roles
+    if (!(await hasTenantPermission(user.role, tenantId, 'cash_drawer.manage'))) {
+      return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
+    }
+
+    const { allowed } = checkRateLimit(`write:cash-drawer:${tenantId}:${user.userId}`, 20, 60_000);
+    if (!allowed) {
+      return NextResponse.json({ success: false, error: t('validation.tooManyRequests', 'Too many requests') }, { status: 429 });
     }
 
     const body = await request.json();
@@ -162,6 +175,15 @@ export async function POST(request: NextRequest) {
       const sessionEnd = new Date();
       const sessionUserId = openSession.userId.toString();
 
+      // Start of the store day the drawer opened on. Expense days are stored as
+      // UTC midnight of the picked date (older rows) or the tenant day start, so
+      // take whichever is earlier.
+      const timezone = (await getTenantSettingsById(tenantId))?.timezone;
+      const openingDay = toTenantDateString(openSession.openingTime, timezone);
+      const openingDayFloor = new Date(
+        Math.min(tenantDayEdge(openingDay, 'start', timezone).getTime(), Date.parse(`${openingDay}T00:00:00.000Z`))
+      );
+
       const [cashTransactions, cashExpenses] = await Promise.all([
         Transaction.find({
           tenantId,
@@ -170,10 +192,16 @@ export async function POST(request: NextRequest) {
           createdAt: { $gte: openSession.openingTime, $lte: sessionEnd },
           status: { $in: SALE_AND_REFUND_STATUSES },
         }).select('total taxAmount discountAmount status receiptNumber').lean(),
+        // Cash paid out of the drawer while it was open: recorded during the
+        // session (createdAt), not deleted, and not backdated to an earlier day.
+        // `date` alone can't be used — a picked day is stored as midnight, which
+        // falls before the opening time, so same-day payouts were never subtracted.
         Expense.find({
           tenantId,
           paymentMethod: 'cash',
-          date: { $gte: openSession.openingTime, $lte: sessionEnd },
+          isActive: { $ne: false },
+          createdAt: { $gte: openSession.openingTime, $lte: sessionEnd },
+          date: { $gte: openingDayFloor },
         }).select('amount').lean(),
       ]);
 

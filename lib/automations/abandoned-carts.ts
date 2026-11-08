@@ -10,6 +10,7 @@ import Transaction from '@/models/Transaction';
 import Tenant from '@/models/Tenant';
 import type { ITenantSettings } from '@/models/Tenant';
 import User from '@/models/User'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import { escapeHtml } from '@/lib/html-escape';
 import { sendEmail } from '@/lib/notifications';
 import { getActiveTenants, type ActiveTenant } from '@/lib/tenant-active-query';
 import { AutomationResult } from './types';
@@ -160,29 +161,29 @@ export async function sendAbandonedCartReminders(
   <div class="container">
     <div class="header">
       <h2>Complete Your Purchase</h2>
-      <p>${companyName}</p>
+      <p>${escapeHtml(companyName)}</p>
     </div>
 
-    <p>Hello ${user.name || 'Valued Customer'},</p>
+    <p>Hello ${escapeHtml(user.name || 'Valued Customer')},</p>
     
     <p>We noticed you saved a cart ${hoursSinceSaved} hour${hoursSinceSaved > 1 ? 's' : ''} ago but haven't completed your purchase yet.</p>
     
     <div class="cart-items">
       <h3>Your Saved Cart:</h3>
-      <pre style="font-family: Arial, sans-serif;">${itemsList}${moreItems}</pre>
+      <pre style="font-family: Arial, sans-serif;">${escapeHtml(itemsList + moreItems)}</pre>
       <div class="total">Total: $${cart.total.toFixed(2)}</div>
     </div>
     
     <p>Don't miss out! Complete your purchase now.</p>
     
     <p style="text-align: center;">
-      <a href="${tenantSettings?.website || '#'}" class="button">Complete Purchase</a>
+      <a href="${escapeHtml(tenantSettings?.website || '#')}" class="button">Complete Purchase</a>
     </p>
     
     <p>If you have any questions, please contact us.</p>
     
     <div class="footer">
-      <p>This is an automated reminder from ${companyName}.</p>
+      <p>This is an automated reminder from ${escapeHtml(companyName)}.</p>
       <p>If you've already completed this purchase, please ignore this email.</p>
     </div>
   </div>
@@ -195,6 +196,7 @@ export async function sendAbandonedCartReminders(
               subject: `Complete Your Purchase - ${companyName}`,
               message: reminderHtml,
               type: 'email',
+              html: true, // already HTML; its values are escaped where it is built
             });
 
             totalReminders++;

@@ -3,32 +3,41 @@
  */
 import { logger } from '@/lib/logger';
 
+/** Text a spreadsheet would read as a formula: =, +, -, @, or a leading tab/CR. */
+const FORMULA_START = /^[=+\-@\t\r]/;
+const PLAIN_NUMBER = /^[-+]?\d+(\.\d+)?$/;
+
+/**
+ * One CSV cell, quoted when needed. A text value that a spreadsheet would run
+ * as a formula (a product named `=HYPERLINK(...)`, a User-Agent in the audit
+ * journal) gets a leading apostrophe, so Excel shows it as text. Numbers, and
+ * strings that are just a number like "-500", are left as they are.
+ */
+export function csvCell(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  let text = String(value);
+  if (typeof value === 'string' && FORMULA_START.test(text) && !PLAIN_NUMBER.test(text)) {
+    text = `'${text}`;
+  }
+  if (/[",\r\n]/.test(text)) {
+    return `"${text.replace(/"/g, '""')}"`;
+  }
+  return text;
+}
+
 /**
  * Convert array of objects to CSV string
  */
 export function arrayToCSV(data: any[], headers: string[]): string { // eslint-disable-line @typescript-eslint/no-explicit-any
+  const headerRow = headers.map(csvCell).join(',');
   if (!data || data.length === 0) {
-    return headers.join(',');
+    return headerRow;
   }
 
-  const rows = [headers.join(',')];
-
+  const rows = [headerRow];
   for (const item of data) {
-    const row = headers.map(header => {
-      const value = getNestedValue(item, header);
-      // Escape commas, quotes, and newlines in CSV
-      if (value === null || value === undefined) {
-        return '';
-      }
-      const stringValue = String(value);
-      if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
-        return `"${stringValue.replace(/"/g, '""')}"`;
-      }
-      return stringValue;
-    });
-    rows.push(row.join(','));
+    rows.push(headers.map((header) => csvCell(getNestedValue(item, header))).join(','));
   }
-
   return rows.join('\n');
 }
 

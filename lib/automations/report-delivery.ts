@@ -6,6 +6,7 @@
 import connectDB from '@/lib/mongodb';
 import Tenant from '@/models/Tenant';
 import type { ITenantSettings } from '@/models/Tenant';
+import { escapeHtml } from '@/lib/html-escape';
 import { sendEmail } from '@/lib/notifications';
 import { getActiveTenants, type ActiveTenant } from '@/lib/tenant-active-query';
 import { getSalesReport } from '@/lib/analytics';
@@ -138,8 +139,8 @@ export async function sendSalesReport(
 <body>
   <div class="report">
     <div class="header">
-      <h2>${periodLabel} Sales Report</h2>
-      <p>${companyName}</p>
+      <h2>${escapeHtml(periodLabel)} Sales Report</h2>
+      <p>${escapeHtml(companyName)}</p>
       <p>${dateRange}</p>
     </div>
 
@@ -219,6 +220,7 @@ export async function sendSalesReport(
           subject: `${periodLabel} Sales Report - ${companyName}`,
           message: reportHtml,
           type: 'email',
+          html: true, // already HTML; its values are escaped where it is built
         });
 
         totalProcessed++;

@@ -10,6 +10,9 @@ import { validateAndSanitize, validateProduct } from '@/lib/validation';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { handleApiError } from '@/lib/error-handler';
 import { getTenantSettingsById } from '@/lib/tenant';
+import { pickProductFields, findTenantCategory } from '@/lib/product-input';
+import { updateStock } from '@/lib/stock';
+import { checkSubscriptionLimit } from '@/lib/subscription';
 import { validateProductForBusiness } from '@/lib/business-type-helpers';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -50,9 +53,11 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     await connectDB();
     // SECURITY: Validate tenant access for authenticated requests
     let tenantId: string;
+    let actorId: string | undefined;
     try {
       const tenantAccess = await requireTenantAccess(request);
       tenantId = tenantAccess.tenantId;
+      actorId = tenantAccess.user.userId;
       if (!(await hasTenantPermission(tenantAccess.user.role, tenantId, 'products.manage'))) {
         return NextResponse.json(
           { success: false, error: 'Forbidden: Insufficient permissions' },
@@ -72,7 +77,20 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     
     const body = await request.json();
     const t = await getValidationTranslatorFromRequest(request);
-    const { data, errors } = validateAndSanitize(body, validateProduct, t);
+
+    const oldProduct = await Product.findOne({ _id: id, tenantId }).lean();
+    if (!oldProduct) {
+      return NextResponse.json({ success: false, error: 'Product not found' }, { status: 404 });
+    }
+
+    // The edit form only sends stock when the count was changed; validate the
+    // rest against the current figure.
+    const stockSent = body.stock !== undefined;
+    const { data, errors } = validateAndSanitize(
+      stockSent ? body : { ...body, stock: oldProduct.stock ?? 0 },
+      validateProduct,
+      t
+    );
 
     if (errors.length > 0) {
       return NextResponse.json(
@@ -85,8 +103,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const tenantSettings = await getTenantSettingsById(tenantId);
     if (tenantSettings) {
       // Merge with existing product data for validation
-      const oldProduct = await Product.findOne({ _id: id, tenantId }).lean();
-      if (oldProduct) {
+      {
         const mergedData = { ...oldProduct, ...data };
         // Remove Mongoose internals before validation
         const {
@@ -118,16 +135,18 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       }
     }
 
-    const oldProduct = await Product.findOne({ _id: id, tenantId }).lean();
-    if (!oldProduct) {
-      return NextResponse.json({ success: false, error: 'Product not found' }, { status: 404 });
-    }
+    // Only the product's own fields; stock, variations, branch stock, status and
+    // pinning each have their own path (see lib/product-input.ts).
+    const { set: updates, unset } = pickProductFields(data as Record<string, unknown>);
 
-    // The form sends whatever it holds, so what can't change this way is taken out: a
-    // product can't move tenants, and variations go through their own checks below.
-    const updates: Record<string, unknown> = { ...data };
-    for (const field of ['tenantId', '_id', '__v', 'createdAt', 'updatedAt', 'variations', 'hasVariations']) {
-      delete updates[field];
+    if ('categoryId' in updates) {
+      const category = await findTenantCategory(tenantId, updates.categoryId);
+      if (!category) {
+        return NextResponse.json({ success: false, errors: [{ field: 'categoryId', message: t('validation.categoryNotFound', 'Category not found'), code: 'categoryNotFound' }] }, { status: 400 });
+      }
+      updates.category = category.name;
+    } else if (unset.includes('categoryId')) {
+      unset.push('category');
     }
 
     const existingVariations = oldProduct.variations ?? [];
@@ -143,21 +162,38 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       }
     }
 
-    // Variations hold the stock, so a form's copy of the main figure must not overwrite it
-    if (oldProduct.hasVariations || variationRows?.length) delete updates.stock;
+    const update: Record<string, unknown> = {};
+    if (Object.keys(updates).length) update.$set = updates;
+    if (unset.length) update.$unset = Object.fromEntries(unset.map((field) => [field, '']));
 
-    const updated = await Product.findOneAndUpdate(
-      { _id: id, tenantId },
-      updates,
-      { new: true, runValidators: true }
-    );
+    const updated = Object.keys(update).length
+      ? await Product.findOneAndUpdate({ _id: id, tenantId }, update, { new: true, runValidators: true })
+      : await Product.findOne({ _id: id, tenantId });
 
     if (!updated) {
       return NextResponse.json({ success: false, error: 'Product not found' }, { status: 404 });
     }
 
     const variationChanges = variationRows ? await saveVariationRows(tenantId, id, variationRows, existingVariations) : undefined;
-    const product = variationRows ? await Product.findOne({ _id: id, tenantId }) : updated;
+
+    // A count typed into the form is a stock adjustment: it goes through the
+    // ledger as a delta against the *current* figure, so sales made while the
+    // form was open are kept and the change shows in stock movements.
+    // Variations hold their own stock, so the main figure is left alone there.
+    let stockChange: { old: number; new: number } | undefined;
+    const typedStock = data.stock as number;
+    if (stockSent && !oldProduct.hasVariations && !variationRows?.length && updated.trackInventory !== false) {
+      const current = updated.stock ?? 0;
+      if (typedStock !== current) {
+        await updateStock(id, tenantId, typedStock - current, 'adjustment', {
+          userId: actorId,
+          reason: 'Stock count edited in product form',
+        });
+        stockChange = { old: current, new: typedStock };
+      }
+    }
+
+    const product = variationRows || stockChange ? await Product.findOne({ _id: id, tenantId }) : updated;
 
     if (!product) {
       return NextResponse.json({ success: false, error: 'Product not found' }, { status: 404 });
@@ -173,6 +209,11 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         };
       }
     });
+    for (const key of unset) {
+      const old = oldProduct[key as keyof typeof oldProduct];
+      if (old !== undefined && old !== null && old !== '') changes[key] = { old, new: null };
+    }
+    if (stockChange) changes.stock = stockChange;
     if (variationChanges) changes.variations = variationChanges;
 
     await createAuditLog(request, {
@@ -228,6 +269,17 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const oldProduct = await Product.findOne({ _id: id, tenantId }).lean();
     if (!oldProduct) {
       return NextResponse.json({ success: false, error: 'Product not found' }, { status: 404 });
+    }
+
+    // Reactivating counts against the plan like creating does — otherwise
+    // delete, create new, reactivate old gets past maxProducts.
+    if (updates.isActive === true && oldProduct.isActive === false) {
+      const activeCount = await Product.countDocuments({ tenantId, isActive: true });
+      try {
+        await checkSubscriptionLimit(tenantId.toString(), 'maxProducts', activeCount);
+      } catch (limitError: unknown) {
+        return NextResponse.json({ success: false, error: (limitError as Error).message }, { status: 403 });
+      }
     }
 
     const product = await Product.findOneAndUpdate({ _id: id, tenantId }, updates, { new: true });

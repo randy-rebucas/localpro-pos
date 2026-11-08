@@ -16,7 +16,8 @@ describe('audit log retention', () => {
     const ttl = AuditLog.schema.indexes().find(([key]) => JSON.stringify(key) === '{"createdAt":1}');
 
     expect(ttl?.[1].expireAfterSeconds).toBe(90 * 24 * 60 * 60);
-  });
+    // Loading the real model can pass the 5s default when the whole suite runs at once
+  }, 30_000);
 
   it('archives a day before the TTL by default', async () => {
     const query = { select: vi.fn(), sort: vi.fn(), limit: vi.fn(), lean: vi.fn().mockResolvedValue([]) };

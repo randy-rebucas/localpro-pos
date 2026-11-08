@@ -151,7 +151,9 @@ export default function InventoryWorkspace({ productsPath, requireManage = false
             sku: (v.sku as string) || '',
             category,
             stock: (v.stock as number) ?? 0,
-            branchStock: (v.branchStock as { branchId: string; stock: number }[]) || (p.branchStock as { branchId: string; stock: number }[]) || [],
+            // Variations keep one stock figure (no per-branch split). Using the
+            // parent's branch count printed the same number on every variation row.
+            branchStock: [],
           }));
         }
         return [{

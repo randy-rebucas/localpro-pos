@@ -10,6 +10,7 @@ import {
   useState,
   ReactNode,
 } from 'react';
+import { cleanFontFamily, cssFontUrl, isGoogleFontUrl } from '@/lib/branding-helpers';
 import { useParams, usePathname } from 'next/navigation';
 import { ITenantSettings } from '@/types/tenant';
 import { getDefaultTenantSettings } from '@/lib/currency';
@@ -232,21 +233,27 @@ export function TenantSettingsProvider({ children, initialSettings }: TenantSett
     document.getElementById(googleLinkId)?.remove();
     document.getElementById(customFontStyleId)?.remove();
 
-    if (branding?.fontSource === 'google' && branding.googleFontUrl) {
+    // Values are re-checked here, not trusted from storage: they go into CSS,
+    // and a quote in a URL used to be able to close the rule and inject styles
+    // into every page, admin pages included.
+    const family = cleanFontFamily(branding?.fontFamily || '');
+    const customUrl = cssFontUrl(branding?.customFontUrl);
+
+    if (branding?.fontSource === 'google' && isGoogleFontUrl(branding.googleFontUrl)) {
       const link = document.createElement('link');
       link.id = googleLinkId;
       link.rel = 'stylesheet';
-      link.href = branding.googleFontUrl;
+      link.href = branding.googleFontUrl!;
       document.head.appendChild(link);
-    } else if (branding?.fontSource === 'custom' && branding.customFontUrl && branding.fontFamily) {
+    } else if (branding?.fontSource === 'custom' && customUrl && family) {
       const style = document.createElement('style');
       style.id = customFontStyleId;
-      style.textContent = `@font-face { font-family: '${branding.fontFamily}'; src: url('${branding.customFontUrl}'); font-display: swap; }`;
+      style.textContent = `@font-face { font-family: '${family}'; src: url(${customUrl}); font-display: swap; }`;
       document.head.appendChild(style);
     }
 
-    if (branding?.fontFamily) {
-      document.documentElement.style.setProperty('--tenant-font-family', `'${branding.fontFamily}'`);
+    if (family) {
+      document.documentElement.style.setProperty('--tenant-font-family', `'${family}'`);
     } else {
       document.documentElement.style.removeProperty('--tenant-font-family');
     }

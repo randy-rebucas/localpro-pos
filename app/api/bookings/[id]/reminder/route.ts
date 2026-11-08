@@ -9,6 +9,7 @@ import { getValidationTranslatorFromRequest } from '@/lib/validation-translation
 import { getTenantSettingsById } from '@/lib/tenant';
 import { requireBookingSchedulingAccess } from '@/lib/booking-scheduling-access';
 import { logger } from '@/lib/logger';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 /**
  * POST - Send reminder for a booking
@@ -62,6 +63,17 @@ export async function POST(
       return NextResponse.json(
         { success: false, error: t('validation.cannotSendReminder', 'Cannot send reminder for cancelled or completed bookings') },
         { status: 400 }
+      );
+    }
+
+    // Each reminder can be a paid SMS: one per booking every 10 minutes, and a
+    // cap per store, so repeated taps don't send a stack of messages.
+    const perBooking = checkRateLimit(`booking-reminder:${tenantId}:${id}`, 1, 10 * 60_000);
+    const perStore = checkRateLimit(`booking-reminder:${tenantId}`, 60, 60 * 60_000);
+    if (!perBooking.allowed || !perStore.allowed) {
+      return NextResponse.json(
+        { success: false, error: t('validation.reminderRecentlySent', 'A reminder was sent recently. Try again later.') },
+        { status: 429 }
       );
     }
 

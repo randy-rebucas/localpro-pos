@@ -49,12 +49,14 @@ export function useBundleForm(bundleToEdit?: Bundle | null, dict?: TranslationDi
       try {
         const url = bundleToEdit ? `/api/bundles/${bundleToEdit._id}` : '/api/bundles';
         const method = bundleToEdit ? 'PUT' : 'POST';
+        // On edit, '' clears a field (undefined would be dropped and the old value kept)
+        const blank = (value?: string) => (value ? value : bundleToEdit ? '' : undefined);
         const body = {
           name: formData.name,
-          description: formData.description || undefined,
+          description: blank(formData.description),
           price: formData.price,
-          sku: formData.sku || undefined,
-          categoryId: formData.categoryId || undefined,
+          sku: blank(formData.sku),
+          categoryId: blank(formData.categoryId),
           trackInventory: formData.trackInventory,
           items: formData.items.map((item) => ({
             productId: typeof item.productId === 'object' ? item.productId._id : item.productId,

@@ -163,16 +163,19 @@ BookingSchema.pre('save', async function(this: IBooking, next) {
     }
   }
 
-  // Populate staffName if staffId is set
-  if (this.isModified('staffId') && this.staffId) {
-    try {
-      const User = mongoose.model('User');
-      const staff = await User.findById(this.staffId).select('name').lean() as { name: string } | null;
-      if (staff && staff.name) {
-        this.staffName = staff.name;
+  // Keep staffName in step with staffId: copied from the tenant's own user, and
+  // cleared when staff is unassigned (the list and reminders read staffName first).
+  if (this.isModified('staffId')) {
+    if (!this.staffId) {
+      this.staffName = undefined;
+    } else {
+      try {
+        const User = mongoose.model('User');
+        const staff = await User.findOne({ _id: this.staffId, tenantId: this.tenantId }).select('name').lean() as { name: string } | null;
+        this.staffName = staff?.name || undefined;
+      } catch {
+        // Ignore error, staffName will remain undefined
       }
-    } catch {
-      // Ignore error, staffName will remain undefined
     }
   }
 

@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { useMessages } from '@/hooks/useMessages';
 
 export interface BundleItem {
   productId: string | { _id: string; name: string; price: number; stock: number };
@@ -35,6 +36,7 @@ export interface BundleFilters {
 }
 
 export function useBundlesList() {
+  const t = useMessages();
   const [bundles, setBundles] = useState<Bundle[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -69,12 +71,14 @@ export function useBundlesList() {
         if (data.success) {
           setBundles(data.data || []);
         } else {
-          const errorMsg = data.error || 'Failed to fetch bundles';
+          const errorMsg = data.error || t('common.failedToFetchBundles', 'Failed to fetch bundles');
           setError(errorMsg);
           onError?.(errorMsg);
         }
       } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'Failed to fetch bundles';
+        const errorMsg = err instanceof Error && err.name === 'AbortError'
+          ? t('common.requestTimedOut', 'The request timed out. Please try again.')
+          : t('common.failedToFetchBundles', 'Failed to fetch bundles');
         setError(errorMsg);
         onError?.(errorMsg);
       } finally {
@@ -82,7 +86,7 @@ export function useBundlesList() {
         setLoading(false);
       }
     },
-    []
+    [t]
   );
 
   const deleteBundle = useCallback(
@@ -103,19 +107,19 @@ export function useBundlesList() {
           // Caller is responsible for refetching with its current filters —
           // refetching here (unfiltered) would clobber the visible list, only
           // for the caller to immediately refetch again with real filters.
-          onSuccess?.(data.message || 'Bundle deleted successfully');
+          onSuccess?.(data.message || t('admin.deleteBundleSuccess', 'Bundle deleted successfully'));
         } else {
-          const errorMsg = data.error || 'Failed to delete bundle';
+          const errorMsg = data.error || t('admin.deleteBundleError', 'Failed to delete bundle');
           onError?.(errorMsg);
         }
       } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'Failed to delete bundle';
+        const errorMsg = t('admin.deleteBundleError', 'Failed to delete bundle');
         onError?.(errorMsg);
       } finally {
         clearTimeout(timeout);
       }
     },
-    []
+    [t]
   );
 
   const toggleBundleStatus = useCallback(
@@ -135,20 +139,21 @@ export function useBundlesList() {
         const data = await res.json();
 
         if (data.success) {
-          await fetchBundles();
-          onSuccess?.(data.message || `Bundle ${!isActive ? 'activated' : 'deactivated'} successfully`);
+          // The caller refetches with its current filters (an unfiltered
+          // refetch here could land last and replace the filtered list)
+          onSuccess?.(!isActive ? t('admin.bundleActivated', 'Bundle activated') : t('admin.bundleDeactivated', 'Bundle deactivated'));
         } else {
-          const errorMsg = data.error || 'Failed to update bundle';
+          const errorMsg = data.error || t('common.failedToUpdateBundle', 'Failed to update bundle');
           onError?.(errorMsg);
         }
       } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'Failed to update bundle';
+        const errorMsg = t('common.failedToUpdateBundle', 'Failed to update bundle');
         onError?.(errorMsg);
       } finally {
         clearTimeout(timeout);
       }
     },
-    [fetchBundles]
+    [t]
   );
 
   const bulkToggleStatus = useCallback(
@@ -173,20 +178,20 @@ export function useBundlesList() {
         const data = await res.json();
 
         if (data.success) {
-          await fetchBundles();
-          onSuccess?.(data.message || `Bundles ${action}d successfully`);
+          // The caller refetches with its current filters
+          onSuccess?.(action === 'activate' ? t('admin.bundlesActivated', 'Bundles activated') : t('admin.bundlesDeactivated', 'Bundles deactivated'));
         } else {
-          const errorMsg = data.error || `Failed to ${action} bundles`;
+          const errorMsg = data.error || t('admin.failedToUpdateBundles', 'Failed to update bundles');
           onError?.(errorMsg);
         }
       } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : `Failed to ${action} bundles`;
+        const errorMsg = t('admin.failedToUpdateBundles', 'Failed to update bundles');
         onError?.(errorMsg);
       } finally {
         clearTimeout(timeout);
       }
     },
-    [fetchBundles]
+    [t]
   );
 
   return { bundles, loading, error, fetchBundles, deleteBundle, toggleBundleStatus, bulkToggleStatus };

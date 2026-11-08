@@ -147,12 +147,20 @@ export default function BookingsPage() {
     );
   };
 
+  // One send at a time per booking: each reminder can be a paid SMS
+  const [remindingId, setRemindingId] = useState<string | null>(null);
   const handleSendReminder = async (bookingId: string) => {
-    await sendReminder(
-      bookingId,
-      (message) => toast.success(message),
-      (error) => toast.error(error)
-    );
+    if (remindingId) return;
+    setRemindingId(bookingId);
+    try {
+      await sendReminder(
+        bookingId,
+        (message) => toast.success(message),
+        (error) => toast.error(error)
+      );
+    } finally {
+      setRemindingId(null);
+    }
   };
 
   // Show the spinner only for the first load; an empty list must not unmount the filters or an open sheet on refetch.
@@ -367,7 +375,9 @@ export default function BookingsPage() {
                               <button
                                 type="button"
                                 onClick={() => handleSendReminder(booking._id)}
-                                className={`${ROW_KEY} mr-2 mt-2 shrink-0`}
+                                disabled={remindingId !== null}
+                                aria-busy={remindingId === booking._id}
+                                className={`${ROW_KEY} mr-2 mt-2 shrink-0 disabled:opacity-40`}
                                 aria-label={`${remindLabel} ${booking.customerName}`}
                                 title={remindLabel}
                               >
@@ -396,6 +406,7 @@ export default function BookingsPage() {
           staff={staff}
           canManage={canManage}
           canSendReminders={canSendReminders}
+          reminding={remindingId !== null}
           updating={updating}
           onStaffChange={(staffId) => handleUpdateBooking({ staffId: staffId || null })}
           onStatusChange={handleStatusChange}
@@ -426,7 +437,7 @@ export default function BookingsPage() {
 
 /** The appointment slip: who, what and when, with the keys to move it along. */
 function BookingSheet({
-  booking, dict, lang, timeZone, staff, canManage, canSendReminders, updating,
+  booking, dict, lang, timeZone, staff, canManage, canSendReminders, updating, reminding,
   onStaffChange, onStatusChange, onRemind, onCancel, onClose,
 }: {
   booking: Booking;
@@ -436,6 +447,7 @@ function BookingSheet({
   staff: StaffMember[];
   canManage: boolean;
   canSendReminders: boolean;
+  reminding: boolean;
   updating: boolean;
   onStaffChange: (staffId: string) => void;
   onStatusChange: (status: BookingStatus) => void;
@@ -471,7 +483,7 @@ function BookingSheet({
             </button>
           )}
           {canSendReminders && active && (
-            <button type="button" onClick={onRemind} className={KEY}>
+            <button type="button" onClick={onRemind} disabled={reminding} aria-busy={reminding} className={`${KEY} disabled:opacity-40`}>
               <BellRing className={ICON} strokeWidth={1.75} aria-hidden />
               {dict.admin?.sendReminder || 'Send Reminder'}
             </button>

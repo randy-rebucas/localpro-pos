@@ -405,20 +405,30 @@ export async function checkLowStock(
 }
 
 /**
- * Get all products with low stock
+ * Get all products with low stock.
+ *
+ * `threshold` overrides every product's own figure (an explicit ?threshold=).
+ * Otherwise each product is judged by its own lowStockThreshold, and products
+ * without one (unset or 0 — 0 means unset at product level) use
+ * `fallbackThreshold`: the store's setting, where 0 means "only when out of
+ * stock".
  */
 export async function getLowStockProducts(
   tenantId: string,
   branchId?: string,
-  threshold?: number
+  threshold?: number,
+  fallbackThreshold = 10
 ): Promise<any[]> { // eslint-disable-line @typescript-eslint/no-explicit-any
   await connectDB();
+
+  const thresholdFor = (product: { lowStockThreshold?: number | null }) =>
+    threshold ?? (product.lowStockThreshold || fallbackThreshold);
 
   // Pre-filter in the database so only candidates are read (this runs on an
   // inventory-page poll and in cron jobs). The filter is a superset of the exact
   // per-product check below, which still decides the final result.
   const thresholdExpr = threshold
-    ?? { $cond: [{ $gt: [{ $ifNull: ['$lowStockThreshold', 0] }, 0] }, '$lowStockThreshold', 10] };
+    ?? { $cond: [{ $gt: [{ $ifNull: ['$lowStockThreshold', 0] }, 0] }, '$lowStockThreshold', fallbackThreshold] };
   const candidates: Record<string, unknown>[] = [
     // Variation products: checked per variation below
     { hasVariations: true },
@@ -440,31 +450,31 @@ export async function getLowStockProducts(
   const lowStockProducts = [];
 
   for (const product of products) {
+    const stockThreshold = thresholdFor(product);
     let isLowStock = false;
     let currentStock = 0;
 
     if (product.hasVariations && product.variations) {
-      // Check each variation
+      // Check each variation; report the lowest one that is at or under the line
+      let lowest: number | null = null;
       for (const variation of product.variations) {
         const stock = variation.stock || 0;
-        const stockThreshold = threshold ?? (product.lowStockThreshold || 10);
         if (stock <= stockThreshold) {
           isLowStock = true;
-          currentStock = Math.min(currentStock || stock, stock);
+          lowest = lowest === null ? stock : Math.min(lowest, stock);
         }
       }
+      currentStock = lowest ?? 0;
     } else if (branchId && product.branchStock) {
       const branchStock = product.branchStock.find(
         (bs) => bs.branchId.toString() === branchId
       );
       if (branchStock) {
         currentStock = branchStock.stock;
-        const stockThreshold = threshold ?? (product.lowStockThreshold || 10);
         isLowStock = currentStock <= stockThreshold;
       }
     } else {
       currentStock = product.stock || 0;
-      const stockThreshold = threshold ?? (product.lowStockThreshold || 10);
       isLowStock = currentStock <= stockThreshold;
     }
 
@@ -472,7 +482,7 @@ export async function getLowStockProducts(
       lowStockProducts.push({
         ...product,
         currentStock,
-        threshold: threshold ?? (product.lowStockThreshold || 10),
+        threshold: stockThreshold,
       });
     }
   }

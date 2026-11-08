@@ -16,6 +16,7 @@ import { useRestoreCollections } from '@/hooks/useRestoreCollections';
 import { useResetCollections } from '@/hooks/useResetCollections';
 import { BACKUP_RESET_COLLECTIONS, COLLECTION_GROUPS, clearableKeys, formatFileSize } from '@/lib/backup-reset-helpers';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useConfirm } from '@/lib/confirm';
 
 type Dict = Record<string, Record<string, unknown> | undefined>;
 
@@ -45,6 +46,7 @@ export default function BackupResetPage() {
     getDictionaryClient(lang).then((d) => setDict(d as unknown as Dict));
   }, [lang]);
 
+  const { confirm, Dialog: ConfirmDialog } = useConfirm();
   const t = useCallback((key: string, fallback: string) => {
     const v = dict?.backupReset?.[key];
     return typeof v === 'string' ? v : fallback;
@@ -112,7 +114,7 @@ export default function BackupResetPage() {
     );
   };
 
-  const handleRestore = () => {
+  const handleRestore = async () => {
     if (!restoreFile) {
       toast.error(c('selectBackupFile', 'Please select a backup file to restore.'));
       return;
@@ -122,6 +124,14 @@ export default function BackupResetPage() {
       setPending({ kind: 'restore', file: restoreFile });
       return;
     }
+    // Even without clearing, a restore adds every record in the file (sales,
+    // stock movements, customers…) to the live store, so ask first
+    const ok = await confirm(
+      t('restoreAddTitle', 'Restore {file}?').replace('{file}', restoreFile.name),
+      t('restoreAddConfirm', 'Every record in this backup that the store does not have yet is added to it, including sales and stock movements. Records it already has are kept as they are.'),
+      { variant: 'warning', confirmText: t('restoreAddKey', 'Restore'), cancelText: c('cancel', 'Cancel') }
+    );
+    if (!ok) return;
     void runRestore(restoreFile, false);
   };
 
@@ -424,6 +434,7 @@ export default function BackupResetPage() {
           </div>
         </Sheet>
       )}
+      {ConfirmDialog}
     </RegisterPage>
   );
 }

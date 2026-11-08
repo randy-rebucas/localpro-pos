@@ -4,6 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { checkRateLimit } from '@/lib/rate-limit';
 import connectDB from '@/lib/mongodb';
 import Tenant from '@/models/Tenant';
 import { fetchExchangeRates } from '@/lib/multi-currency';
@@ -81,6 +82,14 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
+    // Outbound provider calls (and their API quota): a few per minute per store
+    if (action === 'fetch') {
+      const { allowed } = checkRateLimit(`exchange-rates:fetch:${tenant._id}`, 5, 60_000);
+      if (!allowed) {
+        return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
+      }
+    }
+
     if (action === 'fetch') {
       // Fetch fresh rates from API
       const multiCurrency = tenant.settings.multiCurrency;
@@ -101,7 +110,6 @@ export async function POST(
         multiCurrency.displayCurrencies,
         multiCurrency.exchangeRateApiKey
       );
-      console.log(`Fetched exchange rates for tenant ${slug}:`, rates);
       if (!rates) {
         logger.error(`Exchange rate fetch failed for tenant ${slug} (base: ${baseCurrency})`);
         return NextResponse.json(
@@ -113,9 +121,16 @@ export async function POST(
       // Use toObject() so spreading a Mongoose subdocument works correctly
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const mcObj = typeof (multiCurrency as any).toObject === 'function' ? (multiCurrency as any).toObject() : { ...multiCurrency };
+      // Merge over the existing map: a rate entered by hand for a currency the
+      // provider doesn't carry is kept instead of silently disappearing
+      // (a Mongoose Map: spreading it directly would give {})
+      const rawRates = mcObj.exchangeRates as unknown;
+      const existingRates: Record<string, number> =
+        rawRates instanceof Map ? Object.fromEntries(rawRates) : rawRates && typeof rawRates === 'object' ? (rawRates as Record<string, number>) : {};
+      const merged = { ...existingRates, ...rates };
       tenant.settings.multiCurrency = {
         ...mcObj,
-        exchangeRates: rates,
+        exchangeRates: merged,
         lastUpdated: new Date(),
       };
 
@@ -128,12 +143,12 @@ export async function POST(
         action: AuditActions.UPDATE,
         entityType: 'exchange_rates',
         entityId: tenant._id.toString(),
-        changes: { source: 'api', exchangeRates: rates },
+        changes: { source: 'api', exchangeRates: merged },
       });
 
       return NextResponse.json({
         success: true,
-        data: { exchangeRates: rates, lastUpdated: new Date() },
+        data: { exchangeRates: merged, lastUpdated: new Date() },
       });
     } else if (action === 'update') {
       // Manually update rates

@@ -113,6 +113,7 @@ export default function HardwareAdminPage() {
     toast.error(
       result.reason === 'forbidden' ? (dict?.settings?.unauthorized || "You don't have permission to change hardware settings.")
         : result.reason === 'network' ? t('failedToSaveHardwareSettingsConnection', 'Failed to save hardware settings. Please check your connection.')
+          : result.reason === 'timeout' ? (dict?.common?.requestTimedOut || 'The request timed out. Please try again.')
           : result.error || t('failedToSaveHardwareSettings', 'Failed to save hardware settings')
     );
   };

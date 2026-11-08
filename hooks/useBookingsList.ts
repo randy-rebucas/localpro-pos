@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { useMessages } from '@/hooks/useMessages';
 
 export interface Booking {
   _id: string;
@@ -30,6 +31,7 @@ interface BookingFilters {
 }
 
 export function useBookingsList(tenant: string, filters: BookingFilters) {
+  const t = useMessages();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -62,19 +64,21 @@ export function useBookingsList(tenant: string, filters: BookingFilters) {
         setBookings(data.data || []);
         setTruncated(!!data.truncated);
       } else {
-        const errorMsg = data.error || 'Failed to fetch bookings';
+        const errorMsg = data.error || t('common.failedToFetchBookings', 'Failed to fetch bookings');
         setError(errorMsg);
         onError?.(errorMsg);
       }
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to fetch bookings';
+      const errorMsg = err instanceof Error && err.name === 'AbortError'
+        ? t('common.requestTimedOut', 'The request timed out. Please try again.')
+        : t('common.failedToFetchBookings', 'Failed to fetch bookings');
       setError(errorMsg);
       onError?.(errorMsg);
     } finally {
       clearTimeout(timeout);
       setLoading(false);
     }
-  }, [tenant, filters.status, filters.staffId]);
+  }, [tenant, filters.status, filters.staffId, t]);
 
   const deleteBooking = useCallback(
     async (bookingId: string, onSuccess?: (message: string) => void, onError?: (error: string) => void) => {
@@ -92,19 +96,21 @@ export function useBookingsList(tenant: string, filters: BookingFilters) {
 
         if (data.success) {
           await fetchBookings();
-          onSuccess?.(data.message || 'Booking deleted successfully');
+          onSuccess?.(data.message || t('common.bookingDeletedSuccess', 'Booking deleted successfully'));
         } else {
-          const errorMsg = data.error || 'Failed to delete booking';
+          const errorMsg = data.error || t('common.failedToDeleteBooking', 'Failed to delete booking');
           onError?.(errorMsg);
         }
       } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'Failed to delete booking';
+        const errorMsg = err instanceof Error && err.name === 'AbortError'
+          ? t('common.requestTimedOut', 'The request timed out. Please try again.')
+          : t('common.failedToDeleteBooking', 'Failed to delete booking');
         onError?.(errorMsg);
       } finally {
         clearTimeout(timeout);
       }
     },
-    [tenant, fetchBookings]
+    [tenant, fetchBookings, t]
   );
 
   const sendReminder = useCallback(
@@ -122,19 +128,21 @@ export function useBookingsList(tenant: string, filters: BookingFilters) {
         const data = await res.json();
 
         if (data.success) {
-          onSuccess?.(data.message || 'Reminder sent successfully');
+          onSuccess?.(data.message || t('common.reminderSentSuccess', 'Reminder sent successfully'));
         } else {
-          const errorMsg = data.error || 'Failed to send reminder';
+          const errorMsg = data.error || t('common.failedToSendReminder', 'Failed to send reminder');
           onError?.(errorMsg);
         }
       } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'Failed to send reminder';
+        const errorMsg = err instanceof Error && err.name === 'AbortError'
+          ? t('common.requestTimedOut', 'The request timed out. Please try again.')
+          : t('common.failedToSendReminder', 'Failed to send reminder');
         onError?.(errorMsg);
       } finally {
         clearTimeout(timeout);
       }
     },
-    [tenant]
+    [tenant, t]
   );
 
   return { bookings, loading, error, truncated, fetchBookings, deleteBooking, sendReminder };

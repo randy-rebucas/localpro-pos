@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
+import { isLegalDiscountCode } from '@/lib/legal-discounts';
 import { BadgePercent, IdCard, Pencil, Plus, Power, Trash2 } from 'lucide-react';
 import { getDictionaryClient } from '../../dictionaries-client';
 import Currency from '@/components/Currency';
@@ -275,6 +276,7 @@ export default function DiscountsPage() {
                         >
                           <Pencil className={ICON} strokeWidth={1.75} aria-hidden />
                         </button>
+                        {!(isLegalDiscountCode(discount.code) && discount.isActive) && (
                         <button
                           type="button"
                           onClick={() => handleToggleDiscountStatus(discount)}
@@ -285,6 +287,8 @@ export default function DiscountsPage() {
                           <Power className={ICON} strokeWidth={1.75} aria-hidden />
                           {getToggleButtonLabel(discount.isActive, dict)}
                         </button>
+                        )}
+                        {!isLegalDiscountCode(discount.code) && (
                         <button
                           type="button"
                           onClick={() => handleDeleteDiscount(discount)}
@@ -295,6 +299,7 @@ export default function DiscountsPage() {
                         >
                           <Trash2 className={ICON} strokeWidth={1.75} aria-hidden />
                         </button>
+                        )}
                       </div>
                     )}
                   </article>
@@ -348,6 +353,8 @@ function DiscountModal({
   const { formData, setFormData, error, submitting, handleSubmit, initializeForm, resetForm } = useDiscountsForm(settings?.timezone);
   const { createDiscount, updateDiscount } = useDiscountsList();
   const symbol = settings?.currencySymbol || '₱';
+  // SC20 / PWD20: rate and terms fixed by law (the server refuses changes too)
+  const legal = !!discount && isLegalDiscountCode(discount.code);
 
   useEffect(() => {
     if (discount) {
@@ -387,6 +394,11 @@ function DiscountModal({
       }
     >
       <form id="discount-form" onSubmit={onSubmit} className="space-y-4">
+        {legal && (
+          <p className="border-l-2 border-ink/40 pl-2 font-receipt text-xs text-ink/70">
+            {dict.admin?.legalDiscountNote || 'Required by law (RA 9994 / RA 10754): the 20% rate and its terms are fixed. Only the name and description can be changed.'}
+          </p>
+        )}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label htmlFor="discount-code" className={LABEL}>{dict.admin?.code || 'Code'} *</label>
@@ -408,6 +420,7 @@ function DiscountModal({
             <label htmlFor="discount-type" className={LABEL}>{dict.common?.type || 'Type'} *</label>
             <select
               id="discount-type"
+              disabled={legal}
               value={formData.type}
               onChange={(e) => setFormData({ type: e.target.value as any })} // eslint-disable-line @typescript-eslint/no-explicit-any
               className={INPUT}
@@ -433,6 +446,7 @@ function DiscountModal({
             <label htmlFor="discount-category" className={LABEL}>{dict.admin?.category || 'Category'}</label>
             <select
               id="discount-category"
+              disabled={legal}
               value={formData.category}
               onChange={(e) => setFormData({ category: e.target.value as 'general' | 'senior' | 'pwd' | 'employee' | 'promo' })}
               className={INPUT}
@@ -448,6 +462,7 @@ function DiscountModal({
             <input
               type="checkbox"
               checked={formData.requiresIdVerification}
+              disabled={legal}
               onChange={(e) => setFormData({ requiresIdVerification: e.target.checked })}
               className={CHECKBOX}
             />
@@ -471,6 +486,7 @@ function DiscountModal({
             </label>
             <input
               id="discount-value"
+              disabled={legal}
               type="number"
               step="0.01"
               min="0"
@@ -486,6 +502,7 @@ function DiscountModal({
               <label htmlFor="discount-max" className={LABEL}>{dict.admin?.maxDiscount || 'Max Discount Amount'} ({symbol})</label>
               <input
                 id="discount-max"
+              disabled={legal}
                 type="number"
                 step="0.01"
                 min="0"
@@ -501,6 +518,7 @@ function DiscountModal({
             <label htmlFor="discount-min" className={LABEL}>{dict.admin?.minPurchase || 'Min Purchase Amount'} ({symbol})</label>
             <input
               id="discount-min"
+              disabled={legal}
               type="number"
               step="0.01"
               min="0"
@@ -513,6 +531,7 @@ function DiscountModal({
             <label htmlFor="discount-limit" className={LABEL}>{dict.admin?.usageLimit || 'Usage Limit'}</label>
             <input
               id="discount-limit"
+              disabled={legal}
               type="number"
               min="0"
               value={formData.usageLimit}
@@ -528,6 +547,7 @@ function DiscountModal({
             <label htmlFor="discount-from" className={LABEL}>{dict.admin?.validFrom || 'Valid From'} *</label>
             <input
               id="discount-from"
+              disabled={legal}
               type="date"
               required
               value={formData.validFrom}
@@ -540,6 +560,7 @@ function DiscountModal({
             <label htmlFor="discount-until" className={LABEL}>{dict.admin?.validUntil || 'Valid Until'} *</label>
             <input
               id="discount-until"
+              disabled={legal}
               type="date"
               required
               value={formData.validUntil}
@@ -553,6 +574,7 @@ function DiscountModal({
           <input
             type="checkbox"
             checked={formData.isActive}
+            disabled={legal}
             onChange={(e) => setFormData({ isActive: e.target.checked })}
             className={CHECKBOX}
           />

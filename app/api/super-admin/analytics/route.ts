@@ -1,3 +1,4 @@
+import { csvCell } from '@/lib/export';
 import { NextRequest, NextResponse } from 'next/server';
 import { cacheWrap } from '@/lib/cache';
 import { REPORT_MAX_TIME_MS } from '@/lib/query-utils';
@@ -190,14 +191,14 @@ export async function GET(request: NextRequest) {
         `Transactions (total),${txTotal}`,
         '',
         'Plan,Tier,Subscribers',
-        ...planCounts.map((p: { name: string; tier: string; count: number }) => `${p.name},${p.tier},${p.count}`),
+        ...planCounts.map((p: { name: string; tier: string; count: number }) => [p.name, p.tier, p.count].map(csvCell).join(',')),
         '',
         'Status,Count',
         ...statusBreakdown.map((s: { status: string; count: number }) => `${s.status},${s.count}`),
         '',
         'Tenant,Slug,Transactions,Revenue',
         ...topTenants.map((t: { name: string; slug: string; txCount: number; revenue: number }) =>
-          `"${t.name}",${t.slug},${t.txCount},${t.revenue}`),
+          [t.name, t.slug, t.txCount, t.revenue].map(csvCell).join(',')),
       ].join('\n');
 
       return new NextResponse(csvRows, {

@@ -23,6 +23,9 @@ import { buildAuditLogQuery } from '@/lib/audit-log-filter';
  * Note: AuditLog documents auto-expire after 90 days (see models/AuditLog.ts
  * TTL index) — export and archive periodically if longer retention is needed.
  */
+
+/** Largest export built in one request (rows held in memory). */
+const EXPORT_MAX_ENTRIES = 50_000;
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
@@ -58,28 +61,47 @@ export async function GET(request: NextRequest) {
     const endDate = (built.ok && built.end) || new Date();
     const format = searchParams.get('format') || 'json'; // json, csv
 
-    // Logs older than 90 days are moved to ArchivedAuditLog by the daily archive
-    // job — read the archive too when the range reaches past that cutoff.
+    // The daily archive job moves logs to ArchivedAuditLog after 89 days
+    // (lib/automations/audit-log-cleanup.ts); read the archive whenever the
+    // range reaches past 88 days, so the hand-over day is never missed. A log
+    // lives in exactly one collection, but de-duplicate by _id in case an
+    // archive run was caught half-way.
     // A malformed user id matches nobody, so the export is empty rather than every user's entries.
-    const archiveCutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+    const archiveCutoff = new Date(Date.now() - 88 * 24 * 60 * 60 * 1000);
+    // One export is held in memory: cap it and ask for a shorter range instead
+    const cap = EXPORT_MAX_ENTRIES + 1;
     const [liveLogs, archivedLogs] = built.ok
       ? await Promise.all([
         AuditLog.find(built.query)
           .populate('userId', 'name email')
           .sort({ createdAt: 1 })
+          .limit(cap)
           .lean(),
         startDate < archiveCutoff
           ? ArchivedAuditLog.find(built.query)
             .populate('userId', 'name email')
             .sort({ createdAt: 1 })
+            .limit(cap)
             .lean()
           : Promise.resolve([]),
       ])
       : [[], []];
+    if (liveLogs.length + archivedLogs.length > EXPORT_MAX_ENTRIES) {
+      return NextResponse.json(
+        { success: false, error: `This range has more than ${EXPORT_MAX_ENTRIES.toLocaleString('en')} entries. Export a shorter date range.` },
+        { status: 413 }
+      );
+    }
     // chronological, matching an electronic journal's expected order
-    const logs = [...archivedLogs, ...liveLogs].sort(
-      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-    );
+    const seen = new Set<string>();
+    const logs = [...archivedLogs, ...liveLogs]
+      .filter((log) => {
+        const id = String(log._id);
+        if (seen.has(id)) return false;
+        seen.add(id);
+        return true;
+      })
+      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
     const entries = logs.map((log) => {
       const actor = log.userId && typeof log.userId === 'object'

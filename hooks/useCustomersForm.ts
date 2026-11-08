@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import type { Customer } from '@/types/customer';
+import { useMessages } from '@/hooks/useMessages';
 
 export interface CustomerFormData {
   firstName: string;
@@ -25,6 +26,7 @@ interface UseCustomersFormReturn {
 }
 
 export function useCustomersForm(): UseCustomersFormReturn {
+  const t = useMessages();
   const [formData, setFormDataState] = useState<CustomerFormData>({
     firstName: '',
     lastName: '',
@@ -77,11 +79,11 @@ export function useCustomersForm(): UseCustomersFormReturn {
 
       // Validate required fields
       if (!formData.firstName.trim()) {
-        setError('First name is required');
+        setError(t('admin.firstNameRequired', 'First name is required'));
         return;
       }
       if (!formData.lastName.trim()) {
-        setError('Last name is required');
+        setError(t('admin.lastNameRequired', 'Last name is required'));
         return;
       }
 
@@ -92,12 +94,12 @@ export function useCustomersForm(): UseCustomersFormReturn {
           setError(result);
         }
       } catch {
-        setError('An error occurred while saving');
+        setError(t('common.errorWhileSaving', 'An error occurred while saving'));
       } finally {
         setSubmitting(false);
       }
     },
-    [formData]
+    [formData, t]
   );
 
   return {

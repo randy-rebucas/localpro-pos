@@ -8,6 +8,8 @@ import { getValidationTranslatorFromRequest } from '@/lib/validation-translation
 import { logger } from '@/lib/logger';
 import { getTenantSettingsById } from '@/lib/tenant';
 import { tenantDayEdge } from '@/lib/timezone';
+import { checkRateLimit } from '@/lib/rate-limit';
+import mongoose from 'mongoose';
 
 /**
  * GET - Get attendance records for current user or all users (if manager+)
@@ -30,7 +32,10 @@ export async function GET(request: NextRequest) {
     const isManagerPlus = await hasTenantPermission(user.role, user.tenantId, 'attendance.manage');
 
     if (userId && isManagerPlus) {
-      // Manager+ viewing a specific employee
+      // Manager+ viewing a specific employee (a malformed id matches nobody, not a 500)
+      if (!mongoose.isValidObjectId(userId)) {
+        return NextResponse.json({ success: true, data: [] });
+      }
       query.userId = userId;
     } else if (!isManagerPlus) {
       // Non-managers can only see their own records
@@ -79,10 +84,16 @@ export async function POST(request: NextRequest) {
     const user = await requireAuth(request);
     await connectDB();
 
+    const t = await getValidationTranslatorFromRequest(request);
+    // Clock in/out a few times a day is normal; a burst is a stuck button or a script
+    const { allowed } = checkRateLimit(`attendance:clock:${user.tenantId}:${user.userId}`, 10, 60_000);
+    if (!allowed) {
+      return NextResponse.json({ success: false, error: t('validation.tooManyRequests', 'Too many requests') }, { status: 429 });
+    }
+
     const body = await request.json();
     const { action, notes, location } = body; // action: 'clock-in' | 'clock-out'
 
-    const t = await getValidationTranslatorFromRequest(request);
     if (!action || !['clock-in', 'clock-out'].includes(action)) {
       return NextResponse.json(
         { success: false, error: t('validation.attendanceActionRequired', 'Action must be "clock-in" or "clock-out"') },

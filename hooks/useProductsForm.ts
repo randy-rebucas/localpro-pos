@@ -115,19 +115,26 @@ export const useProductsForm = (product: Product | null, businessTypeConfig: Bus
       try {
         const url = product ? `/api/products/${product._id}` : '/api/products';
         const method = product ? 'PUT' : 'POST';
+        // On edit, '' clears a field (undefined would be dropped from the JSON and
+        // the old value kept). Stock is only sent when the count was changed: the
+        // server books it as an adjustment against the live figure, so sales made
+        // while this form was open are not overwritten.
+        const blank = (value: string | undefined) => (value ? value : product ? '' : undefined);
         const body: Record<string, unknown> = {
           name: formData.name,
-          description: formData.description || undefined,
-          image: formData.image || undefined,
+          description: blank(formData.description),
+          image: blank(formData.image),
           price: formData.price,
-          stock: formData.stock,
-          sku: formData.sku || undefined,
-          barcode: formData.barcode || undefined,
-          categoryId: formData.categoryId || undefined,
+          sku: blank(formData.sku),
+          barcode: blank(formData.barcode),
+          categoryId: blank(formData.categoryId),
           productType: formData.productType,
           trackInventory: formData.trackInventory,
           lowStockThreshold: formData.lowStockThreshold,
         };
+        if (!product || formData.stock !== (product.stock || 0)) {
+          body.stock = formData.stock;
+        }
 
         if (!product && confirmDuplicate) {
           body.confirmDuplicate = true;
@@ -135,13 +142,16 @@ export const useProductsForm = (product: Product | null, businessTypeConfig: Bus
 
         // Add restaurant-specific fields
         if (settings?.businessType?.toLowerCase() === 'restaurant') {
-          if (formData.allergens && formData.allergens.length > 0) {
+          // Empty lists are sent on edit so removing the last allergen/modifier saves
+          if (formData.allergens && (formData.allergens.length > 0 || product)) {
             body.allergens = formData.allergens;
           }
           if (formData.nutritionInfo && (formData.nutritionInfo.calories || formData.nutritionInfo.protein)) {
             body.nutritionInfo = formData.nutritionInfo;
+          } else if (product) {
+            body.nutritionInfo = null;
           }
-          if (formData.modifiers && formData.modifiers.length > 0) {
+          if (formData.modifiers && (formData.modifiers.length > 0 || product)) {
             body.modifiers = formData.modifiers;
           }
         }
@@ -180,7 +190,11 @@ export const useProductsForm = (product: Product | null, businessTypeConfig: Bus
         } else if (res.status === 409 && data.code === 'DUPLICATE_PRODUCT_NAME') {
           return { success: false, duplicate: true, existingProduct: data.existingProduct };
         } else {
-          const errorMsg = data.error || 'Failed to save product';
+          // Field validation comes back as errors[] rather than error
+          const fieldErrors = Array.isArray(data.errors)
+            ? data.errors.map((e: { message?: string }) => e?.message).filter(Boolean).join(' ')
+            : '';
+          const errorMsg = data.error || fieldErrors || 'Failed to save product';
           setError(errorMsg);
           return { success: false, error: errorMsg };
         }

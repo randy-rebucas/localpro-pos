@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { getBusinessTypeConfig } from '@/lib/business-types';
 
 export const FEATURE_FLAGS = [
   'enableInventory',
@@ -13,10 +14,16 @@ export const FEATURE_FLAGS = [
 export type FeatureFlagKey = (typeof FEATURE_FLAGS)[number];
 
 /**
- * What the app does when a flag was never saved. Tables count as on when unset, because the
- * tables page and /api/tables only switch off on an explicit false.
+ * What the app does when a flag was never saved. With a business type this is
+ * that type's preset — the same fallback supportsFeature() and the Business
+ * Type page use, so the two pages agree. Tables count as on when unset, because
+ * the tables page and /api/tables only switch off on an explicit false.
  */
-export const getFeatureFlagDefault = (flagKey: FeatureFlagKey): boolean => {
+export const getFeatureFlagDefault = (flagKey: FeatureFlagKey, businessType?: string): boolean => {
+  if (businessType && flagKey !== 'enableTableManagement') {
+    const preset = (getBusinessTypeConfig(businessType).defaultFeatures as Record<string, boolean | undefined>)[flagKey];
+    if (typeof preset === 'boolean') return preset;
+  }
   const defaults: Record<FeatureFlagKey, boolean> = {
     enableInventory: true,
     enableCategories: true,
