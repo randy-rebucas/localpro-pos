@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { getDictionaryClient } from '../../dictionaries-client';
 import { useBranchesList, type Branch } from '@/hooks/useBranchesList';
@@ -18,7 +17,6 @@ import {
 
 export default function BranchesPage() {
   const params = useParams();
-  const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
   const [dict, setDict] = useState<Record<string, any> | null>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [showBranchModal, setShowBranchModal] = useState(false);
@@ -54,7 +52,11 @@ export default function BranchesPage() {
     );
   };
 
-  if (!dict || loading) {
+  // Show the spinner only for the first load, so refetches after a save or delete keep the page (and any open modal) mounted.
+  const [loadedOnce, setLoadedOnce] = useState(false);
+  if (!loading && !loadedOnce) setLoadedOnce(true);
+
+  if (!dict || !loadedOnce) {
     return (
       <div className="flex items-center justify-center py-24">
         <div className="text-center">

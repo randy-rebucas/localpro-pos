@@ -85,7 +85,7 @@ export async function POST(
     const contactField = campaign.channel === 'email' ? { email: { $exists: true, $ne: '' } } : { phone: { $exists: true, $ne: '' } };
     const candidates = await Customer.find(
       { tenantId, isActive: true, ...contactField },
-      { _id: 1, email: 1, phone: 1, lastPurchaseDate: 1, loyaltyPointsBalance: 1, totalSpent: 1 }
+      { _id: 1, firstName: 1, email: 1, phone: 1, lastPurchaseDate: 1, loyaltyPointsBalance: 1, totalSpent: 1 }
     ).lean();
 
     // Real order counts per customer — must match the same logic /api/crm/segments
@@ -114,13 +114,17 @@ export async function POST(
     let sentCount = 0;
     let failedCount = 0;
 
+    // The compose form offers {firstName} as a personalization token; fill it per recipient.
+    const personalize = (text: string | undefined, firstName: unknown) =>
+      text?.replace(/\{firstName\}/g, typeof firstName === 'string' ? firstName.trim() : '');
+
     for (let i = 0; i < recipients.length; i += SEND_BATCH_SIZE) {
       const batch = recipients.slice(i, i + SEND_BATCH_SIZE);
       const results = await Promise.allSettled(
         batch.map((recipient) =>
           campaign.channel === 'email'
-            ? sendEmail({ to: recipient.email as string, subject: campaign.subject, message: campaign.body, type: 'email' })
-            : sendSMS({ to: recipient.phone as string, message: campaign.body, type: 'sms' })
+            ? sendEmail({ to: recipient.email as string, subject: personalize(campaign.subject, recipient.firstName), message: personalize(campaign.body, recipient.firstName) as string, type: 'email' })
+            : sendSMS({ to: recipient.phone as string, message: personalize(campaign.body, recipient.firstName) as string, type: 'sms' })
         )
       );
       for (const result of results) {

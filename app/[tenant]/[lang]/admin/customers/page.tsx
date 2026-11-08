@@ -3,13 +3,21 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import { HandCoins, Pencil, Plus, Power, Search, Upload, Users } from 'lucide-react';
 import { getDictionaryClient } from '../../dictionaries-client';
 import { showToast } from '@/lib/toast';
 import { useConfirm } from '@/lib/confirm';
+import Currency from '@/components/Currency';
+import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import SlipPager from '@/components/ui/SlipPager';
+import { ReceiptRow } from '@/components/marketing/primitives';
+import {
+  ICON, DARK_FIELD, DARK_KEY, DARK_KEY_PRIMARY, DARK_LABEL, HINT, INPUT, KEY, KEY_PRIMARY, LABEL, ROW_KEY,
+  LedReadout, RegisterPage, Sheet,
+} from '@/components/admin/register-ui';
 import { useCustomersList, type Customer } from '@/hooks/useCustomersList';
 import { useCustomersForm } from '@/hooks/useCustomersForm';
 import {
-  getStatusBadgeClass,
   getStatusLabel,
   getDeleteConfirmMessage,
   getDeleteSuccessMessage,
@@ -18,23 +26,74 @@ import {
   getSaveErrorMessage,
   getToggleStatusMessage,
   getToggleStatusErrorMessage,
-  formatCurrency,
 } from '@/lib/customers-helpers';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { supportsFeature } from '@/lib/business-type-helpers';
+import { getDefaultTenantSettings } from '@/lib/currency';
+import { formatDate } from '@/lib/formatting';
 import { usePermissions } from '@/hooks/usePermissions';
+
+type Dict = any; // eslint-disable-line @typescript-eslint/no-explicit-any
+type PaymentMethod = 'cash' | 'card' | 'digital' | 'check' | 'other';
+
+const PAYMENT_METHODS: PaymentMethod[] = ['cash', 'card', 'digital', 'check', 'other'];
+
+const TH = 'px-3 py-2 align-bottom font-receipt text-xs font-medium uppercase tracking-[0.14em] text-ink/60';
+const TD = 'px-3 py-3 font-receipt text-sm';
+/** Cells holding written words rather than printed figures. */
+const TD_TEXT = 'px-3 py-3 text-sm';
+
+const methodLabel = (dict: Dict, method: string) =>
+  ({
+    cash: dict.admin?.cash || 'Cash',
+    card: dict.admin?.card || 'Card',
+    digital: dict.admin?.digital || 'Digital',
+    check: dict.admin?.check || 'Check',
+    other: dict.admin?.other || 'Other',
+  } as Record<string, string>)[method] || method;
+
+const fullName = (customer: Customer) => `${customer.firstName} ${customer.lastName}`.trim();
+const balanceOf = (customer: Customer) => Number(customer.accountBalance) || 0;
+
+function StatusTag({ dict, active }: { dict: Dict; active: boolean }) {
+  return (
+    <span className={`inline-block whitespace-nowrap border px-1.5 py-0.5 font-receipt text-[11px] uppercase ${active ? 'border-ink/25 text-ink/70' : 'border-stamp/50 text-stamp'}`}>
+      {getStatusLabel(active, dict)}
+    </span>
+  );
+}
+
+function Tags({ customer }: { customer: Customer }) {
+  const tags = customer.tags || [];
+  if (tags.length === 0) return null;
+  return (
+    <span className="flex flex-wrap gap-1">
+      {tags.slice(0, 3).map((tag, idx) => (
+        <span key={`${customer._id}-tag-${idx}-${tag}`} className="border border-dashed border-ink/30 px-1.5 py-0.5 font-receipt text-[11px] text-ink/70">
+          {tag}
+        </span>
+      ))}
+      {tags.length > 3 && <span className="font-receipt text-[11px] text-ink/50">+{tags.length - 3}</span>}
+    </span>
+  );
+}
+
+/** Money owed on account reads in stamp red; a clear account stays quiet. */
+function Balance({ amount }: { amount: number }) {
+  return <span className={amount > 0 ? 'font-semibold text-stamp' : 'text-ink/50'}><Currency amount={amount} /></span>;
+}
 
 export default function CustomersPage() {
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<Record<string, any>>(null!); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const [dict, setDict] = useState<Dict>(null);
   const [showModal, setShowModal] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [balancePayOpen, setBalancePayOpen] = useState(false);
   const [balancePayCustomer, setBalancePayCustomer] = useState<Customer | null>(null);
   const [bpAmount, setBpAmount] = useState('');
-  const [bpMethod, setBpMethod] = useState<'cash' | 'card' | 'digital' | 'check' | 'other'>('cash');
+  const [bpMethod, setBpMethod] = useState<PaymentMethod>('cash');
   const [bpNotes, setBpNotes] = useState('');
   const [bpSubmitting, setBpSubmitting] = useState(false);
   const [bpIdempotencyKey, setBpIdempotencyKey] = useState('');
@@ -46,8 +105,10 @@ export default function CustomersPage() {
     createdAt: string;
   }>>([]);
   const [balanceHistoryLoading, setBalanceHistoryLoading] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   const { settings } = useTenantSettings();
+  const dateSettings = settings || getDefaultTenantSettings();
   const enableOnAccountSales = settings?.enableOnAccountSales === true;
   const enableLoyalty = supportsFeature(settings ?? undefined, 'loyalty');
   const { canAccess } = usePermissions();
@@ -60,6 +121,7 @@ export default function CustomersPage() {
     loading,
     page,
     totalPages,
+    total,
     search,
     filterActive,
     setPage,
@@ -96,7 +158,8 @@ export default function CustomersPage() {
     setShowModal(true);
   };
 
-  const handleSave = async () => {
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
     await handleSubmit(async (data) => {
       const isEdit = !!editingCustomer;
       const result = isEdit
@@ -114,30 +177,41 @@ export default function CustomersPage() {
     });
   };
 
-  const handleDelete = async (customer: Customer) => {
+  // Deleting a customer is a soft delete: it deactivates the account and keeps its history.
+  const handleDeactivate = async (customer: Customer) => {
     const confirmed = await confirm(
-      dict?.admin?.deleteCustomer || 'Delete Customer',
-      getDeleteConfirmMessage(dict),
-      { variant: 'danger' }
+      dict?.admin?.deactivateCustomerTitle || 'Deactivate customer?',
+      `${getDeleteConfirmMessage(dict)} (${fullName(customer)})`,
+      { variant: 'danger', confirmText: dict?.admin?.deactivate || 'Deactivate', cancelText: dict?.common?.cancel || 'Cancel' }
     );
     if (!confirmed) return;
 
-    const result = await deleteCustomer(customer._id);
-    if (result === true) {
-      showToast.success(getDeleteSuccessMessage(dict));
-      await fetchCustomers();
-    } else {
-      showToast.error(result || getDeleteErrorMessage(dict));
+    setBusyId(customer._id);
+    try {
+      const result = await deleteCustomer(customer._id);
+      if (result === true) {
+        showToast.success(getDeleteSuccessMessage(dict));
+        await fetchCustomers();
+      } else {
+        showToast.error(result || getDeleteErrorMessage(dict));
+      }
+    } finally {
+      setBusyId(null);
     }
   };
 
-  const handleToggleStatus = async (customer: Customer) => {
-    const result = await toggleCustomerStatus(customer._id, !customer.isActive);
-    if (result === true) {
-      showToast.success(getToggleStatusMessage(!customer.isActive, dict));
-      await fetchCustomers();
-    } else {
-      showToast.error(result || getToggleStatusErrorMessage(dict));
+  const handleActivate = async (customer: Customer) => {
+    setBusyId(customer._id);
+    try {
+      const result = await toggleCustomerStatus(customer._id, true);
+      if (result === true) {
+        showToast.success(getToggleStatusMessage(true, dict));
+        await fetchCustomers();
+      } else {
+        showToast.error(result || getToggleStatusErrorMessage(dict));
+      }
+    } finally {
+      setBusyId(null);
     }
   };
 
@@ -162,7 +236,7 @@ export default function CustomersPage() {
 
   const openBalancePayment = (customer: Customer) => {
     setBalancePayCustomer(customer);
-    setBpAmount((Number(customer.accountBalance) || 0).toFixed(2));
+    setBpAmount(balanceOf(customer).toFixed(2));
     setBpMethod('cash');
     setBpNotes('');
     setBalancePaymentHistory([]);
@@ -171,11 +245,17 @@ export default function CustomersPage() {
     void fetchBalancePaymentHistory(customer._id);
   };
 
-  const submitBalancePayment = async () => {
+  const closeBalancePayment = () => {
+    setBalancePayOpen(false);
+    setBalancePayCustomer(null);
+  };
+
+  const submitBalancePayment = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!balancePayCustomer) return;
     const amt = parseFloat(bpAmount);
     if (!amt || amt <= 0 || Number.isNaN(amt)) {
-      showToast.error(dict?.admin?.amount ? `${dict.admin.amount}: invalid` : 'Enter a valid amount');
+      showToast.error(dict?.admin?.enterValidAmount || 'Enter a valid amount');
       return;
     }
     setBpSubmitting(true);
@@ -189,16 +269,13 @@ export default function CustomersPage() {
       const data = await res.json();
       if (data.success) {
         showToast.success(dict?.admin?.balancePaymentRecorded || 'Payment recorded');
-        const newBalance = Math.max(0, (Number(balancePayCustomer.accountBalance) || 0) - amt);
+        const newBalance = Math.max(0, balanceOf(balancePayCustomer) - amt);
         setBalancePayCustomer({ ...balancePayCustomer, accountBalance: newBalance });
         setBpAmount(newBalance > 0 ? newBalance.toFixed(2) : '');
         setBpIdempotencyKey(crypto.randomUUID());
         await fetchBalancePaymentHistory(balancePayCustomer._id);
         await fetchCustomers();
-        if (newBalance <= 0.01) {
-          setBalancePayOpen(false);
-          setBalancePayCustomer(null);
-        }
+        if (newBalance <= 0.01) closeBalancePayment();
       } else {
         showToast.error(data.error || dict?.admin?.balancePaymentFailed || 'Could not record payment');
       }
@@ -209,452 +286,376 @@ export default function CustomersPage() {
     }
   };
 
-  const showBlockingLoader = !dict || (!initialLoadComplete && loading);
-
-  if (showBlockingLoader) {
+  if (!dict || !initialLoadComplete) {
     return (
-      <div className="flex items-center justify-center py-24">
-        <div className="text-center">
-          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-brand"></div>
-          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
+      <div className="mk-root pos-register">
+        <div className="flex min-h-[calc(100dvh-3.5rem)] items-center justify-center bg-brand-navy-deep lg:min-h-dvh">
+          <LoadingSpinner size="md" color="#8fe3d0" />
         </div>
       </div>
     );
   }
 
+  const title = dict.admin?.customers || 'Customers';
+  // Keep the balance visible while anyone still owes, even if on-account sales were switched off later.
+  const showBalance = enableOnAccountSales || customers.some((c) => balanceOf(c) > 0);
+  const canTakePayment = (customer: Customer) =>
+    canBalancePayments && enableOnAccountSales && customer.isActive && balanceOf(customer) > 0;
+  const statusKeys = [
+    { value: 'all', label: dict.common?.all || 'All' },
+    { value: 'true', label: dict.common?.active || 'Active' },
+    { value: 'false', label: dict.common?.inactive || 'Inactive' },
+  ];
+  const editLabel = dict.common?.edit || 'Edit';
+  const payLabel = dict.admin?.recordBalancePayment || 'Record payment';
+  const deactivateLabel = dict.admin?.deactivate || 'Deactivate';
+  const activateLabel = dict.admin?.activate || 'Activate';
+
+  /** The keys at the end of a customer's line. */
+  const rowKeys = (customer: Customer) => (
+    <>
+      {canTakePayment(customer) && (
+        <button type="button" onClick={() => openBalancePayment(customer)} className={ROW_KEY} aria-label={`${payLabel}: ${fullName(customer)}`} title={payLabel}>
+          <HandCoins className={ICON} strokeWidth={1.75} aria-hidden />
+        </button>
+      )}
+      {canEdit && (
+        <button type="button" onClick={() => openEdit(customer)} className={ROW_KEY} aria-label={`${editLabel} ${fullName(customer)}`} title={editLabel}>
+          <Pencil className={ICON} strokeWidth={1.75} aria-hidden />
+        </button>
+      )}
+      {canEdit && (
+        <button
+          type="button"
+          onClick={() => (customer.isActive ? handleDeactivate(customer) : handleActivate(customer))}
+          disabled={busyId === customer._id}
+          className={`${ROW_KEY} ${customer.isActive ? 'hover:text-stamp' : 'hover:text-brand-hover'} disabled:opacity-40`}
+          aria-label={`${customer.isActive ? deactivateLabel : activateLabel} ${fullName(customer)}`}
+          title={customer.isActive ? deactivateLabel : activateLabel}
+        >
+          <Power className={ICON} strokeWidth={1.75} aria-hidden />
+        </button>
+      )}
+    </>
+  );
+
   return (
-    <div>
+    <RegisterPage
+      tagNo="CU"
+      tag={settings?.companyName}
+      title={title}
+      subtitle={dict.admin?.customersSubtitle || 'Manage your customer database'}
+      side={<LedReadout value={total} label={dict.admin?.customers || 'Customers'} />}
+    >
       {ConfirmDialog}
-      <div className="px-4 sm:px-6 py-6">
-        <div className="mb-6 sm:mb-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-2">
-                {dict?.admin?.customers || 'Customers'}
-              </h1>
-              <p className="text-sm text-gray-500">{dict?.admin?.customersSubtitle || 'Manage your customer database'}</p>
-            </div>
+
+      {/* Find a customer, narrow by status, or open a new account */}
+      <div className="mt-6 grid grid-cols-1 items-end gap-3 lg:grid-cols-[minmax(0,1fr)_auto_auto]">
+        <div>
+          <label htmlFor="customer-search" className={DARK_LABEL}>{dict.common?.search || 'Search'}</label>
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink/40" strokeWidth={1.75} aria-hidden />
+            <input
+              id="customer-search"
+              type="search"
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              placeholder={dict.admin?.customerSearchPlaceholder || 'Name, email or phone'}
+              className={`${DARK_FIELD} pl-9`}
+            />
           </div>
         </div>
-
-        <div className="bg-white border border-gray-300 p-6 relative">
-          {loading && initialLoadComplete && (
-            <div
-              className="absolute inset-0 bg-white/70 flex items-center justify-center z-10"
-              aria-busy="true"
-              aria-live="polite"
+        <nav aria-label={dict.admin?.status || 'Status'} className="grid grid-cols-3 border-l border-t border-white/25">
+          {statusKeys.map((key) => (
+            <button
+              key={key.value}
+              type="button"
+              aria-pressed={filterActive === key.value}
+              onClick={() => { setFilterActive(key.value); setPage(1); }}
+              className={`flex min-h-[44px] items-center justify-center border-b border-r border-white/25 px-3 font-receipt text-xs font-medium uppercase transition-colors touch-manipulation ${filterActive === key.value ? 'bg-paper-white text-ink' : 'text-paper hover:bg-white/10'}`}
             >
-              <div className="inline-block animate-spin h-8 w-8 border-b-2 border-brand" />
-            </div>
-          )}
-          {/* Search & Filters */}
-          <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center mb-6">
-            <div className="flex flex-col sm:flex-row gap-3 flex-1">
-              <input
-                type="text"
-                placeholder={dict?.common?.search || 'Search...'}
-                value={search}
-                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-                className="px-4 py-2 border border-gray-300 text-sm focus:outline-none focus:border-brand w-full sm:w-64"
-              />
-              <select
-                value={filterActive}
-                onChange={(e) => { setFilterActive(e.target.value); setPage(1); }}
-                className="px-4 py-2 border border-gray-300 text-sm focus:outline-none focus:border-brand"
-              >
-                <option value="all">{dict?.common?.all || 'All'}</option>
-                <option value="true">{dict?.common?.active || 'Active'}</option>
-                <option value="false">{dict?.common?.inactive || 'Inactive'}</option>
-              </select>
-            </div>
-            {canManage && (
-              <button
-                onClick={openCreate}
-                className="px-4 py-2 bg-brand text-white hover:bg-brand-hover font-medium border border-brand-hover whitespace-nowrap"
-              >
-                {dict?.common?.add || 'Add'} {dict?.admin?.customer || 'Customer'}
-              </button>
-            )}
-            <Link
-              href={`/${tenant}/${lang}/admin/file-upload`}
-              className="px-4 py-2 bg-gray-100 text-gray-700 hover:bg-gray-200 font-medium border border-gray-300 inline-flex items-center gap-2 transition-colors whitespace-nowrap"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-              </svg>
-              {dict?.admin?.uploadFiles || 'Upload Files'}
-            </Link>
-          </div>
-
-          {/* Table */}
-          {customers.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">
-              <svg className="w-12 h-12 mx-auto mb-4 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-              <p>{dict?.common?.noCustomersFound || 'No customers found'}</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict?.admin?.name || 'Name'}</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict?.admin?.email || 'Email'}</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict?.admin?.phone || 'Phone'}</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict?.common?.totalSpent || 'Total Spent'}</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict?.admin?.balanceDueShort || 'Balance due'}</th>
-                    {enableLoyalty && (
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict?.admin?.loyaltyPoints || 'Loyalty Points'}</th>
-                    )}
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict?.admin?.tags || 'Tags'}</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict?.admin?.status || 'Status'}</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict?.common?.actions || 'Actions'}</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {customers.map((customer) => (
-                    <tr key={customer._id}>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {customer.firstName} {customer.lastName}
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {customer.email || '-'}
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {customer.phone || '-'}
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {formatCurrency(customer.totalSpent || 0, lang)}
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {formatCurrency(Number(customer.accountBalance) || 0, lang)}
-                      </td>
-                      {enableLoyalty && (
-                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {(customer.loyaltyPointsBalance ?? 0).toLocaleString()}
-                        </td>
-                      )}
-                      <td className="px-4 py-4 whitespace-nowrap">
-                        <div className="flex gap-1 flex-wrap">
-                          {(customer.tags || []).slice(0, 3).map((tag, idx) => (
-                            <span key={`${customer._id}-tag-${idx}-${tag}`} className="px-2 py-0.5 text-xs font-medium border border-gray-300 bg-gray-100 text-gray-700">
-                              {tag}
-                            </span>
-                          ))}
-                          {(customer.tags || []).length > 3 && (
-                            <span className="text-xs text-gray-400">+{customer.tags!.length - 3}</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap">
-                        {canEdit ? (
-                          <button
-                            onClick={() => handleToggleStatus(customer)}
-                            className={`px-2 py-1 text-xs font-semibold border ${getStatusBadgeClass(customer.isActive)}`}
-                          >
-                            {getStatusLabel(customer.isActive, dict)}
-                          </button>
-                        ) : (
-                          <span className={`px-2 py-1 text-xs font-semibold border ${getStatusBadgeClass(customer.isActive)}`}>
-                            {getStatusLabel(customer.isActive, dict)}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm">
-                        <div className="flex flex-wrap gap-2">
-                          {canEdit && (
-                            <button
-                              onClick={() => openEdit(customer)}
-                              className="text-brand hover:text-brand-navy font-medium"
-                            >
-                              {dict?.common?.edit || 'Edit'}
-                            </button>
-                          )}
-                          {canBalancePayments && enableOnAccountSales && customer.isActive && (Number(customer.accountBalance) || 0) > 0 && (
-                            <button
-                              type="button"
-                              onClick={() => openBalancePayment(customer)}
-                              className="text-emerald-700 hover:text-emerald-900 font-medium"
-                            >
-                              {dict?.admin?.recordBalancePayment || 'Record payment'}
-                            </button>
-                          )}
-                          {canEdit && customer.isActive && (
-                            <button
-                              onClick={() => handleDelete(customer)}
-                              className="text-red-600 hover:text-red-800 font-medium"
-                            >
-                              {dict?.common?.delete || 'Delete'}
-                            </button>
-                          )}
-                          {!canEdit && !canBalancePayments && (
-                            <span className="text-gray-400">-</span>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex justify-center gap-2 mt-6">
-              <button
-                onClick={() => setPage(Math.max(1, page - 1))}
-                disabled={page === 1}
-                className="px-3 py-1 border border-gray-300 text-sm disabled:opacity-50"
-              >
-                {dict?.common?.previous || 'Previous'}
-              </button>
-              <span className="px-3 py-1 text-sm text-gray-600">
-                {page} / {totalPages}
-              </span>
-              <button
-                onClick={() => setPage(Math.min(totalPages, page + 1))}
-                disabled={page === totalPages}
-                className="px-3 py-1 border border-gray-300 text-sm disabled:opacity-50"
-              >
-                {dict?.common?.next || 'Next'}
-              </button>
-            </div>
+              {key.label}
+            </button>
+          ))}
+        </nav>
+        <div className="grid grid-cols-2 gap-3 sm:flex">
+          <Link href={`/${tenant}/${lang}/admin/file-upload`} className={DARK_KEY}>
+            <Upload className={ICON} strokeWidth={1.75} aria-hidden />
+            {dict.admin?.uploadFiles || 'Upload Files'}
+          </Link>
+          {canManage && (
+            <button type="button" onClick={openCreate} className={DARK_KEY_PRIMARY}>
+              <Plus className={ICON} strokeWidth={1.75} aria-hidden />
+              {dict.admin?.addCustomer || 'Add customer'}
+            </button>
           )}
         </div>
       </div>
 
-      {/* Record balance payment */}
-      {balancePayOpen && balancePayCustomer && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white w-full max-w-md border border-gray-300">
-            <div className="flex items-center justify-between p-5 border-b border-gray-200">
-              <h3 className="text-lg font-bold text-gray-900">
-                {dict?.admin?.recordBalancePaymentTitle || 'Record account payment'}
-              </h3>
-              <button
-                type="button"
-                onClick={() => { setBalancePayOpen(false); setBalancePayCustomer(null); }}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+      {/* The customer book, one line per account */}
+      <section className="mt-6" aria-busy={loading}>
+        <div className={`bg-paper-white text-ink transition-opacity ${loading ? 'opacity-60' : ''}`}>
+          {customers.length === 0 ? (
+            <div className="px-4 py-14 text-center">
+              <Users className="mx-auto mb-2 h-8 w-8 text-ink/20" strokeWidth={1.75} aria-hidden />
+              <p className="font-receipt text-sm text-ink/60">{dict.common?.noCustomersFound || 'No customers found'}</p>
+              {canManage && !search && filterActive === 'all' && (
+                <button type="button" onClick={openCreate} className={`${KEY_PRIMARY} mx-auto mt-4`}>
+                  <Plus className={ICON} strokeWidth={1.75} aria-hidden />
+                  {dict.admin?.addCustomer || 'Add customer'}
+                </button>
+              )}
             </div>
-            <div className="p-5 space-y-4">
-              <p className="text-sm text-gray-700">
-                <span className="font-semibold">{balancePayCustomer.firstName} {balancePayCustomer.lastName}</span>
-                <span className="text-gray-500"> — {dict?.admin?.balanceDueShort || 'Balance due'}: </span>
-                <span className="font-semibold">{formatCurrency(Number(balancePayCustomer.accountBalance) || 0, lang)}</span>
-              </p>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{dict?.admin?.amount || 'Amount'}</label>
-                <input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={bpAmount}
-                  onChange={(e) => setBpAmount(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 text-sm focus:outline-none focus:border-brand"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{dict?.admin?.paymentMethod || 'Payment method'}</label>
-                <select
-                  value={bpMethod}
-                  onChange={(e) => setBpMethod(e.target.value as typeof bpMethod)}
-                  className="w-full px-3 py-2 border border-gray-300 text-sm focus:outline-none focus:border-brand bg-white"
-                >
-                  <option value="cash">{dict?.pos?.cash || 'Cash'}</option>
-                  <option value="card">{dict?.pos?.card || 'Card'}</option>
-                  <option value="digital">{dict?.pos?.digital || 'Digital'}</option>
-                  <option value="check">{dict?.pos?.check || 'Check'}</option>
-                  <option value="other">{dict?.pos?.other || 'Other'}</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict?.common?.notes || 'Notes'} <span className="text-gray-400 font-normal">({dict?.admin?.balancePaymentNotesHint || 'optional'})</span>
-                </label>
-                <textarea
-                  value={bpNotes}
-                  onChange={(e) => setBpNotes(e.target.value)}
-                  rows={2}
-                  className="w-full px-3 py-2 border border-gray-300 text-sm focus:outline-none focus:border-brand resize-none"
-                />
-              </div>
-              <div className="border-t border-gray-200 pt-4">
-                <h4 className="text-sm font-semibold text-gray-900 mb-2">
-                  {dict?.admin?.balancePaymentHistory || 'Recent payments'}
-                </h4>
-                {balanceHistoryLoading ? (
-                  <p className="text-xs text-gray-500">{dict?.common?.loading || 'Loading...'}</p>
-                ) : balancePaymentHistory.length === 0 ? (
-                  <p className="text-xs text-gray-500">{dict?.admin?.noBalancePayments || 'No payments recorded yet.'}</p>
-                ) : (
-                  <ul className="space-y-2 max-h-40 overflow-y-auto">
-                    {balancePaymentHistory.map((payment) => (
-                      <li key={payment._id} className="flex items-start justify-between gap-3 text-xs border border-gray-100 px-2 py-1.5 bg-gray-50">
-                        <div>
-                          <span className="font-medium text-gray-900">{formatCurrency(payment.amount, lang)}</span>
-                          <span className="text-gray-500"> · {payment.method}</span>
-                          {payment.notes && <p className="text-gray-500 mt-0.5">{payment.notes}</p>}
-                        </div>
-                        <span className="text-gray-400 whitespace-nowrap">
-                          {new Date(payment.createdAt).toLocaleDateString(lang === 'es' ? 'es' : 'en')}
-                        </span>
-                      </li>
+          ) : (
+            <>
+              {/* Up to xl: stacked lines */}
+              <ul className="divide-y divide-dashed divide-ink/20 xl:hidden">
+                {customers.map((customer) => (
+                  <li key={customer._id} className="flex items-start gap-2 px-4 py-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-3">
+                        <p className={`min-w-0 text-sm font-medium ${customer.isActive ? '' : 'text-ink/50'}`}>{fullName(customer)}</p>
+                        <p className="shrink-0 text-right font-receipt text-sm"><Currency amount={customer.totalSpent || 0} /></p>
+                      </div>
+                      {customer.phone && <p className="mt-0.5 font-receipt text-xs text-ink/60">{customer.phone}</p>}
+                      {customer.email && <p className="mt-0.5 font-receipt text-xs text-ink/60 [overflow-wrap:anywhere]">{customer.email}</p>}
+                      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 font-receipt text-xs text-ink/60">
+                        {!customer.isActive && <StatusTag dict={dict} active={false} />}
+                        {showBalance && balanceOf(customer) > 0 && (
+                          <span>{dict.admin?.balanceDueShort || 'Balance due'}: <Balance amount={balanceOf(customer)} /></span>
+                        )}
+                        {enableLoyalty && (
+                          <span>{dict.admin?.loyaltyPoints || 'Loyalty points'}: <span className="text-ink">{(customer.loyaltyPointsBalance ?? 0).toLocaleString()}</span></span>
+                        )}
+                        <Tags customer={customer} />
+                      </div>
+                    </div>
+                    <div className="-mr-2 flex shrink-0">{rowKeys(customer)}</div>
+                  </li>
+                ))}
+              </ul>
+
+              {/* From xl: the full book */}
+              <div className="relative hidden overflow-x-auto xl:block" role="region" aria-label={title} tabIndex={0}>
+                <table className="min-w-full">
+                  <thead className="border-b border-dashed border-ink/30">
+                    <tr>
+                      <th scope="col" className={`${TH} text-left`}>{dict.admin?.name || 'Name'}</th>
+                      <th scope="col" className={`${TH} text-left`}>{dict.admin?.tags || 'Tags'}</th>
+                      <th scope="col" className={`${TH} text-right`}>{dict.common?.totalSpent || 'Total Spent'}</th>
+                      {showBalance && <th scope="col" className={`${TH} text-right`}>{dict.admin?.balanceDueShort || 'Balance due'}</th>}
+                      {enableLoyalty && <th scope="col" className={`${TH} text-right`}>{dict.admin?.loyaltyPoints || 'Loyalty points'}</th>}
+                      <th scope="col" className={`${TH} text-left`}>{dict.admin?.status || 'Status'}</th>
+                      {(canEdit || canBalancePayments) && <th scope="col" className={TH}><span className="sr-only">{dict.common?.actions || 'Actions'}</span></th>}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-dashed divide-ink/20">
+                    {customers.map((customer) => (
+                      <tr key={customer._id} className="align-top transition-colors hover:bg-paper">
+                        <td className={`${TD_TEXT} min-w-[14rem]`}>
+                          <p className={`font-medium ${customer.isActive ? '' : 'text-ink/50'}`}>{fullName(customer)}</p>
+                          {(customer.email || customer.phone) && (
+                            <p className="mt-0.5 font-receipt text-xs text-ink/60">{[customer.phone, customer.email].filter(Boolean).join(' · ')}</p>
+                          )}
+                        </td>
+                        <td className={TD}><Tags customer={customer} /></td>
+                        <td className={`${TD} whitespace-nowrap text-right`}><Currency amount={customer.totalSpent || 0} /></td>
+                        {showBalance && (
+                          <td className={`${TD} whitespace-nowrap text-right`}>
+                            <Balance amount={balanceOf(customer)} />
+                            {enableOnAccountSales && customer.creditLimit != null && (
+                              <p className="mt-0.5 text-xs text-ink/50">
+                                {dict.admin?.creditLimit || 'Credit limit'}: <Currency amount={customer.creditLimit} />
+                              </p>
+                            )}
+                          </td>
+                        )}
+                        {enableLoyalty && (
+                          <td className={`${TD} whitespace-nowrap text-right`}>{(customer.loyaltyPointsBalance ?? 0).toLocaleString()}</td>
+                        )}
+                        <td className={TD}><StatusTag dict={dict} active={customer.isActive} /></td>
+                        {(canEdit || canBalancePayments) && (
+                          <td className="whitespace-nowrap px-2 py-1 text-right">
+                            <div className="inline-flex">{rowKeys(customer)}</div>
+                          </td>
+                        )}
+                      </tr>
                     ))}
-                  </ul>
-                )}
+                  </tbody>
+                </table>
               </div>
-            </div>
-            <div className="flex justify-end gap-3 p-5 border-t border-gray-200">
-              <button
-                type="button"
-                onClick={() => { setBalancePayOpen(false); setBalancePayCustomer(null); }}
-                className="px-4 py-2 border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50"
-              >
-                {dict?.common?.cancel || 'Cancel'}
-              </button>
-              <button
-                type="button"
-                onClick={submitBalancePayment}
-                disabled={bpSubmitting}
-                className="px-4 py-2 bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 border border-emerald-700 disabled:opacity-50"
-              >
-                {bpSubmitting ? (dict?.common?.saving || 'Saving...') : (dict?.admin?.recordBalancePayment || 'Record payment')}
-              </button>
-            </div>
-          </div>
+            </>
+          )}
+
+          <SlipPager
+            page={page}
+            totalPages={totalPages}
+            onPageChange={setPage}
+            label={dict.admin?.page || 'Page'}
+            previousLabel={dict.common?.previous || 'Previous'}
+            nextLabel={dict.common?.next || 'Next'}
+          />
         </div>
+        <div className="mk-tear-b h-3 bg-paper-white" aria-hidden />
+      </section>
+
+      {/* Account payment slip */}
+      {balancePayOpen && balancePayCustomer && (
+        <Sheet
+          title={dict.admin?.recordBalancePaymentTitle || 'Record account payment'}
+          subtitle={fullName(balancePayCustomer)}
+          onClose={closeBalancePayment}
+          closeLabel={dict.common?.close || 'Close'}
+          footer={
+            <>
+              <button type="button" onClick={closeBalancePayment} className={KEY}>{dict.common?.cancel || 'Cancel'}</button>
+              <button type="submit" form="balance-payment-form" disabled={bpSubmitting} className={KEY_PRIMARY}>
+                <HandCoins className={ICON} strokeWidth={1.75} aria-hidden />
+                {bpSubmitting ? (dict.common?.saving || 'Saving...') : payLabel}
+              </button>
+            </>
+          }
+        >
+          <form id="balance-payment-form" onSubmit={submitBalancePayment} className="space-y-4">
+            <div className="font-receipt text-lg">
+              <ReceiptRow strong label={dict.admin?.balanceDueShort || 'Balance due'} value={<Balance amount={balanceOf(balancePayCustomer)} />} />
+            </div>
+
+            <div>
+              <label htmlFor="bp-amount" className={LABEL}>{dict.admin?.amount || 'Amount'}</label>
+              <input
+                id="bp-amount"
+                type="number"
+                inputMode="decimal"
+                min={0}
+                step="0.01"
+                value={bpAmount}
+                onChange={(e) => setBpAmount(e.target.value)}
+                className={`${INPUT} font-receipt`}
+              />
+            </div>
+
+            <fieldset>
+              <legend className={LABEL}>{dict.admin?.paymentMethod || 'Payment method'}</legend>
+              <div className="grid grid-cols-3 border-l border-t border-ink/25 sm:grid-cols-5">
+                {PAYMENT_METHODS.map((method) => (
+                  <button
+                    key={method}
+                    type="button"
+                    aria-pressed={bpMethod === method}
+                    onClick={() => setBpMethod(method)}
+                    className={`flex min-h-[44px] items-center justify-center border-b border-r border-ink/25 px-1 font-receipt text-xs font-medium uppercase transition-colors touch-manipulation ${bpMethod === method ? 'bg-ink text-paper-white' : 'text-ink hover:bg-paper'}`}
+                  >
+                    {methodLabel(dict, method)}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+
+            <div>
+              <label htmlFor="bp-notes" className={LABEL}>
+                {dict.common?.notes || 'Notes'} ({dict.common?.optional || 'optional'})
+              </label>
+              <textarea id="bp-notes" value={bpNotes} onChange={(e) => setBpNotes(e.target.value)} rows={2} className={`${INPUT} resize-none`} />
+            </div>
+
+            <div className="border-t border-dashed border-ink/30 pt-4">
+              <h3 className="font-receipt text-xs font-medium uppercase tracking-[0.08em] text-ink/60">
+                {dict.admin?.balancePaymentHistory || 'Recent payments'}
+              </h3>
+              {balanceHistoryLoading ? (
+                <p className="mt-2 font-receipt text-xs text-ink/60">{dict.common?.loading || 'Loading...'}</p>
+              ) : balancePaymentHistory.length === 0 ? (
+                <p className="mt-2 font-receipt text-xs text-ink/60">{dict.admin?.noBalancePayments || 'No payments recorded yet.'}</p>
+              ) : (
+                <ul className="mt-2 max-h-40 space-y-1.5 overflow-y-auto font-receipt text-sm">
+                  {balancePaymentHistory.map((payment) => (
+                    <li key={payment._id}>
+                      <ReceiptRow
+                        label={`${formatDate(payment.createdAt, dateSettings)} · ${methodLabel(dict, payment.method)}`}
+                        value={<Currency amount={payment.amount} />}
+                      />
+                      {payment.notes && <p className="text-xs text-ink/60">{payment.notes}</p>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </form>
+        </Sheet>
       )}
 
-      {/* Create/Edit Modal */}
+      {/* Customer card */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white w-full max-w-lg border border-gray-300">
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <h3 className="text-lg font-bold text-gray-900">
-                {editingCustomer ? (dict?.common?.edit || 'Edit') : (dict?.common?.add || 'Add')} {dict?.admin?.customer || 'Customer'}
-              </h3>
-              <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600">
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+        <Sheet
+          title={editingCustomer ? (dict.admin?.editCustomer || 'Edit customer') : (dict.admin?.addCustomer || 'Add customer')}
+          onClose={() => setShowModal(false)}
+          closeLabel={dict.common?.close || 'Close'}
+          footer={
+            <>
+              <button type="button" onClick={() => setShowModal(false)} className={KEY}>{dict.common?.cancel || 'Cancel'}</button>
+              <button type="submit" form="customer-form" disabled={submitting} className={KEY_PRIMARY}>
+                {submitting ? (dict.common?.saving || 'Saving...') : (dict.common?.save || 'Save')}
               </button>
-            </div>
-            <div className="p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {dict?.common?.firstName || 'First Name'} *
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.firstName}
-                    onChange={(e) => setFormData({ firstName: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 text-sm focus:outline-none focus:border-brand"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {dict?.common?.lastName || 'Last Name'} *
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.lastName}
-                    onChange={(e) => setFormData({ lastName: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 text-sm focus:outline-none focus:border-brand"
-                  />
-                </div>
+            </>
+          }
+        >
+          <form id="customer-form" onSubmit={handleSave} className="space-y-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label htmlFor="customer-first" className={LABEL}>{dict.common?.firstName || 'First Name'} *</label>
+                <input id="customer-first" type="text" value={formData.firstName} onChange={(e) => setFormData({ firstName: e.target.value })} className={INPUT} autoComplete="off" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict?.admin?.email || 'Email'}
+                <label htmlFor="customer-last" className={LABEL}>{dict.common?.lastName || 'Last Name'} *</label>
+                <input id="customer-last" type="text" value={formData.lastName} onChange={(e) => setFormData({ lastName: e.target.value })} className={INPUT} autoComplete="off" />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label htmlFor="customer-phone" className={LABEL}>{dict.admin?.phone || 'Phone'}</label>
+                <input id="customer-phone" type="tel" value={formData.phone} onChange={(e) => setFormData({ phone: e.target.value })} className={`${INPUT} font-receipt`} autoComplete="off" />
+              </div>
+              <div>
+                <label htmlFor="customer-email" className={LABEL}>{dict.admin?.email || 'Email'}</label>
+                <input id="customer-email" type="email" value={formData.email} onChange={(e) => setFormData({ email: e.target.value })} className={INPUT} autoComplete="off" />
+              </div>
+            </div>
+            <div>
+              <label htmlFor="customer-tags" className={LABEL}>
+                {dict.admin?.tags || 'Tags'} ({dict.common?.commaSeparated || 'comma separated'})
+              </label>
+              <input id="customer-tags" type="text" value={formData.tags} onChange={(e) => setFormData({ tags: e.target.value })} placeholder="VIP, Regular, Wholesale" className={INPUT} />
+            </div>
+            <div>
+              <label htmlFor="customer-notes" className={LABEL}>{dict.common?.notes || 'Notes'}</label>
+              <textarea id="customer-notes" value={formData.notes} onChange={(e) => setFormData({ notes: e.target.value })} rows={3} className={`${INPUT} resize-none`} />
+            </div>
+            {enableOnAccountSales && (
+              <div>
+                <label htmlFor="customer-credit" className={LABEL}>
+                  {dict.admin?.creditLimit || dict.components?.customerSidePanel?.creditLimit || 'Credit limit'}
                 </label>
                 <input
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ email: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 text-sm focus:outline-none focus:border-brand"
+                  id="customer-credit"
+                  type="number"
+                  inputMode="decimal"
+                  min={0}
+                  step="0.01"
+                  value={formData.creditLimit}
+                  onChange={(e) => setFormData({ creditLimit: e.target.value })}
+                  placeholder={dict.admin?.creditLimitPlaceholder || 'Leave empty for no limit'}
+                  className={`${INPUT} font-receipt`}
                 />
+                <p className={HINT}>{dict.admin?.creditLimitHint || 'Maximum balance allowed for on-account sales.'}</p>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict?.admin?.phone || 'Phone'}
-                </label>
-                <input
-                  type="tel"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ phone: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 text-sm focus:outline-none focus:border-brand"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict?.admin?.tags || 'Tags'} <span className="text-gray-400 font-normal">({dict?.common?.commaSeparated || 'comma separated'})</span>
-                </label>
-                <input
-                  type="text"
-                  value={formData.tags}
-                  onChange={(e) => setFormData({ tags: e.target.value })}
-                  placeholder="VIP, Regular, Wholesale"
-                  className="w-full px-3 py-2 border border-gray-300 text-sm focus:outline-none focus:border-brand"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict?.common?.notes || 'Notes'}
-                </label>
-                <textarea
-                  value={formData.notes}
-                  onChange={(e) => setFormData({ notes: e.target.value })}
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 text-sm focus:outline-none focus:border-brand resize-none"
-                />
-              </div>
-              {enableOnAccountSales && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {dict?.admin?.creditLimit || dict?.components?.customerSidePanel?.creditLimit || 'Credit limit'}
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    value={formData.creditLimit}
-                    onChange={(e) => setFormData({ creditLimit: e.target.value })}
-                    placeholder={dict?.admin?.creditLimitPlaceholder || 'Leave empty for no limit'}
-                    className="w-full px-3 py-2 border border-gray-300 text-sm focus:outline-none focus:border-brand"
-                  />
-                  <p className="mt-1 text-xs text-gray-500">
-                    {dict?.admin?.creditLimitHint || 'Maximum balance allowed for on-account sales.'}
-                  </p>
-                </div>
-              )}
-              {error && <div className="text-sm text-red-600">{error}</div>}
-            </div>
-            <div className="flex justify-end gap-3 p-6 border-t border-gray-200">
-              <button
-                onClick={() => setShowModal(false)}
-                className="px-4 py-2 border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50"
-              >
-                {dict?.common?.cancel || 'Cancel'}
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={submitting}
-                className="px-4 py-2 bg-brand text-white text-sm font-medium hover:bg-brand-hover border border-brand-hover disabled:opacity-50"
-              >
-                {submitting ? (dict?.common?.saving || 'Saving...') : (dict?.common?.save || 'Save')}
-              </button>
-            </div>
-          </div>
-        </div>
+            )}
+            {error && (
+              <div role="alert" className="border-l-4 border-stamp bg-white px-4 py-3 font-receipt text-sm text-ink">{error}</div>
+            )}
+          </form>
+        </Sheet>
       )}
-    </div>
+    </RegisterPage>
   );
 }

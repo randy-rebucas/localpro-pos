@@ -60,6 +60,11 @@ vi.mock('@/models/Discount', () => ({
   },
 }));
 
+const mockTenantFindById = vi.fn();
+vi.mock('@/models/Tenant', () => ({
+  default: { findById: (...args: unknown[]) => mockTenantFindById(...args) },
+}));
+
 import { GET, POST } from '@/app/api/discounts/route';
 import { PUT, DELETE } from '@/app/api/discounts/[id]/route';
 
@@ -99,6 +104,11 @@ const validPayload = {
 beforeEach(() => {
   vi.clearAllMocks();
   mockHasTenantPermission.mockResolvedValue(true);
+  mockTenantFindById.mockReturnValue({
+    select: vi.fn().mockReturnValue({
+      lean: vi.fn().mockResolvedValue({ settings: { timezone: 'Asia/Manila' } }),
+    }),
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -194,6 +204,10 @@ describe('POST /api/discounts', () => {
     expect(status).toBe(201);
     expect(body.success).toBe(true);
     expect(mockDiscountCreate).toHaveBeenCalledWith(expect.objectContaining({ tenantId: TENANT_A, code: 'SAVE10' }));
+    // Picked days run from the start of validFrom to the end of validUntil in the store's time zone (Manila)
+    const saved = mockDiscountCreate.mock.calls[0][0];
+    expect(saved.validFrom.toISOString()).toBe('2025-12-31T16:00:00.000Z');
+    expect(saved.validUntil.toISOString()).toBe('2026-12-31T15:59:59.999Z');
   });
 });
 

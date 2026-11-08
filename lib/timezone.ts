@@ -72,6 +72,40 @@ export function getTenantDateString(tz: string = DEFAULT_TENANT_TIMEZONE, daysBa
   return day.toISOString().slice(0, 10);
 }
 
+/**
+ * The calendar day of `date` as observed in `tz`, as 'YYYY-MM-DD'.
+ * Falls back to the default timezone if `tz` isn't one the runtime recognises.
+ */
+export function toTenantDateString(date: Date | string, tz: string = DEFAULT_TENANT_TIMEZONE): string {
+  const d = new Date(date);
+  const format = (timeZone: string) =>
+    new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+  try {
+    return format(tz);
+  } catch {
+    return format(DEFAULT_TENANT_TIMEZONE);
+  }
+}
+
+/**
+ * Turn a date picked in a form into the instant a validity window opens or closes.
+ * A plain 'YYYY-MM-DD' day means the start (or, with `edge: 'end'`, the last
+ * millisecond) of that day in `tz`, so "valid until Nov 8" lasts all of Nov 8 at
+ * the store. Any other value is read as a full date and time and kept as is.
+ */
+export function tenantDayEdge(value: string | Date, edge: 'start' | 'end', tz: string = DEFAULT_TENANT_TIMEZONE): Date {
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    let bounds;
+    try {
+      bounds = getTenantDayBoundaries(value, tz);
+    } catch {
+      bounds = getTenantDayBoundaries(value, DEFAULT_TENANT_TIMEZONE);
+    }
+    return edge === 'start' ? bounds.start : bounds.end;
+  }
+  return new Date(value);
+}
+
 /** Resolve a startDate/endDate query-param pair to tenant-timezone-aware UTC boundaries. */
 export function resolveTenantDateRange(
   startParam: string | null | undefined,

@@ -7,6 +7,7 @@ export function useCashDrawerSessions() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
 
   const fetchSessions = useCallback(
     async (statusFilter?: string, onError?: (error: string) => void, page = 1, limit = 10) => {
@@ -32,6 +33,7 @@ export function useCashDrawerSessions() {
         if (res.ok && data.success) {
           setSessions(data.data || []);
           setTotalPages(data.pagination?.totalPages || 1);
+          setTotal(data.pagination?.total ?? (data.data || []).length);
         } else {
           const errorMsg = data.error || 'Failed to fetch cash drawer sessions';
           setError(errorMsg);
@@ -51,5 +53,5 @@ export function useCashDrawerSessions() {
     []
   );
 
-  return { sessions, loading, error, totalPages, fetchSessions };
+  return { sessions, loading, error, total, totalPages, fetchSessions };
 }

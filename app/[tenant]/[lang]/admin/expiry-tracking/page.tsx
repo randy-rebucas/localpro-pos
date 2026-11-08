@@ -5,6 +5,9 @@ import { useParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { AlertTriangle, CalendarClock, Package } from 'lucide-react';
 import { getDictionaryClient } from '../../dictionaries-client';
+import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { getDefaultTenantSettings } from '@/lib/currency';
+import { formatDate } from '@/lib/formatting';
 
 interface ExpiryProduct {
   _id: string;
@@ -40,6 +43,8 @@ const SCHEDULE_LABEL: Record<string, string> = {
 };
 
 export default function ExpiryTrackingPage() {
+  const { settings: tenantSettings } = useTenantSettings();
+  const dateSettings = tenantSettings || getDefaultTenantSettings();
   const params = useParams();
   const lang = params.lang as 'en' | 'es';
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -78,7 +83,7 @@ export default function ExpiryTrackingPage() {
         {p.genericName && <p className="text-xs text-gray-500">{p.genericName}</p>}
       </td>
       <td className="px-4 py-3 text-sm text-gray-600">{p.batchNumber ?? '—'}</td>
-      <td className="px-4 py-3 text-sm text-gray-600">{new Date(p.expiryDate).toLocaleDateString()}</td>
+      <td className="px-4 py-3 text-sm text-gray-600">{formatDate(p.expiryDate, dateSettings)}</td>
       <td className="px-4 py-3">
         <span className={`text-xs px-2 py-0.5 font-medium ${STATUS_CHIP[p.status]}`}>
           {p.daysUntilExpiry < 0

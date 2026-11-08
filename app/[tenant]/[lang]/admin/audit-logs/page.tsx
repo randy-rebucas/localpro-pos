@@ -21,8 +21,10 @@ import {
 } from '@/lib/audit-helpers';
 import { usePermissions } from '@/hooks/usePermissions';
 import toast from 'react-hot-toast';
+import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 
 export default function AuditLogsPage() {
+  const { settings: tenantSettings } = useTenantSettings();
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
@@ -280,7 +282,7 @@ export default function AuditLogsPage() {
                         return (
                           <tr key={log._id} className="hover:bg-gray-50">
                             <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-500">
-                              {formatAuditTimestamp(log.createdAt, lang)}
+                              {formatAuditTimestamp(log.createdAt, lang, tenantSettings?.timezone || 'Asia/Manila')}
                             </td>
                             <td className="px-4 py-3 whitespace-nowrap">
                               <p className="text-sm font-medium text-gray-900">{userName}</p>

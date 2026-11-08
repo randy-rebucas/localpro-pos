@@ -2,34 +2,70 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import Link from 'next/link';
+import { BadgePercent, IdCard, Pencil, Plus, Power, Trash2 } from 'lucide-react';
 import { getDictionaryClient } from '../../dictionaries-client';
 import Currency from '@/components/Currency';
+import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import {
+  ICON, DARK_KEY_PRIMARY, LABEL, INPUT, CHECKBOX, CHECK_ROW, HINT, KEY, KEY_PRIMARY, ROW_KEY,
+  RegisterPage, LedReadout, Sheet, Strip,
+} from '@/components/admin/register-ui';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
-import { supportsFeature } from '@/lib/business-type-helpers';
+import { supportsFeature, getBusinessType } from '@/lib/business-type-helpers';
 import { getBusinessTypeConfig } from '@/lib/business-types';
-import { getBusinessType } from '@/lib/business-type-helpers';
+import { getDefaultTenantSettings } from '@/lib/currency';
+import { formatDate } from '@/lib/formatting';
+import { useConfirm } from '@/lib/confirm';
 import { useDiscountsList, type Discount } from '@/hooks/useDiscountsList';
 import { useDiscountsForm } from '@/hooks/useDiscountsForm';
 import { usePermissions } from '@/hooks/usePermissions';
-import {
-  getStatusBadgeClass,
-  getStatusLabel,
-  getDeleteConfirmMessage,
-  getToggleButtonLabel,
-  getToggleButtonClass,
-  formatDate,
-} from '@/lib/discounts-helpers';
+import { getDeleteConfirmMessage, getToggleButtonLabel } from '@/lib/discounts-helpers';
+
+type Dict = any; // eslint-disable-line @typescript-eslint/no-explicit-any
+type DiscountState = 'valid' | 'scheduled' | 'expired' | 'inactive';
+
+/** Where a discount stands right now, using the same comparison the checkout uses. */
+function discountState(discount: Discount, now = new Date()): DiscountState {
+  if (!discount.isActive) return 'inactive';
+  if (now < new Date(discount.validFrom)) return 'scheduled';
+  if (now > new Date(discount.validUntil)) return 'expired';
+  return 'valid';
+}
+
+const STATE_TONES: Record<DiscountState, string> = {
+  valid: 'bg-ink text-[#7df0d6]',
+  scheduled: 'border border-ink/40 text-ink',
+  expired: 'border border-stamp text-stamp',
+  inactive: 'border border-dashed border-ink/40 text-ink/60',
+};
+
+const stateLabel = (dict: Dict, state: DiscountState) => ({
+  valid: dict.admin?.valid || 'Valid',
+  scheduled: dict.admin?.scheduled || 'Scheduled',
+  expired: dict.admin?.expired || 'Expired',
+  inactive: dict.admin?.inactive || 'Inactive',
+}[state]);
+
+const categoryLabel = (dict: Dict, category?: Discount['category']) => ({
+  general: dict.admin?.categoryGeneral || 'General',
+  senior: dict.admin?.categorySenior || 'Senior Citizen (RA 9994)',
+  pwd: dict.admin?.categoryPwd || 'PWD (RA 10754)',
+  employee: dict.admin?.categoryEmployee || 'Employee',
+  promo: dict.admin?.categoryPromo || 'Promo',
+}[category || 'general']);
 
 export default function DiscountsPage() {
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const [dict, setDict] = useState<Dict>(null);
   const [showDiscountModal, setShowDiscountModal] = useState(false);
   const [editingDiscount, setEditingDiscount] = useState<Discount | null>(null);
+  const [loadedOnce, setLoadedOnce] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
   const { canAccess } = usePermissions();
   const canManage = canAccess('discounts.manage');
+  const { confirm, Dialog: confirmDialog } = useConfirm();
 
   const {
     discounts,
@@ -43,215 +79,256 @@ export default function DiscountsPage() {
   } = useDiscountsList();
 
   const { settings } = useTenantSettings();
+  const dateSettings = settings || getDefaultTenantSettings();
   const discountsEnabled = supportsFeature(settings ?? undefined, 'discounts');
   const businessTypeConfig = settings ? getBusinessTypeConfig(getBusinessType(settings)) : null;
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
-    fetchDiscounts();
+    fetchDiscounts().finally(() => setLoadedOnce(true));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lang, tenant]);
 
-  const handleDeleteDiscount = async (discountId: string) => {
+  const handleDeleteDiscount = async (discount: Discount) => {
     if (!dict) return;
-    if (!confirm(getDeleteConfirmMessage(dict))) return;
+    const confirmed = await confirm(
+      dict.admin?.deleteDiscountTitle || 'Delete discount?',
+      `${getDeleteConfirmMessage(dict)} (${discount.code})`,
+      { variant: 'danger', confirmText: dict.common?.delete || 'Delete', cancelText: dict.common?.cancel || 'Cancel' }
+    );
+    if (!confirmed) return;
 
-    const success = await deleteDiscount(discountId);
-    if (success) {
-      await fetchDiscounts();
+    setBusyId(discount._id);
+    try {
+      const success = await deleteDiscount(discount._id);
+      if (success) await fetchDiscounts();
+    } finally {
+      setBusyId(null);
     }
   };
 
   const handleToggleDiscountStatus = async (discount: Discount) => {
-    const success = await toggleDiscountStatus(discount._id, !discount.isActive);
-    if (success) {
-      await fetchDiscounts();
+    setBusyId(discount._id);
+    try {
+      const success = await toggleDiscountStatus(discount._id, !discount.isActive);
+      if (success) await fetchDiscounts();
+    } finally {
+      setBusyId(null);
     }
   };
 
-  if (!dict || loading) {
+  if (!dict || !loadedOnce) {
     return (
-      <div className="flex items-center justify-center py-24">
-        <div className="text-center">
-          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-brand"></div>
-          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
+      <div className="mk-root pos-register">
+        <div className="flex min-h-[calc(100dvh-3.5rem)] items-center justify-center bg-brand-navy-deep lg:min-h-dvh">
+          <LoadingSpinner size="md" color="#8fe3d0" />
         </div>
       </div>
     );
   }
 
+  const now = new Date();
+  const validCount = discounts.filter((discount) => discountState(discount, now) === 'valid').length;
+  const openForm = (discount: Discount | null) => {
+    clearMessage();
+    setEditingDiscount(discount);
+    setShowDiscountModal(true);
+  };
+
   return (
-    <div>
-      <div className="px-4 sm:px-6 py-6">
-        <div className="mb-6 sm:mb-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-2">
-                {dict.admin?.discounts || 'Discounts'}
-              </h1>
-              <p className="text-gray-600">{dict.admin?.discountsSubtitle || 'Manage discount codes and promotions'}</p>
-            </div>
-          </div>
+    <RegisterPage
+      tagNo="DC"
+      tag={settings?.companyName}
+      title={dict.admin?.discounts || 'Discounts'}
+      subtitle={dict.admin?.discountsSubtitle || 'Manage discount codes and promotions'}
+      side={<LedReadout value={validCount} label={dict.admin?.validNow || 'Valid now'} />}
+    >
+      {confirmDialog}
+
+      {message && (
+        <div className="mt-6">
+          <Strip tone={message.type === 'success' ? 'ok' : 'error'}>{message.text}</Strip>
         </div>
+      )}
 
-        {message && (
-          <div className={`mb-6 p-4 border ${message.type === 'success' ? 'bg-green-50 text-green-800 border-green-300' : 'bg-red-50 text-red-800 border-red-300'}`}>
-            {message.text}
-          </div>
-        )}
+      {!discountsEnabled && (
+        <div className="mt-6 max-w-3xl">
+          <Strip tone="error">
+            <p className="font-semibold uppercase">{dict.admin?.discountsNotAvailable || 'Discounts Not Available'}</p>
+            <p className="mt-1 font-body">
+              {(dict.admin?.discountsNotAvailableDesc || 'Discounts are not enabled for {businessType}.').replace('{businessType}', businessTypeConfig?.name || 'your business type')}
+            </p>
+            <p className="mt-1 font-body text-ink/70">
+              {dict.admin?.discountsNotAvailableHint || 'If you need discounts, please enable it in Settings or update your business type.'}
+            </p>
+          </Strip>
+        </div>
+      )}
 
-        {!discountsEnabled && (
-          <div className="mb-6 p-4 bg-yellow-50 border-2 border-yellow-300 text-yellow-800">
-            <div className="flex items-start gap-3">
-              <svg className="w-6 h-6 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-              <div>
-                <h3 className="text-lg font-semibold text-yellow-900 mb-2">
-                  {dict.admin?.discountsNotAvailable || 'Discounts Not Available'}
-                </h3>
-                <p className="text-yellow-800">
-                  {(dict.admin?.discountsNotAvailableDesc || 'Discounts are not enabled for {businessType}.').replace('{businessType}', businessTypeConfig?.name || 'your business type')}
-                </p>
-                <p className="text-sm text-yellow-700 mt-2">
-                  {dict.admin?.discountsNotAvailableHint || 'If you need discounts, please enable it in Settings or update your business type.'}
-                </p>
-              </div>
+      {discountsEnabled && canManage && (
+        <div className="mt-6 flex">
+          <button type="button" onClick={() => openForm(null)} className={`${DARK_KEY_PRIMARY} w-full sm:w-auto`}>
+            <Plus className={ICON} strokeWidth={1.75} aria-hidden />
+            {dict.admin?.addDiscount || 'Add Discount'}
+          </button>
+        </div>
+      )}
+
+      {/* Each code printed as a coupon */}
+      <section className="mt-6" aria-busy={loading} aria-label={dict.admin?.discounts || 'Discounts'}>
+        {discounts.length === 0 ? (
+          <div className="max-w-2xl">
+            <div className="bg-paper-white px-4 py-14 text-center text-ink">
+              <BadgePercent className="mx-auto mb-2 h-8 w-8 text-ink/20" strokeWidth={1.75} aria-hidden />
+              <p className="font-receipt text-sm text-ink/60">{dict.admin?.noDiscountsYet || 'No discounts yet'}</p>
+              {discountsEnabled && canManage && (
+                <button type="button" onClick={() => openForm(null)} className={`${KEY_PRIMARY} mx-auto mt-4`}>
+                  <Plus className={ICON} strokeWidth={1.75} aria-hidden />
+                  {dict.admin?.addDiscount || 'Add Discount'}
+                </button>
+              )}
             </div>
+            <div className="mk-tear-b h-3 bg-paper-white" aria-hidden />
           </div>
-        )}
-
-        <div className="bg-white border border-gray-300 p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-bold text-gray-900">{dict.admin?.discounts || 'Discounts'}</h2>
-            {discountsEnabled && canManage && (
-              <button
-                onClick={() => {
-                  clearMessage();
-                  setEditingDiscount(null);
-                  setShowDiscountModal(true);
-                }}
-                className="px-4 py-2 bg-brand text-white hover:bg-brand-hover font-medium border border-brand-hover"
-              >
-                {dict.common?.add || 'Add'} {dict.admin?.discount || 'Discount'}
-              </button>
-            )}
-          </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.code || 'Code'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.name || 'Name'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.common?.type || 'Type'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.value || 'Value'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.validPeriod || 'Valid Period'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.usage || 'Usage'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.status || 'Status'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.common?.actions || 'Actions'}</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {discounts.map((discount) => {
-                  return (
-                    <tr key={discount._id}>
-                      <td className="px-4 py-4 whitespace-nowrap">
-                        <span className="text-sm font-mono font-bold text-gray-900">{discount.code}</span>
-                      </td>
-                      <td className="px-4 py-4">
-                        <div className="text-sm font-medium text-gray-900">{discount.name || '-'}</div>
-                        {discount.description && (
-                          <div className="text-xs text-gray-500 mt-1">{discount.description.substring(0, 50)}...</div>
-                        )}
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap">
-                        <span className="px-2 py-1 text-xs font-semibold border border-teal-300 bg-brand-soft text-brand-navy">
-                          {discount.type}
-                        </span>
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {discount.type === 'percentage' ? `${discount.value}%` : <Currency amount={discount.value} />}
-                        {discount.maxDiscountAmount && discount.type === 'percentage' && (
-                          <div className="text-xs text-gray-500">{dict.admin?.maxLabel || 'Max'}: <Currency amount={discount.maxDiscountAmount} /></div>
-                        )}
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                        <div>{formatDate(discount.validFrom)}</div>
-                        <div className="text-xs">{dict.admin?.to || 'to'} {formatDate(discount.validUntil)}</div>
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {discount.usageCount} / {discount.usageLimit || '∞'}
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 text-xs font-semibold border ${getStatusBadgeClass(discount)}`}>
-                          {getStatusLabel(discount, dict)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
-                        {canManage ? (
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => {
-                                clearMessage();
-                                setEditingDiscount(discount);
-                                setShowDiscountModal(true);
-                              }}
-                              className="text-brand hover:text-brand-navy-deep"
-                            >
-                              {dict.common?.edit || 'Edit'}
-                            </button>
-                            <button
-                              onClick={() => handleToggleDiscountStatus(discount)}
-                              className={getToggleButtonClass(discount.isActive)}
-                            >
-                              {getToggleButtonLabel(discount.isActive, dict)}
-                            </button>
-                            <button
-                              onClick={() => handleDeleteDiscount(discount._id)}
-                              className="text-red-600 hover:text-red-900"
-                            >
-                              {dict.common?.delete || 'Delete'}
-                            </button>
-                          </div>
+        ) : (
+          <ul className={`grid grid-cols-1 items-start gap-4 md:grid-cols-2 2xl:grid-cols-3 ${loading ? 'opacity-60' : ''}`}>
+            {discounts.map((discount) => {
+              const state = discountState(discount, now);
+              const used = discount.usageCount || 0;
+              const limit = discount.usageLimit || 0;
+              const usedShare = limit > 0 ? Math.min(100, (used / limit) * 100) : 0;
+              return (
+                <li key={discount._id} className="min-w-0">
+                  <article className={`flex h-full flex-col bg-paper-white ${state === 'valid' ? 'text-ink' : 'text-ink/75'}`}>
+                    {/* Code and value, as the face of the coupon */}
+                    <div className="flex items-start justify-between gap-3 border-b-2 border-dashed border-ink/40 px-4 pb-3 pt-4">
+                      <div className="min-w-0">
+                        <p className="break-all font-receipt text-xl font-semibold tracking-[0.08em] text-ink">{discount.code}</p>
+                        {discount.name && <p className="mt-0.5 text-sm">{discount.name}</p>}
+                      </div>
+                      <div className="shrink-0 text-right">
+                        {discount.type === 'percentage' ? (
+                          <p className="font-led text-4xl leading-none text-ink">{discount.value}%</p>
                         ) : (
-                          <span className="text-gray-400">-</span>
+                          <p className="font-receipt text-2xl font-semibold leading-none text-ink"><Currency amount={discount.value} /></p>
                         )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            {discounts.length === 0 && (
-              <div className="text-center py-8 text-gray-500">{dict.common?.noResults || 'No discounts found'}</div>
-            )}
-          </div>
-        </div>
+                        <p className="mt-1 font-receipt text-[11px] uppercase tracking-[0.14em] text-ink/60">
+                          {discount.type === 'percentage' ? (dict.admin?.percentOff || 'off') : (dict.admin?.amountOff || 'off')}
+                        </p>
+                      </div>
+                    </div>
 
-        {showDiscountModal && discountsEnabled && (
-          <DiscountModal
-            discount={editingDiscount}
-            onClose={() => {
-              setShowDiscountModal(false);
-              setEditingDiscount(null);
-            }}
-            onSave={async () => {
-              setMessage({
-                type: 'success',
-                text: editingDiscount
-                  ? (dict.admin?.updateSuccess || 'Discount updated successfully')
-                  : (dict.admin?.saveSuccess || 'Discount created successfully'),
-              });
-              await fetchDiscounts();
-              setShowDiscountModal(false);
-              setEditingDiscount(null);
-            }}
-            dict={dict}
-            settings={settings}
-          />
+                    <div className="space-y-1.5 px-4 py-3 font-receipt text-xs">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={`px-1.5 py-0.5 font-semibold uppercase ${STATE_TONES[state]}`}>{stateLabel(dict, state)}</span>
+                        <span className="border border-ink/25 px-1.5 py-0.5 uppercase text-ink/70">{categoryLabel(dict, discount.category)}</span>
+                        {discount.requiresIdVerification && (
+                          <span className="flex items-center gap-1 text-ink/70" title={dict.admin?.requiresId || 'Requires ID verification'}>
+                            <IdCard className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+                            {dict.admin?.idCheck || 'ID check'}
+                          </span>
+                        )}
+                      </div>
+                      {discount.description && <p className="font-body text-sm text-ink/65 line-clamp-2">{discount.description}</p>}
+                      <dl className="space-y-1 pt-1">
+                        <div className="flex items-baseline gap-2">
+                          <dt className="uppercase text-ink/60">{dict.admin?.validPeriod || 'Valid Period'}</dt>
+                          <span className="mk-leader" aria-hidden />
+                          <dd className="whitespace-nowrap">{formatDate(discount.validFrom, dateSettings)} – {formatDate(discount.validUntil, dateSettings)}</dd>
+                        </div>
+                        {!!discount.minPurchaseAmount && (
+                          <div className="flex items-baseline gap-2">
+                            <dt className="uppercase text-ink/60">{dict.admin?.minPurchase || 'Min Purchase Amount'}</dt>
+                            <span className="mk-leader" aria-hidden />
+                            <dd className="whitespace-nowrap"><Currency amount={discount.minPurchaseAmount} /></dd>
+                          </div>
+                        )}
+                        {discount.type === 'percentage' && !!discount.maxDiscountAmount && (
+                          <div className="flex items-baseline gap-2">
+                            <dt className="uppercase text-ink/60">{dict.admin?.maxLabel || 'Max'}</dt>
+                            <span className="mk-leader" aria-hidden />
+                            <dd className="whitespace-nowrap"><Currency amount={discount.maxDiscountAmount} /></dd>
+                          </div>
+                        )}
+                        <div className="flex items-baseline gap-2">
+                          <dt className="uppercase text-ink/60">{dict.admin?.usage || 'Usage'}</dt>
+                          <span className="mk-leader" aria-hidden />
+                          <dd className="whitespace-nowrap">{used} / {limit || '∞'}</dd>
+                        </div>
+                      </dl>
+                      {limit > 0 && (
+                        <div className="h-1.5 bg-ink/10" aria-hidden>
+                          <div className={`h-full ${usedShare >= 100 ? 'bg-stamp' : 'bg-brand-hover'}`} style={{ width: `${usedShare}%` }} />
+                        </div>
+                      )}
+                    </div>
+
+                    {canManage && (
+                      <div className="mt-auto flex items-center justify-end gap-1 border-t border-ink/10 px-2 py-1">
+                        <button
+                          type="button"
+                          onClick={() => openForm(discount)}
+                          disabled={!discountsEnabled}
+                          className={`${ROW_KEY} disabled:opacity-40`}
+                          title={dict.common?.edit || 'Edit'}
+                          aria-label={`${dict.common?.edit || 'Edit'}: ${discount.code}`}
+                        >
+                          <Pencil className={ICON} strokeWidth={1.75} aria-hidden />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleDiscountStatus(discount)}
+                          disabled={busyId === discount._id}
+                          className={`${ROW_KEY} w-auto gap-2 px-3 font-receipt text-xs uppercase disabled:opacity-40`}
+                          aria-label={`${getToggleButtonLabel(discount.isActive, dict)}: ${discount.code}`}
+                        >
+                          <Power className={ICON} strokeWidth={1.75} aria-hidden />
+                          {getToggleButtonLabel(discount.isActive, dict)}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteDiscount(discount)}
+                          disabled={busyId === discount._id}
+                          className={`${ROW_KEY} hover:text-stamp disabled:opacity-40`}
+                          title={dict.common?.delete || 'Delete'}
+                          aria-label={`${dict.common?.delete || 'Delete'}: ${discount.code}`}
+                        >
+                          <Trash2 className={ICON} strokeWidth={1.75} aria-hidden />
+                        </button>
+                      </div>
+                    )}
+                  </article>
+                  <div className="mk-tear-b h-3 bg-paper-white" aria-hidden />
+                </li>
+              );
+            })}
+          </ul>
         )}
-      </div>
-    </div>
+      </section>
+
+      {showDiscountModal && discountsEnabled && (
+        <DiscountModal
+          discount={editingDiscount}
+          onClose={() => {
+            setShowDiscountModal(false);
+            setEditingDiscount(null);
+          }}
+          onSave={async () => {
+            setMessage({
+              type: 'success',
+              text: editingDiscount
+                ? (dict.admin?.updateSuccess || 'Discount updated successfully')
+                : (dict.admin?.saveSuccess || 'Discount created successfully'),
+            });
+            await fetchDiscounts();
+            setShowDiscountModal(false);
+            setEditingDiscount(null);
+          }}
+          dict={dict}
+          settings={settings}
+        />
+      )}
+    </RegisterPage>
   );
 }
 
@@ -265,11 +342,12 @@ function DiscountModal({
   discount: Discount | null;
   onClose: () => void;
   onSave: () => Promise<void>;
-  dict: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+  dict: Dict;
   settings: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 }) {
-  const { formData, setFormData, error, submitting, handleSubmit, initializeForm, resetForm } = useDiscountsForm();
+  const { formData, setFormData, error, submitting, handleSubmit, initializeForm, resetForm } = useDiscountsForm(settings?.timezone);
   const { createDiscount, updateDiscount } = useDiscountsList();
+  const symbol = settings?.currencySymbol || '₱';
 
   useEffect(() => {
     if (discount) {
@@ -292,218 +370,196 @@ function DiscountModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-gray-900/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white border border-gray-300 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="p-6">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">
-            {discount ? (dict.admin?.editDiscount || 'Edit Discount') : (dict.admin?.addDiscount || 'Add Discount')}
-          </h2>
-          <form onSubmit={onSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict.admin?.code || 'Code'} *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={formData.code}
-                  onChange={(e) => setFormData({ code: e.target.value.toUpperCase() })}
-                  readOnly={!!discount}
-                  maxLength={50}
-                  className={`w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand ${discount ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'}`}
-                  placeholder={dict?.admin?.discountCodePlaceholder || 'DISCOUNT10'}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict.common?.type || 'Type'} *
-                </label>
-                <select
-                  value={formData.type}
-                  onChange={(e) => setFormData({ type: e.target.value as any })} // eslint-disable-line @typescript-eslint/no-explicit-any
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-                >
-                  <option value="percentage">{dict.admin?.percentage || 'Percentage'}</option>
-                  <option value="fixed">{dict.admin?.fixed || 'Fixed Amount'}</option>
-                </select>
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.name || 'Name'}
-              </label>
-              <input
-                type="text"
-                value={formData.name}
-                onChange={(e) => setFormData({ name: e.target.value })}
-                maxLength={100}
-                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict.admin?.category || 'Category'}
-                </label>
-                <select
-                  value={formData.category}
-                  onChange={(e) => setFormData({ category: e.target.value as 'general' | 'senior' | 'pwd' | 'employee' | 'promo' })}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-                >
-                  <option value="general">{dict.admin?.categoryGeneral || 'General'}</option>
-                  <option value="senior">{dict.admin?.categorySenior || 'Senior Citizen (RA 9994)'}</option>
-                  <option value="pwd">{dict.admin?.categoryPwd || 'PWD (RA 10754)'}</option>
-                  <option value="employee">{dict.admin?.categoryEmployee || 'Employee'}</option>
-                  <option value="promo">{dict.admin?.categoryPromo || 'Promo'}</option>
-                </select>
-              </div>
-              <div className="flex items-end pb-1">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={formData.requiresIdVerification}
-                    onChange={(e) => setFormData({ requiresIdVerification: e.target.checked })}
-                    className="w-4 h-4 border-gray-300"
-                  />
-                  <span className="text-sm text-gray-700">{dict.admin?.requiresId || 'Requires ID verification'}</span>
-                </label>
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.description || 'Description'}
-              </label>
-              <textarea
-                value={formData.description}
-                onChange={(e) => setFormData({ description: e.target.value })}
-                rows={2}
-                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict.admin?.value || 'Value'} * {formData.type === 'percentage' ? '(%)' : `(${settings?.currency || 'USD'})`}
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  required
-                  value={formData.value}
-                  onChange={(e) => setFormData({ value: parseFloat(e.target.value) || 0 })}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-                />
-              </div>
-              {formData.type === 'percentage' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {dict.admin?.maxDiscount || 'Max Discount Amount'} ({settings?.currencySymbol || '$'})
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={formData.maxDiscountAmount}
-                    onChange={(e) => setFormData({ maxDiscountAmount: parseFloat(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-                  />
-                </div>
-              )}
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {dict.admin?.minPurchase || 'Min Purchase Amount'} ({settings?.currencySymbol || '$'})
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={formData.minPurchaseAmount}
-                  onChange={(e) => setFormData({ minPurchaseAmount: parseFloat(e.target.value) || 0 })}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict.admin?.usageLimit || 'Usage Limit'}
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  value={formData.usageLimit}
-                  onChange={(e) => setFormData({ usageLimit: parseInt(e.target.value) || 0 })}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-                  placeholder={dict.admin?.unlimited || 'Unlimited if 0'}
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict.admin?.validFrom || 'Valid From'} *
-                </label>
-                <input
-                  type="date"
-                  required
-                  value={formData.validFrom}
-                  onChange={(e) => setFormData({ validFrom: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict.admin?.validUntil || 'Valid Until'} *
-                </label>
-                <input
-                  type="date"
-                  required
-                  value={formData.validUntil}
-                  onChange={(e) => setFormData({ validUntil: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-                />
-              </div>
-            </div>
-            <div>
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={formData.isActive}
-                  onChange={(e) => setFormData({ isActive: e.target.checked })}
-                  className="mr-2"
-                />
-                <span className="text-sm font-medium text-gray-700">
-                  {dict.admin?.active || 'Active'}
-                </span>
-              </label>
-            </div>
-            {error && (
-              <div className="bg-red-50 text-red-800 border border-red-300 p-3">
-                {error}
-              </div>
-            )}
-            <div className="flex gap-3 justify-end pt-4">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 bg-white"
-              >
-                {dict.common?.cancel || 'Cancel'}
-              </button>
-              <button
-                type="submit"
-                disabled={submitting}
-                className="px-4 py-2 bg-brand text-white hover:bg-brand-hover disabled:opacity-50 border border-brand-hover"
-              >
-                {submitting ? (dict.common?.saving || 'Saving...') : (dict.common?.save || 'Save')}
-              </button>
-            </div>
-          </form>
+    <Sheet
+      wide
+      title={discount ? (dict.admin?.editDiscount || 'Edit Discount') : (dict.admin?.addDiscount || 'Add Discount')}
+      onClose={onClose}
+      closeLabel={dict.common?.close || 'Close'}
+      footer={
+        <>
+          <button type="button" onClick={onClose} className={KEY}>
+            {dict.common?.cancel || 'Cancel'}
+          </button>
+          <button type="submit" form="discount-form" disabled={submitting} className={KEY_PRIMARY}>
+            {submitting ? (dict.common?.saving || 'Saving...') : (dict.common?.save || 'Save')}
+          </button>
+        </>
+      }
+    >
+      <form id="discount-form" onSubmit={onSubmit} className="space-y-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <label htmlFor="discount-code" className={LABEL}>{dict.admin?.code || 'Code'} *</label>
+            <input
+              id="discount-code"
+              type="text"
+              required
+              value={formData.code}
+              onChange={(e) => setFormData({ code: e.target.value.toUpperCase() })}
+              readOnly={!!discount}
+              maxLength={50}
+              aria-describedby={discount ? 'discount-code-hint' : undefined}
+              className={`${INPUT} font-receipt tracking-[0.08em] ${discount ? 'cursor-not-allowed bg-ink/5 text-ink/60' : ''}`}
+              placeholder={dict?.admin?.discountCodePlaceholder || 'DISCOUNT10'}
+            />
+            {discount && <p id="discount-code-hint" className={HINT}>{dict.admin?.codeLocked || 'A code cannot change once it is created.'}</p>}
+          </div>
+          <div>
+            <label htmlFor="discount-type" className={LABEL}>{dict.common?.type || 'Type'} *</label>
+            <select
+              id="discount-type"
+              value={formData.type}
+              onChange={(e) => setFormData({ type: e.target.value as any })} // eslint-disable-line @typescript-eslint/no-explicit-any
+              className={INPUT}
+            >
+              <option value="percentage">{dict.admin?.percentage || 'Percentage'}</option>
+              <option value="fixed">{dict.admin?.fixed || 'Fixed Amount'}</option>
+            </select>
+          </div>
         </div>
-      </div>
-    </div>
+        <div>
+          <label htmlFor="discount-name" className={LABEL}>{dict.admin?.name || 'Name'}</label>
+          <input
+            id="discount-name"
+            type="text"
+            value={formData.name}
+            onChange={(e) => setFormData({ name: e.target.value })}
+            maxLength={100}
+            className={INPUT}
+          />
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:items-end">
+          <div>
+            <label htmlFor="discount-category" className={LABEL}>{dict.admin?.category || 'Category'}</label>
+            <select
+              id="discount-category"
+              value={formData.category}
+              onChange={(e) => setFormData({ category: e.target.value as 'general' | 'senior' | 'pwd' | 'employee' | 'promo' })}
+              className={INPUT}
+            >
+              <option value="general">{categoryLabel(dict, 'general')}</option>
+              <option value="senior">{categoryLabel(dict, 'senior')}</option>
+              <option value="pwd">{categoryLabel(dict, 'pwd')}</option>
+              <option value="employee">{categoryLabel(dict, 'employee')}</option>
+              <option value="promo">{categoryLabel(dict, 'promo')}</option>
+            </select>
+          </div>
+          <label className={CHECK_ROW}>
+            <input
+              type="checkbox"
+              checked={formData.requiresIdVerification}
+              onChange={(e) => setFormData({ requiresIdVerification: e.target.checked })}
+              className={CHECKBOX}
+            />
+            {dict.admin?.requiresId || 'Requires ID verification'}
+          </label>
+        </div>
+        <div>
+          <label htmlFor="discount-description" className={LABEL}>{dict.admin?.description || 'Description'}</label>
+          <textarea
+            id="discount-description"
+            value={formData.description}
+            onChange={(e) => setFormData({ description: e.target.value })}
+            rows={2}
+            className={INPUT}
+          />
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <label htmlFor="discount-value" className={LABEL}>
+              {dict.admin?.value || 'Value'} * {formData.type === 'percentage' ? '(%)' : `(${symbol})`}
+            </label>
+            <input
+              id="discount-value"
+              type="number"
+              step="0.01"
+              min="0"
+              max={formData.type === 'percentage' ? 100 : undefined}
+              required
+              value={formData.value}
+              onChange={(e) => setFormData({ value: parseFloat(e.target.value) || 0 })}
+              className={`${INPUT} font-receipt`}
+            />
+          </div>
+          {formData.type === 'percentage' && (
+            <div>
+              <label htmlFor="discount-max" className={LABEL}>{dict.admin?.maxDiscount || 'Max Discount Amount'} ({symbol})</label>
+              <input
+                id="discount-max"
+                type="number"
+                step="0.01"
+                min="0"
+                value={formData.maxDiscountAmount}
+                onChange={(e) => setFormData({ maxDiscountAmount: parseFloat(e.target.value) || 0 })}
+                className={`${INPUT} font-receipt`}
+              />
+            </div>
+          )}
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <label htmlFor="discount-min" className={LABEL}>{dict.admin?.minPurchase || 'Min Purchase Amount'} ({symbol})</label>
+            <input
+              id="discount-min"
+              type="number"
+              step="0.01"
+              min="0"
+              value={formData.minPurchaseAmount}
+              onChange={(e) => setFormData({ minPurchaseAmount: parseFloat(e.target.value) || 0 })}
+              className={`${INPUT} font-receipt`}
+            />
+          </div>
+          <div>
+            <label htmlFor="discount-limit" className={LABEL}>{dict.admin?.usageLimit || 'Usage Limit'}</label>
+            <input
+              id="discount-limit"
+              type="number"
+              min="0"
+              value={formData.usageLimit}
+              onChange={(e) => setFormData({ usageLimit: parseInt(e.target.value) || 0 })}
+              aria-describedby="discount-limit-hint"
+              className={`${INPUT} font-receipt`}
+            />
+            <p id="discount-limit-hint" className={HINT}>{dict.admin?.usageLimitHint || '0 means no limit'}</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <label htmlFor="discount-from" className={LABEL}>{dict.admin?.validFrom || 'Valid From'} *</label>
+            <input
+              id="discount-from"
+              type="date"
+              required
+              value={formData.validFrom}
+              max={formData.validUntil || undefined}
+              onChange={(e) => setFormData({ validFrom: e.target.value })}
+              className={INPUT}
+            />
+          </div>
+          <div>
+            <label htmlFor="discount-until" className={LABEL}>{dict.admin?.validUntil || 'Valid Until'} *</label>
+            <input
+              id="discount-until"
+              type="date"
+              required
+              value={formData.validUntil}
+              min={formData.validFrom || undefined}
+              onChange={(e) => setFormData({ validUntil: e.target.value })}
+              className={INPUT}
+            />
+          </div>
+        </div>
+        <label className={CHECK_ROW}>
+          <input
+            type="checkbox"
+            checked={formData.isActive}
+            onChange={(e) => setFormData({ isActive: e.target.checked })}
+            className={CHECKBOX}
+          />
+          <span className="font-medium">{dict.admin?.active || 'Active'}</span>
+        </label>
+        {error && <Strip tone="error">{error}</Strip>}
+      </form>
+    </Sheet>
   );
 }
-

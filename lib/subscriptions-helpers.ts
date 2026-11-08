@@ -2,10 +2,10 @@
  * Subscriptions page helper functions
  */
 
-export function formatDate(value: string | Date | undefined | null): string {
+export function formatDate(value: string | Date | undefined | null, timeZone?: string): string {
   if (!value) return '—';
   const d = new Date(value);
-  return isNaN(d.getTime()) ? '—' : d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  return isNaN(d.getTime()) ? '—' : d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric', timeZone });
 }
 
 export function getSubscriptionStatusBadgeStyles(status: string): string {

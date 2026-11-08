@@ -1,3 +1,5 @@
+import type { ITenantSettings } from '@/types/tenant';
+import { formatDate, formatDateTime, formatTime } from '@/lib/formatting';
 import { AttendanceRecord } from '@/hooks/useAttendance';
 
 interface User {
@@ -24,7 +26,8 @@ export function getUserName(
  */
 export function buildExportData(
   attendances: AttendanceRecord[],
-  users: User[]
+  users: User[],
+  settings: ITenantSettings
 ): Record<string, string | number>[] {
   return attendances.map((attendance) => {
     const userName = getUserName(attendance, users);
@@ -35,13 +38,13 @@ export function buildExportData(
 
     return {
       Employee: userName,
-      'Clock In': clockIn.toLocaleString(),
-      'Clock Out': clockOut ? clockOut.toLocaleString() : 'Active',
-      'Break Start': breakStart ? breakStart.toLocaleTimeString() : '',
-      'Break End': breakEnd ? breakEnd.toLocaleTimeString() : '',
+      'Clock In': formatDateTime(clockIn, settings),
+      'Clock Out': clockOut ? formatDateTime(clockOut, settings) : 'Active',
+      'Break Start': breakStart ? formatTime(breakStart, settings) : '',
+      'Break End': breakEnd ? formatTime(breakEnd, settings) : '',
       'Total Hours': formatHours(attendance.totalHours),
       Notes: attendance.notes || '',
-      Date: clockIn.toLocaleDateString(),
+      Date: formatDate(clockIn, settings),
     };
   });
 }

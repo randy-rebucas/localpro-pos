@@ -60,8 +60,8 @@ export function getNotificationBadgeClass(type: Notification['type']): string {
 /**
  * Format clock in time with timezone
  */
-export function formatClockInTime(clockInTime: string): string {
-  return new Date(clockInTime).toLocaleString();
+export function formatClockInTime(clockInTime: string, timeZone?: string): string {
+  return new Date(clockInTime).toLocaleString(undefined, { timeZone });
 }
 
 /**

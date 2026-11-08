@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useEffect, useState, useCallback } from 'react';
+import { Fragment, useEffect, useRef, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { usePermissions } from '@/hooks/usePermissions';
 import { getDictionaryClient } from '../../dictionaries-client';
@@ -37,6 +37,10 @@ export default function RolesPermissionsPage() {
     getDictionaryClient(lang).then(setDict);
   }, [lang]);
 
+  // Read the dictionary through a ref so its arrival does not refetch and overwrite unsaved checkbox changes.
+  const dictRef = useRef(dict);
+  useEffect(() => { dictRef.current = dict; }, [dict]);
+
   const fetchOverrides = useCallback(async () => {
     setLoading(true);
     setMessage(null);
@@ -46,14 +50,14 @@ export default function RolesPermissionsPage() {
       if (data.success) {
         setOverrides(data.data.overrides || {});
       } else {
-        setMessage({ type: 'error', text: data.error || dict?.admin?.failedToLoadRolePermissions || 'Failed to load role permissions' });
+        setMessage({ type: 'error', text: data.error || dictRef.current?.admin?.failedToLoadRolePermissions || 'Failed to load role permissions' });
       }
     } catch {
-      setMessage({ type: 'error', text: dict?.admin?.failedToLoadRolePermissionsConnection || 'Failed to load role permissions. Please check your connection.' });
+      setMessage({ type: 'error', text: dictRef.current?.admin?.failedToLoadRolePermissionsConnection || 'Failed to load role permissions. Please check your connection.' });
     } finally {
       setLoading(false);
     }
-  }, [tenant, dict]);
+  }, [tenant]);
 
   useEffect(() => {
     fetchOverrides();
@@ -114,7 +118,11 @@ export default function RolesPermissionsPage() {
 
   const sections = Array.from(new Set(PERMISSIONS.map((p) => p.section)));
 
-  if (loading) {
+  // Show the spinner only for the first load, so refetches after a save or delete keep the page (and any open modal) mounted.
+  const [loadedOnce, setLoadedOnce] = useState(false);
+  if (!loading && !loadedOnce) setLoadedOnce(true);
+
+  if (!dict || !loadedOnce) {
     return (
       <div className="flex items-center justify-center py-24">
         <div className="text-center">

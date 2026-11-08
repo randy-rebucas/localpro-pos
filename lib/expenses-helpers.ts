@@ -12,8 +12,8 @@ export function getPaymentMethodLabel(method: string, dict: Dict): string {
   return labels[method] || method;
 }
 
-export function formatDate(dateString: string): string {
-  return new Date(dateString).toLocaleDateString();
+export function formatDate(dateString: string, timeZone?: string, lang: 'en' | 'es' = 'en'): string {
+  return new Date(dateString).toLocaleDateString(lang === 'es' ? 'es-ES' : 'en-US', { timeZone });
 }
 
 export function validateDateRange(startDate: string, endDate: string): { valid: boolean; error?: string } {
@@ -50,21 +50,9 @@ export function getSaveSuccessMessage(isEdit: boolean, dict: Dict): string {
   return dict?.common?.expenseCreatedSuccess || 'Expense created successfully';
 }
 
-export function getSaveErrorMessage(dict: Dict): string {
-  return dict?.admin?.failedToSaveExpense || 'Failed to save expense';
-}
-
 export function getDateValidationError(field: 'startDate' | 'endDate', dict?: Dict): string {
   if (field === 'endDate') {
     return dict?.common?.endDateAfterStartDate || 'End date must be after start date';
   }
   return dict?.common?.startDateBeforeEndDate || 'Start date must be before end date';
-}
-
-export function formatPaymentMethodDisplay(method: string): string {
-  return method.charAt(0).toUpperCase() + method.slice(1);
-}
-
-export function getExpenseNameBadgeClass(): string {
-  return 'px-2 py-1 text-xs font-semibold border border-teal-300 bg-brand-soft text-brand-navy';
 }

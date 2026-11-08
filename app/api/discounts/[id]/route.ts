@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Discount from '@/models/Discount';
+import Tenant from '@/models/Tenant';
+import { tenantDayEdge, DEFAULT_TENANT_TIMEZONE } from '@/lib/timezone';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -90,8 +92,13 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
     if (body.minPurchaseAmount !== undefined) updates.minPurchaseAmount = body.minPurchaseAmount;
     if (body.maxDiscountAmount !== undefined) updates.maxDiscountAmount = body.maxDiscountAmount;
-    if (body.validFrom !== undefined) updates.validFrom = new Date(body.validFrom);
-    if (body.validUntil !== undefined) updates.validUntil = new Date(body.validUntil);
+    if (body.validFrom !== undefined || body.validUntil !== undefined) {
+      // A picked day runs from the start of validFrom to the end of validUntil at the store
+      const tenantDoc = await Tenant.findById(tenantId).select('settings.timezone').lean();
+      const tz = tenantDoc?.settings?.timezone || DEFAULT_TENANT_TIMEZONE;
+      if (body.validFrom !== undefined) updates.validFrom = tenantDayEdge(body.validFrom, 'start', tz);
+      if (body.validUntil !== undefined) updates.validUntil = tenantDayEdge(body.validUntil, 'end', tz);
+    }
 
     // Validate date range
     const effectiveFrom = updates.validFrom || discount.validFrom;

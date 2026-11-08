@@ -27,10 +27,11 @@ export function extractUserInfo(userId: unknown): { name: string; email: string 
   return { name: 'System', email: '' };
 }
 
-export function formatAuditTimestamp(dateString: string, lang: 'en' | 'es' = 'en'): string {
+export function formatAuditTimestamp(dateString: string, lang: 'en' | 'es' = 'en', timeZone?: string): string {
   try {
     const date = new Date(dateString);
-    return date.toLocaleDateString(lang === 'es' ? 'es-ES' : 'en-US') + ' ' + date.toLocaleTimeString(lang === 'es' ? 'es-ES' : 'en-US', { hour12: true });
+    const locale = lang === 'es' ? 'es-ES' : 'en-US';
+    return date.toLocaleDateString(locale, { timeZone }) + ' ' + date.toLocaleTimeString(locale, { hour12: true, timeZone });
   } catch {
     return dateString;
   }

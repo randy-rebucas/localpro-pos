@@ -2,96 +2,51 @@
 
 import { ReactNode } from 'react';
 import { useParams } from 'next/navigation';
+import '@/app/marketing.css';
+import { marketingFontClasses } from '@/components/marketing/fonts';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { SubscriptionGuard } from '@/components/SubscriptionGuard';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { AdminLayoutProvider, useAdminLayout } from '@/contexts/AdminLayoutContext';
 import AdminSidebar from '@/components/admin/AdminSidebar';
-import { useAuth } from '@/contexts/AuthContext';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { getDefaultTenantSettings } from '@/lib/currency';
-import { Menu, PanelLeftClose, PanelLeftOpen, Bell } from 'lucide-react';
+import { Menu } from 'lucide-react';
 
 function AdminShell({ children }: { children: ReactNode }) {
   const params = useParams();
   const tenant = (params?.tenant as string) || 'default';
-  const { user } = useAuth();
   const { settings } = useTenantSettings();
-  const { sidebarCollapsed, toggleCollapse, toggleMobileSidebar } = useAdminLayout();
+  const { sidebarCollapsed, toggleMobileSidebar, navT } = useAdminLayout();
 
   const primaryColor = (settings || getDefaultTenantSettings()).primaryColor || '#35979c';
   const businessName = settings?.companyName || tenant;
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      {/* Top header bar */}
-      <header
-        className="fixed top-0 left-0 right-0 h-14 bg-white border-b border-gray-200 flex items-center justify-between px-4 z-40"
-      >
-        {/* Left: hamburger (mobile) / collapse (desktop) + brand */}
-        <div className="flex items-center gap-3">
-          {/* Mobile hamburger */}
-          <button
-            onClick={toggleMobileSidebar}
-            className="p-2 hover:bg-gray-100 text-gray-500 lg:hidden"
-            aria-label="Open menu"
-          >
-            <Menu className="w-5 h-5" />
-          </button>
-          {/* Desktop collapse toggle */}
-          <button
-            onClick={toggleCollapse}
-            className="p-2 hover:bg-gray-100 text-gray-500 hidden lg:flex"
-            aria-label="Toggle sidebar"
-          >
-            {sidebarCollapsed ? <PanelLeftOpen className="w-5 h-5" /> : <PanelLeftClose className="w-5 h-5" />}
-          </button>
-
-          {/* Brand */}
-          <div className="flex items-center gap-2">
-            <div
-              className="w-7 h-7 flex items-center justify-center text-white text-xs font-bold"
-              style={{ backgroundColor: primaryColor }}
-            >
-              {businessName.charAt(0).toUpperCase()}
-            </div>
-            <span className="font-semibold text-gray-800 text-sm hidden sm:block truncate max-w-[160px]">
-              {businessName}
-            </span>
-          </div>
+    <div className={`${marketingFontClasses} min-h-screen bg-paper flex flex-col`}>
+      {/* Phones only: the one way to open the menu drawer. From lg up the sidebar carries the brand. */}
+      <div className="fixed left-0 right-0 top-0 z-40 flex h-14 items-center gap-2 border-b-2 border-[#8fe3d0]/60 bg-ink px-2 font-body text-paper lg:hidden">
+        <button
+          onClick={toggleMobileSidebar}
+          className="flex items-center justify-center text-paper/70 hover:bg-white/10 hover:text-paper-white focus-visible:outline-2 focus-visible:outline-[#8fe3d0]"
+          aria-label={navT('openMenu', 'Open menu')}
+        >
+          <Menu className="h-5 w-5" strokeWidth={1.75} aria-hidden />
+        </button>
+        <div
+          className="flex h-8 w-8 flex-shrink-0 items-center justify-center font-display text-lg font-extrabold uppercase leading-none text-white"
+          style={{ backgroundColor: primaryColor }}
+        >
+          {businessName.charAt(0).toUpperCase()}
         </div>
+        <p className="min-w-0 truncate font-display text-xl font-extrabold uppercase leading-none text-paper-white">
+          {businessName}
+        </p>
+      </div>
 
-        {/* Center: breadcrumb / page title area (optional, empty for now) */}
-        <div className="hidden md:block" />
-
-        {/* Right: notifications + user chip */}
-        <div className="flex items-center gap-2">
-          <button className="p-2 hover:bg-gray-100 text-gray-500 relative" aria-label="Notifications">
-            <Bell className="w-5 h-5" />
-          </button>
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200">
-            <div
-              className="w-6 h-6 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0"
-              style={{ backgroundColor: primaryColor }}
-            >
-              {user?.name?.charAt(0)?.toUpperCase() || 'U'}
-            </div>
-            <span className="text-sm text-gray-700 font-medium hidden sm:block max-w-[120px] truncate">
-              {user?.name || 'User'}
-            </span>
-          </div>
-        </div>
-      </header>
-
-      {/* Sidebar */}
       <AdminSidebar />
 
-      {/* Main content */}
-      <main
-        className={`flex-1 pt-14 transition-all duration-200 ${
-          sidebarCollapsed ? 'lg:pl-16' : 'lg:pl-64'
-        }`}
-      >
+      <main className={`min-w-0 flex-1 pt-14 transition-all duration-200 lg:pt-0 ${sidebarCollapsed ? 'lg:pl-16' : 'lg:pl-64'}`}>
         {children}
       </main>
     </div>

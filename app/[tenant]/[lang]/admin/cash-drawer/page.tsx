@@ -2,34 +2,83 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import Link from 'next/link';
 import toast from 'react-hot-toast';
+import { RefreshCw, Wallet } from 'lucide-react';
 import { getDictionaryClient } from '../../dictionaries-client';
 import Currency from '@/components/Currency';
+import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import SlipPager from '@/components/ui/SlipPager';
+import { Barcode, ReceiptRow } from '@/components/marketing/primitives';
+import { DARK_KEY, KEY, LedReadout, RegisterPage, Sheet } from '@/components/admin/register-ui';
+import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { useCashDrawerSessions, type CashDrawerSession } from '@/hooks/useCashDrawerSessions';
 import { usePermissions } from '@/hooks/usePermissions';
+import { getDefaultTenantSettings } from '@/lib/currency';
+import { formatDate, formatDateTime, formatTime } from '@/lib/formatting';
 import {
   getUserName,
   getUserEmail,
   calculateDifference,
-  getDifferenceColor,
-  getStatusBadgeClasses,
   getStatusLabel,
-  formatSessionTime,
   getRefreshSuccessMessage,
 } from '@/lib/cash-drawer-helpers';
 
+type Dict = any; // eslint-disable-line @typescript-eslint/no-explicit-any
+
+const PAGE_SIZE = 10;
+
+const TH = 'px-3 py-2 align-bottom font-receipt text-xs font-medium uppercase tracking-[0.14em] text-ink/60';
+const TD = 'whitespace-nowrap px-3 py-3 font-receipt text-sm';
+/** Cells holding written words rather than printed figures. */
+const TD_TEXT = 'whitespace-nowrap px-3 py-3 text-sm';
+
+/** Over reads in teal, short in stamp red, and the sign is always printed so color is never the only cue. */
+function Difference({ value }: { value: number | null }) {
+  if (value === null) return <span className="text-ink/40">-</span>;
+  const tone = value > 0 ? 'text-brand-hover' : value < 0 ? 'text-stamp' : 'text-ink/60';
+  return (
+    <span className={`font-semibold ${tone}`}>
+      {value > 0 ? '+' : value < 0 ? '−' : ''}
+      <Currency amount={Math.abs(value)} />
+    </span>
+  );
+}
+
+function StatusTag({ dict, status }: { dict: Dict; status: CashDrawerSession['status'] }) {
+  return (
+    <span
+      className={`inline-block whitespace-nowrap border px-1.5 py-0.5 font-receipt text-[11px] uppercase ${status === 'open' ? 'border-brand bg-brand text-ink' : 'border-ink/25 text-ink/70'}`}
+    >
+      {getStatusLabel(status, dict)}
+    </span>
+  );
+}
+
+type DateSettings = Parameters<typeof formatDateTime>[1];
+
+/** The closing stamp: just the time when the shift closed on the day it opened. */
+const closedAt = (session: CashDrawerSession, settings: DateSettings) =>
+  !session.closingTime
+    ? ''
+    : formatDate(session.closingTime, settings) === formatDate(session.openingTime, settings)
+      ? formatTime(session.closingTime, settings)
+      : formatDateTime(session.closingTime, settings);
+
+const sessionNo = (session: CashDrawerSession) => `#${session._id.slice(-6).toUpperCase()}`;
+
 export default function CashDrawerPage() {
   const params = useParams();
-  const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const [dict, setDict] = useState<Dict>(null);
+  const [loadedOnce, setLoadedOnce] = useState(false);
   const [selectedSession, setSelectedSession] = useState<CashDrawerSession | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [refreshing, setRefreshing] = useState(false);
   const [page, setPage] = useState(1);
 
-  const { sessions, loading, totalPages, fetchSessions } = useCashDrawerSessions();
+  const { sessions, loading, total, totalPages, fetchSessions } = useCashDrawerSessions();
+  const { settings } = useTenantSettings();
+  const dateSettings = settings || getDefaultTenantSettings();
   const { canAccess } = usePermissions();
   const canView = canAccess('cash_drawer.manage');
 
@@ -38,9 +87,8 @@ export default function CashDrawerPage() {
   }, [lang]);
 
   useEffect(() => {
-    fetchSessions(statusFilter, (error) => toast.error(error), page, 10);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter, page]);
+    fetchSessions(statusFilter, (error) => toast.error(error), page, PAGE_SIZE).finally(() => setLoadedOnce(true));
+  }, [statusFilter, page, fetchSessions]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -48,307 +96,285 @@ export default function CashDrawerPage() {
     await fetchSessions(statusFilter, (error) => {
       failed = true;
       toast.error(error);
-    }, page, 10);
+    }, page, PAGE_SIZE);
     if (!failed) {
       toast.success(getRefreshSuccessMessage(dict));
     }
     setRefreshing(false);
   };
 
-  if (!dict || loading) {
+  if (!dict || !loadedOnce) {
     return (
-      <div className="flex items-center justify-center py-24">
-        <div className="text-center">
-          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-brand"></div>
-          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
+      <div className="mk-root pos-register">
+        <div className="flex min-h-[calc(100dvh-3.5rem)] items-center justify-center bg-brand-navy-deep lg:min-h-dvh">
+          <LoadingSpinner size="md" color="#8fe3d0" />
         </div>
       </div>
     );
   }
+
+  const title = dict.admin?.cashDrawer || 'Cash Drawer';
 
   if (!canView) {
     return (
-      <div className="px-4 sm:px-6 py-6">
-        <div className="bg-red-50 border-2 border-red-300 p-6">
-          <h2 className="text-lg font-bold text-red-800 mb-1">{dict?.admin?.accessRestricted || 'Access Restricted'}</h2>
-          <p className="text-sm text-red-700">
-            {dict?.admin?.accessRestrictedCashDrawer || "You don't have permission to view cash drawer sessions. Contact an admin or owner."}
-          </p>
-        </div>
-      </div>
+      <RegisterPage tagNo="CD" tag={settings?.companyName} title={title}>
+        <section className="mt-6 max-w-2xl">
+          <div className="border-l-4 border-stamp bg-paper-white px-5 py-4 text-ink">
+            <h2 className="text-3xl">{dict.admin?.accessRestricted || 'Access Restricted'}</h2>
+            <p className="mt-2 text-sm">
+              {dict.admin?.accessRestrictedCashDrawer || "You don't have permission to view cash drawer sessions. Contact an admin or owner."}
+            </p>
+          </div>
+          <div className="mk-tear-b h-3 bg-paper-white" aria-hidden />
+        </section>
+      </RegisterPage>
     );
   }
 
+  const unknown = dict.common?.unknown || 'Unknown';
+  const userLabel = (session: CashDrawerSession) => {
+    const name = getUserName(session);
+    return name === 'Unknown' ? unknown : name;
+  };
+  const statusKeys = [
+    { value: '', label: dict.admin?.allSessions || 'All Sessions' },
+    { value: 'open', label: dict.admin?.openSessions || 'Open Sessions' },
+    { value: 'closed', label: dict.admin?.closedSessions || 'Closed Sessions' },
+  ];
+  const refreshLabel = dict.admin?.cashDrawerRefreshTitle || 'Refresh cash drawer sessions';
+  const viewLabel = dict.common?.view || 'View';
+
   return (
-    <div>
-      <div className="px-4 sm:px-6 py-6">
-        <div className="mb-6 sm:mb-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-2">
-                {dict.admin?.cashDrawer || 'Cash Drawer Sessions'}
-              </h1>
-              <p className="text-gray-600">{dict.admin?.cashDrawerSubtitle || 'Manage and monitor cash drawer operations'}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white border border-gray-300 p-6">
-          <div className="mb-4 flex gap-4 items-end">
-            <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-700 mb-2">{dict.admin?.filterByStatus || 'Filter by Status'}</label>
-              <select
-                value={statusFilter}
-                onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
-                className="w-full px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-              >
-                <option value="">{dict.admin?.allSessions || 'All Sessions'}</option>
-                <option value="open">{dict.admin?.openSessions || 'Open Sessions'}</option>
-                <option value="closed">{dict.admin?.closedSessions || 'Closed Sessions'}</option>
-              </select>
-            </div>
+    <RegisterPage
+      tagNo="CD"
+      tag={settings?.companyName}
+      title={title}
+      subtitle={dict.admin?.cashDrawerSubtitle || 'Manage and monitor cash drawer operations'}
+      side={<LedReadout value={total} label={dict.admin?.cashDrawerSessions || 'Sessions'} />}
+    >
+      {/* Which sessions to list, and a key to pull the latest */}
+      <div className="mt-6 flex gap-2">
+        <nav
+          aria-label={dict.admin?.filterByStatus || 'Filter by Status'}
+          className="grid min-w-0 flex-1 grid-cols-3 border-l border-t border-white/25"
+        >
+          {statusKeys.map((key) => (
             <button
-              onClick={handleRefresh}
-              disabled={refreshing}
-              className="px-4 py-2 bg-brand text-white hover:bg-brand-hover disabled:bg-gray-400 border border-brand-hover flex items-center gap-2 transition-colors"
-              title={dict.admin?.cashDrawerRefreshTitle || 'Refresh cash drawer sessions'}
+              key={key.value || 'all'}
+              type="button"
+              aria-pressed={statusFilter === key.value}
+              onClick={() => { setStatusFilter(key.value); setPage(1); }}
+              className={`flex min-h-[44px] items-center justify-center border-b border-r border-white/25 px-2 text-center font-receipt text-xs font-medium uppercase transition-colors touch-manipulation ${statusFilter === key.value ? 'bg-paper-white text-ink' : 'text-paper hover:bg-white/10'}`}
             >
-              <svg className={`w-5 h-5 ${refreshing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.5a11 11 0 0120 0v-5m0 0a11 11 0 0120 5V9m-11 11a11 11 0 0120 0v5m0 0a11 11 0 01-20 0v-5m0 0a11 11 0 01-20 0" />
-              </svg>
-              {refreshing ? (dict.common?.loading || 'Loading...') : (dict.common?.refresh || 'Refresh')}
+              {key.label}
             </button>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.user || 'User'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.openingTime || 'Opening Time'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.openingAmount || 'Opening Amount'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.closingTime || 'Closing Time'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.expectedAmount || 'Expected Amount'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.closingAmount || 'Closing Amount'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.difference || 'Difference'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.status || 'Status'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.common?.actions || 'Actions'}</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {sessions.map((session) => {
-                  const userName = getUserName(session);
-                  const difference = calculateDifference(session);
-                  
-                  return (
-                    <tr key={session._id}>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">{userName}</td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {formatSessionTime(session.openingTime)}
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        <Currency amount={session.openingAmount} />
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {session.closingTime ? formatSessionTime(session.closingTime) : '-'}
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {session.expectedAmount !== undefined ? <Currency amount={session.expectedAmount} /> : '-'}
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {session.closingAmount !== undefined ? <Currency amount={session.closingAmount} /> : '-'}
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
-                        {difference !== null ? (
-                          <span className={difference >= 0 ? 'text-green-600' : 'text-red-600'}>
-                            {difference >= 0 ? '+' : ''}<Currency amount={Math.abs(difference)} />
-                            {session.shortage && <div className="text-xs text-red-600">{dict.admin?.shortage || 'Shortage'}: <Currency amount={session.shortage} /></div>}
-                            {session.overage && <div className="text-xs text-green-600">{dict.admin?.overage || 'Overage'}: <Currency amount={session.overage} /></div>}
-                          </span>
-                        ) : '-'}
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 text-xs font-semibold border ${getStatusBadgeClasses(session.status)}`}>
-                          {getStatusLabel(session.status, dict)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
-                        <button
-                          onClick={() => setSelectedSession(session)}
-                          className="text-brand hover:text-brand-navy-deep"
-                        >
-                          {dict.common?.view || 'View'}
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            {sessions.length === 0 && (
-              <div className="text-center py-8 text-gray-500">{dict.common?.noResults || 'No cash drawer sessions found'}</div>
-            )}
-          </div>
-          {totalPages > 1 && (
-            <div className="mt-4 flex justify-center gap-2">
-              <button
-                onClick={() => setPage(p => Math.max(1, p - 1))}
-                disabled={page === 1}
-                className="px-4 py-2 border border-gray-300 disabled:opacity-50 bg-white"
-              >
-                {dict.transactions?.previous || dict.common?.previous || 'Previous'}
-              </button>
-              <span className="px-4 py-2 text-sm text-gray-700">
-                {dict.transactions?.page || dict.admin?.page || 'Page'} {page} {dict.transactions?.of || dict.admin?.of || 'of'} {totalPages}
-              </span>
-              <button
-                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                disabled={page === totalPages}
-                className="px-4 py-2 border border-gray-300 disabled:opacity-50 bg-white"
-              >
-                {dict.transactions?.next || dict.common?.next || 'Next'}
-              </button>
-            </div>
-          )}
-        </div>
-
-        {selectedSession && (
-          <CashDrawerDetailModal
-            session={selectedSession}
-            onClose={() => setSelectedSession(null)}
-            dict={dict}
-          />
-        )}
+          ))}
+        </nav>
+        <button
+          type="button"
+          onClick={handleRefresh}
+          disabled={refreshing}
+          className={`${DARK_KEY} w-11 shrink-0 px-0`}
+          aria-label={refreshLabel}
+          title={refreshLabel}
+        >
+          <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin motion-reduce:animate-none' : ''}`} strokeWidth={1.75} aria-hidden />
+        </button>
       </div>
-    </div>
+
+      {/* The drawer log, one line per session */}
+      <section className="mt-6" aria-busy={loading}>
+        <div className={`bg-paper-white text-ink transition-opacity ${loading ? 'opacity-60' : ''}`}>
+          {sessions.length === 0 ? (
+            <div className="px-4 py-14 text-center">
+              <Wallet className="mx-auto mb-2 h-8 w-8 text-ink/20" strokeWidth={1.75} aria-hidden />
+              <p className="font-receipt text-sm text-ink/60">{dict.admin?.noCashDrawerSessions || 'No cash drawer sessions found'}</p>
+            </div>
+          ) : (
+            <>
+              {/* Up to xl: stacked lines, each opens its count slip */}
+              <ul className="divide-y divide-dashed divide-ink/20 xl:hidden">
+                {sessions.map((session) => (
+                  <li key={session._id}>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedSession(session)}
+                      className="block w-full px-4 py-3 text-left transition-colors hover:bg-paper touch-manipulation"
+                    >
+                      <span className="flex items-start justify-between gap-3">
+                        <span className="min-w-0">
+                          <span className="block text-sm font-medium">{userLabel(session)}</span>
+                          <span className="mt-0.5 block font-receipt text-xs text-ink/60">
+                            {formatDateTime(session.openingTime, dateSettings)}
+                            {session.closingTime && ` → ${closedAt(session, dateSettings)}`}
+                          </span>
+                        </span>
+                        {calculateDifference(session) !== null && (
+                          <span className="shrink-0 text-right font-receipt">
+                            <span className="block text-lg leading-none"><Difference value={calculateDifference(session)} /></span>
+                            <span className="mt-1 block text-xs text-ink/60">{dict.admin?.difference || 'Difference'}</span>
+                          </span>
+                        )}
+                      </span>
+                      <span className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 font-receipt text-xs text-ink/60">
+                        <StatusTag dict={dict} status={session.status} />
+                        <span>{dict.admin?.openingAmount || 'Opening Amount'}: <span className="text-ink"><Currency amount={session.openingAmount} /></span></span>
+                        {session.closingAmount !== undefined && (
+                          <span>{dict.admin?.closingAmount || 'Closing Amount'}: <span className="text-ink"><Currency amount={session.closingAmount} /></span></span>
+                        )}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+
+              {/* From xl: the full log */}
+              <div className="relative hidden overflow-x-auto xl:block" role="region" aria-label={title} tabIndex={0}>
+                <table className="min-w-full">
+                  <thead className="border-b border-dashed border-ink/30">
+                    <tr>
+                      <th scope="col" className={`${TH} text-left`}>{dict.admin?.user || 'User'}</th>
+                      <th scope="col" className={`${TH} text-left`}>{dict.admin?.openingTime || 'Opening Time'}</th>
+                      <th scope="col" className={`${TH} text-left`}>{dict.admin?.closingTime || 'Closing Time'}</th>
+                      <th scope="col" className={`${TH} text-right`}>{dict.admin?.openingAmount || 'Opening Amount'}</th>
+                      <th scope="col" className={`${TH} text-right`}>{dict.admin?.expectedAmount || 'Expected Amount'}</th>
+                      <th scope="col" className={`${TH} text-right`}>{dict.admin?.closingAmount || 'Closing Amount'}</th>
+                      <th scope="col" className={`${TH} text-right`}>{dict.admin?.difference || 'Difference'}</th>
+                      <th scope="col" className={`${TH} text-left`}>{dict.admin?.status || 'Status'}</th>
+                      <th scope="col" className={TH}><span className="sr-only">{dict.common?.actions || 'Actions'}</span></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-dashed divide-ink/20">
+                    {sessions.map((session) => (
+                      <tr key={session._id} className="transition-colors hover:bg-paper">
+                        <td className={`${TD_TEXT} font-medium`}>{userLabel(session)}</td>
+                        <td className={`${TD} text-ink/70`}>{formatDateTime(session.openingTime, dateSettings)}</td>
+                        <td className={`${TD} text-ink/70`}>{session.closingTime ? closedAt(session, dateSettings) : '-'}</td>
+                        <td className={`${TD} text-right`}><Currency amount={session.openingAmount} /></td>
+                        <td className={`${TD} text-right text-ink/70`}>{session.expectedAmount !== undefined ? <Currency amount={session.expectedAmount} /> : '-'}</td>
+                        <td className={`${TD} text-right`}>{session.closingAmount !== undefined ? <Currency amount={session.closingAmount} /> : '-'}</td>
+                        <td className={`${TD} text-right`}><Difference value={calculateDifference(session)} /></td>
+                        <td className={TD}><StatusTag dict={dict} status={session.status} /></td>
+                        <td className="px-2 py-1 text-right">
+                          <button type="button" onClick={() => setSelectedSession(session)} className={`${KEY} ml-auto`}>
+                            {viewLabel}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+
+          <SlipPager
+            page={page}
+            totalPages={totalPages}
+            onPageChange={setPage}
+            label={dict.admin?.page || 'Page'}
+            previousLabel={dict.common?.previous || 'Previous'}
+            nextLabel={dict.common?.next || 'Next'}
+          />
+        </div>
+        <div className="mk-tear-b h-3 bg-paper-white" aria-hidden />
+      </section>
+
+      {selectedSession && (
+        <CountSlip
+          session={selectedSession}
+          userName={userLabel(selectedSession)}
+          dateSettings={dateSettings}
+          onClose={() => setSelectedSession(null)}
+          dict={dict}
+        />
+      )}
+    </RegisterPage>
   );
 }
 
-function CashDrawerDetailModal({
+/** One session printed as the drawer count slip: times, the money in and out, and what was over or short. */
+function CountSlip({
   session,
+  userName,
+  dateSettings,
   onClose,
   dict,
 }: {
   session: CashDrawerSession;
+  userName: string;
+  dateSettings: DateSettings;
   onClose: () => void;
-  dict: Record<string, Record<string, string>> | null;
+  dict: Dict;
 }) {
-  const userName = getUserName(session);
   const userEmail = getUserEmail(session);
-  
+  const difference = calculateDifference(session);
+  const closeLabel = dict.common?.close || 'Close';
+
   return (
-    <div className="fixed inset-0 bg-gray-900/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white border border-gray-300 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="p-6">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-2xl font-bold text-gray-900">
-              {dict?.admin?.cashDrawerDetails || 'Cash Drawer Session Details'}
-            </h2>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600"
-            >
-              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium text-gray-500">{dict?.admin?.user || 'User'}</label>
-                <div className="text-lg">{userName}</div>
-                {userEmail && <div className="text-sm text-gray-500">{userEmail}</div>}
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-500">{dict?.admin?.status || 'Status'}</label>
-                <div>
-                  <span className={`px-2 py-1 text-xs font-semibold border ${getStatusBadgeClasses(session.status)}`}>
-                    {getStatusLabel(session.status, dict)}
-                  </span>
-                </div>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium text-gray-500">{dict?.admin?.openingTime || 'Opening Time'}</label>
-                <div className="text-lg">{formatSessionTime(session.openingTime)}</div>
-              </div>
-              {session.closingTime && (
-                <div>
-                  <label className="text-sm font-medium text-gray-500">{dict?.admin?.closingTime || 'Closing Time'}</label>
-                  <div className="text-lg">{formatSessionTime(session.closingTime)}</div>
-                </div>
-              )}
-            </div>
-            <div className="border-t pt-4 space-y-2">
-              <div className="flex justify-between">
-                <span className="text-sm text-gray-500">{dict?.admin?.openingAmount || 'Opening Amount'}:</span>
-                <span className="font-medium"><Currency amount={session.openingAmount} /></span>
-              </div>
-              {session.expectedAmount !== undefined && (
-                <div className="flex justify-between">
-                  <span className="text-sm text-gray-500">{dict?.admin?.expectedAmount || 'Expected Amount'}:</span>
-                  <span className="font-medium"><Currency amount={session.expectedAmount} /></span>
-                </div>
-              )}
-              {session.totalDiscounts !== undefined && session.totalDiscounts > 0 && (
-                <div className="flex justify-between">
-                  <span className="text-sm text-gray-500">{dict?.admin?.totalDiscounts || 'Total Discounts'}:</span>
-                  <span className="font-semibold text-green-600">-<Currency amount={session.totalDiscounts} /></span>
-                </div>
-              )}
-              {session.totalVAT !== undefined && session.totalVAT > 0 && (
-                <div className="flex justify-between">
-                  <span className="text-sm text-gray-500">{dict?.admin?.totalVat || 'Total VAT'}:</span>
-                  <span className="font-medium"><Currency amount={session.totalVAT} /></span>
-                </div>
-              )}
-              {session.closingAmount !== undefined && (
-                <div className="flex justify-between">
-                  <span className="text-sm text-gray-500">{dict?.admin?.closingAmount || 'Closing Amount'}:</span>
-                  <span className="font-medium"><Currency amount={session.closingAmount} /></span>
-                </div>
-              )}
-              {session.shortage !== undefined && session.shortage > 0 && (
-                <div className="flex justify-between text-red-600">
-                  <span>{dict?.admin?.shortage || 'Shortage'}:</span>
-                  <span className="font-medium"><Currency amount={session.shortage} /></span>
-                </div>
-              )}
-              {session.overage !== undefined && session.overage > 0 && (
-                <div className="flex justify-between text-green-600">
-                  <span>{dict?.admin?.overage || 'Overage'}:</span>
-                  <span className="font-medium"><Currency amount={session.overage} /></span>
-                </div>
-              )}
-              {session.closingAmount !== undefined && session.expectedAmount !== undefined && (
-                <div className="flex justify-between text-lg font-bold border-t pt-2">
-                  <span>{dict?.admin?.difference || 'Difference'}:</span>
-                  <span className={getDifferenceColor(calculateDifference(session))}>
-                    {calculateDifference(session)! >= 0 ? '+' : ''}
-                    <Currency amount={Math.abs(calculateDifference(session)!)} />
-                  </span>
-                </div>
-              )}
-            </div>
-            {session.notes && (
-              <div>
-                <label className="text-sm font-medium text-gray-500 mb-1 block">{dict?.common?.notes || 'Notes'}</label>
-                <div className="p-3 bg-gray-50 border border-gray-300">{session.notes}</div>
-              </div>
-            )}
-          </div>
-          <div className="mt-6 flex justify-end">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 bg-gray-200 text-gray-700 hover:bg-gray-300 border border-gray-400"
-            >
-              {dict?.common?.close || 'Close'}
-            </button>
-          </div>
-        </div>
+    <Sheet
+      title={dict.admin?.drawerCount || 'Drawer count'}
+      subtitle={[userName, userEmail].filter(Boolean).join(' · ')}
+      onClose={onClose}
+      closeLabel={closeLabel}
+      footer={<button type="button" onClick={onClose} className={KEY}>{closeLabel}</button>}
+    >
+      <div className="flex items-center justify-between gap-3 font-receipt text-xs uppercase tracking-[0.14em] text-ink/60">
+        <span>{sessionNo(session)}</span>
+        <StatusTag dict={dict} status={session.status} />
       </div>
-    </div>
+
+      <div className="mt-3 space-y-1.5 font-receipt text-sm">
+        <ReceiptRow label={dict.admin?.openingTime || 'Opening Time'} value={formatDateTime(session.openingTime, dateSettings)} />
+        {session.closingTime && (
+          <ReceiptRow label={dict.admin?.closingTime || 'Closing Time'} value={formatDateTime(session.closingTime, dateSettings)} />
+        )}
+      </div>
+
+      <div className="mt-4 space-y-1.5 border-t border-dashed border-ink/30 pt-4 font-receipt text-sm">
+        <ReceiptRow label={dict.admin?.openingAmount || 'Opening Amount'} value={<Currency amount={session.openingAmount} />} />
+        {session.totalDiscounts !== undefined && session.totalDiscounts > 0 && (
+          <ReceiptRow label={dict.admin?.totalDiscounts || 'Total Discounts'} value={<>−<Currency amount={session.totalDiscounts} /></>} />
+        )}
+        {session.totalVAT !== undefined && session.totalVAT > 0 && (
+          <ReceiptRow label={dict.admin?.totalVat || 'Total VAT'} value={<Currency amount={session.totalVAT} />} />
+        )}
+        {session.expectedAmount !== undefined && (
+          <ReceiptRow label={dict.admin?.expectedAmount || 'Expected Amount'} value={<Currency amount={session.expectedAmount} />} />
+        )}
+        {session.closingAmount !== undefined && (
+          <ReceiptRow label={dict.admin?.closingAmount || 'Closing Amount'} value={<Currency amount={session.closingAmount} />} />
+        )}
+      </div>
+
+      {(difference !== null || !!session.shortage || !!session.overage) && (
+        <div className="mt-4 space-y-1.5 border-t border-dashed border-ink/30 pt-4 font-receipt">
+          {!!session.shortage && session.shortage > 0 && (
+            <div className="text-sm text-stamp">
+              <ReceiptRow label={dict.admin?.shortage || 'Shortage'} value={<Currency amount={session.shortage} />} />
+            </div>
+          )}
+          {!!session.overage && session.overage > 0 && (
+            <div className="text-sm text-brand-hover">
+              <ReceiptRow label={dict.admin?.overage || 'Overage'} value={<Currency amount={session.overage} />} />
+            </div>
+          )}
+          {difference !== null && (
+            <div className="text-lg">
+              <ReceiptRow strong label={dict.admin?.difference || 'Difference'} value={<Difference value={difference} />} />
+            </div>
+          )}
+        </div>
+      )}
+
+      {session.notes && (
+        <div className="mt-4 border-t border-dashed border-ink/30 pt-4">
+          <p className="font-receipt text-xs font-medium uppercase tracking-[0.08em] text-ink/60">{dict.common?.notes || 'Notes'}</p>
+          <p className="mt-1 whitespace-pre-line font-receipt text-sm">{session.notes}</p>
+        </div>
+      )}
+
+      <Barcode className="mt-5 h-8 w-40 text-ink/80" />
+    </Sheet>
   );
 }
-

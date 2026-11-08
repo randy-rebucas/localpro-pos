@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { Discount } from './useDiscountsList';
+import { getTenantDateString, toTenantDateString, DEFAULT_TENANT_TIMEZONE } from '@/lib/timezone';
 
 export interface DiscountFormData {
   code: string;
@@ -29,7 +30,8 @@ interface UseDiscountsFormReturn {
   initializeForm: (discount: Discount) => void;
 }
 
-const emptyForm: DiscountFormData = {
+/** A blank form running from today for 30 days, as days at the store. */
+const emptyForm = (tz: string): DiscountFormData => ({
   code: '',
   name: '',
   description: '',
@@ -39,14 +41,14 @@ const emptyForm: DiscountFormData = {
   requiresIdVerification: false,
   minPurchaseAmount: 0,
   maxDiscountAmount: 0,
-  validFrom: new Date().toISOString().split('T')[0],
-  validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+  validFrom: getTenantDateString(tz),
+  validUntil: getTenantDateString(tz, -30),
   usageLimit: 0,
   isActive: true,
-};
+});
 
-export function useDiscountsForm(): UseDiscountsFormReturn {
-  const [formData, setFormDataState] = useState<DiscountFormData>(emptyForm);
+export function useDiscountsForm(timezone: string = DEFAULT_TENANT_TIMEZONE): UseDiscountsFormReturn {
+  const [formData, setFormDataState] = useState<DiscountFormData>(() => emptyForm(timezone));
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -55,9 +57,9 @@ export function useDiscountsForm(): UseDiscountsFormReturn {
   }, []);
 
   const resetForm = useCallback(() => {
-    setFormDataState(emptyForm);
+    setFormDataState(emptyForm(timezone));
     setError('');
-  }, []);
+  }, [timezone]);
 
   const initializeForm = useCallback((discount: Discount) => {
     setFormDataState({
@@ -70,13 +72,13 @@ export function useDiscountsForm(): UseDiscountsFormReturn {
       requiresIdVerification: discount.requiresIdVerification || false,
       minPurchaseAmount: discount.minPurchaseAmount || 0,
       maxDiscountAmount: discount.maxDiscountAmount || 0,
-      validFrom: new Date(discount.validFrom).toISOString().split('T')[0],
-      validUntil: new Date(discount.validUntil).toISOString().split('T')[0],
+      validFrom: toTenantDateString(discount.validFrom, timezone),
+      validUntil: toTenantDateString(discount.validUntil, timezone),
       usageLimit: discount.usageLimit || 0,
       isActive: discount.isActive,
     });
     setError('');
-  }, []);
+  }, [timezone]);
 
   const handleSubmit = useCallback(
     async (onSubmit: (data: DiscountFormData) => Promise<true | string>) => {

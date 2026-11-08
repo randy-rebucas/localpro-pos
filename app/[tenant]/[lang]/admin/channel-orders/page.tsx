@@ -6,6 +6,9 @@ import toast from 'react-hot-toast';
 import { ShoppingCart, RefreshCw, Package } from 'lucide-react';
 import { getDictionaryClient } from '../../dictionaries-client';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { getDefaultTenantSettings } from '@/lib/currency';
+import { formatDate } from '@/lib/formatting';
 
 interface ShopifyLineItem {
   id: number;
@@ -28,8 +31,9 @@ interface ShopifyOrder {
 }
 
 export default function ChannelOrdersPage() {
+  const { settings: tenantSettings } = useTenantSettings();
+  const dateSettings = tenantSettings || getDefaultTenantSettings();
   const params = useParams();
-  const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const { canAccess } = usePermissions();
@@ -202,7 +206,7 @@ export default function ChannelOrdersPage() {
                           {fulfillmentBadge(order.fulfillment_status)}
                         </div>
                         <p className="text-xs text-gray-400 mt-0.5">
-                          {customerName(order)} · {new Date(order.created_at).toLocaleDateString()}
+                          {customerName(order)} · {formatDate(order.created_at, dateSettings)}
                         </p>
                       </div>
                       <div className="text-right shrink-0">

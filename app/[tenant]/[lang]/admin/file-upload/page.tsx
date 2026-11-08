@@ -2,12 +2,12 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { getDefaultTenantSettings } from '@/lib/currency';
 import { logger } from '@/lib/logger';
 import toast from 'react-hot-toast';
+import { formatDateTime as formatTenantDateTime } from '@/lib/formatting';
 
 interface UploadedFile {
   id?: string;
@@ -177,8 +177,7 @@ export default function FileUploadPage() {
   };
 
   const formatDate = (dateString: string): string => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString(lang === 'es' ? 'es-ES' : 'en-US') + ' ' + date.toLocaleTimeString(undefined, { hour12: true });
+    return formatTenantDateTime(dateString, tenantSettings);
   };
 
   const copyToClipboard = (text: string) => {
@@ -225,7 +224,7 @@ export default function FileUploadPage() {
             className="inline-block animate-spin h-8 w-8 border-b-2"
             style={{ borderColor: primaryColor, borderBottomColor: 'transparent' }}
           ></div>
-          <p className="mt-4 text-gray-600">{(dict as Record<string, any>)?.common?.loading || 'Loading...'}</p>
+          <p className="mt-4 text-gray-600">{(dict as { common?: { loading?: string } } | null)?.common?.loading || 'Loading...'}</p>
         </div>
       </div>
     );

@@ -2,14 +2,22 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
+import Link from 'next/link';
+import { Mail, MessageSquare, Plus, Send, Users } from 'lucide-react';
 import PageTitle from '@/components/PageTitle';
 import Currency from '@/components/Currency';
+import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import { ReceiptRow } from '@/components/marketing/primitives';
+import { DARK_KEY_PRIMARY, HINT, ICON, INPUT, KEY, KEY_PRIMARY, LABEL, RegisterPage, Sheet } from '@/components/admin/register-ui';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { getDefaultTenantSettings } from '@/lib/currency';
 import { showToast } from '@/lib/toast';
+import { useConfirm } from '@/lib/confirm';
 import { getDictionaryClient } from '../../dictionaries-client';
 import { usePermissions } from '@/hooks/usePermissions';
+import { formatDate } from '@/lib/formatting';
 
+type Dict = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 type Segment = 'all' | 'new' | 'regular' | 'vip' | 'at_risk' | 'lapsed';
 type Channel = 'email' | 'sms';
 
@@ -44,24 +52,52 @@ interface Campaign {
   createdAt: string;
 }
 
-const SEGMENT_META: Record<string, { label: string; color: string; bg: string; border: string; description: string }> = {
-  vip:      { label: 'VIP',      color: 'text-amber-700',  bg: 'bg-amber-50',  border: 'border-amber-300', description: 'High spend or 500+ points' },
-  new:      { label: 'New',      color: 'text-brand-hover',   bg: 'bg-brand-soft',   border: 'border-teal-300',  description: 'Joined recently, ≤2 orders' },
-  regular:  { label: 'Regular',  color: 'text-green-700',  bg: 'bg-green-50',  border: 'border-green-300', description: '3+ orders, steady buyer' },
-  at_risk:  { label: 'At Risk',  color: 'text-orange-700', bg: 'bg-orange-50', border: 'border-orange-300',description: 'No purchase in 30–90 days' },
-  lapsed:   { label: 'Lapsed',   color: 'text-red-700',    bg: 'bg-red-50',    border: 'border-red-300',   description: 'Inactive 90+ days' },
-  prospect: { label: 'Prospect', color: 'text-gray-600',   bg: 'bg-gray-50',   border: 'border-gray-300',  description: 'No purchases yet' },
+const SEGMENT_ORDER: Segment[] = ['all', 'vip', 'new', 'regular', 'at_risk', 'lapsed'];
+const EMPTY_FORM = { name: '', channel: 'email' as Channel, segment: 'all' as Segment, subject: '', body: '' };
+
+/** Segment names and the rule behind each, in the page language. */
+const segmentText = (dict: Dict, segment: string): { label: string; description: string } => {
+  const text: Record<string, { label: string; description: string }> = {
+    all: { label: dict?.crm?.allCustomers || 'All Customers', description: dict?.crm?.allCustomersDesc || 'Every active customer' },
+    vip: { label: dict?.crm?.segmentVip || 'VIP', description: dict?.crm?.segmentVipDesc || 'High spend or 500+ points' },
+    new: { label: dict?.crm?.segmentNew || 'New', description: dict?.crm?.segmentNewDesc || 'Joined recently, ≤2 orders' },
+    regular: { label: dict?.crm?.segmentRegular || 'Regular', description: dict?.crm?.segmentRegularDesc || '3+ orders, steady buyer' },
+    at_risk: { label: dict?.crm?.segmentAtRisk || 'At Risk', description: dict?.crm?.segmentAtRiskDesc || 'No purchase in 30–90 days' },
+    lapsed: { label: dict?.crm?.segmentLapsed || 'Lapsed', description: dict?.crm?.segmentLapsedDesc || 'Inactive 90+ days' },
+    prospect: { label: dict?.crm?.segmentProspect || 'Prospect', description: dict?.crm?.segmentProspectDesc || 'No purchases yet' },
+  };
+  return text[segment] || { label: segment, description: '' };
 };
+
+/** Segments that need attention print in stamp red; the rest stay plain. */
+function SegmentTag({ dict, segment }: { dict: Dict; segment: string }) {
+  const warn = segment === 'at_risk' || segment === 'lapsed';
+  return (
+    <span className={`inline-block whitespace-nowrap border px-1.5 py-0.5 font-receipt text-[11px] uppercase ${warn ? 'border-stamp/50 text-stamp' : segment === 'vip' ? 'border-ink bg-ink text-paper-white' : 'border-ink/25 text-ink/70'}`}>
+      {segmentText(dict, segment).label}
+    </span>
+  );
+}
+
+function StatusTag({ dict, status }: { dict: Dict; status: Campaign['status'] }) {
+  const label = { draft: dict?.crm?.statusDraft || 'Draft', sent: dict?.crm?.statusSent || 'Sent', failed: dict?.crm?.statusFailed || 'Failed' }[status];
+  const tone = status === 'failed' ? 'border-stamp/50 text-stamp' : status === 'sent' ? 'border-brand-hover text-brand-hover' : 'border-ink/25 text-ink/70';
+  return <span className={`inline-block whitespace-nowrap border px-1.5 py-0.5 font-receipt text-[11px] uppercase ${tone}`}>{label}</span>;
+}
+
+const channelLabel = (dict: Dict, channel: Channel) =>
+  channel === 'email' ? (dict?.crm?.channelEmail || 'Email') : (dict?.crm?.channelSms || 'SMS');
 
 export default function CRMPage() {
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const [dict, setDict] = useState<Dict>(null);
   const { settings } = useTenantSettings();
-  const primaryColor = (settings || getDefaultTenantSettings()).primaryColor || '#35979c';
+  const dateSettings = settings || getDefaultTenantSettings();
   const { canAccess } = usePermissions();
   const canManage = canAccess('crm.manage');
+  const { confirm, Dialog: confirmDialog } = useConfirm();
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -74,11 +110,12 @@ export default function CRMPage() {
   const [selectedCustomer, setSelectedCustomer] = useState<CRMCustomer | null>(null);
   const [loadingCustomers, setLoadingCustomers] = useState(true);
   const [loadingCampaigns, setLoadingCampaigns] = useState(true);
+  const [loadedOnce, setLoadedOnce] = useState(false);
   const [sending, setSending] = useState<string | null>(null);
 
   // Campaign compose form
   const [showCompose, setShowCompose] = useState(false);
-  const [form, setForm] = useState({ name: '', channel: 'email' as Channel, segment: 'all' as Segment, subject: '', body: '' });
+  const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
 
   const fetchSegments = useCallback(async (seg: Segment) => {
@@ -92,6 +129,7 @@ export default function CRMPage() {
       }
     } catch { /* non-critical */ } finally {
       setLoadingCustomers(false);
+      setLoadedOnce(true);
     }
   }, [tenant]);
 
@@ -109,7 +147,8 @@ export default function CRMPage() {
   useEffect(() => { fetchSegments(selectedSegment); }, [selectedSegment, fetchSegments]);
   useEffect(() => { fetchCampaigns(); }, [fetchCampaigns]);
 
-  const handleCreateCampaign = async () => {
+  const handleCreateCampaign = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!form.name.trim() || !form.body.trim()) {
       showToast.error(dict?.crm?.nameBodyRequired || 'Name and body are required');
       return;
@@ -127,14 +166,25 @@ export default function CRMPage() {
         showToast.success(dict?.crm?.campaignSavedAsDraft || 'Campaign saved as draft');
         setCampaigns((prev) => [data.data, ...prev]);
         setShowCompose(false);
-        setForm({ name: '', channel: 'email', segment: 'all', subject: '', body: '' });
+        setForm(EMPTY_FORM);
       } else {
         showToast.error(data.error || dict?.crm?.failedToSaveCampaign || 'Failed to save campaign');
       }
     } catch { showToast.error(dict?.crm?.failedToSaveCampaign || 'Failed to save campaign'); } finally { setSaving(false); }
   };
 
+  // Sending emails or texts real customers and cannot be taken back, so it asks first.
   const handleSend = async (campaign: Campaign) => {
+    const ok = await confirm(
+      dict?.crm?.confirmSendTitle || 'Send this campaign?',
+      (dict?.crm?.confirmSendMessage || '"{name}" goes out by {channel} to every active customer in {segment} who has contact details. This cannot be undone.')
+        .replace('{name}', campaign.name)
+        .replace('{channel}', channelLabel(dict, campaign.channel))
+        .replace('{segment}', segmentText(dict, campaign.segment).label),
+      { variant: 'danger', confirmText: dict?.crm?.send || 'Send', cancelText: dict?.common?.cancel || 'Cancel' }
+    );
+    if (!ok) return;
+
     setSending(campaign._id);
     try {
       const res = await fetch(`/api/crm/campaigns/${campaign._id}/send?tenant=${tenant}`, {
@@ -143,7 +193,7 @@ export default function CRMPage() {
       });
       const data = await res.json();
       if (data.success) {
-        showToast.success((dict?.crm?.sentToCustomers || 'Sent to {count} customers').replace('{count}', data.data.sentCount));
+        showToast.success((dict?.crm?.sentToCustomers || 'Sent to {count} customers').replace('{count}', String(data.data.sentCount)));
         setCampaigns((prev) => prev.map((c) => c._id === campaign._id ? { ...c, status: 'sent', sentCount: data.data.sentCount, sentAt: new Date().toISOString() } : c));
       } else {
         showToast.error(data.error || dict?.crm?.sendFailed || 'Send failed');
@@ -151,344 +201,282 @@ export default function CRMPage() {
     } catch { showToast.error(dict?.crm?.sendFailed || 'Send failed'); } finally { setSending(null); }
   };
 
-  const segmentOrder: Segment[] = ['all', 'vip', 'new', 'regular', 'at_risk', 'lapsed'];
+  if (!dict || !loadedOnce) {
+    return (
+      <div className="mk-root pos-register">
+        <PageTitle />
+        <div className="flex min-h-[calc(100dvh-3.5rem)] items-center justify-center bg-brand-navy-deep lg:min-h-dvh">
+          <LoadingSpinner size="md" color="#8fe3d0" />
+        </div>
+      </div>
+    );
+  }
 
-  // Translated segment metadata (computed from dict so labels update on language change)
-  const segmentMeta: Record<string, { label: string; color: string; bg: string; border: string; description: string }> = {
-    vip:      { ...SEGMENT_META.vip,      label: dict?.crm?.segmentVip || SEGMENT_META.vip.label,           description: dict?.crm?.segmentVipDesc || SEGMENT_META.vip.description },
-    new:      { ...SEGMENT_META.new,      label: dict?.crm?.segmentNew || SEGMENT_META.new.label,           description: dict?.crm?.segmentNewDesc || SEGMENT_META.new.description },
-    regular:  { ...SEGMENT_META.regular,  label: dict?.crm?.segmentRegular || SEGMENT_META.regular.label,   description: dict?.crm?.segmentRegularDesc || SEGMENT_META.regular.description },
-    at_risk:  { ...SEGMENT_META.at_risk,  label: dict?.crm?.segmentAtRisk || SEGMENT_META.at_risk.label,    description: dict?.crm?.segmentAtRiskDesc || SEGMENT_META.at_risk.description },
-    lapsed:   { ...SEGMENT_META.lapsed,   label: dict?.crm?.segmentLapsed || SEGMENT_META.lapsed.label,     description: dict?.crm?.segmentLapsedDesc || SEGMENT_META.lapsed.description },
-    prospect: { ...SEGMENT_META.prospect, label: dict?.crm?.segmentProspect || SEGMENT_META.prospect.label, description: dict?.crm?.segmentProspectDesc || SEGMENT_META.prospect.description },
-  };
+  const countOf = (seg: string) => (counts ? (counts[seg as keyof SegmentCounts] ?? 0) : 0);
+  const listTitle = selectedSegment === 'all'
+    ? (dict.crm?.allCustomers || 'All Customers')
+    : `${segmentText(dict, selectedSegment).label} · ${dict.crm?.customers || 'Customers'}`;
 
   return (
-    <div>
-      <div className="px-4 sm:px-6 py-6">
-        <PageTitle />
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">{dict?.crm?.title || 'CRM'}</h1>
-          {canManage && (
+    <RegisterPage
+      tagNo="CR"
+      tag={settings?.companyName}
+      title={dict.crm?.title || 'CRM'}
+      subtitle={dict.crm?.subtitle || 'Group customers by how they shop and send them campaigns.'}
+      side={canManage ? (
+        <button type="button" onClick={() => setShowCompose(true)} className={DARK_KEY_PRIMARY}>
+          <Plus className={ICON} strokeWidth={1.75} aria-hidden />
+          {dict.crm?.newCampaign || 'New Campaign'}
+        </button>
+      ) : undefined}
+    >
+      <PageTitle />
+      {confirmDialog}
+
+      {/* Segment keys, each with its count on the display */}
+      <nav aria-label={dict.crm?.segment || 'Segment'} className="mt-6 grid grid-cols-2 border-l border-t border-white/20 sm:grid-cols-3 xl:grid-cols-6">
+        {SEGMENT_ORDER.map((seg) => {
+          const on = selectedSegment === seg;
+          const text = segmentText(dict, seg);
+          return (
             <button
+              key={seg}
               type="button"
-              onClick={() => setShowCompose(true)}
-              className="flex items-center gap-2 px-4 py-2.5 text-white text-sm font-medium border transition-colors"
-              style={{ backgroundColor: primaryColor, borderColor: primaryColor }}
+              aria-pressed={on}
+              onClick={() => { setSelectedSegment(seg); setSelectedCustomer(null); }}
+              className={`flex min-h-[44px] flex-col items-start border-b border-r border-white/20 px-4 py-3 text-left transition-colors touch-manipulation ${on ? 'bg-paper-white text-ink' : 'text-paper hover:bg-white/10'}`}
             >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-              </svg>
-              {dict?.crm?.newCampaign || 'New Campaign'}
+              <span className={`font-led text-4xl leading-none ${on ? 'text-ink' : 'mk-led-glow text-[#7df0d6]'}`}>{countOf(seg)}</span>
+              <span className="mt-2 font-receipt text-xs font-medium uppercase tracking-[0.08em]">{text.label}</span>
+              <span className={`mt-0.5 text-xs leading-snug ${on ? 'text-ink/60' : 'text-white/55'}`}>{text.description}</span>
             </button>
-          )}
-        </div>
+          );
+        })}
+      </nav>
 
-        {/* Segment cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
-          {segmentOrder.map((seg) => {
-            const meta = seg === 'all'
-              ? { label: dict?.crm?.allCustomers || 'All Customers', color: 'text-gray-700', bg: 'bg-white', border: 'border-gray-300', description: dict?.crm?.allCustomersDesc || 'Every active customer' }
-              : segmentMeta[seg];
-            const count = counts ? (seg === 'all' ? counts.all : counts[seg as keyof SegmentCounts] ?? 0) : null;
-            return (
-              <button
-                key={seg}
-                type="button"
-                onClick={() => setSelectedSegment(seg)}
-                className={`text-left p-4 border-2 transition-all ${meta.bg} ${
-                  selectedSegment === seg ? meta.border : 'border-transparent hover:border-gray-300'
-                }`}
-                style={selectedSegment === seg ? { borderColor: primaryColor } : {}}
-              >
-                <p className={`text-2xl font-bold ${meta.color}`}>{count ?? '—'}</p>
-                <p className="text-sm font-semibold text-gray-800 mt-0.5">{meta.label}</p>
-                <p className="text-[11px] text-gray-500 mt-0.5 leading-tight">{meta.description}</p>
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Customer list */}
-          <div className="lg:col-span-2 bg-white border border-gray-300">
-            <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
-                {segmentOrder.includes(selectedSegment) && selectedSegment !== 'all'
-                  ? `${segmentMeta[selectedSegment]?.label} ${dict?.crm?.customers || 'Customers'}`
-                  : (dict?.crm?.allCustomers || 'All Customers')}
-              </h2>
-              <span className="text-xs text-gray-400">{customers.length} {dict?.crm?.shown || 'shown'}</span>
+      <div className="mt-6 grid grid-cols-1 items-start gap-6 xl:grid-cols-12">
+        {/* Customers in the chosen segment */}
+        <section className="xl:col-span-7" aria-busy={loadingCustomers}>
+          <div className={`bg-paper-white text-ink transition-opacity ${loadingCustomers ? 'opacity-60' : ''}`}>
+            <div className="flex items-baseline justify-between gap-3 border-b border-dashed border-ink/30 px-4 py-4">
+              <h2 className="text-3xl">{listTitle}</h2>
+              <span className="shrink-0 font-receipt text-xs text-ink/60">{customers.length} {dict.crm?.shown || 'shown'}</span>
             </div>
-            {loadingCustomers ? (
-              <div className="divide-y divide-gray-100">
-                {[1,2,3,4].map((i) => (
-                  <div key={i} className="px-4 py-3 flex items-center gap-3 animate-pulse">
-                    <div className="w-8 h-8 bg-gray-200 flex-shrink-0" />
-                    <div className="flex-1 space-y-1.5">
-                      <div className="h-3 bg-gray-200 w-1/3" />
-                      <div className="h-2.5 bg-gray-200 w-1/2" />
-                    </div>
-                  </div>
-                ))}
+            {customers.length === 0 ? (
+              <div className="px-4 py-14 text-center">
+                <Users className="mx-auto mb-2 h-8 w-8 text-ink/20" strokeWidth={1.75} aria-hidden />
+                <p className="font-receipt text-sm text-ink/60">{dict.crm?.noCustomersInSegment || 'No customers in this segment'}</p>
               </div>
-            ) : customers.length === 0 ? (
-              <div className="px-4 py-12 text-center text-gray-400 text-sm">{dict?.crm?.noCustomersInSegment || 'No customers in this segment'}</div>
             ) : (
-              <div className="divide-y divide-gray-100 max-h-[520px] overflow-y-auto">
-                {customers.map((c) => {
-                  const segMeta = segmentMeta[c.computedSegment];
+              <ul className="divide-y divide-dashed divide-ink/20">
+                {customers.map((c) => (
+                  <li key={c._id}>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedCustomer(c)}
+                      className="flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-paper touch-manipulation"
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-medium">{c.firstName} {c.lastName}</span>
+                        <span className="mt-0.5 block truncate font-receipt text-xs text-ink/60">{c.phone || c.email || (dict.crm?.noContact || 'No contact')}</span>
+                      </span>
+                      <span className="shrink-0 space-y-1 text-right">
+                        <span className="block font-receipt text-sm"><Currency amount={c.totalSpent ?? 0} /></span>
+                        <SegmentTag dict={dict} segment={c.computedSegment} />
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div className="mk-tear-b h-3 bg-paper-white" aria-hidden />
+        </section>
+
+        {/* Campaigns, newest first */}
+        <section className="xl:col-span-5" aria-busy={loadingCampaigns}>
+          <div className="bg-paper-white text-ink">
+            <h2 className="border-b border-dashed border-ink/30 px-4 py-4 text-3xl">{dict.crm?.recentCampaigns || 'Recent Campaigns'}</h2>
+            {loadingCampaigns && campaigns.length === 0 ? (
+              <div className="flex justify-center py-10"><LoadingSpinner size="md" /></div>
+            ) : campaigns.length === 0 ? (
+              <div className="px-4 py-14 text-center">
+                <Send className="mx-auto mb-2 h-8 w-8 text-ink/20" strokeWidth={1.75} aria-hidden />
+                <p className="font-receipt text-sm text-ink/60">{dict.crm?.noCampaignsYet || 'No campaigns yet'}</p>
+                {canManage && (
+                  <button type="button" onClick={() => setShowCompose(true)} className={`${KEY_PRIMARY} mx-auto mt-4`}>
+                    <Plus className={ICON} strokeWidth={1.75} aria-hidden />
+                    {dict.crm?.newCampaign || 'New Campaign'}
+                  </button>
+                )}
+              </div>
+            ) : (
+              <ul className="divide-y divide-dashed divide-ink/20">
+                {campaigns.map((c) => {
+                  const ChannelIcon = c.channel === 'email' ? Mail : MessageSquare;
+                  return (
+                    <li key={c._id} className="flex items-start gap-3 px-4 py-3">
+                      <ChannelIcon className="mt-0.5 h-4 w-4 shrink-0 text-ink/50" strokeWidth={1.75} aria-hidden />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium">{c.name}</p>
+                        <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 font-receipt text-xs text-ink/60">
+                          <StatusTag dict={dict} status={c.status} />
+                          <span>{channelLabel(dict, c.channel)} · {segmentText(dict, c.segment).label}</span>
+                          <span>{formatDate(c.sentAt || c.createdAt, dateSettings)}</span>
+                          {c.sentCount != null && c.sentCount > 0 && (
+                            <span>{(dict.crm?.sentCount || '{count} sent').replace('{count}', String(c.sentCount))}</span>
+                          )}
+                        </p>
+                      </div>
+                      {canManage && c.status !== 'sent' && (
+                        <button type="button" onClick={() => handleSend(c)} disabled={sending === c._id} className={`${KEY} shrink-0`}>
+                          <Send className={ICON} strokeWidth={1.75} aria-hidden />
+                          {sending === c._id ? (dict.crm?.sending || 'Sending...') : (dict.crm?.send || 'Send')}
+                        </button>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+          <div className="mk-tear-b h-3 bg-paper-white" aria-hidden />
+        </section>
+      </div>
+
+      {/* Customer card */}
+      {selectedCustomer && (
+        <Sheet
+          title={`${selectedCustomer.firstName} ${selectedCustomer.lastName}`}
+          subtitle={[selectedCustomer.phone, selectedCustomer.email].filter(Boolean).join(' · ') || (dict.crm?.noContact || 'No contact')}
+          onClose={() => setSelectedCustomer(null)}
+          closeLabel={dict.common?.close || 'Close'}
+          footer={
+            <Link href={`/${tenant}/${lang}/admin/customers`} className={KEY}>
+              {dict.crm?.openCustomers || 'Open Customers'}
+            </Link>
+          }
+        >
+          <div className="mb-3"><SegmentTag dict={dict} segment={selectedCustomer.computedSegment} /></div>
+          <div className="space-y-1.5 font-receipt text-sm">
+            <ReceiptRow label={dict.crm?.orders || 'Orders'} value={selectedCustomer.orderCount} />
+            <ReceiptRow label={dict.crm?.totalSpent || 'Total Spent'} value={<Currency amount={selectedCustomer.totalSpent ?? 0} />} />
+            <ReceiptRow label={dict.loyalty?.points || 'Points'} value={(selectedCustomer.loyaltyPointsBalance ?? 0).toLocaleString()} />
+            {selectedCustomer.lastPurchaseDate && (
+              <ReceiptRow
+                label={(dict.crm?.lastPurchase || 'Last purchase:').replace(/:\s*$/, '')}
+                value={formatDate(selectedCustomer.lastPurchaseDate, dateSettings)}
+              />
+            )}
+          </div>
+          {selectedCustomer.tags && selectedCustomer.tags.length > 0 && (
+            <div className="mt-4 flex flex-wrap gap-1 border-t border-dashed border-ink/30 pt-4">
+              {selectedCustomer.tags.map((t) => (
+                <span key={t} className="border border-dashed border-ink/30 px-1.5 py-0.5 font-receipt text-[11px] text-ink/70">{t}</span>
+              ))}
+            </div>
+          )}
+        </Sheet>
+      )}
+
+      {/* Compose campaign */}
+      {showCompose && canManage && (
+        <Sheet
+          title={dict.crm?.newCampaign || 'New Campaign'}
+          onClose={() => setShowCompose(false)}
+          closeLabel={dict.common?.close || 'Close'}
+          footer={
+            <>
+              <button type="button" onClick={() => setShowCompose(false)} className={KEY}>{dict.common?.cancel || 'Cancel'}</button>
+              <button type="submit" form="campaign-form" disabled={saving} className={KEY_PRIMARY}>
+                {saving ? (dict.admin?.saving || 'Saving...') : (dict.crm?.saveDraft || 'Save Draft')}
+              </button>
+            </>
+          }
+        >
+          <form id="campaign-form" onSubmit={handleCreateCampaign} className="space-y-4">
+            <div>
+              <label htmlFor="campaign-name" className={LABEL}>{dict.crm?.campaignName || 'Campaign Name'}</label>
+              <input
+                id="campaign-name"
+                type="text"
+                value={form.name}
+                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                className={INPUT}
+                placeholder={dict.crm?.campaignNamePlaceholder || 'e.g. VIP Exclusive Offer'}
+              />
+            </div>
+
+            <fieldset>
+              <legend className={LABEL}>{dict.crm?.channel || 'Channel'}</legend>
+              <div className="grid grid-cols-2 border-l border-t border-ink/25">
+                {(['email', 'sms'] as Channel[]).map((ch) => {
+                  const Icon = ch === 'email' ? Mail : MessageSquare;
                   return (
                     <button
-                      key={c._id}
+                      key={ch}
                       type="button"
-                      onClick={() => setSelectedCustomer(selectedCustomer?._id === c._id ? null : c)}
-                      className={`w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-gray-50 transition-colors ${selectedCustomer?._id === c._id ? 'bg-gray-50' : ''}`}
+                      aria-pressed={form.channel === ch}
+                      onClick={() => setForm((f) => ({ ...f, channel: ch }))}
+                      className={`flex min-h-[44px] items-center justify-center gap-2 border-b border-r border-ink/25 font-receipt text-xs font-medium uppercase transition-colors touch-manipulation ${form.channel === ch ? 'bg-ink text-paper-white' : 'text-ink hover:bg-paper'}`}
                     >
-                      <div className="w-8 h-8 flex items-center justify-center flex-shrink-0 text-white text-xs font-bold"
-                        style={{ backgroundColor: primaryColor }}>
-                        {c.firstName[0]}{c.lastName[0]}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900 truncate">{c.firstName} {c.lastName}</p>
-                        <p className="text-xs text-gray-500 truncate">{c.email || c.phone || (dict?.crm?.noContact || 'No contact')}</p>
-                      </div>
-                      <div className="flex-shrink-0 text-right space-y-1">
-                        <p className="text-xs font-semibold text-gray-700"><Currency amount={c.totalSpent ?? 0} /></p>
-                        <span className={`inline-block text-[10px] font-semibold px-1.5 py-0.5 border ${segMeta?.color ?? 'text-gray-600'} ${segMeta?.bg ?? 'bg-gray-50'} ${segMeta?.border ?? 'border-gray-300'}`}>
-                          {segMeta?.label ?? c.computedSegment}
-                        </span>
-                      </div>
+                      <Icon className={ICON} strokeWidth={1.75} aria-hidden />
+                      {channelLabel(dict, ch)}
                     </button>
                   );
                 })}
               </div>
-            )}
-          </div>
+            </fieldset>
 
-          {/* Right sidebar — customer mini-profile OR campaign list */}
-          <div className="space-y-4">
-            {selectedCustomer ? (
-              <div className="bg-white border border-gray-300">
-                <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
-                  <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">{dict?.crm?.customerProfile || 'Customer Profile'}</h2>
-                  <button onClick={() => setSelectedCustomer(null)} className="text-gray-400 hover:text-gray-600">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-                <div className="p-4 space-y-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 flex items-center justify-center text-white font-bold text-lg flex-shrink-0"
-                      style={{ backgroundColor: primaryColor }}>
-                      {selectedCustomer.firstName[0]}{selectedCustomer.lastName[0]}
-                    </div>
-                    <div>
-                      <p className="font-semibold text-gray-900">{selectedCustomer.firstName} {selectedCustomer.lastName}</p>
-                      <p className="text-xs text-gray-500">{selectedCustomer.email || selectedCustomer.phone || 'No contact'}</p>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    {[
-                      { label: dict?.crm?.orders || 'Orders', value: String(selectedCustomer.orderCount) },
-                      { label: dict?.crm?.totalSpent || 'Total Spent', value: <Currency amount={selectedCustomer.totalSpent ?? 0} /> },
-                      { label: dict?.loyalty?.points || 'Points', value: String(selectedCustomer.loyaltyPointsBalance ?? 0) },
-                      { label: dict?.crm?.segment || 'Segment', value: segmentMeta[selectedCustomer.computedSegment]?.label ?? selectedCustomer.computedSegment },
-                    ].map(({ label, value }) => (
-                      <div key={label} className="bg-gray-50 border border-gray-200 p-2.5">
-                        <p className="text-[10px] text-gray-500 uppercase tracking-wide">{label}</p>
-                        <p className="text-sm font-semibold text-gray-900 mt-0.5">{value}</p>
-                      </div>
-                    ))}
-                  </div>
-                  {selectedCustomer.lastPurchaseDate && (
-                    <p className="text-xs text-gray-500">
-                      {dict?.crm?.lastPurchase || 'Last purchase:'} {new Date(selectedCustomer.lastPurchaseDate).toLocaleDateString()}
-                    </p>
-                  )}
-                  {selectedCustomer.tags && selectedCustomer.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                      {selectedCustomer.tags.map((t) => (
-                        <span key={t} className="text-[10px] px-1.5 py-0.5 bg-gray-100 border border-gray-300 text-gray-600">{t}</span>
-                      ))}
-                    </div>
-                  )}
-                  <a
-                    href={`/${tenant}/${lang}/admin/customers`}
-                    className="block w-full text-center text-xs py-2 border border-gray-300 text-gray-600 hover:bg-gray-50 transition-colors mt-1"
-                  >
-                    {dict?.crm?.viewFullProfile || 'View full profile →'}
-                  </a>
-                </div>
-              </div>
-            ) : null}
-
-            {/* Campaigns list */}
-            <div className="bg-white border border-gray-300">
-              <div className="px-4 py-3 border-b border-gray-200">
-                <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">{dict?.crm?.recentCampaigns || 'Recent Campaigns'}</h2>
-              </div>
-              {loadingCampaigns ? (
-                <div className="px-4 py-6 text-center">
-                  <div className="w-5 h-5 border-2 border-gray-200 border-t-gray-500 animate-spin mx-auto" />
-                </div>
-              ) : campaigns.length === 0 ? (
-                <div className="px-4 py-6 text-center text-sm text-gray-400">{dict?.crm?.noCampaignsYet || 'No campaigns yet'}</div>
-              ) : (
-                <ul className="divide-y divide-gray-100 max-h-64 overflow-y-auto">
-                  {campaigns.map((c) => (
-                    <li key={c._id} className="px-4 py-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900 truncate">{c.name}</p>
-                          <p className="text-xs text-gray-500">
-                            {c.channel.toUpperCase()} · {segmentMeta[c.segment]?.label ?? c.segment}
-                            {c.sentCount != null && c.sentCount > 0 && ` · ${c.sentCount} sent`}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-1.5 flex-shrink-0">
-                          <span className={`text-[10px] font-bold px-1.5 py-0.5 border ${
-                            c.status === 'sent' ? 'bg-green-50 text-green-700 border-green-300' :
-                            c.status === 'failed' ? 'bg-red-50 text-red-700 border-red-300' :
-                            'bg-gray-50 text-gray-600 border-gray-300'
-                          }`}>
-                            {c.status.toUpperCase()}
-                          </span>
-                          {canManage && c.status === 'draft' && (
-                            <button
-                              type="button"
-                              onClick={() => handleSend(c)}
-                              disabled={sending === c._id}
-                              className="text-xs px-2 py-1 text-white border transition-colors disabled:opacity-50"
-                              style={{ backgroundColor: primaryColor, borderColor: primaryColor }}
-                            >
-                              {sending === c._id ? '…' : (dict?.crm?.send || 'Send')}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
+            <div>
+              <label htmlFor="campaign-segment" className={LABEL}>{dict.crm?.targetSegment || 'Target Segment'}</label>
+              <select
+                id="campaign-segment"
+                value={form.segment}
+                onChange={(e) => setForm((f) => ({ ...f, segment: e.target.value as Segment }))}
+                className={INPUT}
+              >
+                {SEGMENT_ORDER.map((seg) => (
+                  <option key={seg} value={seg}>{segmentText(dict, seg).label} ({countOf(seg)})</option>
+                ))}
+              </select>
             </div>
-          </div>
-        </div>
-      </div>
 
-      {/* Compose campaign modal */}
-      {showCompose && canManage && (
-        <div
-          className="fixed inset-0 bg-gray-900/30 backdrop-blur-md z-50"
-          onClick={() => setShowCompose(false)}
-        >
-          <div
-            className="absolute inset-y-0 right-0 w-full max-w-md bg-white border-l border-gray-300 flex flex-col animate-slide-in-right"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
-              <h2 className="text-lg font-bold text-gray-900">{dict?.crm?.newCampaign || 'New Campaign'}</h2>
-              <button onClick={() => setShowCompose(false)} className="text-gray-400 hover:text-gray-600">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto px-5 py-5 space-y-4">
-              {/* Name */}
+            {form.channel === 'email' && (
               <div>
-                <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">{dict?.crm?.campaignName || 'Campaign Name'}</label>
+                <label htmlFor="campaign-subject" className={LABEL}>{dict.crm?.subject || 'Subject'}</label>
                 <input
+                  id="campaign-subject"
                   type="text"
-                  value={form.name}
-                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                  className="w-full px-3 py-2.5 border border-gray-300 text-sm focus:outline-none focus:border-gray-500"
-                  placeholder={dict?.crm?.campaignNamePlaceholder || 'e.g. VIP Exclusive Offer'}
+                  value={form.subject}
+                  onChange={(e) => setForm((f) => ({ ...f, subject: e.target.value }))}
+                  className={INPUT}
+                  placeholder={dict.crm?.subjectPlaceholder || "We miss you! Here's 10% off..."}
                 />
               </div>
-              {/* Channel */}
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">{dict?.crm?.channel || 'Channel'}</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {(['email', 'sms'] as Channel[]).map((ch) => (
-                    <button
-                      key={ch}
-                      type="button"
-                      onClick={() => setForm((f) => ({ ...f, channel: ch }))}
-                      className={`py-2.5 border-2 text-sm font-medium transition-colors ${form.channel === ch ? 'text-white' : 'bg-white text-gray-600 border-gray-300'}`}
-                      style={form.channel === ch ? { backgroundColor: primaryColor, borderColor: primaryColor } : {}}
-                    >
-                      {ch === 'email' ? (dict?.crm?.channelEmail || 'Email') : (dict?.crm?.channelSms || 'SMS')}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              {/* Segment */}
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">{dict?.crm?.targetSegment || 'Target Segment'}</label>
-                <select
-                  value={form.segment}
-                  onChange={(e) => setForm((f) => ({ ...f, segment: e.target.value as Segment }))}
-                  className="w-full px-3 py-2.5 border border-gray-300 text-sm focus:outline-none focus:border-gray-500"
-                >
-                  <option value="all">{dict?.crm?.allCustomers || 'All Customers'} ({counts?.all ?? 0})</option>
-                  <option value="vip">{dict?.crm?.segmentVip || 'VIP'} ({counts?.vip ?? 0})</option>
-                  <option value="new">{dict?.crm?.segmentNew || 'New'} ({counts?.new ?? 0})</option>
-                  <option value="regular">{dict?.crm?.segmentRegular || 'Regular'} ({counts?.regular ?? 0})</option>
-                  <option value="at_risk">{dict?.crm?.segmentAtRisk || 'At Risk'} ({counts?.at_risk ?? 0})</option>
-                  <option value="lapsed">{dict?.crm?.segmentLapsed || 'Lapsed'} ({counts?.lapsed ?? 0})</option>
-                </select>
-              </div>
-              {/* Subject (email only) */}
-              {form.channel === 'email' && (
-                <div>
-                  <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">{dict?.crm?.subject || 'Subject'}</label>
-                  <input
-                    type="text"
-                    value={form.subject}
-                    onChange={(e) => setForm((f) => ({ ...f, subject: e.target.value }))}
-                    className="w-full px-3 py-2.5 border border-gray-300 text-sm focus:outline-none focus:border-gray-500"
-                    placeholder={dict?.crm?.subjectPlaceholder || "We miss you! Here's 10% off..."}
-                  />
-                </div>
-              )}
-              {/* Body */}
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">
-                  {dict?.crm?.message || 'Message'} {form.channel === 'sms' && <span className="text-gray-400 normal-case font-normal">{dict?.crm?.smsCharLimit || '(160 char limit for single SMS)'}</span>}
-                </label>
-                <textarea
-                  value={form.body}
-                  onChange={(e) => setForm((f) => ({ ...f, body: e.target.value }))}
-                  rows={6}
-                  className="w-full px-3 py-2.5 border border-gray-300 text-sm focus:outline-none focus:border-gray-500 resize-none"
-                  placeholder={dict?.crm?.messagePlaceholder || 'Hi {firstName}, we have something special for you...'}
-                />
-                <p className="text-[11px] text-gray-400 mt-1">{dict?.crm?.personalizationHint || "Use {firstName} as a personalization token"}</p>
-              </div>
+            )}
+
+            <div>
+              <label htmlFor="campaign-body" className={LABEL}>{dict.crm?.message || 'Message'}</label>
+              <textarea
+                id="campaign-body"
+                value={form.body}
+                onChange={(e) => setForm((f) => ({ ...f, body: e.target.value }))}
+                rows={6}
+                className={`${INPUT} resize-none`}
+                placeholder={dict.crm?.messagePlaceholder || 'Hi {firstName}, we have something special for you...'}
+              />
+              <p className={`${HINT} flex justify-between gap-3`}>
+                <span>{dict.crm?.personalizationHint || 'Use {firstName} as a personalization token'}</span>
+                {form.channel === 'sms' && (
+                  <span className={`shrink-0 ${form.body.length > 160 ? 'text-stamp' : ''}`}>{form.body.length}/160</span>
+                )}
+              </p>
+              {form.channel === 'sms' && <p className={HINT}>{dict.crm?.smsCharLimit || '(160 char limit for single SMS)'}</p>}
             </div>
-            <div className="px-5 py-4 border-t border-gray-200 flex gap-3">
-              <button
-                type="button"
-                onClick={() => setShowCompose(false)}
-                className="flex-1 py-2.5 border border-gray-300 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-              >
-                {dict?.common?.cancel || 'Cancel'}
-              </button>
-              <button
-                type="button"
-                onClick={handleCreateCampaign}
-                disabled={saving}
-                className="flex-1 py-2.5 text-white text-sm font-medium border transition-colors disabled:opacity-50"
-                style={{ backgroundColor: primaryColor, borderColor: primaryColor }}
-              >
-                {saving ? (dict?.admin?.saving || 'Saving…') : (dict?.crm?.saveDraft || 'Save Draft')}
-              </button>
-            </div>
-          </div>
-        </div>
+          </form>
+        </Sheet>
       )}
-    </div>
+    </RegisterPage>
   );
 }

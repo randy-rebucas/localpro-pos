@@ -3,9 +3,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import toast from 'react-hot-toast';
-import { FileText, Plus, ChevronRight, CheckCircle, Clock, XCircle } from 'lucide-react';
+import { FileText, Plus, ChevronRight, CheckCircle } from 'lucide-react';
 import { getDictionaryClient } from '../../dictionaries-client';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { getDefaultTenantSettings } from '@/lib/currency';
+import { formatDate, formatDateTime } from '@/lib/formatting';
 
 interface PrescriptionItem {
   productId?: string;
@@ -48,8 +51,9 @@ const STATUS_STYLES: Record<string, string> = {
 };
 
 export default function PrescriptionsPage() {
+  const { settings: tenantSettings } = useTenantSettings();
+  const dateSettings = tenantSettings || getDefaultTenantSettings();
   const params = useParams();
-  const tenant = params.tenant as string;
   const lang = params.lang as string;
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const { canAccess } = usePermissions();
@@ -221,7 +225,7 @@ export default function PrescriptionsPage() {
               <div>
                 <p className="text-sm font-medium text-gray-900">{rx.prescriptionNumber}</p>
                 <p className="text-xs text-gray-500">{rx.patientName} · Dr. {rx.doctorName}</p>
-                <p className="text-xs text-gray-400">{new Date(rx.issuedDate).toLocaleDateString()}</p>
+                <p className="text-xs text-gray-400">{formatDate(rx.issuedDate, dateSettings)}</p>
               </div>
               <div className="flex items-center gap-2">
                 <span className={`text-xs px-2 py-0.5 font-medium border ${STATUS_STYLES[rx.status]}`}>
@@ -246,7 +250,7 @@ export default function PrescriptionsPage() {
               <div className="text-sm text-gray-600 space-y-1 mb-4">
                 <p><span className="font-medium">Patient:</span> {selected.patientName}</p>
                 <p><span className="font-medium">Doctor:</span> Dr. {selected.doctorName} (PRC: {selected.doctorPRCNumber})</p>
-                <p><span className="font-medium">Valid until:</span> {new Date(selected.validUntil).toLocaleDateString()}</p>
+                <p><span className="font-medium">Valid until:</span> {formatDate(selected.validUntil, dateSettings)}</p>
                 {selected.notes && <p><span className="font-medium">Notes:</span> {selected.notes}</p>}
               </div>
 
@@ -270,7 +274,7 @@ export default function PrescriptionsPage() {
                       <p className="text-gray-500">{item.quantity} unit(s) · {item.dosage} · {item.frequency}</p>
                       {item.instructions && <p className="text-gray-400 text-xs">{item.instructions}</p>}
                       {item.dispensed && item.dispensedAt && (
-                        <p className="text-green-600 text-xs">Dispensed {new Date(item.dispensedAt).toLocaleString(undefined, { hour12: true })}</p>
+                        <p className="text-green-600 text-xs">Dispensed {formatDateTime(item.dispensedAt, dateSettings)}</p>
                       )}
                     </div>
                   </label>

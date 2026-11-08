@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
 import { useMultiCurrencySettings } from '@/hooks/useMultiCurrencySettings';
 import { useExchangeRateFetch } from '@/hooks/useExchangeRateFetch';
@@ -13,8 +12,13 @@ import {
   getExchangeRateFetchSuccessMessage,
   getExchangeRateFetchErrorMessage,
 } from '@/lib/multi-currency-helpers';
+import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { getDefaultTenantSettings } from '@/lib/currency';
+import { formatDateTime } from '@/lib/formatting';
 
 export default function MultiCurrencyPage() {
+  const { settings: tenantSettings } = useTenantSettings();
+  const dateSettings = tenantSettings || getDefaultTenantSettings();
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
@@ -165,7 +169,7 @@ export default function MultiCurrencyPage() {
               </div>
               {multiCurrency.lastUpdated && (
                 <p className="text-xs text-gray-500 mb-4">
-                  {dict?.admin?.lastUpdated || 'Last updated'}: {new Date(multiCurrency.lastUpdated).toLocaleString(undefined, { hour12: true })}
+                  {dict?.admin?.lastUpdated || 'Last updated'}: {formatDateTime(multiCurrency.lastUpdated, dateSettings)}
                 </p>
               )}
               <div className="space-y-2">

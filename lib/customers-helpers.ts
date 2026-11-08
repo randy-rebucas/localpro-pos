@@ -1,11 +1,5 @@
 type Dict = Record<string, Record<string, string | undefined> | undefined>;
 
-export function getStatusBadgeClass(isActive: boolean): string {
-  return isActive
-    ? 'bg-green-100 text-green-800 border-green-300'
-    : 'bg-red-100 text-red-800 border-red-300';
-}
-
 export function getStatusLabel(isActive: boolean, dict: Dict): string {
   return isActive ? (dict?.common?.active || 'Active') : (dict?.common?.inactive || 'Inactive');
 }
@@ -41,16 +35,4 @@ export function getToggleStatusMessage(isActive: boolean, dict: Dict): string {
 
 export function getToggleStatusErrorMessage(dict: Dict): string {
   return dict?.admin?.toggleCustomerStatusError || 'Could not update customer status';
-}
-
-export function formatCurrency(amount: number, lang: string): string {
-  return new Intl.NumberFormat(lang === 'es' ? 'es' : 'en', {
-    style: 'currency',
-    currency: 'PHP',
-  }).format(amount);
-}
-
-export function formatTags(tags: string[]) {
-  if (!tags || tags.length === 0) return [];
-  return tags.slice(0, 3).map(tag => ({ tag, display: tag }));
 }

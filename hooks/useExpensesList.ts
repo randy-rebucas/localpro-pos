@@ -34,6 +34,8 @@ interface UseExpensesListReturn {
   expenseNames: string[];
   deletingId: string | null;
   totalAmount: number;
+  /** True when the server capped the list, so the total shown is incomplete. */
+  truncated: boolean;
   setFilters: (filters: ExpenseFilters) => void;
   setMessage: (message: { type: 'success' | 'error'; text: string } | null) => void;
   fetchExpenses: () => Promise<void>;
@@ -52,6 +54,7 @@ export function useExpensesList(): UseExpensesListReturn {
   const [filters, setFilters] = useState<ExpenseFilters>({ startDate: '', endDate: '', name: '' });
   const [expenseNames, setExpenseNames] = useState<string[]>([]);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [truncated, setTruncated] = useState(false);
 
   // Calculate total amount
   const totalAmount = expenses.reduce((sum, expense) => sum + expense.amount, 0);
@@ -77,13 +80,14 @@ export function useExpensesList(): UseExpensesListReturn {
       const data = await res.json();
       if (data.success) {
         setExpenses(data.data || []);
-        // The total on this screen only covers what was loaded
-        if (data.truncated) {
-          setMessage({ type: 'error', text: 'Showing the latest 1,000 expenses, so the total is incomplete. Narrow the date range.' });
+        // The total on this screen only covers what was loaded; the page explains this in its own language.
+        setTruncated(!!data.truncated);
+        // Names for the filter dropdown. Keep the list while a name is picked,
+        // or the dropdown would shrink to that one name.
+        if (!filters.name) {
+          const uniqueNames = Array.from(new Set((data.data || []).map((e: Expense) => e.name))).sort() as string[];
+          setExpenseNames(uniqueNames);
         }
-        // Extract unique expense names
-        const uniqueNames = Array.from(new Set((data.data || []).map((e: Expense) => e.name))).sort() as string[];
-        setExpenseNames(uniqueNames);
         // Note: intentionally not clearing `message` here — callers commonly
         // set a success/error message right before triggering a refetch
         // (delete, save), and clearing it here would wipe that feedback out
@@ -174,6 +178,7 @@ export function useExpensesList(): UseExpensesListReturn {
     expenseNames,
     deletingId,
     totalAmount,
+    truncated,
     setFilters,
     setMessage,
     fetchExpenses,

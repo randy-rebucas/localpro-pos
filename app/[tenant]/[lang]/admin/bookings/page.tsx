@@ -118,7 +118,11 @@ export default function BookingsPage() {
     );
   };
 
-  if (loading && bookings.length === 0) {
+  // Show the spinner only for the first load; an empty list must not unmount the filters or an open modal on refetch.
+  const [loadedOnce, setLoadedOnce] = useState(false);
+  if (!loading && !loadedOnce) setLoadedOnce(true);
+
+  if (!loadedOnce) {
     return (
       <div className="flex items-center justify-center py-24">
         <div className="text-center">
@@ -253,7 +257,7 @@ export default function BookingsPage() {
                         <div className="text-xs text-gray-500">{booking.duration} min</div>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">{formatBookingDateTime(booking.startTime)}</div>
+                        <div className="text-sm text-gray-900">{formatBookingDateTime(booking.startTime, settings?.timezone || 'Asia/Manila', lang)}</div>
                         <div className="text-xs text-gray-500">
                           {booking.staffName || booking.staffId?.name || dict?.admin?.unassigned || 'Unassigned'}
                         </div>
@@ -365,7 +369,7 @@ export default function BookingsPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700">{dict?.admin?.dateTime || 'Date & Time'}</label>
-                <p className="mt-1 text-sm text-gray-900">{formatBookingDateTime(selectedBooking.startTime)}</p>
+                <p className="mt-1 text-sm text-gray-900">{formatBookingDateTime(selectedBooking.startTime, settings?.timezone || 'Asia/Manila', lang)}</p>
                 <p className="mt-1 text-sm text-gray-500">{dict?.admin?.duration || 'Duration'}: {selectedBooking.duration} {dict?.admin?.durationMinutes || 'minutes'}</p>
               </div>
               <div>

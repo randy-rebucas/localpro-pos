@@ -2,18 +2,6 @@
  * Stock movements page helper functions
  */
 
-export function getMovementTypeColor(type: string): string {
-  const colors: Record<string, string> = {
-    sale: 'bg-red-100 text-red-800',
-    purchase: 'bg-green-100 text-green-800',
-    adjustment: 'bg-brand-soft text-brand-navy',
-    return: 'bg-yellow-100 text-yellow-800',
-    damage: 'bg-orange-100 text-orange-800',
-    transfer: 'bg-purple-100 text-purple-800',
-  };
-  return colors[type] || 'bg-gray-100 text-gray-800';
-}
-
 export function getFailedToFetchMovementsMessage(dict: any): string { // eslint-disable-line @typescript-eslint/no-explicit-any
   return dict?.common?.failedToFetchStockMovements || 'Failed to fetch stock movements';
 }

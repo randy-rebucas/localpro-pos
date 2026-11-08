@@ -2,7 +2,6 @@
 
 import React, { useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
-import Link from 'next/link';
 import { getDictionaryClient } from '../../../dictionaries-client';
 import { useAttendanceNotifications } from '@/hooks/useAttendanceNotifications';
 import { useNotificationSettings } from '@/hooks/useNotificationSettings';
@@ -16,8 +15,13 @@ import {
   confirmSendEmails,
 } from '@/lib/notification-helpers';
 import toast from 'react-hot-toast';
+import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { getDefaultTenantSettings } from '@/lib/currency';
+import { formatTime } from '@/lib/formatting';
 
 export default function AttendanceNotificationsPage() {
+  const { settings: tenantSettings } = useTenantSettings();
+  const dateSettings = tenantSettings || getDefaultTenantSettings();
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
@@ -243,7 +247,7 @@ export default function AttendanceNotificationsPage() {
                           {notification.userEmail && <p className="text-xs text-gray-500">{notification.userEmail}</p>}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                          {formatClockInTime(notification.clockInTime)}
+                          {formatClockInTime(notification.clockInTime, dateSettings.timezone || 'Asia/Manila')}
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-500">
                           {notification.type === 'missing_clock_out' && notification.hoursSinceClockIn && (
@@ -254,7 +258,7 @@ export default function AttendanceNotificationsPage() {
                               <span>{notification.minutesLate} min late</span>
                               {notification.expectedTime && (
                                 <p className="text-xs text-gray-400">
-                                  {dict.admin?.expectedTime || 'Expected'}: {new Date(notification.expectedTime).toLocaleTimeString(undefined, { hour12: true })}
+                                  {dict.admin?.expectedTime || 'Expected'}: {formatTime(notification.expectedTime, dateSettings)}
                                 </p>
                               )}
                             </div>

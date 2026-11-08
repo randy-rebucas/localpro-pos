@@ -11,6 +11,8 @@ interface UseCustomersListReturn {
   loading: boolean;
   page: number;
   totalPages: number;
+  /** Customers matching the current search and filter, across all pages. */
+  total: number;
   setPage: (page: number) => void;
   search: string;
   setSearch: (search: string) => void;
@@ -51,6 +53,7 @@ export function useCustomersList(): UseCustomersListReturn {
   const [initialLoadComplete, setInitialLoadComplete] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [filterActive, setFilterActive] = useState('all');
@@ -82,6 +85,7 @@ export function useCustomersList(): UseCustomersListReturn {
         setCustomers(data.data || []);
         const pages = data.pagination?.pages;
         setTotalPages(typeof pages === 'number' && pages >= 1 ? pages : 1);
+        setTotal(typeof data.pagination?.total === 'number' ? data.pagination.total : (data.data || []).length);
       }
     } catch (error) {
       if (error instanceof Error && error.name !== 'AbortError') {
@@ -191,6 +195,7 @@ export function useCustomersList(): UseCustomersListReturn {
     loading,
     page,
     totalPages,
+    total,
     setPage,
     search,
     setSearch,

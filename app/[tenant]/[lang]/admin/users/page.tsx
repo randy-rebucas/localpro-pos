@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { getDictionaryClient } from '../../dictionaries-client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -83,7 +82,11 @@ export default function UsersPage() {
     [toggleUserStatus]
   );
 
-  if (!dict || loading) {
+  // Show the spinner only for the first load, so refetches after a save or delete keep the page (and any open modal) mounted.
+  const [loadedOnce, setLoadedOnce] = useState(false);
+  if (!loading && !loadedOnce) setLoadedOnce(true);
+
+  if (!dict || !loadedOnce) {
     return (
       <div className="flex items-center justify-center py-24">
         <div className="text-center">

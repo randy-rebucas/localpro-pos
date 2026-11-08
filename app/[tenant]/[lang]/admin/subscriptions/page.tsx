@@ -9,7 +9,6 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { getDefaultTenantSettings } from '@/lib/currency';
 import { CreditCard, AlertTriangle, ArrowUp, Receipt, CheckCircle } from 'lucide-react';
 import { useConfirm } from '@/lib/confirm';
-import Link from 'next/link';
 import { useSubscriptionManager } from '@/hooks/useSubscriptionManager';
 import {
   formatDate,
@@ -323,7 +322,7 @@ export default function SubscriptionsPage() {
                               {transaction.currency} {transaction.amount.toLocaleString()}
                             </p>
                             <p className="text-xs text-gray-500 mt-0.5">
-                              {formatDate(transaction.date)}
+                              {formatDate(transaction.date, settings?.timezone || 'Asia/Manila')}
                             </p>
                             {transaction.transactionId && (
                               <p className="text-xs text-gray-400 font-mono mt-0.5">{transaction.transactionId}</p>

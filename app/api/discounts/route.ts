@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Discount from '@/models/Discount';
+import Tenant from '@/models/Tenant';
+import { tenantDayEdge, DEFAULT_TENANT_TIMEZONE } from '@/lib/timezone';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -115,8 +117,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Description must be 500 characters or less' }, { status: 400 });
     }
 
-    // Validate date range
-    if (new Date(validFrom) >= new Date(validUntil)) {
+    // A picked day runs from the start of validFrom to the end of validUntil at the store
+    const tenantDoc = await Tenant.findById(tenantId).select('settings.timezone').lean();
+    const tz = tenantDoc?.settings?.timezone || DEFAULT_TENANT_TIMEZONE;
+    const startsAt = tenantDayEdge(validFrom, 'start', tz);
+    const endsAt = tenantDayEdge(validUntil, 'end', tz);
+    if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime()) || startsAt >= endsAt) {
       return NextResponse.json(
         { success: false, error: t('validation.validUntilAfterFrom', 'End date must be after start date') },
         { status: 400 }
@@ -158,8 +164,8 @@ export async function POST(request: NextRequest) {
       requiresIdVerification: requiresIdVerification || false,
       minPurchaseAmount,
       maxDiscountAmount,
-      validFrom: new Date(validFrom),
-      validUntil: new Date(validUntil),
+      validFrom: startsAt,
+      validUntil: endsAt,
       usageLimit,
       isActive,
       usageCount: 0,

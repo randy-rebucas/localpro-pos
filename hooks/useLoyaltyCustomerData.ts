@@ -60,11 +60,10 @@ export const useLoyaltyCustomerData = (customerId: string) => {
 
   const goToPage = useCallback(
     (pageNum: number) => {
-      const validPage = Math.max(1, Math.min(pageNum, data?.pagination.totalPages ?? 1));
-      setPage(validPage);
-      fetchData(validPage);
+      // The [page] effect below does the fetch; fetching here as well loaded every page twice.
+      setPage(Math.max(1, Math.min(pageNum, data?.pagination.totalPages ?? 1)));
     },
-    [data?.pagination.totalPages, fetchData]
+    [data?.pagination.totalPages]
   );
 
   useEffect(() => {

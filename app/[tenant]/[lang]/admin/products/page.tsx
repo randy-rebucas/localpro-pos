@@ -1,6 +1,6 @@
 ﻿'use client';
 
-import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useMemo, useCallback, type ReactNode } from 'react';
 import dynamic from 'next/dynamic';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
@@ -10,13 +10,21 @@ const ProductImportModal = dynamic(() => import('@/components/ProductImportModal
 const BulkBarcodeModal = dynamic(() => import('@/components/BulkBarcodeModal'), { ssr: false });
 import { getDictionaryClient } from '../../dictionaries-client';
 import Currency from '@/components/Currency';
+import { LineTag } from '@/components/marketing/primitives';
+import {
+  ICON, DARK_LABEL, DARK_FIELD, DARK_KEY, DARK_KEY_PRIMARY, LABEL, INPUT_BASE, INPUT, CHECKBOX, HINT, KEY, KEY_PRIMARY, CHECK_ROW, ROW_KEY, Sheet, Strip,
+} from '@/components/admin/register-ui';
+import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import SlipPager from '@/components/ui/SlipPager';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { showToast } from '@/lib/toast';
 import { useConfirm } from '@/lib/confirm';
 import { getBusinessTypeConfig, getAllowedProductTypes } from '@/lib/business-types'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { getBusinessType } from '@/lib/business-type-helpers';
 import { usePermissions } from '@/hooks/usePermissions';
-import { Barcode, Pencil, RefreshCw, RotateCcw, Trash2 } from 'lucide-react';
+import {
+  Barcode, Check, Download, ImageUp, Package, Pencil, Plus, RefreshCw, RotateCcw, Search, Trash2, Upload, X,
+} from 'lucide-react';
 import { useProductsList, type Product, type Category } from '@/hooks/useProductsList';
 import { useProductsForm } from '@/hooks/useProductsForm';
 import type { BulkProductUpdates } from '@/lib/validation';
@@ -30,18 +38,68 @@ import {
   generateEAN13 as generateEAN13Helper,
 } from '@/lib/products-helpers';
 
-const btnPrimary =
-  'px-4 py-2 bg-brand text-white hover:bg-brand-hover font-medium border border-brand-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
-const btnPrimarySm = `${btnPrimary} text-sm`;
-const btnSecondary =
-  'px-4 py-2 border border-gray-300 text-gray-700 font-medium hover:bg-gray-50 bg-white transition-colors';
-const btnSecondarySm =
-  `${btnSecondary} text-sm disabled:opacity-50 disabled:cursor-not-allowed`;
-const btnSecondaryIcon = `${btnSecondary} inline-flex items-center gap-2`;
-const btnDropdownItem =
-  'block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed';
-const btnTableIcon =
-  'p-1.5 border border-transparent hover:border-gray-200 hover:bg-gray-50 transition-colors';
+// Table
+const TH = 'whitespace-nowrap px-4 py-2 text-left font-receipt text-xs font-medium uppercase tracking-[0.14em] text-ink/60';
+const TD = 'px-4 py-3 font-receipt text-sm';
+
+const PAGE_SIZE = 20;
+type Dict = any; // eslint-disable-line @typescript-eslint/no-explicit-any
+
+/** A category search box with its suggestion list. */
+function CategoryPicker({ inputRef, listRef, value, selectedId, options, open, onType, onFocus, onPick, placeholder, emptyLabel, inputId }: {
+  inputRef: React.RefObject<HTMLInputElement | null>;
+  listRef: React.RefObject<HTMLDivElement | null>;
+  value: string;
+  selectedId: string;
+  options: Category[];
+  open: boolean;
+  onType: (value: string) => void;
+  onFocus: () => void;
+  onPick: (category: Category) => void;
+  placeholder: string;
+  emptyLabel?: string;
+  inputId?: string;
+}) {
+  return (
+    <div className="relative">
+      <input
+        id={inputId}
+        ref={inputRef}
+        type="text"
+        value={value}
+        onChange={(e) => onType(e.target.value)}
+        onFocus={onFocus}
+        placeholder={placeholder}
+        className={INPUT}
+      />
+      {open && options.length > 0 && (
+        <div ref={listRef} className="absolute z-50 mt-1 max-h-60 w-full overflow-y-auto border border-ink bg-paper-white">
+          {options.map((cat) => (
+            <button
+              key={cat._id}
+              type="button"
+              onClick={() => onPick(cat)}
+              className={`flex min-h-[44px] w-full items-center px-3 text-left text-sm text-ink transition-colors hover:bg-paper focus:bg-paper focus:outline-none ${selectedId === cat._id ? 'bg-paper font-semibold' : ''}`}
+            >
+              {cat.name}
+            </button>
+          ))}
+        </div>
+      )}
+      {open && emptyLabel && value && options.length === 0 && (
+        <div ref={listRef} className="absolute z-50 mt-1 w-full border border-ink bg-paper-white p-3 font-receipt text-sm text-ink/60">
+          {emptyLabel}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const productTypeLabel = (dict: Dict, type: string) =>
+  type === 'regular' ? (dict.admin?.regular || 'Regular')
+    : type === 'bundle' ? (dict.admin?.bundle || 'Bundle')
+      : type === 'service' ? (dict.admin?.service || 'Service')
+        : type;
 
 export default function ProductsPage() {
   const params = useParams();
@@ -63,7 +121,6 @@ export default function ProductsPage() {
   const [showBulkBarcodeModal, setShowBulkBarcodeModal] = useState(false);
   const [exporting, setExporting] = useState(false);
   const selectAllRef = useRef<HTMLInputElement>(null);
-  const PAGE_SIZE = 20;
   const { settings } = useTenantSettings();
   const { confirm, Dialog } = useConfirm();
   const { canAccess } = usePermissions();
@@ -204,12 +261,13 @@ export default function ProductsPage() {
       setShowBulkEditModal(false);
       loadProducts();
     } else {
-      showToast.error(result.error || 'Failed to update products');
+      showToast.error(result.error || dict.products?.bulkUpdateError || 'Failed to update products');
     }
   };
 
   const handleBulkRestockSave = async (items: Array<{ productId: string; quantity: number }>) => {
     if (items.length === 0 || !dict) return;
+    const restockError = dict.products?.restockError || 'Failed to restock products';
     try {
       const res = await fetch('/api/products/bulk-restock', {
         method: 'POST',
@@ -221,19 +279,24 @@ export default function ProductsPage() {
       if (result.success) {
         if (result.failed > 0) {
           showToast.error(
-            `${result.restocked} restocked, ${result.failed} failed: ${result.errors?.[0]?.error || ''}`
+            (dict.products?.restockPartial || '{restocked} restocked, {failed} failed: {error}')
+              .replace('{restocked}', String(result.restocked))
+              .replace('{failed}', String(result.failed))
+              .replace('{error}', result.errors?.[0]?.error || '')
           );
         } else {
-          showToast.success(`${result.restocked} product(s) restocked`);
+          showToast.success(
+            (dict.products?.restockSuccess || '{count} product(s) restocked').replace('{count}', String(result.restocked))
+          );
         }
         setSelectedProducts(new Set());
         setShowBulkRestockModal(false);
         loadProducts();
       } else {
-        showToast.error(result.error || 'Failed to restock products');
+        showToast.error(result.error || restockError);
       }
     } catch {
-      showToast.error('Failed to restock products');
+      showToast.error(restockError);
     }
   };
 
@@ -309,383 +372,422 @@ export default function ProductsPage() {
 
   if (!dict || loading) {
     return (
-      <div className="flex items-center justify-center py-24">
-        <div className="text-center">
-          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-brand"></div>
-          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
+      <div className="mk-root pos-register">
+        <div className="flex min-h-[calc(100dvh-3.5rem)] items-center justify-center bg-brand-navy-deep lg:min-h-dvh">
+          <LoadingSpinner size="md" color="#8fe3d0" />
         </div>
       </div>
     );
   }
 
+  const filterTabs = [
+    { value: 'missing-barcode', label: dict.products?.filterMissingBarcode || 'Missing Barcode' },
+    { value: 'all', label: dict.products?.filterAll || 'All Products' },
+  ] as const;
+  const activeTabLabel = filterTabs.find((tab) => tab.value === productFilter)?.label;
+  const exportFormats = [
+    { format: 'csv', label: 'CSV', title: dict.admin?.exportCSV || 'Export CSV' },
+    { format: 'excel', label: 'Excel', title: dict.admin?.exportExcel || 'Export Excel' },
+    { format: 'pdf', label: 'PDF', title: dict.admin?.exportPDF || 'Export PDF' },
+  ] as const;
+  const firstShown = (pagination.page - 1) * pagination.limit + 1;
+  const lastShown = Math.min(pagination.page * pagination.limit, pagination.total);
+  const allSelected = selectedProducts.size === products.length && products.length > 0;
+
+  const renderActions = (product: Product) => (
+    <div className="flex items-center justify-end">
+      <button
+        type="button"
+        onClick={() => setBarcodeProduct(product)}
+        className={ROW_KEY}
+        title={dict.products?.barcode || 'Barcode'}
+        aria-label={`${dict.products?.barcode || 'Barcode'}: ${product.name}`}
+      >
+        <Barcode className={ICON} strokeWidth={1.75} aria-hidden />
+      </button>
+      {canManage && (
+        <button
+          type="button"
+          onClick={() => {
+            setEditingProduct(product);
+            setShowProductModal(true);
+          }}
+          className={ROW_KEY}
+          title={dict.common?.edit || 'Edit'}
+          aria-label={`${dict.common?.edit || 'Edit'}: ${product.name}`}
+        >
+          <Pencil className={ICON} strokeWidth={1.75} aria-hidden />
+        </button>
+      )}
+      {canManage && (product.isActive === false ? (
+        <button
+          type="button"
+          onClick={() => handleReactivateProduct(product._id)}
+          className={`${ROW_KEY} hover:text-brand-hover`}
+          title={dict.products?.reactivate || 'Reactivate'}
+          aria-label={`${dict.products?.reactivate || 'Reactivate'}: ${product.name}`}
+        >
+          <RotateCcw className={ICON} strokeWidth={1.75} aria-hidden />
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => handleDeleteProduct(product._id)}
+          className={`${ROW_KEY} hover:text-stamp`}
+          title={dict.common?.delete || 'Delete'}
+          aria-label={`${dict.common?.delete || 'Delete'}: ${product.name}`}
+        >
+          <Trash2 className={ICON} strokeWidth={1.75} aria-hidden />
+        </button>
+      ))}
+    </div>
+  );
+
   return (
-    <div>
+    <div className="mk-root pos-register">
       {Dialog}
-      <div className="px-4 sm:px-6 py-6">
-        <div className="mb-6 sm:mb-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-2">
-                {dict.admin?.products || 'Products'}
-              </h1>
-              <p className="text-gray-600">{dict.admin?.productsSubtitle || 'Manage products, variations, and bundles'}</p>
+      <div className="min-h-[calc(100dvh-3.5rem)] bg-brand-navy-deep text-paper lg:min-h-dvh">
+        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
+          {/* Heading and the count on the display */}
+          <div className="flex flex-wrap items-end justify-between gap-5">
+            <div className="min-w-0">
+              {settings?.companyName && (
+                <LineTag no="PR" className="mb-3 text-[#8fe3d0]">{settings.companyName}</LineTag>
+              )}
+              <h1 className="text-5xl text-paper-white sm:text-6xl lg:text-7xl">{dict.admin?.products || 'Products'}</h1>
+              <p className="mt-3 text-paper/70">{dict.admin?.productsSubtitle || 'Manage products, variations, and bundles'}</p>
+            </div>
+            <div className="flex items-center gap-3 border border-white/10 bg-black/30 px-4 py-2">
+              <span className="mk-led-glow font-led text-4xl leading-none text-[#7df0d6]">{pagination.total}</span>
+              <span className="font-receipt text-xs uppercase tracking-[0.14em] text-white/60">{activeTabLabel}</span>
             </div>
           </div>
-        </div>
 
-        {message && (
-          <div className={`mb-6 p-4 border ${message.type === 'success' ? 'bg-green-50 text-green-800 border-green-300' : 'bg-red-50 text-red-800 border-red-300'}`}>
-            {message.text}
+          {/* Which list, and the keys that add to it */}
+          <div className="mt-6 flex flex-wrap items-stretch justify-between gap-3">
+            <nav className="grid w-full grid-cols-2 border-l border-t border-white/25 sm:inline-grid sm:w-auto" aria-label={dict.common?.tabs || 'Tabs'}>
+              {filterTabs.map((tab) => (
+                <button
+                  key={tab.value}
+                  type="button"
+                  aria-pressed={productFilter === tab.value}
+                  onClick={() => { setProductFilter(tab.value); setPage(1); }}
+                  className={`flex min-h-[44px] items-center justify-center border-b border-r border-white/25 px-4 font-receipt text-xs font-medium uppercase transition-colors touch-manipulation ${productFilter === tab.value ? 'bg-paper-white text-ink' : 'text-paper hover:bg-white/10'}`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </nav>
+            {canManage && (
+              <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
+                <button type="button" onClick={() => setShowImportModal(true)} className={DARK_KEY}>
+                  <Upload className={ICON} strokeWidth={1.75} aria-hidden />
+                  {dict.products?.import || 'Import'}
+                </button>
+                <Link href={`/${tenant}/${lang}/admin/file-upload`} className={DARK_KEY}>
+                  <ImageUp className={ICON} strokeWidth={1.75} aria-hidden />
+                  {dict.products?.uploadImages || 'Upload Images'}
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingProduct(null);
+                    setShowProductModal(true);
+                  }}
+                  className={`${DARK_KEY_PRIMARY} col-span-2`}
+                >
+                  <Plus className={ICON} strokeWidth={1.75} aria-hidden />
+                  {dict.admin?.addProduct || 'Add Product'}
+                </button>
+              </div>
+            )}
           </div>
-        )}
 
-        <div className="bg-white border border-gray-300 p-6">
-          {/* Filter tabs */}
-          <div className="flex gap-1 mb-4 border-b border-gray-200">
-            {([
-              { value: 'missing-barcode', label: 'Missing Barcode' },
-              { value: 'all', label: 'All Products' },
-            ] as const).map((tab) => (
-              <button
-                key={tab.value}
-                type="button"
-                onClick={() => { setProductFilter(tab.value); setPage(1); }}
-                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${
-                  productFilter === tab.value
-                    ? 'border-brand text-brand bg-brand-soft'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                {tab.label}
-                {productFilter === tab.value && pagination.total > 0 && (
-                  <span className="ml-2 px-1.5 py-0.5 text-xs bg-brand text-white">
-                    {pagination.total}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-
-          <div className="flex justify-between items-center mb-6 flex-wrap gap-2">
-            <div className="flex-1 max-w-md flex gap-2">
-              <input
-                type="text"
-                placeholder={dict.common?.search || 'Search products...'}
-                value={searchTerm}
-                onChange={(e) => {
-                  setSearchTerm(e.target.value);
-                  setPage(1);
-                }}
-                className="flex-1 px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-              />
+          {/* Search, status and export */}
+          <div className="mt-3 grid grid-cols-1 gap-3 border border-white/10 bg-black/20 p-3 sm:grid-cols-[minmax(0,1fr)_11rem] lg:flex lg:items-end">
+            <div className="lg:w-80">
+              <label htmlFor="products-search" className={DARK_LABEL}>{dict.common?.search || 'Search'}</label>
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink/40" strokeWidth={1.75} aria-hidden />
+                <input
+                  id="products-search"
+                  type="search"
+                  placeholder={dict.products?.searchPlaceholder || 'Name, SKU or barcode'}
+                  value={searchTerm}
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value);
+                    setPage(1);
+                  }}
+                  className={`${DARK_FIELD} pl-9`}
+                />
+              </div>
+            </div>
+            <div className="lg:w-44">
+              <label htmlFor="products-status" className={DARK_LABEL}>{dict.products?.statusFilter || 'Status'}</label>
               <select
+                id="products-status"
                 value={statusFilter}
                 onChange={(e) => {
                   setStatusFilter(e.target.value as 'active' | 'inactive' | 'all');
                   setPage(1);
                 }}
-                className="px-3 py-2 border border-gray-300 bg-white text-sm"
-                aria-label={dict.products?.statusFilter || 'Status'}
+                className={DARK_FIELD}
               >
                 <option value="active">{dict.products?.statusActive || 'Active'}</option>
                 <option value="inactive">{dict.products?.statusInactive || 'Inactive'}</option>
                 <option value="all">{dict.products?.statusAll || 'All'}</option>
               </select>
             </div>
-            <div className="flex gap-2 flex-wrap">
-              <div className="relative group">
+            <div
+              role="group"
+              aria-label={dict.admin?.export || 'Export'}
+              aria-busy={exporting}
+              className="flex divide-x divide-white/25 border border-white/25 sm:col-span-2 lg:ml-auto"
+            >
+              <span className="flex items-center px-3 text-white/60" title={dict.admin?.export || 'Export'}>
+                {exporting
+                  ? <LoadingSpinner size="sm" color="#8fe3d0" />
+                  : <Download className="h-[18px] w-[18px]" strokeWidth={1.75} aria-hidden />}
+              </span>
+              {exportFormats.map(({ format, label, title }) => (
                 <button
+                  key={format}
                   type="button"
-                  onClick={() => handleExport('csv')}
+                  onClick={() => handleExport(format)}
                   disabled={exporting}
-                  className={btnSecondarySm}
+                  title={title}
+                  aria-label={title}
+                  className="flex min-h-[44px] flex-1 items-center justify-center px-4 font-receipt text-xs font-medium uppercase text-paper transition-colors hover:bg-white/10 touch-manipulation disabled:opacity-50 lg:flex-none"
                 >
-                  {exporting
-                    ? (dict.products?.exporting || 'Exporting...')
-                    : `${dict.admin?.export || 'Export'} ▼`}
+                  {label}
                 </button>
-                <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-300 hidden group-hover:block z-10">
-                  <button
-                    type="button"
-                    onClick={() => handleExport('csv')}
-                    disabled={exporting}
-                    className={btnDropdownItem}
-                  >
-                    {dict.admin?.exportCSV || 'Export CSV'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleExport('excel')}
-                    disabled={exporting}
-                    className={btnDropdownItem}
-                  >
-                    {dict.admin?.exportExcel || 'Export Excel'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleExport('pdf')}
-                    disabled={exporting}
-                    className={btnDropdownItem}
-                  >
-                    {dict.admin?.exportPDF || 'Export PDF'}
-                  </button>
-                </div>
-              </div>
-              {canManage && (
-                <button
-                  type="button"
-                  onClick={() => setShowImportModal(true)}
-                  className={btnSecondaryIcon}
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                  </svg>
-                  {dict.products?.import || 'Import'}
-                </button>
-              )}
-              {canManage && (
-                <Link
-                  href={`/${tenant}/${lang}/admin/file-upload`}
-                  className={btnSecondaryIcon}
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                  </svg>
-                  {dict.products?.uploadImages || 'Upload Images'}
-                </Link>
-              )}
-              {canManage && (
-                <button
-                  onClick={() => {
-                    setEditingProduct(null);
-                    setShowProductModal(true);
-                  }}
-                  className={btnPrimary}
-                >
-                  {dict.common?.add || 'Add'} {dict.admin?.product || 'Product'}
-                </button>
-              )}
+              ))}
             </div>
           </div>
 
+          {message && (
+            <div className="mt-3">
+              <Strip tone={message.type === 'success' ? 'ok' : 'error'}>{message.text}</Strip>
+            </div>
+          )}
+
+          {/* What to do with the ticked lines */}
           {selectedProducts.size > 0 && (
-            <div className="mb-4 p-3 bg-brand-soft border border-teal-200 flex items-center justify-between flex-wrap gap-2">
-              <span className="text-sm font-medium text-brand-navy-deep">
-                {selectedProducts.size} {dict.admin?.selected || 'selected'}
-              </span>
-              <div className="flex gap-2 flex-wrap">
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-3 bg-brand px-3 py-2 text-ink" role="region" aria-label={dict.admin?.selected || 'Selected'}>
+              <p className="flex items-baseline gap-2 font-receipt text-sm font-semibold uppercase">
+                <span className="font-led text-3xl leading-none">{selectedProducts.size}</span>
+                {dict.admin?.selected || 'selected'}
+              </p>
+              <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap">
                 {canManage && (
-                  <button
-                    type="button"
-                    onClick={() => setShowBulkEditModal(true)}
-                    className={btnPrimarySm}
-                  >
+                  <button type="button" onClick={() => setShowBulkEditModal(true)} className={KEY_PRIMARY}>
                     {dict.products?.bulkEdit || 'Edit Selected'}
                   </button>
                 )}
                 {canManage && (
-                  <button
-                    type="button"
-                    onClick={() => setShowBulkRestockModal(true)}
-                    className={btnPrimarySm}
-                  >
+                  <button type="button" onClick={() => setShowBulkRestockModal(true)} className={KEY_PRIMARY}>
                     {dict.products?.restockSelected || 'Restock Selected'}
                   </button>
                 )}
-                <button
-                  type="button"
-                  onClick={() => setShowBulkBarcodeModal(true)}
-                  className={btnSecondarySm}
-                >
+                <button type="button" onClick={() => setShowBulkBarcodeModal(true)} className={`${KEY} border-ink/50 hover:bg-[#8fe3d0]`}>
                   {dict.products?.printBarcodes || 'Print Barcodes'}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedProducts(new Set())}
-                  className={btnSecondarySm}
-                >
+                <button type="button" onClick={() => setSelectedProducts(new Set())} className={`${KEY} border-ink/50 hover:bg-[#8fe3d0]`}>
                   {dict.common?.cancel || 'Cancel'}
                 </button>
               </div>
             </div>
           )}
 
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-10">
+          {/* The price list */}
+          <section className="mt-6 min-w-0">
+            <div className="bg-paper-white text-ink">
+              {/* Up to xl: one line per product, so price, stock and the keys stay on screen */}
+              <div className="xl:hidden">
+                {products.length > 0 && (
+                  <label className="flex min-h-[44px] items-center gap-3 border-b border-dashed border-ink/30 px-4 font-receipt text-xs uppercase tracking-[0.14em] text-ink/60">
                     <input
-                      ref={selectAllRef}
                       type="checkbox"
-                      checked={selectedProducts.size === products.length && products.length > 0}
+                      checked={allSelected}
                       onChange={handleSelectAll}
-                      className="checkbox-win8"
-                      aria-label={dict.common?.selectAll || 'Select all'}
+                      className={CHECKBOX}
                     />
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.products?.imageHeader || 'Image'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.name || 'Name'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">SKU</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.category || 'Category'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.price || 'Price'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.stock || 'Stock'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.common?.type || 'Type'}</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">{dict.common?.actions || 'Actions'}</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {products.map((product) => (
-                  <tr key={product._id}>
-                    <td className="px-4 py-4 w-10">
-                      <input
-                        type="checkbox"
-                        checked={selectedProducts.has(product._id)}
-                        onChange={() => handleSelectProduct(product._id)}
-                        className="checkbox-win8"
-                        aria-label={`Select ${product.name}`}
-                      />
-                    </td>
-                    <td className="px-4 py-4 w-14">
-                      {product.image ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={product.image} alt={product.name} className="w-10 h-10 object-cover border border-gray-200" />
-                      ) : (
-                        <div className="w-10 h-10 bg-gray-100 border border-gray-200 flex items-center justify-center">
-                          <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                          </svg>
+                    {dict.common?.selectAll || 'Select all'}
+                  </label>
+                )}
+                <ul className="divide-y divide-dashed divide-ink/20">
+                  {products.map((product) => {
+                    const selected = selectedProducts.has(product._id);
+                    const low = product.trackInventory && product.stock < (product.lowStockThreshold || 10);
+                    const category = typeof product.categoryId === 'object' && product.categoryId?.name ? product.categoryId.name : product.category;
+                    return (
+                      <li key={product._id} className={`px-4 pb-1 pt-3 ${selected ? 'bg-[#8fe3d0]/25' : ''}`}>
+                        <div className="flex items-start gap-3">
+                          <input
+                            type="checkbox"
+                            checked={selected}
+                            onChange={() => handleSelectProduct(product._id)}
+                            className={`${CHECKBOX} mt-0.5`}
+                            aria-label={(dict.products?.selectProduct || 'Select {name}').replace('{name}', product.name)}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-medium">
+                              {product.name}
+                              {product.isActive === false && (
+                                <span className="border border-dashed border-ink/40 px-1.5 py-0.5 font-receipt text-[11px] uppercase text-ink/60">
+                                  {dict.products?.statusInactive || 'Inactive'}
+                                </span>
+                              )}
+                            </p>
+                            <p className="mt-0.5 truncate font-receipt text-xs text-ink/60">
+                              {[product.sku || '-', category, productTypeLabel(dict, product.productType)].filter(Boolean).join(' · ')}
+                            </p>
+                          </div>
+                          <div className="shrink-0 text-right font-receipt">
+                            <p className="text-sm font-semibold"><Currency amount={product.price} /></p>
+                            <p className={`text-xs ${low ? 'font-semibold text-stamp' : 'text-ink/60'}`}>
+                              {dict.admin?.stock || 'Stock'} {product.trackInventory ? product.stock : '∞'}
+                            </p>
+                          </div>
                         </div>
-                      )}
-                    </td>
-                    <td className="px-4 py-4">
-                      <div className="text-sm font-medium text-gray-900 flex items-center gap-2">
-                        {product.name}
-                        {product.isActive === false && (
-                          <span className="px-1.5 py-0.5 text-xs font-semibold border border-gray-300 bg-gray-100 text-gray-600">
-                            {dict.products?.statusInactive || 'Inactive'}
-                          </span>
-                        )}
-                      </div>
-                      {product.description && (
-                        <div className="text-xs text-gray-500 mt-1">{product.description.substring(0, 50)}...</div>
-                      )}
-                    </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                      <div>{product.sku || '-'}</div>
-                      {product.barcode && (
-                        <div className="text-xs text-gray-400 font-mono mt-0.5">{product.barcode}</div>
-                      )}
-                    </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {typeof product.categoryId === 'object' && product.categoryId?.name ? product.categoryId.name : product.category || '-'}
-                    </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      <Currency amount={product.price} />
-                    </td>
-                    <td className="px-4 py-4 whitespace-nowrap">
-                      <span className={`text-sm font-medium ${product.stock < (product.lowStockThreshold || 10) ? 'text-red-600' : 'text-gray-900'}`}>
-                        {product.trackInventory ? product.stock : '∞'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-4 whitespace-nowrap">
-                      <span className="px-2 py-1 text-xs font-semibold border border-teal-300 bg-brand-soft text-brand-navy">
-                        {product.productType}
-                        {product.hasVariations && ` ${dict.products?.variations || '(variations)'}`}
-                      </span>
-                    </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          type="button"
-                          onClick={() => setBarcodeProduct(product)}
-                          className={`${btnTableIcon} text-gray-600 hover:text-gray-900`}
-                          title={dict.products?.barcode || 'Barcode'}
-                          aria-label={dict.products?.barcode || 'Barcode'}
-                        >
-                          <Barcode className="w-4 h-4" aria-hidden />
-                        </button>
-                        {canManage && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEditingProduct(product);
-                              setShowProductModal(true);
-                            }}
-                            className={`${btnTableIcon} text-brand hover:text-brand-navy-deep`}
-                            title={dict.common?.edit || 'Edit'}
-                            aria-label={dict.common?.edit || 'Edit'}
-                          >
-                            <Pencil className="w-4 h-4" aria-hidden />
-                          </button>
-                        )}
-                        {canManage && (product.isActive === false ? (
-                          <button
-                            type="button"
-                            onClick={() => handleReactivateProduct(product._id)}
-                            className={`${btnTableIcon} text-green-600 hover:text-green-900`}
-                            title={dict.products?.reactivate || 'Reactivate'}
-                            aria-label={dict.products?.reactivate || 'Reactivate'}
-                          >
-                            <RotateCcw className="w-4 h-4" aria-hidden />
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteProduct(product._id)}
-                            className={`${btnTableIcon} text-red-600 hover:text-red-900`}
-                            title={dict.common?.delete || 'Delete'}
-                            aria-label={dict.common?.delete || 'Delete'}
-                          >
-                            <Trash2 className="w-4 h-4" aria-hidden />
-                          </button>
-                        ))}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {products.length === 0 && (
-              <div className="text-center py-8 text-gray-500">
-                {debouncedSearch ? (dict.common?.noResults || 'No products found') : (dict.common?.noData || 'No products yet')}
+                        <div className="-mr-2 mt-1">{renderActions(product)}</div>
+                      </li>
+                    );
+                  })}
+                </ul>
               </div>
-            )}
-          </div>
-          {pagination.pages > 1 && (
-            <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-              <p className="text-sm text-gray-600">
-                {dict.admin?.showing || 'Showing'}{' '}
-                {(pagination.page - 1) * pagination.limit + 1}
-                {' '}{dict.admin?.to || 'to'}{' '}
-                {Math.min(pagination.page * pagination.limit, pagination.total)}
-                {' '}{dict.admin?.of || 'of'}{' '}
-                {pagination.total}
-                {' '}{dict.admin?.results || 'results'}
-              </p>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page === 1}
-                  className={btnSecondarySm}
-                >
-                  {dict.common?.previous || 'Previous'}
-                </button>
-                <span className="px-2 text-sm text-gray-700">
-                  {dict.admin?.page || 'Page'} {page} {dict.admin?.of || 'of'} {pagination.pages}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setPage((p) => Math.min(pagination.pages, p + 1))}
-                  disabled={page >= pagination.pages}
-                  className={btnSecondarySm}
-                >
-                  {dict.common?.next || 'Next'}
-                </button>
+
+              <div className="hidden overflow-x-auto xl:block" role="region" aria-label={dict.admin?.products || 'Products'} tabIndex={0}>
+                <table className="min-w-full">
+                  <thead className="border-b border-dashed border-ink/30">
+                    <tr>
+                      <th scope="col" className="w-12 py-1 pl-2 pr-0">
+                        <label className="flex h-11 w-11 cursor-pointer items-center justify-center">
+                          <input
+                            ref={selectAllRef}
+                            type="checkbox"
+                            checked={allSelected}
+                            onChange={handleSelectAll}
+                            className={CHECKBOX}
+                            aria-label={dict.common?.selectAll || 'Select all'}
+                          />
+                        </label>
+                      </th>
+                      <th scope="col" className={TH}>{dict.admin?.name || 'Name'}</th>
+                      <th scope="col" className={TH}>SKU</th>
+                      <th scope="col" className={TH}>{dict.admin?.category || 'Category'}</th>
+                      <th scope="col" className={`${TH} text-right`}>{dict.admin?.price || 'Price'}</th>
+                      <th scope="col" className={`${TH} text-right`}>{dict.admin?.stock || 'Stock'}</th>
+                      <th scope="col" className={`${TH} text-right`}>{dict.common?.actions || 'Actions'}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-dashed divide-ink/20">
+                    {products.map((product) => {
+                      const selected = selectedProducts.has(product._id);
+                      const low = product.trackInventory && product.stock < (product.lowStockThreshold || 10);
+                      return (
+                        <tr key={product._id} className={`transition-colors ${selected ? 'bg-[#8fe3d0]/25' : 'hover:bg-paper'}`}>
+                          <td className="w-12 py-1 pl-2 pr-0 align-middle">
+                            <label className="flex h-11 w-11 cursor-pointer items-center justify-center">
+                              <input
+                                type="checkbox"
+                                checked={selected}
+                                onChange={() => handleSelectProduct(product._id)}
+                                className={CHECKBOX}
+                                aria-label={(dict.products?.selectProduct || 'Select {name}').replace('{name}', product.name)}
+                              />
+                            </label>
+                          </td>
+                          <td className={`${TD} min-w-[14rem]`}>
+                            <div className="flex items-center gap-3">
+                              <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden bg-ink/5">
+                                {product.image ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img
+                                    src={product.image}
+                                    alt=""
+                                    loading="lazy"
+                                    decoding="async"
+                                    className="h-full w-full object-cover"
+                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                  />
+                                ) : (
+                                  <Package className="h-4 w-4 text-ink/30" strokeWidth={1.75} aria-hidden />
+                                )}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="flex flex-wrap items-center gap-2 font-body text-sm font-medium">
+                                  {product.name}
+                                  {(product.productType !== 'regular' || product.hasVariations) && (
+                                    <span className="border border-ink/25 px-1.5 py-0.5 font-receipt text-[11px] uppercase text-ink/70">
+                                      {productTypeLabel(dict, product.productType)}
+                                      {product.hasVariations && ` ${dict.products?.variations || '(variations)'}`}
+                                    </span>
+                                  )}
+                                  {product.isActive === false && (
+                                    <span className="border border-dashed border-ink/40 px-1.5 py-0.5 font-receipt text-[11px] uppercase text-ink/60">
+                                      {dict.products?.statusInactive || 'Inactive'}
+                                    </span>
+                                  )}
+                                </p>
+                                {product.description && (
+                                  <p className="mt-0.5 line-clamp-1 max-w-xs font-body text-xs text-ink/60" title={product.description}>
+                                    {product.description}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                          <td className={`${TD} whitespace-nowrap`}>
+                            <div>{product.sku || '-'}</div>
+                            {product.barcode && <div className="mt-0.5 text-xs text-ink/50">{product.barcode}</div>}
+                          </td>
+                          <td className={`${TD} whitespace-nowrap text-ink/70`}>
+                            {typeof product.categoryId === 'object' && product.categoryId?.name ? product.categoryId.name : product.category || '-'}
+                          </td>
+                          <td className={`${TD} whitespace-nowrap text-right font-semibold`}>
+                            <Currency amount={product.price} />
+                          </td>
+                          <td className={`${TD} whitespace-nowrap text-right ${low ? 'font-semibold text-stamp' : ''}`}>
+                            {product.trackInventory ? product.stock : '∞'}
+                          </td>
+                          <td className="whitespace-nowrap px-2 py-1 text-right">
+                            {renderActions(product)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
+
+              {products.length === 0 && (
+                <div className="px-4 py-14 text-center">
+                  <Package className="mx-auto mb-2 h-8 w-8 text-ink/20" strokeWidth={1.75} aria-hidden />
+                  <p className="font-receipt text-sm text-ink/60">
+                    {debouncedSearch ? (dict.common?.noResults || 'No products found') : (dict.common?.noData || 'No products yet')}
+                  </p>
+                </div>
+              )}
+
+              {pagination.pages > 1 && (
+                <>
+                  <p className="px-4 pt-3 font-receipt text-xs text-ink/60 sm:px-5">
+                    {dict.admin?.showing || 'Showing'} {firstShown} {dict.admin?.to || 'to'} {lastShown} {dict.admin?.of || 'of'} {pagination.total} {dict.admin?.results || 'results'}
+                  </p>
+                  <SlipPager
+                    page={page}
+                    totalPages={pagination.pages}
+                    onPageChange={setPage}
+                    label={dict.admin?.page || 'Page'}
+                    previousLabel={dict.common?.previous || 'Previous'}
+                    nextLabel={dict.common?.next || 'Next'}
+                  />
+                </>
+              )}
             </div>
-          )}
+            <div className="mk-tear-b h-3 bg-paper-white" aria-hidden />
+          </section>
         </div>
 
         {barcodeProduct && (
@@ -758,7 +860,6 @@ export default function ProductsPage() {
   );
 }
 
-
 function ProductModal({
   product,
   categories,
@@ -784,6 +885,9 @@ function ProductModal({
   const [showCategorySuggestions, setShowCategorySuggestions] = useState(false);
   const categoryInputRef = useRef<HTMLInputElement>(null);
   const categoryListRef = useRef<HTMLDivElement>(null);
+  const currencySymbol = settings?.currencySymbol || '₱';
+  const showInventory = businessTypeConfig?.defaultFeatures?.enableInventory !== false;
+  const closeLabel = dict.common?.close || 'Close';
 
   // Image picker state
   const [showImagePicker, setShowImagePicker] = useState(false);
@@ -828,10 +932,10 @@ function ProductModal({
         updateFormData({ image: data.data.url });
         setShowImagePicker(false);
       } else {
-        alert(data?.error || dict?.products?.failedToUploadImage || 'Failed to upload image');
+        showToast.error(data?.error || dict?.products?.failedToUploadImage || 'Failed to upload image');
       }
     } catch {
-      alert(dict?.products?.uploadFailed || 'Upload failed');
+      showToast.error(dict?.products?.uploadFailed || 'Upload failed');
     } finally {
       setPickerUploading(false);
       if (pickerFileInputRef.current) pickerFileInputRef.current.value = '';
@@ -845,7 +949,6 @@ function ProductModal({
         cat => cat._id === (typeof product.categoryId === 'object' && product.categoryId?._id ? product.categoryId._id : product.categoryId)
       );
       if (currentCategory) {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         setCategorySearch(currentCategory.name);
       } else {
         setCategorySearch('');
@@ -946,50 +1049,59 @@ function ProductModal({
     }
   };
 
+  const updateModifiers = (mods: NonNullable<typeof formData.modifiers>) => updateFormData({ modifiers: mods });
+  const pickerMatches = pickerFiles.filter(f => f.name.toLowerCase().includes(pickerSearch.toLowerCase()));
+
   return (
     <>
-    <div className="fixed inset-0 bg-gray-900/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white border border-gray-300 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="p-6">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">
-            {product ? (dict.admin?.editProduct || 'Edit Product') : (dict.admin?.addProduct || 'Add Product')}
-          </h2>
-          {businessTypeConfig && (
-            <div className="mb-4 p-3 bg-brand-soft border border-teal-200">
-              <p className="text-sm text-brand-navy-deep">
-                <strong>{dict.products?.businessType || 'Business Type'}:</strong> {businessTypeConfig.name}
+      <Sheet
+        wide
+        title={product ? (dict.admin?.editProduct || 'Edit Product') : (dict.admin?.addProduct || 'Add Product')}
+        onClose={onClose}
+        closeLabel={closeLabel}
+        footer={
+          <>
+            <button type="button" onClick={onClose} className={KEY}>
+              {dict.common?.cancel || 'Cancel'}
+            </button>
+            <button type="submit" form="product-form" disabled={saving} className={KEY_PRIMARY}>
+              {saving ? (dict.common?.loading || 'Saving...') : (dict.common?.save || 'Save')}
+            </button>
+          </>
+        }
+      >
+        {businessTypeConfig && (
+          <div className="mb-4 border border-dashed border-ink/30 bg-paper px-3 py-2 font-receipt text-xs text-ink/70">
+            <p>
+              <span className="uppercase tracking-[0.08em] text-ink/50">{dict.products?.businessType || 'Business Type'}</span>{' '}
+              <span className="font-semibold text-ink">{businessTypeConfig.name}</span>
+            </p>
+            {businessTypeConfig.requiredFields.length > 0 && (
+              <p className="mt-1">
+                <span className="uppercase tracking-[0.08em] text-ink/50">{dict.products?.requiredFields || 'Required fields'}</span>{' '}
+                {businessTypeConfig.requiredFields.join(', ')}
               </p>
-              <p className="text-xs text-brand-hover mt-1">
-                {businessTypeConfig.description}
-              </p>
-              {businessTypeConfig.requiredFields.length > 0 && (
-                <p className="text-xs text-brand-hover mt-1">
-                  <strong>{dict.products?.requiredFields || 'Required fields'}:</strong> {businessTypeConfig.requiredFields.join(', ')}
-                </p>
-              )}
-            </div>
-          )}
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict.admin?.name || 'Name'} *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={formData.name}
-                  onChange={(e) => updateFormData({ name: e.target.value })}
-                  onBlur={(e) => checkDuplicateName(e.target.value)}
-                  className={`w-full px-3 py-2 border bg-white focus:ring-2 ${
-                    nameDuplicate ? 'border-amber-400 focus:ring-amber-400' : 'border-gray-300 focus:ring-brand'
-                  }`}
-                />
-                {checkingName && (
-                  <p className="text-xs text-gray-400 mt-1">{dict.products?.checkingDuplicate || 'Checking...'}</p>
-                )}
+            )}
+          </div>
+        )}
+        <form id="product-form" onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label htmlFor="pm-name" className={LABEL}>{dict.admin?.name || 'Name'} *</label>
+              <input
+                id="pm-name"
+                type="text"
+                required
+                value={formData.name}
+                onChange={(e) => updateFormData({ name: e.target.value })}
+                onBlur={(e) => checkDuplicateName(e.target.value)}
+                aria-describedby="pm-name-hint"
+                className={`${INPUT} ${nameDuplicate ? 'border-stamp focus:border-stamp focus:ring-stamp/30' : ''}`}
+              />
+              <div id="pm-name-hint" aria-live="polite">
+                {checkingName && <p className={HINT}>{dict.products?.checkingDuplicate || 'Checking...'}</p>}
                 {!checkingName && nameDuplicate && (
-                  <p className="text-xs text-amber-700 mt-1">
+                  <p className="mt-1 border-l-2 border-stamp pl-2 font-receipt text-xs text-stamp">
                     {(dict.products?.duplicateProductInlineWarning ||
                       'A product named "{name}" already exists (SKU: {sku}, stock: {stock}).')
                       .replace('{name}', nameDuplicate.name)
@@ -998,671 +1110,594 @@ function ProductModal({
                   </p>
                 )}
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  SKU {businessTypeConfig?.requiredFields?.includes('sku') && <span className="text-red-500">*</span>}
-                </label>
-                <input
-                  type="text"
-                  required={businessTypeConfig?.requiredFields?.includes('sku')}
-                  value={formData.sku}
-                  onChange={(e) => updateFormData({ sku: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-                />
-              </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.products?.barcode || 'Barcode'}
+              <label htmlFor="pm-sku" className={LABEL}>
+                SKU {businessTypeConfig?.requiredFields?.includes('sku') && <span className="text-stamp">*</span>}
               </label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={formData.barcode}
-                  onChange={(e) => updateFormData({ barcode: e.target.value })}
-                  className="flex-1 px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white font-mono"
-                  placeholder={dict.products?.scanOrEnterBarcode || 'Scan or enter barcode'}
-                />
-                <button
-                  type="button"
-                  onClick={() => updateFormData({ barcode: generateEAN13Helper() })}
-                  className="px-3 py-2 border border-gray-300 bg-gray-50 hover:bg-gray-100 text-gray-700 text-sm font-medium flex items-center gap-1.5 transition-colors whitespace-nowrap"
-                  title={dict.products?.generateEan13Title || 'Generate EAN-13 barcode'}
-                >
-                  <RefreshCw className="h-3.5 w-3.5" />
-                  {dict.products?.generate || 'Generate'}
-                </button>
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.description || 'Description'}
-              </label>
-              <textarea
-                value={formData.description}
-                onChange={(e) => updateFormData({ description: e.target.value })}
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
+              <input
+                id="pm-sku"
+                type="text"
+                required={businessTypeConfig?.requiredFields?.includes('sku')}
+                value={formData.sku}
+                onChange={(e) => updateFormData({ sku: e.target.value })}
+                className={`${INPUT} font-receipt`}
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.products?.productImage || 'Product Image'}
-              </label>
-              <div className="flex gap-3 items-start">
-                {formData.image && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={formData.image}
-                    alt="Preview"
-                    className="w-20 h-20 object-cover border border-gray-200 flex-shrink-0"
-                  />
-                )}
-                <div className="flex-1 space-y-2">
-                  <div className="flex gap-2">
-                    <label className="flex items-center gap-2 px-3 py-2 border border-gray-300 bg-gray-50 hover:bg-gray-100 cursor-pointer text-sm text-gray-700 transition-colors">
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                      </svg>
-                      {dict.products?.upload || 'Upload'}
-                      <input
-                        type="file"
-                        accept="image/jpeg,image/png,image/webp,image/gif"
-                        className="hidden"
-                        onChange={async (e) => {
-                          const file = e.target.files?.[0];
-                          if (!file) return;
-                          if (file.size > 10 * 1024 * 1024) {
-                            alert(dict.products?.fileTooLarge || 'File too large. Maximum size: 10MB');
-                            return;
+          </div>
+          <div>
+            <label htmlFor="pm-barcode" className={LABEL}>{dict.products?.barcode || 'Barcode'}</label>
+            <div className="flex gap-2">
+              <input
+                id="pm-barcode"
+                type="text"
+                value={formData.barcode}
+                onChange={(e) => updateFormData({ barcode: e.target.value })}
+                className={`${INPUT_BASE} min-w-0 flex-1 font-receipt`}
+                placeholder={dict.products?.scanOrEnterBarcode || 'Scan or enter barcode'}
+              />
+              <button
+                type="button"
+                onClick={() => updateFormData({ barcode: generateEAN13Helper() })}
+                className={`${KEY} shrink-0`}
+                title={dict.products?.generateEan13Title || 'Generate EAN-13 barcode'}
+              >
+                <RefreshCw className={ICON} strokeWidth={1.75} aria-hidden />
+                {dict.products?.generate || 'Generate'}
+              </button>
+            </div>
+          </div>
+          <div>
+            <label htmlFor="pm-description" className={LABEL}>{dict.admin?.description || 'Description'}</label>
+            <textarea
+              id="pm-description"
+              value={formData.description}
+              onChange={(e) => updateFormData({ description: e.target.value })}
+              rows={3}
+              className={INPUT}
+            />
+          </div>
+          <div>
+            <p className={LABEL}>{dict.products?.productImage || 'Product Image'}</p>
+            <div className="flex items-start gap-3">
+              {formData.image && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={formData.image}
+                  alt=""
+                  className="h-20 w-20 flex-shrink-0 border border-ink/15 object-cover"
+                />
+              )}
+              <div className="min-w-0 flex-1 space-y-2">
+                <div className="flex flex-wrap gap-2">
+                  <label className={`${KEY} cursor-pointer`}>
+                    <Upload className={ICON} strokeWidth={1.75} aria-hidden />
+                    {dict.products?.upload || 'Upload'}
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/gif"
+                      className="sr-only"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        if (file.size > 10 * 1024 * 1024) {
+                          showToast.error(dict.products?.fileTooLarge || 'File too large. Maximum size: 10MB');
+                          return;
+                        }
+                        try {
+                          const fd = new FormData();
+                          fd.append('file', file);
+                          fd.append('type', 'products'); // Cloudinary folder 1pos/{slug}/products/
+                          const res = await fetch('/api/upload', {
+                            method: 'POST',
+                            credentials: 'include',
+                            body: fd,
+                          });
+                          const data = await res.json();
+                          if (data.success) {
+                            updateFormData({ image: data.data.url });
+                          } else {
+                            showToast.error(data.error || dict.products?.failedToUploadImage || 'Failed to upload image');
                           }
-                          try {
-                            const fd = new FormData();
-                            fd.append('file', file);
-                            fd.append('type', 'products'); // Cloudinary folder 1pos/{slug}/products/
-                            const res = await fetch('/api/upload', {
-                              method: 'POST',
-                              credentials: 'include',
-                              body: fd,
-                            });
-                            const data = await res.json();
-                            if (data.success) {
-                              updateFormData({ image: data.data.url });
-                            } else {
-                              alert(data.error || dict.products?.failedToUploadImage || 'Failed to upload image');
-                            }
-                          } catch {
-                            alert(dict.products?.uploadFailed || 'Upload failed');
-                          }
-                        }}
-                      />
-                    </label>
-                    <button
-                      type="button"
-                      onClick={openImagePicker}
-                      className="px-3 py-2 border border-gray-300 bg-gray-50 hover:bg-gray-100 text-sm text-gray-700 transition-colors"
-                    >
-                      {dict.products?.browse || 'Browse'}
-                    </button>
-                  </div>
-                  <input
-                    type="url"
-                    value={formData.image.startsWith('data:') ? '' : formData.image}
-                    onChange={(e) => updateFormData({ image: e.target.value })}
-                    placeholder={dict.products?.pasteImageUrl || 'Or paste image URL (https://...)'}
-                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white text-sm"
-                  />
+                        } catch {
+                          showToast.error(dict.products?.uploadFailed || 'Upload failed');
+                        }
+                      }}
+                    />
+                  </label>
+                  <button type="button" onClick={openImagePicker} className={KEY}>
+                    {dict.products?.browse || 'Browse'}
+                  </button>
                   {formData.image && (
-                    <button
-                      type="button"
-                      onClick={() => updateFormData({ image: '' })}
-                      className="text-xs text-red-600 hover:text-red-800"
-                    >
+                    <button type="button" onClick={() => updateFormData({ image: '' })} className={`${KEY} border-transparent text-stamp hover:bg-stamp/10`}>
                       {dict.products?.removeImage || 'Remove image'}
                     </button>
                   )}
                 </div>
-              </div>
-            </div>
-            <div className={`grid gap-4 ${businessTypeConfig?.defaultFeatures?.enableInventory !== false ? 'grid-cols-3' : 'grid-cols-1'}`}>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict.admin?.price || 'Price'} *
-                </label>
                 <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  required
-                  value={formData.price}
-                  onChange={(e) => updateFormData({ price: parseFloat(e.target.value) || 0 })}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
+                  type="url"
+                  value={formData.image.startsWith('data:') ? '' : formData.image}
+                  onChange={(e) => updateFormData({ image: e.target.value })}
+                  placeholder={dict.products?.pasteImageUrl || 'Or paste image URL (https://...)'}
+                  aria-label={dict.products?.pasteImageUrl || 'Image URL'}
+                  className={INPUT}
                 />
               </div>
-              {businessTypeConfig?.defaultFeatures?.enableInventory !== false && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {dict.admin?.stock || 'Stock'}
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={formData.stock}
-                    onChange={(e) => updateFormData({ stock: parseInt(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-                    disabled={!formData.trackInventory || product?.hasVariations}
-                  />
-                  {product?.hasVariations && (
-                    <p className="mt-1 text-xs text-gray-500">
-                      {dict.products?.restockUseRefill || 'Has variations. Use Refill on the Products page.'}
-                    </p>
-                  )}
-                </div>
-              )}
-              {businessTypeConfig?.defaultFeatures?.enableInventory !== false && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {dict.admin?.lowStockThreshold || 'Low Stock Threshold'}
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={formData.lowStockThreshold}
-                    onChange={(e) => updateFormData({ lowStockThreshold: parseInt(e.target.value) || 10 })}
-                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-                  />
-                </div>
-              )}
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="relative">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict.admin?.category || 'Category'}
-                </label>
-                <div ref={categoryInputRef} className="relative">
-                  <input
-                    type="text"
-                    value={categorySearch}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      setCategorySearch(value);
-                      setShowCategorySuggestions(true);
-                      // Clear categoryId if search doesn't match any category
-                      const matchingCategory = categories.find(
-                        cat => cat.name.toLowerCase() === value.toLowerCase()
-                      );
-                      if (matchingCategory) {
-                        updateFormData({ categoryId: matchingCategory._id });
-                      } else {
-                        updateFormData({ categoryId: '' });
-                      }
-                    }}
-                    onFocus={() => setShowCategorySuggestions(true)}
-                    placeholder={dict.admin?.searchCategory || 'Type to search categories...'}
-                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-                  />
-                  {showCategorySuggestions && filteredCategories.length > 0 && (
-                    <div
-                      ref={categoryListRef}
-                      className="absolute z-50 w-full mt-1 bg-white border border-gray-300 max-h-60 overflow-y-auto"
-                    >
-                      {filteredCategories.map((cat) => (
-                        <button
-                          key={cat._id}
-                          type="button"
-                          onClick={() => handleCategorySelect(cat)}
-                          className={`w-full text-left px-4 py-2 hover:bg-brand-soft focus:bg-brand-soft focus:outline-none transition-colors ${
-                            formData.categoryId === cat._id ? 'bg-brand-soft' : ''
-                          }`}
-                        >
-                          {cat.name}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  {showCategorySuggestions && categorySearch && filteredCategories.length === 0 && (
-                    <div
-                      ref={categoryListRef}
-                      className="absolute z-50 w-full mt-1 bg-white border border-gray-300 p-4 text-sm text-gray-500"
-                    >
-                      {dict.admin?.noCategoryFound || 'No category found'}
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict.common?.type || 'Type'} {businessTypeConfig && `(${businessTypeConfig.name})`}
-                </label>
-                <select
-                  value={formData.productType}
-                  onChange={(e) => updateFormData({ productType: e.target.value as any })} // eslint-disable-line @typescript-eslint/no-explicit-any
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-                >
-                  {businessTypeConfig?.productTypes?.map((type: string) => (
-                    <option key={type} value={type}>
-                      {type === 'regular' ? (dict.admin?.regular || 'Regular') : 
-                       type === 'bundle' ? (dict.admin?.bundle || 'Bundle') : 
-                       (dict.admin?.service || 'Service')}
-                    </option>
-                  )) || (
-                    <>
-                      <option value="regular">{dict.admin?.regular || 'Regular'}</option>
-                      <option value="bundle">{dict.admin?.bundle || 'Bundle'}</option>
-                      <option value="service">{dict.admin?.service || 'Service'}</option>
-                    </>
-                  )}
-                </select>
-                {businessTypeConfig && businessTypeConfig.productTypes.length === 1 && (
-                  <p className="mt-1 text-xs text-gray-500">
-                    {(dict.products?.onlyProductType || 'Only {type} products are allowed for {businessType}')
-                      .replace('{type}', businessTypeConfig.productTypes[0])
-                      .replace('{businessType}', businessTypeConfig.name)}
-                  </p>
-                )}
-              </div>
-            </div>
-            {businessTypeConfig?.defaultFeatures?.enableInventory !== false && (
-              <div>
-                <label className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={formData.trackInventory}
-                    onChange={(e) => updateFormData({ trackInventory: e.target.checked })}
-                    className="checkbox-win8 mr-2"
-                  />
-                  <span className="text-sm font-medium text-gray-700">
-                    {dict.admin?.trackInventory || 'Track Inventory'}
-                  </span>
-                </label>
-              </div>
-            )}
-
-            {/* Restaurant-specific fields */}
-            {settings?.businessType?.toLowerCase() === 'restaurant' && (
-              <div className="space-y-4 pt-4 border-t border-gray-200">
-                <h3 className="text-lg font-semibold text-gray-900">{dict.products?.restaurantInfo || 'Restaurant Information'}</h3>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{dict.products?.allergens || 'Allergens (comma-separated)'}</label>
-                  <input
-                    type="text"
-                    value={Array.isArray(formData.allergens) ? formData.allergens.join(', ') : formData.allergens || ''}
-                    onChange={(e) => {
-                      const allergens = e.target.value.split(',').map(a => a.trim()).filter(a => a);
-                      updateFormData({ allergens });
-                    }}
-                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-                    placeholder="e.g., gluten, dairy, nuts"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{dict.products?.calories || 'Calories'}</label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={formData.nutritionInfo?.calories || ''}
-                      onChange={(e) => updateFormData({
-                        ...formData,
-                        nutritionInfo: { ...formData.nutritionInfo, calories: parseInt(e.target.value) || undefined }
-                      })}
-                      className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{dict.products?.protein || 'Protein (g)'}</label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.1"
-                      value={formData.nutritionInfo?.protein || ''}
-                      onChange={(e) => updateFormData({
-                        ...formData,
-                        nutritionInfo: { ...formData.nutritionInfo, protein: parseFloat(e.target.value) || undefined }
-                      })}
-                      className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-                    />
-                  </div>
-                </div>
-
-                {/* Modifier Groups */}
-                <div className="pt-2">
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="text-sm font-semibold text-gray-700">{dict.products?.modifierGroups || 'Modifier Groups'}</label>
-                    <button
-                      type="button"
-                      onClick={() => updateFormData({
-                        modifiers: [
-                          ...(formData.modifiers || []),
-                          { name: '', options: [{ name: '', price: 0 }], required: false },
-                        ],
-                      })}
-                      className="text-xs px-2 py-1 bg-orange-50 border border-orange-300 text-orange-700 hover:bg-orange-100 font-semibold"
-                    >
-                      {dict.products?.addGroup || '+ Add Group'}
-                    </button>
-                  </div>
-                  <div className="space-y-3">
-                    {(formData.modifiers || []).map((group, gi) => (
-                      <div key={gi} className="border border-gray-200 p-3 bg-gray-50 space-y-2">
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="text"
-                            value={group.name}
-                            onChange={(e) => {
-                              const mods = [...(formData.modifiers || [])];
-                              mods[gi] = { ...mods[gi], name: e.target.value };
-                              updateFormData({ modifiers: mods });
-                            }}
-                            placeholder="Group name (e.g. Temperature)"
-                            className="flex-1 px-2 py-1.5 text-sm border border-gray-300 bg-white focus:ring-1 focus:ring-orange-400 focus:outline-none"
-                          />
-                          <label className="flex items-center gap-1 text-xs text-gray-600 flex-shrink-0 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={group.required}
-                              onChange={(e) => {
-                                const mods = [...(formData.modifiers || [])];
-                                mods[gi] = { ...mods[gi], required: e.target.checked };
-                                updateFormData({ modifiers: mods });
-                              }}
-                              className="checkbox-win8"
-                            />
-                            {dict.products?.required || 'Required'}
-                          </label>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const mods = [...(formData.modifiers || [])];
-                              mods.splice(gi, 1);
-                              updateFormData({ modifiers: mods });
-                            }}
-                            className="text-red-500 hover:text-red-700 p-1"
-                            title="Remove group"
-                          >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                          </button>
-                        </div>
-                        {/* Options */}
-                        <div className="pl-2 space-y-1.5">
-                          {group.options.map((opt, oi) => (
-                            <div key={oi} className="flex items-center gap-2">
-                              <input
-                                type="text"
-                                value={opt.name}
-                                onChange={(e) => {
-                                  const mods = [...(formData.modifiers || [])];
-                                  const opts = [...mods[gi].options];
-                                  opts[oi] = { ...opts[oi], name: e.target.value };
-                                  mods[gi] = { ...mods[gi], options: opts };
-                                  updateFormData({ modifiers: mods });
-                                }}
-                                placeholder="Option (e.g. Rare)"
-                                className="flex-1 px-2 py-1 text-sm border border-gray-300 bg-white focus:ring-1 focus:ring-orange-400 focus:outline-none"
-                              />
-                              <span className="text-xs text-gray-400 flex-shrink-0">+$</span>
-                              <input
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                value={opt.price || ''}
-                                onChange={(e) => {
-                                  const mods = [...(formData.modifiers || [])];
-                                  const opts = [...mods[gi].options];
-                                  opts[oi] = { ...opts[oi], price: parseFloat(e.target.value) || 0 };
-                                  mods[gi] = { ...mods[gi], options: opts };
-                                  updateFormData({ modifiers: mods });
-                                }}
-                                placeholder="0.00"
-                                className="w-20 px-2 py-1 text-sm border border-gray-300 bg-white focus:ring-1 focus:ring-orange-400 focus:outline-none"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const mods = [...(formData.modifiers || [])];
-                                  const opts = [...mods[gi].options];
-                                  opts.splice(oi, 1);
-                                  mods[gi] = { ...mods[gi], options: opts };
-                                  updateFormData({ modifiers: mods });
-                                }}
-                                className="text-red-400 hover:text-red-600 p-0.5"
-                                title="Remove option"
-                              >
-                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                              </button>
-                            </div>
-                          ))}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const mods = [...(formData.modifiers || [])];
-                              mods[gi] = { ...mods[gi], options: [...mods[gi].options, { name: '', price: 0 }] };
-                              updateFormData({ modifiers: mods });
-                            }}
-                            className="text-xs text-orange-600 hover:text-orange-800 font-medium"
-                          >
-                            {dict.products?.addOption || '+ Add option'}
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Laundry-specific fields */}
-            {settings?.businessType?.toLowerCase() === 'laundry' && (
-              <div className="space-y-4 pt-4 border-t border-gray-200">
-                <h3 className="text-lg font-semibold text-gray-900">{dict.products?.laundryInfo || 'Laundry Service Information'}</h3>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{dict.products?.serviceType || 'Service Type'}</label>
-                  <select
-                    value={formData.serviceType}
-                    onChange={(e) => updateFormData({ serviceType: e.target.value as any })} // eslint-disable-line @typescript-eslint/no-explicit-any
-                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-                  >
-                    <option value="wash">{dict.products?.serviceTypeWash || 'Wash'}</option>
-                    <option value="dry-clean">{dict.products?.serviceTypeDryClean || 'Dry Clean'}</option>
-                    <option value="press">{dict.products?.serviceTypePress || 'Press'}</option>
-                    <option value="repair">{dict.products?.serviceTypeRepair || 'Repair'}</option>
-                    <option value="other">{dict.products?.serviceTypeOther || 'Other'}</option>
-                  </select>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={formData.weightBased}
-                        onChange={(e) => updateFormData({ weightBased: e.target.checked })}
-                        className="checkbox-win8 mr-2"
-                      />
-                      <span className="text-sm font-medium text-gray-700">{dict.products?.weightBased || 'Weight-based pricing'}</span>
-                    </label>
-                  </div>
-                  <div>
-                    <label className="flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={formData.pickupDelivery}
-                        onChange={(e) => updateFormData({ pickupDelivery: e.target.checked })}
-                        className="checkbox-win8 mr-2"
-                      />
-                      <span className="text-sm font-medium text-gray-700">{dict.products?.pickupDelivery || 'Pickup & Delivery'}</span>
-                    </label>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{dict.products?.estimatedDuration || 'Estimated Duration (minutes)'}</label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={formData.estimatedDuration || ''}
-                    onChange={(e) => updateFormData({ estimatedDuration: parseInt(e.target.value) || undefined })}
-                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Service-specific fields */}
-            {settings?.businessType?.toLowerCase() === 'service' && (
-              <div className="space-y-4 pt-4 border-t border-gray-200">
-                <h3 className="text-lg font-semibold text-gray-900">{dict.products?.serviceInfo || 'Service Information'}</h3>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{dict.products?.serviceDuration || 'Service Duration (minutes)'}</label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={formData.serviceDuration || ''}
-                      onChange={(e) => updateFormData({ serviceDuration: parseInt(e.target.value) || undefined })}
-                      className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{dict.products?.staffRequired || 'Staff Required'}</label>
-                    <input
-                      type="number"
-                      min="1"
-                      value={formData.staffRequired || 1}
-                      onChange={(e) => updateFormData({ staffRequired: parseInt(e.target.value) || 1 })}
-                      className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{dict.products?.equipmentRequired || 'Equipment Required (comma-separated)'}</label>
-                  <input
-                    type="text"
-                    value={Array.isArray(formData.equipmentRequired) ? formData.equipmentRequired.join(', ') : formData.equipmentRequired || ''}
-                    onChange={(e) => {
-                      const equipment = e.target.value.split(',').map(e => e.trim()).filter(e => e);
-                      updateFormData({ equipmentRequired: equipment });
-                    }}
-                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-                    placeholder="e.g., scissors, clippers, styling chair"
-                  />
-                </div>
-              </div>
-            )}
-            {error && (
-              <div className="bg-red-50 text-red-800 border border-red-300 p-3">
-                {error}
-              </div>
-            )}
-            <div className="flex gap-3 justify-end pt-4">
-              <button
-                type="button"
-                onClick={onClose}
-                className={btnSecondary}
-              >
-                {dict.common?.cancel || 'Cancel'}
-              </button>
-              <button
-                type="submit"
-                disabled={saving}
-                className={btnPrimary}
-              >
-                {saving ? (dict.common?.loading || 'Saving...') : (dict.common?.save || 'Save')}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
-
-      {/* Image Picker Modal */}
-      {showImagePicker && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
-          <div className="bg-white border border-gray-200 w-full max-w-2xl flex flex-col max-h-[80vh]">
-            {/* Header */}
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
-              <h3 className="text-base font-semibold text-gray-900">{dict.products?.selectImage || 'Select Image'}</h3>
-              <button type="button" onClick={() => setShowImagePicker(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
-            </div>
-            {/* Toolbar */}
-            <div className="flex items-center gap-3 px-5 py-3 border-b border-gray-100">
-              <input
-                type="text"
-                placeholder={dict.products?.searchImages || 'Search images...'}
-                value={pickerSearch}
-                onChange={e => setPickerSearch(e.target.value)}
-                className="flex-1 px-3 py-2 border border-gray-300 text-sm bg-white"
-              />
-              <label className={`${btnPrimarySm} cursor-pointer ${pickerUploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                {pickerUploading ? (dict.products?.uploading || 'Uploading...') : (dict.products?.uploadNew || 'Upload New')}
-                <input
-                  ref={pickerFileInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  disabled={pickerUploading}
-                  onChange={handlePickerUpload}
-                />
-              </label>
-            </div>
-            {/* Grid */}
-            <div className="flex-1 overflow-y-auto p-4">
-              {pickerLoading ? (
-                <div className="flex items-center justify-center py-12">
-                  <div className="animate-spin h-6 w-6 border-2 border-gray-400 border-t-transparent" />
-                </div>
-              ) : pickerFiles.filter(f => f.name.toLowerCase().includes(pickerSearch.toLowerCase())).length === 0 ? (
-                <div className="text-center py-12 text-gray-400 text-sm">
-                  {pickerSearch ? (dict.products?.noImagesMatch || 'No images match your search.') : (dict.products?.noImagesUploaded || 'No images uploaded yet. Upload one above.')}
-                </div>
-              ) : (
-                <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
-                  {pickerFiles
-                    .filter(f => f.name.toLowerCase().includes(pickerSearch.toLowerCase()))
-                    .map(file => (
-                      <button
-                        key={file.id}
-                        type="button"
-                        onClick={() => {
-                          updateFormData({ image: file.url });
-                          setShowImagePicker(false);
-                        }}
-                        className={`relative group aspect-square border-2 overflow-hidden bg-gray-50 ${
-                          formData.image === file.url ? 'border-brand' : 'border-gray-200 hover:border-gray-400'
-                        }`}
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={file.url} alt={file.name} className="w-full h-full object-cover" />
-                        {formData.image === file.url && (
-                          <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
-                            <span className="text-white text-lg">✓</span>
-                          </div>
-                        )}
-                        <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs px-1 py-0.5 truncate opacity-0 group-hover:opacity-100 transition-opacity">
-                          {file.name}
-                        </div>
-                      </button>
-                    ))}
-                </div>
-              )}
-            </div>
-            {/* Footer */}
-            <div className="flex justify-end px-5 py-3 border-t border-gray-200">
-              <button type="button" onClick={() => setShowImagePicker(false)} className={btnSecondarySm}>
-                {dict.common?.cancel || 'Cancel'}
-              </button>
             </div>
           </div>
-        </div>
+          <div className={`grid grid-cols-1 gap-4 ${showInventory ? 'sm:grid-cols-3' : ''}`}>
+            <div>
+              <label htmlFor="pm-price" className={LABEL}>{dict.admin?.price || 'Price'} *</label>
+              <input
+                id="pm-price"
+                type="number"
+                step="0.01"
+                min="0"
+                required
+                value={formData.price}
+                onChange={(e) => updateFormData({ price: parseFloat(e.target.value) || 0 })}
+                className={`${INPUT} font-receipt`}
+              />
+            </div>
+            {showInventory && (
+              <div>
+                <label htmlFor="pm-stock" className={LABEL}>{dict.admin?.stock || 'Stock'}</label>
+                <input
+                  id="pm-stock"
+                  type="number"
+                  min="0"
+                  value={formData.stock}
+                  onChange={(e) => updateFormData({ stock: parseInt(e.target.value) || 0 })}
+                  className={`${INPUT} font-receipt`}
+                  disabled={!formData.trackInventory || product?.hasVariations}
+                />
+                {product?.hasVariations && (
+                  <p className={HINT}>{dict.products?.restockUseRefill || 'Has variations. Use Refill on the Products page.'}</p>
+                )}
+              </div>
+            )}
+            {showInventory && (
+              <div>
+                <label htmlFor="pm-threshold" className={LABEL}>{dict.admin?.lowStockThreshold || 'Low Stock Threshold'}</label>
+                <input
+                  id="pm-threshold"
+                  type="number"
+                  min="0"
+                  value={formData.lowStockThreshold}
+                  onChange={(e) => updateFormData({ lowStockThreshold: parseInt(e.target.value) || 10 })}
+                  className={`${INPUT} font-receipt`}
+                />
+              </div>
+            )}
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label htmlFor="pm-category" className={LABEL}>{dict.admin?.category || 'Category'}</label>
+              <CategoryPicker
+                inputId="pm-category"
+                inputRef={categoryInputRef}
+                listRef={categoryListRef}
+                value={categorySearch}
+                selectedId={formData.categoryId}
+                options={filteredCategories}
+                open={showCategorySuggestions}
+                onType={(value) => {
+                  setCategorySearch(value);
+                  setShowCategorySuggestions(true);
+                  // Clear categoryId if search doesn't match any category
+                  const matchingCategory = categories.find(
+                    cat => cat.name.toLowerCase() === value.toLowerCase()
+                  );
+                  updateFormData({ categoryId: matchingCategory ? matchingCategory._id : '' });
+                }}
+                onFocus={() => setShowCategorySuggestions(true)}
+                onPick={handleCategorySelect}
+                placeholder={dict.admin?.searchCategory || 'Type to search categories...'}
+                emptyLabel={dict.admin?.noCategoryFound || 'No category found'}
+              />
+            </div>
+            <div>
+              <label htmlFor="pm-type" className={LABEL}>
+                {dict.common?.type || 'Type'} {businessTypeConfig && `(${businessTypeConfig.name})`}
+              </label>
+              <select
+                id="pm-type"
+                value={formData.productType}
+                onChange={(e) => updateFormData({ productType: e.target.value as any })} // eslint-disable-line @typescript-eslint/no-explicit-any
+                className={INPUT}
+              >
+                {businessTypeConfig?.productTypes?.map((type: string) => (
+                  <option key={type} value={type}>{productTypeLabel(dict, type)}</option>
+                )) || (
+                  <>
+                    <option value="regular">{dict.admin?.regular || 'Regular'}</option>
+                    <option value="bundle">{dict.admin?.bundle || 'Bundle'}</option>
+                    <option value="service">{dict.admin?.service || 'Service'}</option>
+                  </>
+                )}
+              </select>
+              {businessTypeConfig && businessTypeConfig.productTypes.length === 1 && (
+                <p className={HINT}>
+                  {(dict.products?.onlyProductType || 'Only {type} products are allowed for {businessType}')
+                    .replace('{type}', productTypeLabel(dict, businessTypeConfig.productTypes[0]))
+                    .replace('{businessType}', businessTypeConfig.name)}
+                </p>
+              )}
+            </div>
+          </div>
+          {showInventory && (
+            <label className={CHECK_ROW}>
+              <input
+                type="checkbox"
+                checked={formData.trackInventory}
+                onChange={(e) => updateFormData({ trackInventory: e.target.checked })}
+                className={CHECKBOX}
+              />
+              <span className="font-medium">{dict.admin?.trackInventory || 'Track Inventory'}</span>
+            </label>
+          )}
+
+          {/* Restaurant-specific fields */}
+          {settings?.businessType?.toLowerCase() === 'restaurant' && (
+            <div className="space-y-4 border-t border-dashed border-ink/30 pt-4">
+              <h3 className="font-semibold">{dict.products?.restaurantInfo || 'Restaurant Information'}</h3>
+
+              <div>
+                <label htmlFor="pm-allergens" className={LABEL}>{dict.products?.allergens || 'Allergens (comma-separated)'}</label>
+                <input
+                  id="pm-allergens"
+                  type="text"
+                  value={Array.isArray(formData.allergens) ? formData.allergens.join(', ') : formData.allergens || ''}
+                  onChange={(e) => {
+                    const allergens = e.target.value.split(',').map(a => a.trim()).filter(a => a);
+                    updateFormData({ allergens });
+                  }}
+                  className={INPUT}
+                  placeholder="e.g., gluten, dairy, nuts"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="pm-calories" className={LABEL}>{dict.products?.calories || 'Calories'}</label>
+                  <input
+                    id="pm-calories"
+                    type="number"
+                    min="0"
+                    value={formData.nutritionInfo?.calories || ''}
+                    onChange={(e) => updateFormData({
+                      ...formData,
+                      nutritionInfo: { ...formData.nutritionInfo, calories: parseInt(e.target.value) || undefined }
+                    })}
+                    className={INPUT}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="pm-protein" className={LABEL}>{dict.products?.protein || 'Protein (g)'}</label>
+                  <input
+                    id="pm-protein"
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={formData.nutritionInfo?.protein || ''}
+                    onChange={(e) => updateFormData({
+                      ...formData,
+                      nutritionInfo: { ...formData.nutritionInfo, protein: parseFloat(e.target.value) || undefined }
+                    })}
+                    className={INPUT}
+                  />
+                </div>
+              </div>
+
+              {/* Modifier Groups */}
+              <div className="pt-2">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <p className={`${LABEL} mb-0`}>{dict.products?.modifierGroups || 'Modifier Groups'}</p>
+                  <button
+                    type="button"
+                    onClick={() => updateModifiers([
+                      ...(formData.modifiers || []),
+                      { name: '', options: [{ name: '', price: 0 }], required: false },
+                    ])}
+                    className={KEY}
+                  >
+                    {dict.products?.addGroup || '+ Add Group'}
+                  </button>
+                </div>
+                <div className="space-y-3">
+                  {(formData.modifiers || []).map((group, gi) => (
+                    <div key={gi} className="space-y-2 border border-dashed border-ink/30 bg-paper p-3">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={group.name}
+                          onChange={(e) => {
+                            const mods = [...(formData.modifiers || [])];
+                            mods[gi] = { ...mods[gi], name: e.target.value };
+                            updateModifiers(mods);
+                          }}
+                          placeholder="Group name (e.g. Temperature)"
+                          aria-label={dict.products?.modifierGroups || 'Modifier group name'}
+                          className={`${INPUT_BASE} min-w-0 flex-1`}
+                        />
+                        <label className={`${CHECK_ROW} shrink-0 font-receipt text-xs uppercase`}>
+                          <input
+                            type="checkbox"
+                            checked={group.required}
+                            onChange={(e) => {
+                              const mods = [...(formData.modifiers || [])];
+                              mods[gi] = { ...mods[gi], required: e.target.checked };
+                              updateModifiers(mods);
+                            }}
+                            className={CHECKBOX}
+                          />
+                          {dict.products?.required || 'Required'}
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const mods = [...(formData.modifiers || [])];
+                            mods.splice(gi, 1);
+                            updateModifiers(mods);
+                          }}
+                          className={`${ROW_KEY} hover:text-stamp`}
+                          title="Remove group"
+                          aria-label="Remove group"
+                        >
+                          <X className={ICON} strokeWidth={1.75} aria-hidden />
+                        </button>
+                      </div>
+                      {/* Options */}
+                      <div className="space-y-1.5 pl-2">
+                        {group.options.map((opt, oi) => (
+                          <div key={oi} className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={opt.name}
+                              onChange={(e) => {
+                                const mods = [...(formData.modifiers || [])];
+                                const opts = [...mods[gi].options];
+                                opts[oi] = { ...opts[oi], name: e.target.value };
+                                mods[gi] = { ...mods[gi], options: opts };
+                                updateModifiers(mods);
+                              }}
+                              placeholder="Option (e.g. Rare)"
+                              aria-label="Option name"
+                              className={`${INPUT_BASE} min-w-0 flex-1`}
+                            />
+                            <span className="flex-shrink-0 font-receipt text-xs text-ink/50">+{currencySymbol}</span>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={opt.price || ''}
+                              onChange={(e) => {
+                                const mods = [...(formData.modifiers || [])];
+                                const opts = [...mods[gi].options];
+                                opts[oi] = { ...opts[oi], price: parseFloat(e.target.value) || 0 };
+                                mods[gi] = { ...mods[gi], options: opts };
+                                updateModifiers(mods);
+                              }}
+                              placeholder="0.00"
+                              aria-label="Option price"
+                              className={`${INPUT_BASE} w-24 font-receipt`}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const mods = [...(formData.modifiers || [])];
+                                const opts = [...mods[gi].options];
+                                opts.splice(oi, 1);
+                                mods[gi] = { ...mods[gi], options: opts };
+                                updateModifiers(mods);
+                              }}
+                              className={`${ROW_KEY} hover:text-stamp`}
+                              title="Remove option"
+                              aria-label="Remove option"
+                            >
+                              <X className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+                            </button>
+                          </div>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const mods = [...(formData.modifiers || [])];
+                            mods[gi] = { ...mods[gi], options: [...mods[gi].options, { name: '', price: 0 }] };
+                            updateModifiers(mods);
+                          }}
+                          className="flex min-h-[44px] items-center font-receipt text-xs font-medium uppercase text-brand-hover hover:underline"
+                        >
+                          {dict.products?.addOption || '+ Add option'}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Laundry-specific fields */}
+          {settings?.businessType?.toLowerCase() === 'laundry' && (
+            <div className="space-y-4 border-t border-dashed border-ink/30 pt-4">
+              <h3 className="font-semibold">{dict.products?.laundryInfo || 'Laundry Service Information'}</h3>
+
+              <div>
+                <label htmlFor="pm-service-type" className={LABEL}>{dict.products?.serviceType || 'Service Type'}</label>
+                <select
+                  id="pm-service-type"
+                  value={formData.serviceType}
+                  onChange={(e) => updateFormData({ serviceType: e.target.value as any })} // eslint-disable-line @typescript-eslint/no-explicit-any
+                  className={INPUT}
+                >
+                  <option value="wash">{dict.products?.serviceTypeWash || 'Wash'}</option>
+                  <option value="dry-clean">{dict.products?.serviceTypeDryClean || 'Dry Clean'}</option>
+                  <option value="press">{dict.products?.serviceTypePress || 'Press'}</option>
+                  <option value="repair">{dict.products?.serviceTypeRepair || 'Repair'}</option>
+                  <option value="other">{dict.products?.serviceTypeOther || 'Other'}</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
+                <label className={CHECK_ROW}>
+                  <input
+                    type="checkbox"
+                    checked={formData.weightBased}
+                    onChange={(e) => updateFormData({ weightBased: e.target.checked })}
+                    className={CHECKBOX}
+                  />
+                  <span className="font-medium">{dict.products?.weightBased || 'Weight-based pricing'}</span>
+                </label>
+                <label className={CHECK_ROW}>
+                  <input
+                    type="checkbox"
+                    checked={formData.pickupDelivery}
+                    onChange={(e) => updateFormData({ pickupDelivery: e.target.checked })}
+                    className={CHECKBOX}
+                  />
+                  <span className="font-medium">{dict.products?.pickupDelivery || 'Pickup & Delivery'}</span>
+                </label>
+              </div>
+
+              <div>
+                <label htmlFor="pm-duration" className={LABEL}>{dict.products?.estimatedDuration || 'Estimated Duration (minutes)'}</label>
+                <input
+                  id="pm-duration"
+                  type="number"
+                  min="0"
+                  value={formData.estimatedDuration || ''}
+                  onChange={(e) => updateFormData({ estimatedDuration: parseInt(e.target.value) || undefined })}
+                  className={INPUT}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Service-specific fields */}
+          {settings?.businessType?.toLowerCase() === 'service' && (
+            <div className="space-y-4 border-t border-dashed border-ink/30 pt-4">
+              <h3 className="font-semibold">{dict.products?.serviceInfo || 'Service Information'}</h3>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="pm-service-duration" className={LABEL}>{dict.products?.serviceDuration || 'Service Duration (minutes)'}</label>
+                  <input
+                    id="pm-service-duration"
+                    type="number"
+                    min="0"
+                    value={formData.serviceDuration || ''}
+                    onChange={(e) => updateFormData({ serviceDuration: parseInt(e.target.value) || undefined })}
+                    className={INPUT}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="pm-staff" className={LABEL}>{dict.products?.staffRequired || 'Staff Required'}</label>
+                  <input
+                    id="pm-staff"
+                    type="number"
+                    min="1"
+                    value={formData.staffRequired || 1}
+                    onChange={(e) => updateFormData({ staffRequired: parseInt(e.target.value) || 1 })}
+                    className={INPUT}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="pm-equipment" className={LABEL}>{dict.products?.equipmentRequired || 'Equipment Required (comma-separated)'}</label>
+                <input
+                  id="pm-equipment"
+                  type="text"
+                  value={Array.isArray(formData.equipmentRequired) ? formData.equipmentRequired.join(', ') : formData.equipmentRequired || ''}
+                  onChange={(e) => {
+                    const equipment = e.target.value.split(',').map(e => e.trim()).filter(e => e);
+                    updateFormData({ equipmentRequired: equipment });
+                  }}
+                  className={INPUT}
+                  placeholder="e.g., scissors, clippers, styling chair"
+                />
+              </div>
+            </div>
+          )}
+          {error && <Strip tone="error">{error}</Strip>}
+        </form>
+      </Sheet>
+
+      {/* Image Picker */}
+      {showImagePicker && (
+        <Sheet
+          wide
+          layer="z-[60]"
+          title={dict.products?.selectImage || 'Select Image'}
+          onClose={() => setShowImagePicker(false)}
+          closeLabel={closeLabel}
+          footer={
+            <button type="button" onClick={() => setShowImagePicker(false)} className={KEY}>
+              {dict.common?.cancel || 'Cancel'}
+            </button>
+          }
+        >
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <input
+              type="search"
+              placeholder={dict.products?.searchImages || 'Search images...'}
+              aria-label={dict.products?.searchImages || 'Search images'}
+              value={pickerSearch}
+              onChange={e => setPickerSearch(e.target.value)}
+              className={`${INPUT_BASE} min-w-0 flex-1`}
+            />
+            <label className={`${KEY_PRIMARY} cursor-pointer ${pickerUploading ? 'cursor-not-allowed opacity-50' : ''}`}>
+              <Upload className={ICON} strokeWidth={1.75} aria-hidden />
+              {pickerUploading ? (dict.products?.uploading || 'Uploading...') : (dict.products?.uploadNew || 'Upload New')}
+              <input
+                ref={pickerFileInputRef}
+                type="file"
+                accept="image/*"
+                className="sr-only"
+                disabled={pickerUploading}
+                onChange={handlePickerUpload}
+              />
+            </label>
+          </div>
+          {pickerLoading ? (
+            <LoadingSpinner size="sm" className="py-12" />
+          ) : pickerMatches.length === 0 ? (
+            <p className="py-12 text-center font-receipt text-sm text-ink/60">
+              {pickerSearch ? (dict.products?.noImagesMatch || 'No images match your search.') : (dict.products?.noImagesUploaded || 'No images uploaded yet. Upload one above.')}
+            </p>
+          ) : (
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+              {pickerMatches.map(file => {
+                const chosen = formData.image === file.url;
+                return (
+                  <button
+                    key={file.id}
+                    type="button"
+                    onClick={() => {
+                      updateFormData({ image: file.url });
+                      setShowImagePicker(false);
+                    }}
+                    aria-pressed={chosen}
+                    title={file.name}
+                    className={`group relative aspect-square overflow-hidden border-2 bg-ink/5 ${chosen ? 'border-ink' : 'border-transparent hover:border-ink/40'}`}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={file.url} alt={file.name} loading="lazy" className="h-full w-full object-cover" />
+                    {chosen && (
+                      <span className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center bg-ink text-[#7df0d6]">
+                        <Check className="h-4 w-4" strokeWidth={1.75} aria-hidden />
+                      </span>
+                    )}
+                    <span className="absolute inset-x-0 bottom-0 truncate bg-ink/80 px-1 py-0.5 font-receipt text-[11px] text-paper-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
+                      {file.name}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </Sheet>
       )}
       {DuplicateDialog}
     </>
@@ -1715,60 +1750,56 @@ function BulkRestockModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-gray-900/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white border border-gray-300 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <form onSubmit={handleSubmit} className="p-6">
-          <h2 className="text-2xl font-bold text-gray-900 mb-1">
-            {dict.products?.restockSelected || 'Restock Selected'}
-          </h2>
-          <p className="text-sm text-gray-500 mb-4">
-            {dict.products?.restockDescription ||
-              `Enter the quantity received for each product (${products.length} selected). Leave blank to skip a product.`}
-          </p>
-
-          {error && (
-            <div className="mb-4 p-3 bg-red-50 text-red-800 border border-red-300 text-sm">{error}</div>
-          )}
-
-          <div className="border border-gray-200 divide-y divide-gray-100 max-h-96 overflow-y-auto">
-            {products.map((product) => (
-              <div key={product._id} className="flex items-center justify-between gap-3 px-3 py-2">
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-medium text-gray-900 truncate">{product.name}</div>
-                  <div className="text-xs text-gray-500">
-                    {product.sku || '-'} · {dict.admin?.stock || 'Stock'}: {product.trackInventory ? product.stock : '∞'}
-                  </div>
-                </div>
-                {product.hasVariations ? (
-                  <span className="shrink-0 text-xs text-gray-500">
-                    {dict.products?.restockUseRefill || 'Has variations. Use Refill on the Products page.'}
-                  </span>
-                ) : (
-                  <input
-                    type="number"
-                    min={0}
-                    step={1}
-                    placeholder="0"
-                    value={quantities[product._id] || ''}
-                    onChange={(e) => setQuantity(product._id, e.target.value)}
-                    className="w-24 px-2 py-1.5 border border-gray-300 text-sm text-right"
-                  />
-                )}
+    <Sheet
+      wide
+      title={dict.products?.restockSelected || 'Restock Selected'}
+      subtitle={(dict.products?.restockDescription ||
+        'Enter the quantity received for each product ({count} selected). Leave blank to skip a product.').replace('{count}', String(products.length))}
+      onClose={onClose}
+      closeLabel={dict.common?.close || 'Close'}
+      footer={
+        <>
+          <button type="button" onClick={onClose} className={KEY} disabled={saving}>
+            {dict.common?.cancel || 'Cancel'}
+          </button>
+          <button type="submit" form="restock-form" className={KEY_PRIMARY} disabled={saving}>
+            {saving ? (dict.common?.saving || 'Saving...') : (dict.products?.restockConfirm || 'Restock')}
+          </button>
+        </>
+      }
+    >
+      <form id="restock-form" onSubmit={handleSubmit} className="space-y-4">
+        {error && <Strip tone="error">{error}</Strip>}
+        <ul className="divide-y divide-dashed divide-ink/20 border-y border-dashed border-ink/30">
+          {products.map((product) => (
+            <li key={product._id} className="flex items-center justify-between gap-3 py-2">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium">{product.name}</p>
+                <p className="font-receipt text-xs text-ink/60">
+                  {product.sku || '-'} · {dict.admin?.stock || 'Stock'}: {product.trackInventory ? product.stock : '∞'}
+                </p>
               </div>
-            ))}
-          </div>
-
-          <div className="flex justify-end gap-2 mt-6">
-            <button type="button" onClick={onClose} className={btnSecondarySm} disabled={saving}>
-              {dict.common?.cancel || 'Cancel'}
-            </button>
-            <button type="submit" className={btnPrimarySm} disabled={saving}>
-              {saving ? (dict.common?.saving || 'Saving...') : (dict.products?.restockConfirm || 'Restock')}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+              {product.hasVariations ? (
+                <span className="max-w-[12rem] shrink-0 text-right font-receipt text-xs text-ink/60">
+                  {dict.products?.restockUseRefill || 'Has variations. Use Refill on the Products page.'}
+                </span>
+              ) : (
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  placeholder="0"
+                  value={quantities[product._id] || ''}
+                  onChange={(e) => setQuantity(product._id, e.target.value)}
+                  aria-label={`${dict.products?.restockConfirm || 'Restock'}: ${product.name}`}
+                  className={`${INPUT_BASE} w-24 text-right font-receipt`}
+                />
+              )}
+            </li>
+          ))}
+        </ul>
+      </form>
+    </Sheet>
   );
 }
 
@@ -1812,6 +1843,8 @@ function BulkEditModal({
   const [lowStockThreshold, setLowStockThreshold] = useState('10');
 
   const showInventory = businessTypeConfig?.defaultFeatures?.enableInventory !== false;
+  const applyLabel = dict.products?.applyField || 'Apply';
+  const needsValue = (field: string) => `${field}: ${dict.products?.valueRequired || 'enter a value'}`;
 
   const filteredCategories = useMemo(() => {
     if (!categorySearch.trim()) return categories;
@@ -1858,7 +1891,7 @@ function BulkEditModal({
     if (applyPrice) {
       const value = parseFloat(priceValue);
       if (isNaN(value)) {
-        setError(dict.admin?.price || 'Price' + ' is required');
+        setError(needsValue(dict.admin?.price || 'Price'));
         return;
       }
       updates.price = { mode: priceMode, value };
@@ -1867,7 +1900,7 @@ function BulkEditModal({
     if (applyStock && showInventory) {
       const value = parseInt(stockValue, 10);
       if (isNaN(value)) {
-        setError(dict.admin?.stock || 'Stock' + ' is required');
+        setError(needsValue(dict.admin?.stock || 'Stock'));
         return;
       }
       updates.stock = { mode: stockMode, value };
@@ -1880,7 +1913,7 @@ function BulkEditModal({
     if (applyLowStockThreshold && showInventory) {
       const value = parseInt(lowStockThreshold, 10);
       if (isNaN(value) || value < 0) {
-        setError(dict.admin?.lowStockThreshold || 'Low stock threshold' + ' is required');
+        setError(needsValue(dict.admin?.lowStockThreshold || 'Low Stock Threshold'));
         return;
       }
       updates.lowStockThreshold = value;
@@ -1899,126 +1932,113 @@ function BulkEditModal({
     }
   };
 
+  /** One line of the form: tick it to apply, then fill in the value. */
+  const Field = ({ checked, onToggle, label, children }: { checked: boolean; onToggle: (v: boolean) => void; label: string; children?: ReactNode }) => (
+    <div className="py-1">
+      <label className={`${CHECK_ROW} font-medium`}>
+        <input type="checkbox" checked={checked} onChange={(e) => onToggle(e.target.checked)} className={CHECKBOX} />
+        {applyLabel} {label}
+      </label>
+      {checked && children && <div className="pb-2 pl-6">{children}</div>}
+    </div>
+  );
+
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white border border-gray-200 w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900">
-              {dict.products?.bulkEditTitle || 'Bulk Edit Products'}
-            </h2>
-            <p className="text-sm text-gray-500 mt-1">
-              {(dict.products?.bulkEditSubtitle || 'Only checked fields will be applied.') + ` (${count})`}
-            </p>
-          </div>
-          <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">
-            ×
+    <Sheet
+      title={dict.products?.bulkEditTitle || 'Bulk Edit Products'}
+      subtitle={
+        <>
+          <span className="flex items-baseline gap-2 font-receipt text-xs font-semibold uppercase text-ink">
+            <span className="font-led text-2xl leading-none">{count}</span>
+            {dict.admin?.selected || 'selected'}
+          </span>
+          <span className="mt-1 block">{dict.products?.bulkEditSubtitle || 'Only checked fields will be applied.'}</span>
+        </>
+      }
+      onClose={onClose}
+      closeLabel={dict.common?.close || 'Close'}
+      footer={
+        <>
+          <button type="button" onClick={onClose} className={KEY}>
+            {dict.common?.cancel || 'Cancel'}
           </button>
-        </div>
+          <button type="submit" form="bulk-edit-form" disabled={saving} className={KEY_PRIMARY}>
+            {saving ? (dict.common?.loading || 'Saving...') : (dict.common?.save || 'Save')}
+          </button>
+        </>
+      }
+    >
+      <form id="bulk-edit-form" onSubmit={handleSubmit} className="divide-y divide-dashed divide-ink/20">
+        {Field({
+          checked: applyCategory,
+          onToggle: setApplyCategory,
+          label: dict.admin?.category || 'Category',
+          children: (
+            <CategoryPicker
+              inputRef={categoryInputRef}
+              listRef={categoryListRef}
+              value={categorySearch}
+              selectedId={categoryId}
+              options={filteredCategories}
+              open={showCategorySuggestions}
+              onType={(value) => {
+                setCategorySearch(value);
+                setShowCategorySuggestions(true);
+                const match = categories.find(
+                  (cat) => cat.name.toLowerCase() === value.toLowerCase()
+                );
+                setCategoryId(match?._id || '');
+              }}
+              onFocus={() => setShowCategorySuggestions(true)}
+              onPick={handleCategorySelect}
+              placeholder={dict.admin?.searchCategory || 'Type to search categories...'}
+            />
+          ),
+        })}
 
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
-          <div className="space-y-2">
-            <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+        {Field({
+          checked: applyPrice,
+          onToggle: setApplyPrice,
+          label: dict.admin?.price || 'Price',
+          children: (
+            <div className="flex gap-2">
+              <select
+                value={priceMode}
+                onChange={(e) => setPriceMode(e.target.value as 'set' | 'percent' | 'add')}
+                aria-label={dict.admin?.price || 'Price'}
+                className={`${INPUT_BASE} w-auto`}
+              >
+                <option value="set">{dict.products?.priceModeSet || 'Set to'}</option>
+                <option value="percent">{dict.products?.priceModePercent || 'Increase by %'}</option>
+                <option value="add">{dict.products?.priceModeAdd || 'Add amount'}</option>
+              </select>
               <input
-                type="checkbox"
-                checked={applyCategory}
-                onChange={(e) => setApplyCategory(e.target.checked)}
-                className="checkbox-win8"
+                type="number"
+                step={priceMode === 'set' ? '0.01' : '1'}
+                value={priceValue}
+                onChange={(e) => setPriceValue(e.target.value)}
+                aria-label={dict.admin?.price || 'Price'}
+                className={`${INPUT_BASE} min-w-0 flex-1 font-receipt`}
+                placeholder="0"
               />
-              {dict.products?.applyField || 'Apply'} {dict.admin?.category || 'Category'}
-            </label>
-            {applyCategory && (
-              <div ref={categoryInputRef} className="relative">
-                <input
-                  type="text"
-                  value={categorySearch}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    setCategorySearch(value);
-                    setShowCategorySuggestions(true);
-                    const match = categories.find(
-                      (cat) => cat.name.toLowerCase() === value.toLowerCase()
-                    );
-                    setCategoryId(match?._id || '');
-                  }}
-                  onFocus={() => setShowCategorySuggestions(true)}
-                  placeholder={dict.admin?.searchCategory || 'Type to search categories...'}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-                />
-                {showCategorySuggestions && filteredCategories.length > 0 && (
-                  <div
-                    ref={categoryListRef}
-                    className="absolute z-50 w-full mt-1 bg-white border border-gray-300 max-h-40 overflow-y-auto"
-                  >
-                    {filteredCategories.map((cat) => (
-                      <button
-                        key={cat._id}
-                        type="button"
-                        onClick={() => handleCategorySelect(cat)}
-                        className={`w-full text-left px-4 py-2 hover:bg-brand-soft focus:bg-brand-soft focus:outline-none ${
-                          categoryId === cat._id ? 'bg-brand-soft' : ''
-                        }`}
-                      >
-                        {cat.name}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
+            </div>
+          ),
+        })}
 
-          <div className="space-y-2">
-            <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
-              <input
-                type="checkbox"
-                checked={applyPrice}
-                onChange={(e) => setApplyPrice(e.target.checked)}
-                className="checkbox-win8"
-              />
-              {dict.products?.applyField || 'Apply'} {dict.admin?.price || 'Price'}
-            </label>
-            {applyPrice && (
-              <div className="flex gap-2">
-                <select
-                  value={priceMode}
-                  onChange={(e) => setPriceMode(e.target.value as 'set' | 'percent' | 'add')}
-                  className="px-3 py-2 border border-gray-300 bg-white"
-                >
-                  <option value="set">{dict.products?.priceModeSet || 'Set to'}</option>
-                  <option value="percent">{dict.products?.priceModePercent || 'Increase by %'}</option>
-                  <option value="add">{dict.products?.priceModeAdd || 'Add amount'}</option>
-                </select>
-                <input
-                  type="number"
-                  step={priceMode === 'set' ? '0.01' : '1'}
-                  value={priceValue}
-                  onChange={(e) => setPriceValue(e.target.value)}
-                  className="flex-1 px-3 py-2 border border-gray-300 bg-white"
-                  placeholder="0"
-                />
-              </div>
-            )}
-          </div>
-
-          {showInventory && (
-            <>
-              <div className="space-y-2">
-                <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                  <input
-                    type="checkbox"
-                    checked={applyStock}
-                    onChange={(e) => setApplyStock(e.target.checked)}
-                    className="checkbox-win8"
-                  />
-                  {dict.products?.applyField || 'Apply'} {dict.admin?.stock || 'Stock'}
-                </label>
-                {applyStock && (
+        {showInventory && (
+          <>
+            {Field({
+              checked: applyStock,
+              onToggle: setApplyStock,
+              label: dict.admin?.stock || 'Stock',
+              children: (
+                <>
                   <div className="flex gap-2">
                     <select
                       value={stockMode}
                       onChange={(e) => setStockMode(e.target.value as 'set' | 'add')}
-                      className="px-3 py-2 border border-gray-300 bg-white"
+                      aria-label={dict.admin?.stock || 'Stock'}
+                      className={`${INPUT_BASE} w-auto`}
                     >
                       <option value="set">{dict.products?.stockModeSet || 'Set to'}</option>
                       <option value="add">{dict.products?.stockModeAdd || 'Add'}</option>
@@ -2028,87 +2048,55 @@ function BulkEditModal({
                       step="1"
                       value={stockValue}
                       onChange={(e) => setStockValue(e.target.value)}
-                      className="flex-1 px-3 py-2 border border-gray-300 bg-white"
+                      aria-label={dict.admin?.stock || 'Stock'}
+                      className={`${INPUT_BASE} min-w-0 flex-1 font-receipt`}
                       placeholder="0"
                     />
                   </div>
-                )}
-                {applyStock && (
-                  <p className="text-xs text-gray-500">
+                  <p className={HINT}>
                     {dict.products?.bulkStockSkipsVariations || 'Products with variations are skipped. Use Refill on the Products page.'}
                   </p>
-                )}
-              </div>
+                </>
+              ),
+            })}
 
-              <div className="space-y-2">
-                <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+            {Field({
+              checked: applyTrackInventory,
+              onToggle: setApplyTrackInventory,
+              label: dict.admin?.trackInventory || 'Track Inventory',
+              children: (
+                <label className={CHECK_ROW}>
                   <input
                     type="checkbox"
-                    checked={applyTrackInventory}
-                    onChange={(e) => setApplyTrackInventory(e.target.checked)}
-                    className="checkbox-win8"
+                    checked={trackInventory}
+                    onChange={(e) => setTrackInventory(e.target.checked)}
+                    className={CHECKBOX}
                   />
-                  {dict.products?.applyField || 'Apply'} {dict.admin?.trackInventory || 'Track Inventory'}
+                  {dict.admin?.trackInventory || 'Track Inventory'}
                 </label>
-                {applyTrackInventory && (
-                  <label className="flex items-center gap-2 text-sm text-gray-600 ml-6">
-                    <input
-                      type="checkbox"
-                      checked={trackInventory}
-                      onChange={(e) => setTrackInventory(e.target.checked)}
-                      className="checkbox-win8"
-                    />
-                    {dict.admin?.trackInventory || 'Track Inventory'}
-                  </label>
-                )}
-              </div>
+              ),
+            })}
 
-              <div className="space-y-2">
-                <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                  <input
-                    type="checkbox"
-                    checked={applyLowStockThreshold}
-                    onChange={(e) => setApplyLowStockThreshold(e.target.checked)}
-                    className="checkbox-win8"
-                  />
-                  {dict.products?.applyField || 'Apply'} {dict.admin?.lowStockThreshold || 'Low Stock Threshold'}
-                </label>
-                {applyLowStockThreshold && (
-                  <input
-                    type="number"
-                    min="0"
-                    value={lowStockThreshold}
-                    onChange={(e) => setLowStockThreshold(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 bg-white"
-                  />
-                )}
-              </div>
-            </>
-          )}
+            {Field({
+              checked: applyLowStockThreshold,
+              onToggle: setApplyLowStockThreshold,
+              label: dict.admin?.lowStockThreshold || 'Low Stock Threshold',
+              children: (
+                <input
+                  type="number"
+                  min="0"
+                  value={lowStockThreshold}
+                  onChange={(e) => setLowStockThreshold(e.target.value)}
+                  aria-label={dict.admin?.lowStockThreshold || 'Low Stock Threshold'}
+                  className={`${INPUT} font-receipt`}
+                />
+              ),
+            })}
+          </>
+        )}
 
-          {error && (
-            <div className="bg-red-50 text-red-800 border border-red-300 p-3 text-sm">{error}</div>
-          )}
-
-          <div className="flex gap-3 justify-end pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className={btnSecondary}
-            >
-              {dict.common?.cancel || 'Cancel'}
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className={btnPrimary}
-            >
-              {saving ? (dict.common?.loading || 'Saving...') : (dict.common?.save || 'Save')}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        {error && <div className="pt-3"><Strip tone="error">{error}</Strip></div>}
+      </form>
+    </Sheet>
   );
 }
-

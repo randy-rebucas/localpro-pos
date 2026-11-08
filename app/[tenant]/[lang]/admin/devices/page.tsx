@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { getDictionaryClient } from '../../dictionaries-client';
@@ -53,6 +53,10 @@ export default function DevicesPage() {
     setAssignedDeviceIdState(getAssignedDeviceId(tenant));
   }, [tenant]);
 
+  // Read the dictionary through a ref so its arrival does not refetch the list.
+  const dictRef = useRef(dict);
+  useEffect(() => { dictRef.current = dict; }, [dict]);
+
   const fetchDevices = useCallback(async () => {
     try {
       setLoading(true);
@@ -61,14 +65,14 @@ export default function DevicesPage() {
       if (data.success) {
         setDevices(data.data || []);
       } else {
-        toast.error(data.error || dict?.admin?.failedToLoadDevices || 'Failed to load devices');
+        toast.error(data.error || dictRef.current?.admin?.failedToLoadDevices || 'Failed to load devices');
       }
     } catch {
-      toast.error(dict?.admin?.failedToLoadDevices || 'Failed to load devices');
+      toast.error(dictRef.current?.admin?.failedToLoadDevices || 'Failed to load devices');
     } finally {
       setLoading(false);
     }
-  }, [dict]);
+  }, []);
 
   const fetchBranches = useCallback(async () => {
     try {
@@ -172,7 +176,11 @@ export default function DevicesPage() {
     toast.success(dict?.admin?.deviceUnassignedFromBrowser || 'This browser is no longer assigned to a device');
   };
 
-  if (!dict || loading) {
+  // Show the spinner only for the first load, so refetches after a save or delete keep the page (and any open modal) mounted.
+  const [loadedOnce, setLoadedOnce] = useState(false);
+  if (!loading && !loadedOnce) setLoadedOnce(true);
+
+  if (!dict || !loadedOnce) {
     return (
       <div className="flex items-center justify-center py-24">
         <div className="text-center">

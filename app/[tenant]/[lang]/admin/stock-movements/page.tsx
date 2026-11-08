@@ -2,16 +2,19 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import Link from 'next/link';
+import { ArrowDownUp } from 'lucide-react';
 import { getDictionaryClient } from '../../dictionaries-client';
+import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import SlipPager from '@/components/ui/SlipPager';
+import { RegisterPage, Strip } from '@/components/admin/register-ui';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { usePermissions } from '@/hooks/usePermissions';
-import { supportsFeature } from '@/lib/business-type-helpers';
+import { supportsFeature, getBusinessType } from '@/lib/business-type-helpers';
 import { getBusinessTypeConfig } from '@/lib/business-types';
-import { getBusinessType } from '@/lib/business-type-helpers';
-import { useStockMovementsList } from '@/hooks/useStockMovementsList';
+import { getDefaultTenantSettings } from '@/lib/currency';
+import { formatDateTime } from '@/lib/formatting';
+import { useStockMovementsList, type StockMovement } from '@/hooks/useStockMovementsList';
 import {
-  getMovementTypeColor,
   getProductName,
   getProductSku,
   getUserName,
@@ -19,13 +22,59 @@ import {
   getNotes,
 } from '@/lib/stock-movements-helpers';
 
+type Dict = any; // eslint-disable-line @typescript-eslint/no-explicit-any
+
+const MOVEMENT_TYPES = ['sale', 'purchase', 'adjustment', 'return', 'damage', 'transfer'] as const;
+
+const TH = 'whitespace-nowrap px-4 py-2 text-left font-receipt text-xs font-medium uppercase tracking-[0.14em] text-ink/60';
+const TD = 'px-4 py-3 font-receipt text-sm';
+/** Cells holding written words rather than printed figures. */
+const TD_TEXT = 'px-4 py-3 text-sm';
+
+const typeLabel = (dict: Dict, type: string) =>
+  ({
+    sale: dict.admin?.sale || 'Sale',
+    purchase: dict.admin?.purchase || 'Purchase',
+    adjustment: dict.admin?.adjustment || 'Adjustment',
+    return: dict.admin?.returnType || 'Return',
+    damage: dict.admin?.damageType || 'Damage',
+    transfer: dict.admin?.transferType || 'Transfer',
+  } as Record<string, string>)[type] || type;
+
+const variationText = (movement: StockMovement) =>
+  movement.variation
+    ? Object.entries(movement.variation).filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`).join(', ')
+    : '';
+
+const branchName = (movement: StockMovement) =>
+  typeof movement.branchId === 'object' && movement.branchId?.name ? movement.branchId.name : '';
+
+/** Stock in reads in teal, stock out in stamp red, like the two columns of a stock card. */
+function Quantity({ value }: { value: number }) {
+  return (
+    <span className={`font-semibold ${value > 0 ? 'text-brand-hover' : value < 0 ? 'text-stamp' : 'text-ink/60'}`}>
+      {value > 0 ? '+' : ''}{value}
+    </span>
+  );
+}
+
+function TypeTag({ dict, type }: { dict: Dict; type: string }) {
+  const out = type === 'sale' || type === 'damage';
+  return (
+    <span className={`inline-block whitespace-nowrap border px-1.5 py-0.5 font-receipt text-[11px] uppercase ${out ? 'border-stamp/50 text-stamp' : 'border-ink/25 text-ink/70'}`}>
+      {typeLabel(dict, type)}
+    </span>
+  );
+}
+
 export default function StockMovementsPage() {
   const params = useParams();
-  const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const [dict, setDict] = useState<Dict>(null);
+  const [loadedOnce, setLoadedOnce] = useState(false);
   const { movements, loading, page, totalPages, filters, message, fetchMovements, updateFilters, updatePage } = useStockMovementsList();
   const { settings } = useTenantSettings();
+  const dateSettings = settings || getDefaultTenantSettings();
   const inventoryEnabled = supportsFeature(settings ?? undefined, 'inventory');
   const businessTypeConfig = settings ? getBusinessTypeConfig(getBusinessType(settings)) : null;
   const { canAccess } = usePermissions();
@@ -36,191 +85,196 @@ export default function StockMovementsPage() {
   }, [lang]);
 
   useEffect(() => {
-    fetchMovements();
+    fetchMovements().finally(() => setLoadedOnce(true));
   }, [page, filters, fetchMovements]);
 
-  if (!dict || loading) {
+  if (!dict || !loadedOnce) {
     return (
-      <div className="flex items-center justify-center py-24">
-        <div className="text-center">
-          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-brand"></div>
-          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
+      <div className="mk-root pos-register">
+        <div className="flex min-h-[calc(100dvh-3.5rem)] items-center justify-center bg-brand-navy-deep lg:min-h-dvh">
+          <LoadingSpinner size="md" color="#8fe3d0" />
         </div>
       </div>
     );
   }
+
+  const title = dict.admin?.stockMovements || 'Stock Movements';
 
   if (!canManage) {
     return (
-      <div className="px-4 sm:px-6 py-6">
-        <div className="bg-red-50 border-2 border-red-300 p-6">
-          <h2 className="text-lg font-bold text-red-800 mb-1">{dict?.admin?.accessRestricted || 'Access Restricted'}</h2>
-          <p className="text-sm text-red-700">
-            {dict?.admin?.accessRestrictedStockMovements || "You don't have permission to view stock movements. Contact an admin or owner."}
-          </p>
-        </div>
-      </div>
+      <RegisterPage tagNo="SM" tag={settings?.companyName} title={title}>
+        <section className="mt-6 max-w-2xl">
+          <div className="border-l-4 border-stamp bg-paper-white px-5 py-4 text-ink">
+            <h2 className="text-3xl">{dict.admin?.accessRestricted || 'Access Restricted'}</h2>
+            <p className="mt-2 text-sm">
+              {dict.admin?.accessRestrictedStockMovements || "You don't have permission to view stock movements. Contact an admin or owner."}
+            </p>
+          </div>
+          <div className="mk-tear-b h-3 bg-paper-white" aria-hidden />
+        </section>
+      </RegisterPage>
     );
   }
 
+  const unknown = dict.admin?.unknownProduct || 'Unknown product';
+  const system = dict.admin?.systemUser || 'System';
+  const filterKeys = [{ value: '', label: dict.admin?.allTypes || 'All Types' }, ...MOVEMENT_TYPES.map((type) => ({ value: type, label: typeLabel(dict, type) }))];
+  const productLabel = (movement: StockMovement) => {
+    const name = getProductName(movement.productId);
+    return name === 'Unknown' ? unknown : name;
+  };
+  const userLabel = (movement: StockMovement) => {
+    const name = getUserName(movement.userId);
+    return name === 'System' ? system : name;
+  };
+
   return (
-    <div>
-      <div className="px-4 sm:px-6 py-6">
-        <div className="mb-6 sm:mb-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-2">
-                {dict.admin?.stockMovements || 'Stock Movements'}
-              </h1>
-              <p className="text-gray-600">{dict.admin?.stockMovementsSubtitle || 'Track all inventory changes and movements'}</p>
-            </div>
-          </div>
+    <RegisterPage
+      tagNo="SM"
+      tag={settings?.companyName}
+      title={title}
+      subtitle={dict.admin?.stockMovementsSubtitle || 'Track all inventory changes and movements'}
+    >
+      {message && (
+        <div className="mt-6">
+          <Strip tone={message.type === 'success' ? 'ok' : 'error'}>{message.text}</Strip>
         </div>
+      )}
 
-        {message && (
-          <div className={`mb-6 p-4 border ${message.type === 'success' ? 'bg-green-50 text-green-800 border-green-300' : 'bg-red-50 text-red-800 border-red-300'}`}>
-            {message.text}
+      {!inventoryEnabled ? (
+        <section className="mt-6 max-w-2xl">
+          <div className="border-l-4 border-stamp bg-paper-white px-5 py-4 text-ink">
+            <h2 className="text-3xl">{dict.admin?.stockMovementsNotAvailable || 'Stock Movements Not Available'}</h2>
+            <p className="mt-2 text-sm">
+              {(dict.admin?.stockMovementsNotAvailableDesc || 'Stock movements tracking is not available for {businessType}.').replace('{businessType}', businessTypeConfig?.name || 'your business type')}
+            </p>
+            <p className="mt-1 text-sm text-ink/70">
+              {dict.admin?.stockMovementsNotAvailableHint || 'If you need stock tracking, please enable inventory management in Settings.'}
+            </p>
           </div>
-        )}
+          <div className="mk-tear-b h-3 bg-paper-white" aria-hidden />
+        </section>
+      ) : (
+        <>
+          {/* Which kind of movement to list */}
+          <nav
+            aria-label={dict.admin?.type || 'Type'}
+            className="mt-6 grid grid-cols-2 border-l border-t border-white/25 sm:grid-cols-4 xl:grid-cols-7"
+          >
+            {filterKeys.map((key) => (
+              <button
+                key={key.value || 'all'}
+                type="button"
+                aria-pressed={filters.type === key.value}
+                onClick={() => updateFilters({ type: key.value })}
+                className={`flex min-h-[44px] items-center justify-center border-b border-r border-white/25 px-2 text-center font-receipt text-xs font-medium uppercase transition-colors touch-manipulation ${filters.type === key.value ? 'bg-paper-white text-ink' : 'text-paper hover:bg-white/10'}`}
+              >
+                {key.label}
+              </button>
+            ))}
+          </nav>
 
-        {!inventoryEnabled && (
-          <div className="mb-6 p-4 bg-yellow-50 border-2 border-yellow-300 text-yellow-800">
-            <div className="flex items-start gap-3">
-              <svg className="w-6 h-6 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-              <div>
-                <h3 className="text-lg font-semibold text-yellow-900 mb-2">
-                  {dict.admin?.stockMovementsNotAvailable || 'Stock Movements Not Available'}
-                </h3>
-                <p className="text-yellow-800">
-                  {(dict.admin?.stockMovementsNotAvailableDesc || 'Stock movements tracking is not available for {businessType}.').replace('{businessType}', businessTypeConfig?.name || 'your business type')}
-                </p>
-                <p className="text-sm text-yellow-700 mt-2">
-                  {dict.admin?.stockMovementsNotAvailableHint || 'If you need stock tracking, please enable inventory management in Settings.'}
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {inventoryEnabled && (
-          <div className="bg-white border border-gray-300 p-6">
-          <div className="mb-4 flex gap-4">
-            <select
-              value={filters.type}
-              onChange={(e) => updateFilters({ type: e.target.value })}
-              className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-            >
-              <option value="">{dict.admin?.allTypes || 'All Types'}</option>
-              <option value="sale">{dict.admin?.sale || 'Sale'}</option>
-              <option value="purchase">{dict.admin?.purchase || 'Purchase'}</option>
-              <option value="adjustment">{dict.admin?.adjustment || 'Adjustment'}</option>
-              <option value="return">{dict.admin?.returnType || 'Return'}</option>
-              <option value="damage">{dict.admin?.damageType || 'Damage'}</option>
-              <option value="transfer">{dict.admin?.transferType || 'Transfer'}</option>
-            </select>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.date || 'Date'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.product || 'Product'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.type || 'Type'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.quantity || 'Quantity'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.stockChange || 'Stock Change'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.user || 'User'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.transaction || 'Transaction'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.notes || 'Notes'}</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {movements.map((movement) => {
-                  const productName = getProductName(movement.productId);
-                  const productSku = getProductSku(movement.productId);
-                  const userName = getUserName(movement.userId);
-                  const receiptNumber = getReceiptNumber(movement.transactionId);
-                  
-                  return (
-                    <tr key={movement._id}>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {new Date(movement.createdAt).toLocaleString(undefined, { hour12: true })}
-                      </td>
-                      <td className="px-4 py-4">
-                        <div className="text-sm font-medium text-gray-900">{productName}</div>
-                        {productSku && (
-                          <div className="text-xs text-gray-500">{dict.admin?.sku || 'SKU'}: {productSku}</div>
-                        )}
-                        {movement.variation && (
-                          <div className="text-xs text-gray-500">
-                            {Object.entries(movement.variation).filter(([_, v]) => v).map(([k, v]) => `${k}: ${v}`).join(', ')}
+          {/* The stock card, one line per movement */}
+          <section className="mt-6" aria-busy={loading}>
+            <div className={`bg-paper-white text-ink transition-opacity ${loading ? 'opacity-60' : ''}`}>
+              {movements.length === 0 ? (
+                <div className="px-4 py-14 text-center">
+                  <ArrowDownUp className="mx-auto mb-2 h-8 w-8 text-ink/20" strokeWidth={1.75} aria-hidden />
+                  <p className="font-receipt text-sm text-ink/60">{dict.admin?.noStockMovements || 'No stock movements found'}</p>
+                </div>
+              ) : (
+                <>
+                  {/* Up to xl: stacked lines */}
+                  <ul className="divide-y divide-dashed divide-ink/20 xl:hidden">
+                    {movements.map((movement) => {
+                      const sku = getProductSku(movement.productId);
+                      const variation = variationText(movement);
+                      const branch = branchName(movement);
+                      const receipt = getReceiptNumber(movement.transactionId);
+                      const notes = getNotes(movement.notes, movement.reason);
+                      return (
+                        <li key={movement._id} className="px-4 py-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium">{productLabel(movement)}</p>
+                              <p className="mt-0.5 font-receipt text-xs text-ink/60">
+                                {[sku, variation, branch].filter(Boolean).join(' · ') || ' '}
+                              </p>
+                            </div>
+                            <div className="shrink-0 text-right font-receipt">
+                              <p className="text-lg leading-none"><Quantity value={movement.quantity} /></p>
+                              <p className="mt-1 text-xs text-ink/60">{movement.previousStock} → {movement.newStock}</p>
+                            </div>
                           </div>
-                        )}
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 text-xs font-semibold border ${getMovementTypeColor(movement.type)}`}>
-                          {({
-                            sale: dict.admin?.sale || 'Sale',
-                            purchase: dict.admin?.purchase || 'Purchase',
-                            adjustment: dict.admin?.adjustment || 'Adjustment',
-                            return: dict.admin?.returnType || 'Return',
-                            damage: dict.admin?.damageType || 'Damage',
-                            transfer: dict.admin?.transferType || 'Transfer',
-                          } as Record<string, string>)[movement.type] || movement.type}
-                        </span>
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
-                        <span className={movement.quantity > 0 ? 'text-green-600' : 'text-red-600'}>
-                          {movement.quantity > 0 ? '+' : ''}{movement.quantity}
-                        </span>
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {movement.previousStock} → {movement.newStock}
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {userName}
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">
-                        {receiptNumber}
-                      </td>
-                      <td className="px-4 py-4 text-sm text-gray-500">
-                        {getNotes(movement.notes, movement.reason)}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            {movements.length === 0 && (
-              <div className="text-center py-8 text-gray-500">{dict.common?.noResults || 'No stock movements found'}</div>
-            )}
-          </div>
-          {totalPages > 1 && (
-            <div className="mt-4 flex justify-center gap-2">
-              <button
-                onClick={() => updatePage(page - 1)}
-                disabled={page === 1}
-                className="px-4 py-2 border border-gray-300 disabled:opacity-50 bg-white"
-              >
-                {dict.common?.previous || 'Previous'}
-              </button>
-              <span className="px-4 py-2 text-sm text-gray-700">
-                {dict.admin?.page || 'Page'} {page} / {totalPages}
-              </span>
-              <button
-                onClick={() => updatePage(page + 1)}
-                disabled={page === totalPages}
-                className="px-4 py-2 border border-gray-300 disabled:opacity-50 bg-white"
-              >
-                {dict.common?.next || 'Next'}
-              </button>
+                          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 font-receipt text-xs text-ink/60">
+                            <TypeTag dict={dict} type={movement.type} />
+                            <span>{formatDateTime(movement.createdAt, dateSettings)}</span>
+                            <span>{userLabel(movement)}</span>
+                            {receipt !== '-' && <span className="text-ink">{receipt}</span>}
+                          </div>
+                          {notes !== '-' && <p className="mt-1 text-xs text-ink/70">{notes}</p>}
+                        </li>
+                      );
+                    })}
+                  </ul>
+
+                  {/* From xl: the full ledger */}
+                  <div className="hidden overflow-x-auto xl:block" role="region" aria-label={title} tabIndex={0}>
+                    <table className="min-w-full">
+                      <thead className="border-b border-dashed border-ink/30">
+                        <tr>
+                          <th scope="col" className={TH}>{dict.admin?.date || 'Date'}</th>
+                          <th scope="col" className={TH}>{dict.admin?.product || 'Product'}</th>
+                          <th scope="col" className={TH}>{dict.admin?.type || 'Type'}</th>
+                          <th scope="col" className={`${TH} text-right`}>{dict.admin?.quantity || 'Quantity'}</th>
+                          <th scope="col" className={`${TH} text-right`}>{dict.admin?.stockChange || 'Stock Change'}</th>
+                          <th scope="col" className={TH}>{dict.admin?.user || 'User'}</th>
+                          <th scope="col" className={TH}>{dict.admin?.transaction || 'Transaction'}</th>
+                          <th scope="col" className={TH}>{dict.admin?.notes || 'Notes'}</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-dashed divide-ink/20">
+                        {movements.map((movement) => {
+                          const sku = getProductSku(movement.productId);
+                          const variation = variationText(movement);
+                          const branch = branchName(movement);
+                          return (
+                            <tr key={movement._id} className="align-top transition-colors hover:bg-paper">
+                              <td className={`${TD} whitespace-nowrap text-ink/70`}>{formatDateTime(movement.createdAt, dateSettings)}</td>
+                              <td className={`${TD} min-w-[12rem]`}>
+                                <p className="font-body font-medium">{productLabel(movement)}</p>
+                                {(sku || variation || branch) && (
+                                  <p className="mt-0.5 text-xs text-ink/60">{[sku, variation, branch].filter(Boolean).join(' · ')}</p>
+                                )}
+                              </td>
+                              <td className={TD}><TypeTag dict={dict} type={movement.type} /></td>
+                              <td className={`${TD} whitespace-nowrap text-right`}><Quantity value={movement.quantity} /></td>
+                              <td className={`${TD} whitespace-nowrap text-right text-ink/70`}>{movement.previousStock} → {movement.newStock}</td>
+                              <td className={`${TD} whitespace-nowrap text-ink/70`}>{userLabel(movement)}</td>
+                              <td className={`${TD} whitespace-nowrap`}>{getReceiptNumber(movement.transactionId)}</td>
+                              <td className={`${TD_TEXT} max-w-xs text-ink/70`}>{getNotes(movement.notes, movement.reason)}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+
+              <SlipPager
+                page={page}
+                totalPages={totalPages}
+                onPageChange={updatePage}
+                label={dict.admin?.page || 'Page'}
+                previousLabel={dict.common?.previous || 'Previous'}
+                nextLabel={dict.common?.next || 'Next'}
+              />
             </div>
-          )}
-          </div>
-        )}
-      </div>
-    </div>
+            <div className="mk-tear-b h-3 bg-paper-white" aria-hidden />
+          </section>
+        </>
+      )}
+    </RegisterPage>
   );
 }
-

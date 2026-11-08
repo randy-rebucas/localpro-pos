@@ -2,27 +2,32 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import Link from 'next/link';
 import toast from 'react-hot-toast';
+import { Pencil, Plus, Tags } from 'lucide-react';
 import { getDictionaryClient } from '../../dictionaries-client';
+import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { useCategoriesList, type Category } from '@/hooks/useCategoriesList';
 import { useCategoryForm } from '@/hooks/useCategoryForm';
 import { usePermissions } from '@/hooks/usePermissions';
+import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import {
-  getStatusBadgeClasses,
+  ICON, DARK_KEY_PRIMARY, LABEL, INPUT, KEY, KEY_PRIMARY, ROW_KEY,
+  RegisterPage, LedReadout, Sheet, Strip,
+} from '@/components/admin/register-ui';
+import {
   getStatusLabel,
-  getActionButtonColor,
   getActionButtonLabel,
   getStatusChangeMessage,
 } from '@/lib/categories-helpers';
 
 export default function CategoriesPage() {
   const params = useParams();
-  const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
+  const { settings } = useTenantSettings();
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
   const { canAccess } = usePermissions();
   const canManage = canAccess('categories.manage');
 
@@ -41,126 +46,145 @@ export default function CategoriesPage() {
     if (!dict) return;
 
     const newStatus = !category.isActive;
-    await toggleCategoryStatus(
-      category._id,
-      newStatus,
-      () => {
-        toast.success(getStatusChangeMessage(!category.isActive, dict));
-      },
-      (error) => toast.error(error)
-    );
+    setTogglingId(category._id);
+    try {
+      await toggleCategoryStatus(
+        category._id,
+        newStatus,
+        () => {
+          toast.success(getStatusChangeMessage(!category.isActive, dict));
+        },
+        (error) => toast.error(error)
+      );
+    } finally {
+      setTogglingId(null);
+    }
   };
 
-  if (!dict || loading) {
+  // Show the spinner only for the first load, so refetches after a save or delete keep the page (and any open modal) mounted.
+  const [loadedOnce, setLoadedOnce] = useState(false);
+  if (!loading && !loadedOnce) setLoadedOnce(true);
+
+  if (!dict || !loadedOnce) {
     return (
-      <div className="flex items-center justify-center py-24">
-        <div className="text-center">
-          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-brand"></div>
-          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
+      <div className="mk-root pos-register">
+        <div className="flex min-h-[calc(100dvh-3.5rem)] items-center justify-center bg-brand-navy-deep lg:min-h-dvh">
+          <LoadingSpinner size="md" color="#8fe3d0" />
         </div>
       </div>
     );
   }
 
-  return (
-    <div>
-      <div className="px-4 sm:px-6 py-6">
-        <div className="mb-6 sm:mb-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-2">
-                {dict.admin?.categories || 'Categories'}
-              </h1>
-              <p className="text-gray-600">{dict.admin?.categoriesSubtitle || 'Manage product categories'}</p>
-            </div>
-          </div>
-        </div>
+  const activeCount = categories.filter((category) => category.isActive).length;
+  const openForm = (category: Category | null) => {
+    setEditingCategory(category);
+    setShowCategoryModal(true);
+  };
 
-        <div className="bg-white border border-gray-300 p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-bold text-gray-900">{dict.admin?.categories || 'Categories'}</h2>
-            {canManage && (
-              <button
-                onClick={() => {
-                  setEditingCategory(null);
-                  setShowCategoryModal(true);
-                }}
-                className="px-4 py-2 bg-brand text-white hover:bg-brand-hover font-medium border border-brand-hover"
-              >
-                {dict.common?.add || 'Add'} {dict.admin?.category || 'Category'}
-              </button>
-            )}
-          </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.name || 'Name'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.description || 'Description'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.status || 'Status'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.common?.actions || 'Actions'}</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {categories.map((category) => (
-                  <tr key={category._id}>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{category.name}</td>
-                    <td className="px-4 py-4 text-sm text-gray-500">{category.description || '-'}</td>
-                    <td className="px-4 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 text-xs font-semibold border ${getStatusBadgeClasses(category.isActive)}`}>
+  return (
+    <RegisterPage
+      tagNo="CT"
+      tag={settings?.companyName}
+      title={dict.admin?.categories || 'Categories'}
+      subtitle={dict.admin?.categoriesSubtitle || 'Manage product categories'}
+      side={<LedReadout value={activeCount} label={dict.admin?.activeCategories || 'Active categories'} />}
+    >
+      {canManage && (
+        <div className="mt-6 flex">
+          <button type="button" onClick={() => openForm(null)} className={`${DARK_KEY_PRIMARY} w-full sm:w-auto`}>
+            <Plus className={ICON} strokeWidth={1.75} aria-hidden />
+            {dict.admin?.addCategory || 'Add Category'}
+          </button>
+        </div>
+      )}
+
+      {/* The aisle signs, printed as a numbered list */}
+      <section className="mt-6 max-w-4xl">
+        <div className="bg-paper-white text-ink">
+          <h2 className="border-b border-dashed border-ink/30 px-4 py-3 text-3xl sm:px-5">
+            {dict.admin?.categories || 'Categories'}
+          </h2>
+
+          {categories.length === 0 ? (
+            <div className="px-4 py-14 text-center">
+              <Tags className="mx-auto mb-2 h-8 w-8 text-ink/20" strokeWidth={1.75} aria-hidden />
+              <p className="font-receipt text-sm text-ink/60">{dict.common?.noResults || 'No categories found'}</p>
+              {canManage && (
+                <button type="button" onClick={() => openForm(null)} className={`${KEY} mx-auto mt-4`}>
+                  <Plus className={ICON} strokeWidth={1.75} aria-hidden />
+                  {dict.admin?.addCategory || 'Add Category'}
+                </button>
+              )}
+            </div>
+          ) : (
+            <ol className="divide-y divide-dashed divide-ink/20">
+              {categories.map((category, index) => (
+                <li
+                  key={category._id}
+                  className={`grid grid-cols-[2.5rem_minmax(0,1fr)] gap-x-3 px-4 py-3 sm:grid-cols-[2.5rem_minmax(0,1fr)_auto] sm:items-center sm:px-5 ${category.isActive ? '' : 'bg-ink/[0.03]'}`}
+                >
+                  <span className="pt-0.5 font-led text-2xl leading-none text-ink/40 sm:pt-0" aria-hidden>
+                    {String(index + 1).padStart(2, '0')}
+                  </span>
+                  <div className="min-w-0">
+                    <p className={`flex flex-wrap items-center gap-2 font-medium ${category.isActive ? '' : 'text-ink/60'}`}>
+                      {category.name}
+                      <span
+                        className={`border px-1.5 py-0.5 font-receipt text-[11px] uppercase ${category.isActive ? 'border-ink/25 text-ink/70' : 'border-dashed border-ink/40 text-ink/60'}`}
+                      >
                         {getStatusLabel(category.isActive, dict)}
                       </span>
-                    </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
-                      {canManage ? (
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => {
-                              setEditingCategory(category);
-                              setShowCategoryModal(true);
-                            }}
-                            className="text-brand hover:text-brand-navy-deep"
-                          >
-                            {dict.common?.edit || 'Edit'}
-                          </button>
-                          <button
-                            onClick={() => handleToggleCategoryStatus(category)}
-                            className={`${getActionButtonColor(category.isActive)}`}
-                          >
-                            {getActionButtonLabel(category.isActive, dict)}
-                          </button>
-                        </div>
-                      ) : (
-                        <span className="text-gray-400">-</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {categories.length === 0 && (
-              <div className="text-center py-8 text-gray-500">{dict.common?.noResults || 'No categories found'}</div>
-            )}
-          </div>
+                    </p>
+                    {category.description && (
+                      <p className="mt-0.5 text-sm text-ink/60">{category.description}</p>
+                    )}
+                  </div>
+                  {canManage && (
+                    <div className="col-start-2 mt-2 flex items-center gap-1 sm:col-start-3 sm:mt-0">
+                      <button
+                        type="button"
+                        onClick={() => openForm(category)}
+                        className={ROW_KEY}
+                        title={dict.common?.edit || 'Edit'}
+                        aria-label={`${dict.common?.edit || 'Edit'}: ${category.name}`}
+                      >
+                        <Pencil className={ICON} strokeWidth={1.75} aria-hidden />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleCategoryStatus(category)}
+                        disabled={togglingId === category._id}
+                        className={`${KEY} w-36 ${category.isActive ? 'hover:border-stamp hover:bg-transparent hover:text-stamp' : 'border-ink bg-ink text-paper-white hover:bg-brand-navy'}`}
+                        aria-label={`${getActionButtonLabel(category.isActive, dict)}: ${category.name}`}
+                      >
+                        {getActionButtonLabel(category.isActive, dict)}
+                      </button>
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ol>
+          )}
         </div>
+        <div className="mk-tear-b h-3 bg-paper-white" aria-hidden />
+      </section>
 
-        {showCategoryModal && (
-          <CategoryModal
-            category={editingCategory}
-            onClose={() => {
-              setShowCategoryModal(false);
-              setEditingCategory(null);
-            }}
-            onSave={() => {
-              fetchCategories((error) => toast.error(error));
-              setShowCategoryModal(false);
-              setEditingCategory(null);
-            }}
-            dict={dict}
-          />
-        )}
-      </div>
-    </div>
+      {showCategoryModal && (
+        <CategoryModal
+          category={editingCategory}
+          onClose={() => {
+            setShowCategoryModal(false);
+            setEditingCategory(null);
+          }}
+          onSave={() => {
+            fetchCategories((error) => toast.error(error));
+            setShowCategoryModal(false);
+            setEditingCategory(null);
+          }}
+          dict={dict}
+        />
+      )}
+    </RegisterPage>
   );
 }
 
@@ -191,63 +215,52 @@ function CategoryModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-gray-900/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white border border-gray-300 max-w-md w-full">
-        <div className="p-6">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">
-            {category
-              ? (dict?.admin?.editCategory || 'Edit Category')
-              : (dict?.admin?.addCategory || 'Add Category')}
-          </h2>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict?.admin?.name || 'Name'} *
-              </label>
-              <input
-                type="text"
-                required
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict?.admin?.description || 'Description'} ({dict?.common?.optional || 'optional'})
-              </label>
-              <textarea
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-              />
-            </div>
-            {error && (
-              <div className="bg-red-50 text-red-800 border border-red-300 p-3">
-                {error}
-              </div>
-            )}
-            <div className="flex gap-3 justify-end pt-4">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 bg-white"
-              >
-                {(dict?.common?.cancel) || 'Cancel'}
-              </button>
-              <button
-                type="submit"
-                disabled={submitting}
-                className="px-4 py-2 bg-brand text-white hover:bg-brand-hover disabled:opacity-50 border border-brand-hover"
-              >
-                {submitting ? (dict?.common?.saving || 'Saving...') : (dict?.common?.save || 'Save')}
-              </button>
-            </div>
-          </form>
+    <Sheet
+      title={category
+        ? (dict?.admin?.editCategory || 'Edit Category')
+        : (dict?.admin?.addCategory || 'Add Category')}
+      onClose={onClose}
+      closeLabel={dict?.common?.close || 'Close'}
+      footer={
+        <>
+          <button type="button" onClick={onClose} className={KEY}>
+            {dict?.common?.cancel || 'Cancel'}
+          </button>
+          <button type="submit" form="category-form" disabled={submitting} className={KEY_PRIMARY}>
+            {submitting ? (dict?.common?.saving || 'Saving...') : (dict?.common?.save || 'Save')}
+          </button>
+        </>
+      }
+    >
+      <form id="category-form" onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label htmlFor="category-name" className={LABEL}>
+            {dict?.admin?.name || 'Name'} *
+          </label>
+          <input
+            id="category-name"
+            type="text"
+            required
+            autoFocus
+            value={formData.name}
+            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            className={INPUT}
+          />
         </div>
-      </div>
-    </div>
+        <div>
+          <label htmlFor="category-description" className={LABEL}>
+            {dict?.admin?.description || 'Description'} ({dict?.common?.optional || 'optional'})
+          </label>
+          <textarea
+            id="category-description"
+            value={formData.description}
+            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+            rows={3}
+            className={INPUT}
+          />
+        </div>
+        {error && <Strip tone="error">{error}</Strip>}
+      </form>
+    </Sheet>
   );
 }
-

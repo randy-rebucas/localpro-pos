@@ -56,9 +56,10 @@ export function getStatusLabel(status: BookingStatus, dict?: Dict): string {
 /**
  * Format date and time for display
  */
-export function formatBookingDateTime(dateString: string): string {
+export function formatBookingDateTime(dateString: string, timeZone?: string, lang: 'en' | 'es' = 'en'): string {
   const date = new Date(dateString);
-  return date.toLocaleString('en-US', {
+  return date.toLocaleString(lang === 'es' ? 'es-ES' : 'en-US', {
+    timeZone,
     weekday: 'short',
     year: 'numeric',
     month: 'short',
