@@ -15,6 +15,9 @@ const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'
 export default function BusinessHoursManager({ settings, tenant, onUpdate, dict }: BusinessHoursManagerProps) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  // Saving replaces the whole schedule, so never save on top of a failed load
+  // (the editor would be showing an empty schedule, not the stored one).
+  const [loadFailed, setLoadFailed] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [schedule, setSchedule] = useState<Record<string, any>>({}); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [specialHours, setSpecialHours] = useState<Array<any>>([]); // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -28,15 +31,20 @@ export default function BusinessHoursManager({ settings, tenant, onUpdate, dict 
   const fetchBusinessHours = async () => {
     try {
       setLoading(true);
+      setLoadFailed(false);
       const res = await fetch(`/api/tenants/${tenant}/business-hours`, { credentials: 'include' });
-      const data = await res.json();
-      if (data.success) {
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.success) {
         const hours = data.data || {};
         setSchedule(hours.schedule || {});
         setSpecialHours(hours.specialHours || []);
         setTimezone(hours.timezone || settings.timezone || 'Asia/Manila');
+      } else {
+        setLoadFailed(true);
+        setMessage({ type: 'error', text: data?.error || dict?.businessHours?.failedToLoad || 'Failed to load business hours' });
       }
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+      setLoadFailed(true);
       setMessage({ type: 'error', text: error.message || dict?.businessHours?.failedToLoad || 'Failed to load business hours' });
     } finally {
       setLoading(false);
@@ -258,7 +266,7 @@ export default function BusinessHoursManager({ settings, tenant, onUpdate, dict 
       <div className="flex items-center space-x-3">
         <button
           onClick={handleSave}
-          disabled={saving}
+          disabled={saving || loadFailed}
           className="px-6 py-2 bg-brand text-white font-medium hover:bg-brand-hover disabled:bg-gray-400"
         >
           {saving ? (dict?.businessHours?.saving || 'Saving...') : (dict?.businessHours?.saveBusinessHours || 'Save Business Hours')}

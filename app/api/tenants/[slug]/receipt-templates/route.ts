@@ -207,6 +207,17 @@ export async function PUT(
       return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden') }, { status: 403 });
     }
 
+    // Feature gate — same as POST, so a downgraded plan can't keep editing
+    // templates. DELETE stays ungated so tenants can still clean up.
+    try {
+      await checkBirFeatureAccess(tenant._id.toString(), 'receiptFormatting');
+    } catch (featureError: unknown) {
+      return NextResponse.json(
+        { success: false, error: (featureError as Error).message },
+        { status: 403 }
+      );
+    }
+
     const templates = tenant.settings.receiptTemplates?.templates || [];
     const existingTemplate = templates.find((tpl) => tpl.id === id);
 

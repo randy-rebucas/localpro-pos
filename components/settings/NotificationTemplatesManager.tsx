@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { ITenantSettings } from '@/types/tenant';
+import { parseEmailTemplate } from '@/lib/notification-template-format';
 
 interface NotificationTemplatesManagerProps {
   settings: ITenantSettings;
@@ -78,20 +79,14 @@ export default function NotificationTemplatesManager({ settings, tenant, onUpdat
     
     if (typeof templateKey === 'string') {
       // Handle format: "subject|body" for email
-      if (type === 'email' && templateKey.includes('|')) {
-        return templateKey.split('|')[1] || '';
-      }
-      return templateKey;
+      return type === 'email' ? parseEmailTemplate(templateKey).body : templateKey;
     }
     return '';
   };
 
   const getSubject = (category: TemplateCategory): string => {
     const templateKey = templates.email?.[category];
-    if (typeof templateKey === 'string' && templateKey.includes('|')) {
-      return templateKey.split('|')[0] || '';
-    }
-    return '';
+    return typeof templateKey === 'string' ? parseEmailTemplate(templateKey).subject || '' : '';
   };
 
   const handleSave = async (type: TemplateType, category: TemplateCategory, subject: string, body: string) => {

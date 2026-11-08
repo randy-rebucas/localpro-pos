@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { ITenantSettings } from '@/types/tenant';
+import { sanitizeReceiptHtml } from '@/lib/receipt-template-sanitize';
 
 interface ReceiptTemplate {
   id: string;
@@ -106,10 +107,12 @@ export default function ReceiptTemplatesManager({ settings, tenant, onUpdate, di
         body: JSON.stringify({ id, isDefault: true }),
       });
 
-      const data = await res.json();
-      if (data.success) {
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.success) {
         setMessage({ type: 'success', text: dict?.receiptTemplates?.defaultUpdated || 'Default template updated' });
         fetchTemplates();
+      } else {
+        setMessage({ type: 'error', text: data?.error || dict?.receiptTemplates?.failedToSetDefault || 'Failed to set default template' });
       }
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       setMessage({ type: 'error', text: error.message || dict?.receiptTemplates?.failedToSetDefault || 'Failed to set default template' });
@@ -413,7 +416,14 @@ function TemplateEditor({
           </div>
           {preview ? (
             <div className="border-2 border-ink/25 p-4 bg-white">
-              <div className="mk-print-preview" dangerouslySetInnerHTML={{ __html: renderPreview() }} />
+              {/* Sandboxed (no scripts, opaque origin) and sanitized: the template
+                  is tenant-authored HTML, and its <style> must not restyle this page. */}
+              <iframe
+                title={dict?.receiptTemplates?.preview || 'Preview'}
+                sandbox=""
+                srcDoc={sanitizeReceiptHtml(renderPreview())}
+                className="mk-print-preview block h-[600px] w-full border-0 bg-white"
+              />
             </div>
           ) : (
             <textarea

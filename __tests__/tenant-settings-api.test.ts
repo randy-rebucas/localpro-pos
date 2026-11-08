@@ -128,6 +128,54 @@ describe('GET /api/tenants/:slug/settings', () => {
 
     expect(status).toBe(404);
   });
+
+  it('strips secrets for anonymous callers', async () => {
+    mockGetCurrentUser.mockResolvedValue(null);
+    mockTenantFindOne.mockReturnValue(findOneChain({
+      _id: TENANT_A_ID,
+      slug: 'secret-anon',
+      settings: {
+        companyName: 'Acme',
+        birEsalesPushUrl: 'https://push.example.com',
+        multiCurrency: { enabled: true, exchangeRateApiKey: 'sk-live' },
+      },
+    }));
+
+    const res = await GET(createRequest('/api/tenants/secret-anon/settings'), { params: Promise.resolve({ slug: 'secret-anon' }) });
+    const { body } = await parseResponse(res);
+
+    expect(body.data).toEqual({ companyName: 'Acme', multiCurrency: { enabled: true } });
+  });
+
+  it('strips secrets for a settings manager of a different tenant', async () => {
+    authAs(TENANT_B_ID, 'owner');
+    mockTenantFindOne.mockReturnValue(findOneChain({
+      _id: TENANT_A_ID,
+      slug: 'secret-other',
+      settings: { multiCurrency: { exchangeRateApiKey: 'sk-live' } },
+    }));
+
+    const res = await GET(createRequest('/api/tenants/secret-other/settings'), { params: Promise.resolve({ slug: 'secret-other' }) });
+    const { body } = await parseResponse(res);
+
+    expect(body.data.multiCurrency.exchangeRateApiKey).toBeUndefined();
+  });
+
+  it('returns secrets to a settings manager of this tenant', async () => {
+    authAs(TENANT_A_ID, 'manager');
+    mockTenantFindOne.mockReturnValue(findOneChain({
+      _id: TENANT_A_ID,
+      slug: 'secret-own',
+      settings: { birEsalesPushUrl: 'https://push.example.com', multiCurrency: { exchangeRateApiKey: 'sk-live' } },
+    }));
+
+    const res = await GET(createRequest('/api/tenants/secret-own/settings'), { params: Promise.resolve({ slug: 'secret-own' }) });
+    const { body } = await parseResponse(res);
+
+    expect(body.data.birEsalesPushUrl).toBe('https://push.example.com');
+    expect(body.data.multiCurrency.exchangeRateApiKey).toBe('sk-live');
+    expect(res.headers.get('cache-control')).toContain('no-store');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -279,5 +327,126 @@ describe('PUT /api/tenants/:slug/settings', () => {
 
     expect(status).toBe(400);
     expect(mockTenantFindOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  it('never writes rolePermissionOverrides, even for an owner', async () => {
+    authAs(TENANT_A_ID, 'owner');
+    mockExistingTenant({ _id: { toString: () => TENANT_A_ID }, slug: SLUG, settings: {} });
+
+    const res = await PUT(
+      createRequest(`/api/tenants/${SLUG}/settings`, 'PUT', {
+        rolePermissionOverrides: { manager: { 'roles_permissions.manage': true } },
+      }),
+      { params: Promise.resolve({ slug: SLUG }) }
+    );
+    const { status } = await parseResponse(res);
+
+    expect(status).toBe(403);
+    expect(mockTenantFindOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  it('accepts an unchanged rolePermissionOverrides echoed back with other changes', async () => {
+    authAs(TENANT_A_ID, 'manager');
+    const overrides = { cashier: { 'refunds.process': true } };
+    mockExistingTenant({ _id: { toString: () => TENANT_A_ID }, slug: SLUG, settings: { rolePermissionOverrides: overrides } });
+    mockTenantFindOneAndUpdate.mockResolvedValue({ _id: TENANT_A_ID, settings: {} });
+
+    const res = await PUT(
+      createRequest(`/api/tenants/${SLUG}/settings`, 'PUT', { rolePermissionOverrides: overrides, companyName: 'New' }),
+      { params: Promise.resolve({ slug: SLUG }) }
+    );
+    const { status } = await parseResponse(res);
+
+    expect(status).toBe(200);
+    expect(mockTenantFindOneAndUpdate).toHaveBeenCalledWith(
+      { slug: SLUG },
+      { $set: { 'settings.companyName': 'New' } },
+      { new: true, runValidators: true }
+    );
+  });
+
+  it('requires bir_compliance.manage to change BIR fields', async () => {
+    authAs(TENANT_A_ID, 'manager');
+    mockHasTenantPermission.mockImplementation(async (_role: string, _tenantId: string, key: string) => key === 'settings.manage');
+    mockExistingTenant({ _id: { toString: () => TENANT_A_ID }, slug: SLUG, settings: {} });
+
+    const res = await PUT(
+      createRequest(`/api/tenants/${SLUG}/settings`, 'PUT', { birEsalesPushUrl: 'http://169.254.169.254/' }),
+      { params: Promise.resolve({ slug: SLUG }) }
+    );
+    const { status } = await parseResponse(res);
+
+    expect(status).toBe(403);
+    expect(mockHasTenantPermission).toHaveBeenCalledWith('manager', TENANT_A_ID, 'bir_compliance.manage');
+    expect(mockTenantFindOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  it('rejects an eSales push URL that points at an internal address', async () => {
+    authAs(TENANT_A_ID, 'owner');
+    mockExistingTenant({ _id: { toString: () => TENANT_A_ID }, slug: SLUG, settings: {} });
+
+    const res = await PUT(
+      createRequest(`/api/tenants/${SLUG}/settings`, 'PUT', { birEsalesPushUrl: 'http://169.254.169.254/latest/meta-data' }),
+      { params: Promise.resolve({ slug: SLUG }) }
+    );
+    const { status, body } = await parseResponse(res);
+
+    expect(status).toBe(400);
+    expect(body.error).toContain('public address');
+    expect(mockTenantFindOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  it('requires tax_rules.manage to change taxRules', async () => {
+    authAs(TENANT_A_ID, 'manager');
+    mockHasTenantPermission.mockImplementation(async (_role: string, _tenantId: string, key: string) => key === 'settings.manage');
+    mockExistingTenant({ _id: { toString: () => TENANT_A_ID }, slug: SLUG, settings: { taxRules: [] } });
+
+    const res = await PUT(
+      createRequest(`/api/tenants/${SLUG}/settings`, 'PUT', { taxRules: [{ id: 'r1', rate: 0 }] }),
+      { params: Promise.resolve({ slug: SLUG }) }
+    );
+    const { status } = await parseResponse(res);
+
+    expect(status).toBe(403);
+    expect(mockTenantFindOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  it('does not block a save that echoes unchanged businessHours without business_hours.manage', async () => {
+    authAs(TENANT_A_ID, 'manager');
+    mockHasTenantPermission.mockImplementation(async (_role: string, _tenantId: string, key: string) => key === 'settings.manage');
+    const businessHours = { timezone: 'Asia/Manila' };
+    mockExistingTenant({ _id: { toString: () => TENANT_A_ID }, slug: SLUG, settings: { businessHours } });
+    mockTenantFindOneAndUpdate.mockResolvedValue({ _id: TENANT_A_ID, settings: {} });
+
+    const res = await PUT(
+      createRequest(`/api/tenants/${SLUG}/settings`, 'PUT', { businessHours, companyName: 'New' }),
+      { params: Promise.resolve({ slug: SLUG }) }
+    );
+    const { status } = await parseResponse(res);
+
+    expect(status).toBe(200);
+  });
+
+  it('keeps the stored exchange-rate API key when multiCurrency is sent without it', async () => {
+    authAs(TENANT_A_ID, 'owner');
+    mockExistingTenant({
+      _id: { toString: () => TENANT_A_ID },
+      slug: SLUG,
+      settings: { multiCurrency: { enabled: false, exchangeRateApiKey: 'sk-live' } },
+    });
+    mockTenantFindOneAndUpdate.mockResolvedValue({ _id: TENANT_A_ID, settings: {} });
+
+    const res = await PUT(
+      createRequest(`/api/tenants/${SLUG}/settings`, 'PUT', { multiCurrency: { enabled: true } }),
+      { params: Promise.resolve({ slug: SLUG }) }
+    );
+    const { status } = await parseResponse(res);
+
+    expect(status).toBe(200);
+    expect(mockTenantFindOneAndUpdate).toHaveBeenCalledWith(
+      { slug: SLUG },
+      { $set: { 'settings.multiCurrency': { enabled: true, exchangeRateApiKey: 'sk-live' } } },
+      { new: true, runValidators: true }
+    );
   });
 });

@@ -4,6 +4,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { formatEmailTemplate } from '@/lib/notification-template-format';
+import { hasTenantPermission } from '@/lib/permissions-server';
 import connectDB from '@/lib/mongodb';
 import Tenant from '@/models/Tenant';
 import { validateNotificationTemplate } from '@/lib/notification-templates';
@@ -40,9 +42,15 @@ export async function GET(
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     logger.error('Error fetching notification templates:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, error: 'Failed to process notification template request' }, { status: 500 });
   }
 }
+
+/** Template slots defined in models/Tenant.ts settings.notificationTemplates. */
+const TEMPLATE_SLOTS = {
+  email: ['bookingConfirmation', 'bookingReminder', 'bookingCancellation', 'lowStockAlert', 'attendanceAlert'],
+  sms: ['bookingConfirmation', 'bookingReminder', 'bookingCancellation', 'lowStockAlert'],
+} as const satisfies Record<string, readonly string[]>;
 
 export async function PUT(
   request: NextRequest,
@@ -54,7 +62,7 @@ export async function PUT(
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (user.role !== 'admin' && user.role !== 'manager' && user.role !== 'owner' && user.role !== 'super_admin') {
+    if (!(await hasTenantPermission(user.role, user.tenantId, 'notifications.manage'))) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
@@ -69,6 +77,21 @@ export async function PUT(
 
     if (!type || !category || !templateBody) {
       return NextResponse.json({ success: false, error: 'Type, category, and body are required' }, { status: 400 });
+    }
+
+    // The key becomes a dot-path in $set — only allow the slots the schema has
+    // (unknown ones were silently dropped while the route reported success).
+    const key = subcategory || category;
+    if (typeof type !== 'string' || !(type in TEMPLATE_SLOTS)
+      || typeof key !== 'string' || !(TEMPLATE_SLOTS[type as keyof typeof TEMPLATE_SLOTS] as readonly string[]).includes(key)) {
+      return NextResponse.json({ success: false, error: 'Unknown template type or category' }, { status: 400 });
+    }
+    if (typeof templateBody !== 'string' || (subject !== undefined && subject !== null && typeof subject !== 'string')) {
+      return NextResponse.json({ success: false, error: 'Invalid template' }, { status: 400 });
+    }
+    // "|" separates subject from body in storage
+    if (typeof subject === 'string' && subject.includes('|')) {
+      return NextResponse.json({ success: false, error: 'Subject cannot contain "|"' }, { status: 400 });
     }
 
     // Validate template
@@ -88,8 +111,7 @@ export async function PUT(
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
-    const key = subcategory || category;
-    const value = type === 'email' && subject ? `${subject}|${templateBody}` : templateBody;
+    const value = type === 'email' ? formatEmailTemplate(subject, templateBody) : templateBody;
 
     // Atomic $set on the specific dot-path avoids clobbering concurrent edits to
     // other template categories (a full read-modify-write of the whole
@@ -117,6 +139,6 @@ export async function PUT(
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     logger.error('Error updating notification template:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, error: 'Failed to update notification template' }, { status: 500 });
   }
 }

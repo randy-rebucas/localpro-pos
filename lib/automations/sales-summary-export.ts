@@ -8,6 +8,7 @@
  * if the tenant has configured a push endpoint, POSTs it there.
  */
 import connectDB from '@/lib/mongodb';
+import { safeFetch } from '@/lib/net/outbound-url';
 import Tenant from '@/models/Tenant';
 import { getDailySalesAggregate, startOfBusinessDay } from '@/lib/bir-readings';
 import { formatGrandTotalRegister } from '@/lib/bir-format';
@@ -171,7 +172,8 @@ export async function generateSalesSummaryExport(
           try {
             const controller = new AbortController();
             const timeout = setTimeout(() => controller.abort(), 15000);
-            const res = await fetch(pushUrl, {
+            // Tenant-supplied endpoint: SSRF-guarded (public https only, redirects re-checked)
+            const res = await safeFetch(pushUrl, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(payload),

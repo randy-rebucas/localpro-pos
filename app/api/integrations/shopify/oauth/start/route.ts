@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { publicEcommerceError } from '@/lib/ecommerce/public-error';
 import { requireTenantAccess, getTenantSlugFromRequest } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { signShopifyOAuthState } from '@/lib/ecommerce/shopify-oauth-state';
@@ -76,6 +77,6 @@ export async function GET(request: NextRequest) {
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Error';
     const status = msg.includes('Unauthorized') ? 401 : msg.includes('Forbidden') ? 403 : 500;
-    return NextResponse.json({ success: false, error: msg }, { status });
+    return NextResponse.json({ success: false, error: publicEcommerceError(msg, status, 'Failed to start Shopify connection') }, { status });
   }
 }

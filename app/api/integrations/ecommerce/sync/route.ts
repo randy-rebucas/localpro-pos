@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { publicEcommerceError } from '@/lib/ecommerce/public-error';
 import connectDB from '@/lib/mongodb';
+import { createAuditLog, AuditActions } from '@/lib/audit';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import TenantEcommerceIntegration from '@/models/TenantEcommerceIntegration';
@@ -46,6 +48,17 @@ export async function POST(request: NextRequest) {
     }
 
     const result = await runCatalogSync({ integration, autoCreateProducts });
+
+    // A sync can create products (autoCreateProducts) and relink listings.
+    await createAuditLog(request, {
+      tenantId,
+      userId: user.userId,
+      action: AuditActions.UPDATE,
+      entityType: 'ecommerce_integration',
+      entityId: integration._id.toString(),
+      changes: { provider, action: 'catalog_sync', autoCreateProducts },
+      metadata: { result },
+    });
     return NextResponse.json({ success: true, data: result });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Sync failed';
@@ -61,6 +74,6 @@ export async function POST(request: NextRequest) {
       }
     }
     const status = msg.includes('Unauthorized') ? 401 : msg.includes('Forbidden') ? 403 : msg.includes('feature') ? 403 : 500;
-    return NextResponse.json({ success: false, error: msg }, { status });
+    return NextResponse.json({ success: false, error: publicEcommerceError(msg, status, 'Sync failed') }, { status });
   }
 }

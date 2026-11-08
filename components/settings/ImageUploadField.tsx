@@ -58,6 +58,7 @@ export default function ImageUploadField({
     try {
       const formData = new FormData();
       formData.append('file', file);
+      formData.append('type', 'branding'); // Cloudinary folder 1pos/{slug}/branding/
 
       const res = await fetch(`/api/upload?tenant=${tenant}`, {
         method: 'POST',

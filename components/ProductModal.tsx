@@ -138,15 +138,18 @@ export default function ProductModal({ product, onClose, lang = 'en' }: ProductM
     try {
       const fd = new FormData();
       fd.append('file', file);
+      fd.append('type', 'products'); // Cloudinary folder 1pos/{slug}/products/
       const res = await fetch('/api/upload', { method: 'POST', credentials: 'include', body: fd });
-      const data = await res.json();
-      if (data.success) {
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.success) {
         setFormData(prev => ({ ...prev, image: data.data.url }));
         setShowImagePicker(false);
         if (errors.image) setErrors(prev => ({ ...prev, image: '' }));
+      } else {
+        setErrors(prev => ({ ...prev, image: data?.error || dict?.products?.failedToUploadImage || 'Failed to upload image' }));
       }
     } catch {
-      // silent
+      setErrors(prev => ({ ...prev, image: dict?.products?.failedToUploadImage || 'Failed to upload image' }));
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';

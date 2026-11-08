@@ -29,6 +29,9 @@ export default function EcommerceIntegrationsSettings({
   const [featureUnlocked, setFeatureUnlocked] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingPrefs, setSavingPrefs] = useState(false);
+  // Each connect rotates the webhook signing secret; two in flight can leave the
+  // store's webhooks signed with a secret the DB no longer holds.
+  const [connectingWoo, setConnectingWoo] = useState(false);
   const [shopDomain, setShopDomain] = useState('');
   const [wooUrl, setWooUrl] = useState('');
   const [wooKey, setWooKey] = useState('');
@@ -99,8 +102,9 @@ export default function EcommerceIntegrationsSettings({
     setSavingPrefs(true);
     setMsg(null);
     try {
-      const merged: ITenantSettings = {
-        ...settings,
+      // Send only the integrations key: echoing the whole (page-load) settings
+      // object back would revert anything changed since it was loaded.
+      const merged: Pick<ITenantSettings, 'integrations'> = {
         integrations: {
           ...settings.integrations,
           ecommerce: {
@@ -147,6 +151,8 @@ export default function EcommerceIntegrationsSettings({
   };
 
   const connectWoo = async () => {
+    if (connectingWoo) return;
+    setConnectingWoo(true);
     setMsg(null);
     try {
       const res = await fetch(`/api/integrations/woocommerce/connect?tenant=${encodeURIComponent(tenant)}`, {
@@ -170,6 +176,8 @@ export default function EcommerceIntegrationsSettings({
       }
     } catch {
       setMsg({ type: 'error', text: t('connectFailed', 'Connection failed.') });
+    } finally {
+      setConnectingWoo(false);
     }
   };
 
@@ -482,7 +490,7 @@ export default function EcommerceIntegrationsSettings({
               />
               <button
                 type="button"
-                disabled={gateClosed || !wooUrl.trim() || !wooKey.trim() || !wooSecret.trim()}
+                disabled={connectingWoo || gateClosed || !wooUrl.trim() || !wooKey.trim() || !wooSecret.trim()}
                 onClick={connectWoo}
                 className="min-h-[44px] px-4 bg-ink font-receipt text-xs font-medium uppercase text-paper-white transition-colors hover:bg-brand-navy disabled:cursor-not-allowed disabled:opacity-50"
               >

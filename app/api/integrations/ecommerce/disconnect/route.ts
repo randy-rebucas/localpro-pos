@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { publicEcommerceError } from '@/lib/ecommerce/public-error';
 import connectDB from '@/lib/mongodb';
+import { createAuditLog, AuditActions } from '@/lib/audit';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import TenantEcommerceIntegration from '@/models/TenantEcommerceIntegration';
@@ -28,13 +30,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Invalid provider' }, { status: 400 });
     }
 
-    await ProductChannelListing.deleteMany({ tenantId, provider });
-    await TenantEcommerceIntegration.deleteMany({ tenantId, provider });
+    const listings = await ProductChannelListing.deleteMany({ tenantId, provider });
+    const integrations = await TenantEcommerceIntegration.deleteMany({ tenantId, provider });
+
+    // Destructive (drops every product-channel link for the provider) — record who did it.
+    await createAuditLog(request, {
+      tenantId,
+      userId: user.userId,
+      action: AuditActions.DELETE,
+      entityType: 'ecommerce_integration',
+      entityId: provider,
+      changes: {
+        provider,
+        integrationsDeleted: integrations.deletedCount ?? 0,
+        channelListingsDeleted: listings.deletedCount ?? 0,
+      },
+    });
 
     return NextResponse.json({ success: true });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Error';
     const status = msg.includes('Unauthorized') ? 401 : msg.includes('Forbidden') ? 403 : 500;
-    return NextResponse.json({ success: false, error: msg }, { status });
+    return NextResponse.json({ success: false, error: publicEcommerceError(msg, status, 'Disconnect failed') }, { status });
   }
 }

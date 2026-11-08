@@ -3,6 +3,8 @@
  * Manages custom receipt templates with variable substitution
  */
 
+import { escapeHtml, findUnsafeTemplateMarkup, sanitizeReceiptHtml } from '@/lib/receipt-template-sanitize';
+
 export interface ReceiptTemplate {
   id: string;
   name: string;
@@ -75,7 +77,7 @@ export const DEFAULT_RECEIPT_TEMPLATE: ReceiptTemplate = {
 <body>
   <div class="header">
     {{#if storeName}}<h2>{{storeName}}</h2>{{/if}}
-    {{#if logo}}<img src="{{logo}}" alt="Logo" style="max-width: 100px; max-height: 60px;" onerror="this.remove()" />{{/if}}
+    {{#if logo}}<img src="{{logo}}" alt="Logo" style="max-width: 100px; max-height: 60px;" />{{/if}}
     <p>Receipt #{{receiptNumber}}</p>
     <p>{{date}} {{time}}</p>
     {{#if address}}<p>{{address}}</p>{{/if}}
@@ -143,21 +145,9 @@ export const DEFAULT_RECEIPT_TEMPLATE: ReceiptTemplate = {
 export function renderReceiptTemplate(template: string, data: ReceiptData): string {
   let html = template;
 
-  // Replace simple variables {{variable}}
-  html = html.replace(/\{\{(\w+)\}\}/g, (match, key) => {
-    const value = (data as any)[key]; // eslint-disable-line @typescript-eslint/no-explicit-any
-    return value !== undefined && value !== null ? String(value) : '';
-  });
-
-  // Handle {{#if condition}} blocks
-  html = html.replace(/\{\{#if\s+(\w+)\}\}([\s\S]*?)\{\{\/if\}\}/g, (match, condition, content) => {
-    const value = (data as any)[condition]; // eslint-disable-line @typescript-eslint/no-explicit-any
-    if (value && value !== false && value !== '' && value !== 0) {
-      // Recursively process nested content
-      return processTemplateContent(content, data);
-    }
-    return '';
-  });
+  // Blocks first, then plain variables. Substituting variables first blanked
+  // item fields inside {{#each}} (e.g. {{name}} resolved against the receipt,
+  // not the item) before the loop ever ran.
 
   // Handle {{#each array}} blocks
   html = html.replace(/\{\{#each\s+(\w+)\}\}([\s\S]*?)\{\{\/each\}\}/g, (match, arrayKey, content) => {
@@ -172,7 +162,28 @@ export function renderReceiptTemplate(template: string, data: ReceiptData): stri
     return '';
   });
 
-  return html;
+  // Handle {{#if condition}} blocks
+  html = html.replace(/\{\{#if\s+(\w+)\}\}([\s\S]*?)\{\{\/if\}\}/g, (match, condition, content) => {
+    const value = (data as any)[condition]; // eslint-disable-line @typescript-eslint/no-explicit-any
+    if (value && value !== false && value !== '' && value !== 0) {
+      // Recursively process nested content
+      return processTemplateContent(content, data);
+    }
+    return '';
+  });
+
+  // Replace simple variables {{variable}}
+  // Values are escaped: names and notes can come from customers or
+  // e-commerce orders, and must render as text, not markup. (escapeHtml also
+  // encodes braces, so a value like "{{total}}" can't be re-substituted.)
+  html = html.replace(/\{\{(\w+)\}\}/g, (match, key) => {
+    const value = (data as any)[key]; // eslint-disable-line @typescript-eslint/no-explicit-any
+    return value !== undefined && value !== null ? escapeHtml(value) : '';
+  });
+
+  // Template markup itself is tenant-authored — strip scripts/handlers before
+  // it reaches the (same-origin) print iframe.
+  return sanitizeReceiptHtml(html);
 }
 
 /**
@@ -184,7 +195,7 @@ function processTemplateContent(content: string, data: any): string { // eslint-
   // Replace variables
   processed = processed.replace(/\{\{(\w+)\}\}/g, (match, key) => {
     const value = data[key];
-    return value !== undefined && value !== null ? String(value) : '';
+    return value !== undefined && value !== null ? escapeHtml(value) : '';
   });
 
   // Handle nested if blocks
@@ -239,6 +250,11 @@ export function validateTemplate(html: string): { valid: boolean; error?: string
         valid: false,
         error: 'Unbalanced {{#each}} tags',
       };
+    }
+
+    const unsafe = findUnsafeTemplateMarkup(html);
+    if (unsafe) {
+      return { valid: false, error: unsafe };
     }
 
     return { valid: true };

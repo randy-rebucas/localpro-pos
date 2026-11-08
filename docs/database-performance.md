@@ -20,7 +20,9 @@ More cached values:
 - **CRM order stats** (`crm:orderstats:<tenantId>`): 5 min. There's no invalidation; segments can be up to 5 minutes stale.
 - **Public platform stats:** 10 min.
 
-**Client settings.** The `[lang]` layout passes the cached tenant settings to `TenantSettingsProvider` as `initialSettings`, so pages don't fetch `GET /api/tenants/[slug]/settings` on load. Settings hooks read `useTenantSettings()`. After saving, they update the context with `updateSettings` or `applySettings` instead of refetching.
+**Client settings.** The `[lang]` layout passes the cached tenant settings to `TenantSettingsProvider` as `initialSettings`, so pages don't fetch `GET /api/tenants/[slug]/settings` on load. Settings hooks read `useTenantSettings()`. After saving, they update the context with `updateSettings` or `applySettings` instead of refetching. The seed and the public GET have secrets stripped (`birEsalesPushUrl`, `multiCurrency.exchangeRateApiKey`; see `lib/tenant-settings-access.ts`). The full copy is returned only to this tenant's `settings.manage` holders. So the main settings page fetches its own fresh copy on load, and saves send only the changed keys.
+
+**Outbound requests to tenant URLs.** Server-side fetches to tenant-supplied URLs (the WooCommerce store, the BIR eSales push endpoint) go through `safeFetch` in `lib/net/outbound-url.ts`. It blocks private, loopback, link-local and metadata addresses, requires https in production, and re-checks every redirect. To test against a WooCommerce running on localhost in development, set `OUTBOUND_ALLOW_PRIVATE=true`. That flag is ignored in production.
 
 **Settings PUT** writes only keys whose value changed, skips the write entirely when nothing changed, and its audit entry records only the changed keys.
 

@@ -131,6 +131,7 @@ export default function FileUploadPage() {
     try {
       const formData = new FormData();
       formData.append('file', file);
+      formData.append('type', 'files'); // Cloudinary folder 1pos/{slug}/files/
 
       const res = await fetch(`/api/upload?tenant=${tenant}`, {
         method: 'POST',

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { publicEcommerceError } from '@/lib/ecommerce/public-error';
 import connectDB from '@/lib/mongodb';
+import { createAuditLog, AuditActions } from '@/lib/audit';
 import Tenant from '@/models/Tenant';
 import TenantEcommerceIntegration from '@/models/TenantEcommerceIntegration';
 import { verifyShopifyOAuthQuery } from '@/lib/ecommerce/webhook-verify';
@@ -86,6 +88,15 @@ export async function GET(request: NextRequest) {
       await integration.updateOne({ $set: { lastError: 'webhook_registration_failed' } });
     }
 
+    // userId resolves from the session cookie on this browser redirect.
+    await createAuditLog(request, {
+      tenantId: st.tenantId,
+      action: AuditActions.UPDATE,
+      entityType: 'ecommerce_integration',
+      entityId: integration._id.toString(),
+      changes: { provider: 'shopify', shopDomain: shopNorm, action: 'connect' },
+    });
+
     const tenant = await Tenant.findById(st.tenantId).select('slug').lean();
     const slug = tenant?.slug || st.tenantSlug || 'default';
     const redirect = new URL(`/${slug}/${st.lang}/settings`, request.nextUrl.origin);
@@ -94,6 +105,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(redirect.toString());
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'OAuth error';
-    return NextResponse.json({ error: msg }, { status: 500 });
+    return NextResponse.json({ error: publicEcommerceError(msg, 500, 'Shopify connection failed') }, { status: 500 });
   }
 }

@@ -87,6 +87,18 @@ export async function PUT(
       requirePrescriptionForRx, trackExpiryDates, expiryAlertDays,
     } = body;
 
+    if (expiryAlertDays !== undefined && expiryAlertDays !== null && expiryAlertDays !== '') {
+      const days = Number(expiryAlertDays);
+      if (!Number.isInteger(days) || days < 1 || days > 3650) {
+        return NextResponse.json({ success: false, error: 'Expiry alert days must be a whole number from 1 to 3650' }, { status: 400 });
+      }
+    }
+    for (const [label, value] of [['FDA LTO expiry date', fdaLTOExpiryDate], ['PDEA license expiry', pdeaLicenseExpiry]] as const) {
+      if (value && Number.isNaN(new Date(value).getTime())) {
+        return NextResponse.json({ success: false, error: `Invalid ${label}` }, { status: 400 });
+      }
+    }
+
     if (!tenant.settings.pharmacyCompliance) {
       tenant.settings.pharmacyCompliance = {} as never;
     }
@@ -102,7 +114,9 @@ export async function PUT(
     if (pdeaLicenseExpiry !== undefined) pc.pdeaLicenseExpiry = pdeaLicenseExpiry ? new Date(pdeaLicenseExpiry) : undefined;
     if (requirePrescriptionForRx !== undefined) pc.requirePrescriptionForRx = requirePrescriptionForRx;
     if (trackExpiryDates !== undefined) pc.trackExpiryDates = trackExpiryDates;
-    if (expiryAlertDays !== undefined) pc.expiryAlertDays = Number(expiryAlertDays);
+    if (expiryAlertDays !== undefined) {
+      pc.expiryAlertDays = expiryAlertDays === null || expiryAlertDays === '' ? undefined : Number(expiryAlertDays);
+    }
 
     tenant.markModified('settings');
     await tenant.save();
@@ -113,7 +127,15 @@ export async function PUT(
       action: AuditActions.PHARMACY_SETTINGS_UPDATE,
       entityType: 'pharmacy_settings',
       entityId: tenant._id.toString(),
-      changes: body,
+      // Only the recognised fields (not the raw request body, which could carry anything)
+      changes: Object.fromEntries(
+        Object.entries({
+          pharmacistName, pharmacistPRCNumber, pharmacistPTRNumber,
+          fdaLTO, fdaLTOExpiryDate, dohAccreditation,
+          pdeaLicense, pdeaLicenseExpiry,
+          requirePrescriptionForRx, trackExpiryDates, expiryAlertDays,
+        }).filter(([, v]) => v !== undefined)
+      ),
     });
 
     return NextResponse.json({ success: true });

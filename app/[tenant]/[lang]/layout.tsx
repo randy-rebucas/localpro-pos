@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "../../globals.css";
 import LangSetter from "@/components/LangSetter";
 import { getTenantBySlug } from "@/lib/tenant";
+import { stripSecretSettings } from "@/lib/tenant-settings-access";
 import ProtectedLayout from "./layout-protected";
 import { headers } from "next/headers"; // eslint-disable-line @typescript-eslint/no-unused-vars
 
@@ -60,8 +61,10 @@ export default async function RootLayout({
   // (same cached lookup GET /api/tenants/[slug]/settings serves), so it doesn't
   // refetch them on mount. JSON round-trip strips ObjectIds/Dates so the value
   // can cross the server/client boundary — matching what the API would return.
+  // Secrets are stripped: this seed is serialized into every page's HTML,
+  // including public ones. Pages that edit secrets fetch them via the API.
   const initialSettings = tenant?.settings
-    ? JSON.parse(JSON.stringify(tenant.settings))
+    ? JSON.parse(JSON.stringify(stripSecretSettings(tenant.settings)))
     : null;
   
   // Use a client component to set the lang attribute to avoid hydration mismatch

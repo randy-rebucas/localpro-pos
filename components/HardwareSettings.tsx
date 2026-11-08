@@ -33,7 +33,7 @@ export default function HardwareSettings({
     cameras: Array<{ deviceId: string; label: string }>;
   }>({ printers: [], cameras: [] });
   const [testing, setTesting] = useState<string | null>(null);
-  const { settings } = useTenantSettings();
+  const { settings, applySettings } = useTenantSettings();
   const primaryColor = (settings || getDefaultTenantSettings()).primaryColor || '#35979c';
 
   useEffect(() => {
@@ -86,6 +86,9 @@ export default function HardwareSettings({
         if (!data.success) {
           throw new Error(data.error || 'Failed to save hardware settings');
         }
+        // Keep the shared copy current, or a later save elsewhere that diffs
+        // against it would see a stale hardwareConfig.
+        applySettings({ hardwareConfig: config });
       }
       const hardwareConfigKey = `hardware_config_${tenant}`;
       localStorage.setItem(hardwareConfigKey, JSON.stringify(config));

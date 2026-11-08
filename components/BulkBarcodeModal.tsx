@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { escapeHtml } from '@/lib/html-escape';
 import JsBarcode from 'jsbarcode';
 import type { Product } from '@/hooks/useProductsList';
 
@@ -92,7 +93,7 @@ export default function BulkBarcodeModal({ products, dict, onClose }: BulkBarcod
         const url = dataURLs[p._id];
         if (!url) return [];
         const count = getCopies(p._id);
-        const escapedName = p.name.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const escapedName = escapeHtml(p.name);
         return Array.from(
           { length: count },
           () => `<div class="label"><div class="name">${escapedName}</div><img src="${url}" /></div>`,

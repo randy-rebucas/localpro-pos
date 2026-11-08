@@ -10,13 +10,16 @@ import { applyBusinessTypeDefaults, isBusinessTypeOpenForSignup } from '@/lib/bu
 import { checkRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { getTenantBySlug } from '@/lib/tenant';
+import { assertPublicHttpUrl, UnsafeOutboundUrlError } from '@/lib/net/outbound-url';
+import { LOCKED_SETTINGS_KEYS, permissionForSettingsKey, stripSecretSettings } from '@/lib/tenant-settings-access';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ slug: string }> }
 ) {
   try {
-    // Settings are public per tenant (no sensitive data exposed)
+    // Settings are readable per tenant (storefront, login, POS all need them),
+    // but secrets are only returned to this tenant's settings managers.
     const { slug } = await params;
     const t = await getValidationTranslatorFromRequest(request);
 
@@ -30,7 +33,18 @@ export async function GET(
       );
     }
 
-    return NextResponse.json({ success: true, data: tenant.settings });
+    const user = await getCurrentUser(request);
+    const canSeeSecrets = !!user
+      && (user.role === 'super_admin' || user.tenantId === tenant._id)
+      && (await hasTenantPermission(user.role, user.tenantId, 'settings.manage'));
+
+    if (canSeeSecrets) {
+      return NextResponse.json(
+        { success: true, data: tenant.settings },
+        { headers: { 'Cache-Control': 'private, no-store' } }
+      );
+    }
+    return NextResponse.json({ success: true, data: stripSecretSettings(tenant.settings) });
   } catch (error: unknown) {
     logger.error('Error fetching tenant settings:', error);
     const t = await getValidationTranslatorFromRequest(request);
@@ -54,7 +68,9 @@ export async function PUT(
       return NextResponse.json({ success: false, error: t('validation.unauthorized', 'Unauthorized') }, { status: 401 });
     }
 
-    const rl = checkRateLimit(`settings:${slug}`, 30, 60_000);
+    // Per user, not per slug: this runs before the tenant check, so a per-slug
+    // bucket let any signed-in user (of any tenant) exhaust another tenant's saves.
+    const rl = checkRateLimit(`settings:${slug}:${user.userId}`, 30, 60_000);
     if (!rl.allowed) {
       return NextResponse.json({ success: false, error: t('validation.tooManyRequests', 'Too many requests') }, { status: 429 });
     }
@@ -64,14 +80,9 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const settings = body.settings || body;
-
-    // businessHours has its own granular permission (the Business Hours admin
-    // page gates on it, not settings.manage) — enforce it here too, since this
-    // shared settings endpoint is the only thing that actually persists it.
-    if (Object.prototype.hasOwnProperty.call(settings, 'businessHours')
-      && !(await hasTenantPermission(user.role, user.tenantId, 'business_hours.manage'))) {
-      return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
+    const settings = body?.settings || body;
+    if (!settings || typeof settings !== 'object' || Array.isArray(settings)) {
+      return NextResponse.json({ success: false, error: t('validation.invalidRequest', 'Invalid request') }, { status: 400 });
     }
 
     // Validate settings structure
@@ -83,6 +94,25 @@ export async function PUT(
     // main settings page saves only its own tabs.
     const existingTenant = await Tenant.findOne({ slug }).select('_id settings').lean();
     const existingSettings = existingTenant?.settings || {};
+
+    // Tenant isolation: verify the authenticated user belongs to this tenant
+    if (existingTenant && user.role !== 'super_admin' && user.tenantId !== existingTenant._id.toString()) {
+      return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden') }, { status: 403 });
+    }
+
+    // The exchange-rate API key is stripped from non-manager reads, so a client
+    // may send multiCurrency without it — treat "absent" as "keep the stored key"
+    // instead of wiping it.
+    const existingMultiCurrency = (existingSettings as Record<string, unknown>).multiCurrency as
+      | { exchangeRateApiKey?: string }
+      | undefined;
+    if (
+      settings.multiCurrency && typeof settings.multiCurrency === 'object'
+      && settings.multiCurrency.exchangeRateApiKey === undefined
+      && existingMultiCurrency?.exchangeRateApiKey
+    ) {
+      settings.multiCurrency = { ...settings.multiCurrency, exchangeRateApiKey: existingMultiCurrency.exchangeRateApiKey };
+    }
 
     // Three-way merge: defaults → existing → incoming (incoming wins on conflict)
     const mergedSettings = { ...defaultSettings, ...existingSettings, ...settings };
@@ -135,11 +165,6 @@ export async function PUT(
       }
     }
 
-    // Tenant isolation: verify the authenticated user belongs to this tenant (reuse existingTenant)
-    if (existingTenant && user && user.role !== 'super_admin' && user.tenantId !== existingTenant._id.toString()) {
-      return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden') }, { status: 403 });
-    }
-
     // Only $set the settings keys this request actually owns (submitted keys, plus
     // any business-type-default keys it triggered) so a concurrent PUT touching
     // other keys (e.g. a different tab, or the page's language auto-save) can't
@@ -153,6 +178,46 @@ export async function PUT(
     if (existingTenant && keysToSet.length === 0) {
       return NextResponse.json({ success: true, data: existingTenant.settings });
     }
+
+    // Keys owned by stricter admin pages must pass that page's permission here
+    // too, or this endpoint is a way around it. Only keys the request actually
+    // changes are checked (clients may echo unchanged keys back), and
+    // business-type default keys are exempt — the server derives those itself.
+    const submittedChanges = keysToSet.filter((key) => Object.prototype.hasOwnProperty.call(settings, key));
+    const lockedKey = submittedChanges.find((key) => LOCKED_SETTINGS_KEYS.has(key));
+    if (lockedKey) {
+      return NextResponse.json(
+        { success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') },
+        { status: 403 }
+      );
+    }
+    const requiredPermissions = Array.from(new Set(
+      submittedChanges.map(permissionForSettingsKey).filter((p): p is string => !!p)
+    ));
+    for (const permission of requiredPermissions) {
+      if (!(await hasTenantPermission(user.role, user.tenantId, permission))) {
+        return NextResponse.json(
+          { success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') },
+          { status: 403 }
+        );
+      }
+    }
+
+    // The cron POSTs sales data to this URL from the server — reject internal
+    // targets at save time (it is re-checked again on every push).
+    const pushUrl = settings.birEsalesPushUrl;
+    if (submittedChanges.includes('birEsalesPushUrl') && typeof pushUrl === 'string' && pushUrl.trim()) {
+      try {
+        await assertPublicHttpUrl(pushUrl.trim());
+      } catch (err) {
+        const reason = err instanceof UnsafeOutboundUrlError ? err.message : 'Invalid URL';
+        return NextResponse.json(
+          { success: false, error: `${t('validation.invalidPushUrl', 'Invalid eSales push endpoint')}: ${reason}` },
+          { status: 400 }
+        );
+      }
+    }
+
     const setPayload: Record<string, unknown> = {};
     for (const key of keysToSet) {
       setPayload[`settings.${key}`] = updatedSettings[key];
@@ -173,7 +238,7 @@ export async function PUT(
 
     await createAuditLog(request, {
       tenantId: tenant._id,
-      userId: user?.userId,
+      userId: user.userId,
       action: AuditActions.UPDATE,
       entityType: 'tenant',
       entityId: tenant._id.toString(),

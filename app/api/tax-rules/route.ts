@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { handleApiError } from '@/lib/error-handler';
 import connectDB from '@/lib/mongodb';
 import TaxRule from '@/models/TaxRule';
 import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant';
@@ -40,8 +41,8 @@ export async function GET(request: NextRequest) {
       .lean();
     
     return NextResponse.json({ success: true, data: taxRules });
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return handleApiError(error, 'Failed to fetch tax rules');
   }
 }
 
@@ -107,7 +108,7 @@ export async function POST(request: NextRequest) {
     });
     
     return NextResponse.json({ success: true, data: taxRule }, { status: 201 });
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+  } catch (error: unknown) {
+    return handleApiError(error, 'Failed to create tax rule');
   }
 }

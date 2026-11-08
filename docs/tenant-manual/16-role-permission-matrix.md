@@ -32,6 +32,10 @@ Legend: ✅ Full access · ➖ Limited/view-only · ❌ No access
 | Manage staff accounts (create/edit) | ✅ | ✅ | ✅ | ➖ | ❌ | ❌ |
 | Delete/deactivate staff accounts | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
 | Branches | ✅ | ✅ | ✅ | ➖ | ❌ | ❌ |
+| Business hours, holidays, notification templates | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ |
+| Receipt templates | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ |
+| BIR details (TIN, PTU, MIN, eSales push URL) | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Upload / delete files (product images, logos) | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ |
 | **Billing** |||||||
 | Subscriptions & subscription plans | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
 | **Sales & POS** |||||||
@@ -61,5 +65,6 @@ Legend: ✅ Full access · ➖ Limited/view-only · ❌ No access
 ## Notes
 
 - ➖ generally means the role can view or perform a narrow subset of the action (e.g. a cashier viewing but not editing a product, or managing only their own cash drawer session) — it is not a formal permission tier in code, just the practical effect of route-level role checks.
-- There is no capability-based permission system (e.g. per-user toggleable permissions) — access is entirely determined by the six fixed roles above and enforced per API route.
+- The table shows the **defaults**. On **Admin > Roles & Permissions**, an owner or admin can turn individual permissions on or off for the Viewer, Cashier and Manager roles. The API enforces those changes too. Owner, Admin and Super Admin always keep full access. Permissions are set per role, not per user.
+- Editing a section through the general Settings page needs that section's own permission too. For example, BIR fields need **BIR Compliance** and tax rules need **Tax Rules**. Role permissions can only be changed on the Roles & Permissions page.
 - Super Admin is a platform role, not a tenant role: it has no `tenantId` and does not appear in a tenant's own staff list.

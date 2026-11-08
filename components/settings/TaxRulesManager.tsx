@@ -218,7 +218,7 @@ function TaxRuleForm({
 }: {
   rule: TaxRule | null;
   primaryColor?: string;
-  onSave: (rule: Partial<TaxRule>) => void;
+  onSave: (rule: Partial<TaxRule>) => Promise<void>;
   onCancel: () => void;
   dict?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 }) {
@@ -234,6 +234,8 @@ function TaxRuleForm({
   const [zipCodes, setZipCodes] = useState(rule?.region?.zipCodes?.join(', ') || '');
   const [categoryIds, setCategoryIds] = useState<string[]>(rule?.categoryIds || []);
   const [categories, setCategories] = useState<Array<{ _id: string; name: string }>>([]);
+  // Guards double-clicks: each click on Save would otherwise create another rule.
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (appliesTo !== 'categories') return;
@@ -469,24 +471,34 @@ function TaxRuleForm({
 
         <div className="flex items-center space-x-3">
           <button
-            onClick={() =>
-              onSave({
-                name,
-                rate: parseFloat(rate),
-                label,
-                appliesTo,
-                categoryIds: appliesTo === 'categories' ? categoryIds : undefined,
-                priority: parseInt(priority) || 0,
-                isActive,
-                region: country || state || city || zipCodes ? {
-                  country: country || undefined,
-                  state: state || undefined,
-                  city: city || undefined,
-                  zipCodes: zipCodes ? zipCodes.split(',').map((z) => z.trim()).filter(Boolean) : undefined,
-                } : undefined,
-              })
-            }
-            className="px-4 py-2 text-white font-medium transition-opacity hover:opacity-80"
+            disabled={submitting}
+            onClick={async () => {
+              if (submitting) return;
+              setSubmitting(true);
+              try {
+                await onSave({
+                  name,
+                  rate: parseFloat(rate),
+                  label,
+                  appliesTo,
+                  // [] and {} rather than undefined when cleared: JSON drops
+                  // undefined, so the PATCH kept the old value. A stale region made
+                  // the rule silently stop applying to sales without that region.
+                  categoryIds: appliesTo === 'categories' ? categoryIds : [],
+                  priority: parseInt(priority) || 0,
+                  isActive,
+                  region: country || state || city || zipCodes ? {
+                    country: country || undefined,
+                    state: state || undefined,
+                    city: city || undefined,
+                    zipCodes: zipCodes ? zipCodes.split(',').map((z) => z.trim()).filter(Boolean) : undefined,
+                  } : {},
+                });
+              } finally {
+                setSubmitting(false);
+              }
+            }}
+            className="px-4 py-2 text-white font-medium transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-50"
             style={{ backgroundColor: primaryColor }}
           >
             {dict?.taxRules?.saveRule || 'Save Rule'}

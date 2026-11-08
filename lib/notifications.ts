@@ -4,6 +4,7 @@
  */
 
 import { ITenantSettings } from '@/models/Tenant';
+import { parseEmailTemplate } from '@/lib/notification-template-format';
 import { formatDate, formatTime } from '@/lib/formatting';
 import { getDefaultTenantSettings } from '@/lib/currency';
 import { renderNotificationTemplate, getDefaultTemplate } from '@/lib/notification-templates';
@@ -243,8 +244,7 @@ export async function sendBookingConfirmation(
 
   if (emailTemplate) {
     // Template may contain subject|body format
-    const parts = emailTemplate.split('|');
-    emailMessage = parts.length > 1 ? parts[1] : parts[0];
+    emailMessage = parseEmailTemplate(emailTemplate).body;
     emailMessage = renderNotificationTemplate(emailMessage, {
       customerName: data.customerName,
       serviceName: data.serviceName,
@@ -309,9 +309,9 @@ export async function sendBookingConfirmation(
   if (data.customerEmail && tenantSettings.emailNotifications) {
     const emailTemplate = tenantSettings.notificationTemplates?.email?.bookingConfirmation;
     let subject = `Booking Confirmation: ${data.serviceName}`;
-    if (emailTemplate && emailTemplate.includes('|')) {
-      subject = emailTemplate.split('|')[0];
-      subject = renderNotificationTemplate(subject, {
+    const templateSubject = parseEmailTemplate(emailTemplate).subject;
+    if (templateSubject) {
+      subject = renderNotificationTemplate(templateSubject, {
         serviceName: data.serviceName,
       }, tenantSettings);
     }
@@ -359,8 +359,7 @@ export async function sendBookingReminder(
   let smsMessage = '';
 
   if (emailTemplate) {
-    const parts = emailTemplate.split('|');
-    emailMessage = parts.length > 1 ? parts[1] : parts[0];
+    emailMessage = parseEmailTemplate(emailTemplate).body;
     emailMessage = renderNotificationTemplate(emailMessage, {
       customerName: data.customerName,
       serviceName: data.serviceName,
@@ -420,9 +419,9 @@ export async function sendBookingReminder(
   if (data.customerEmail && tenantSettings.emailNotifications) {
     const emailTemplate = tenantSettings.notificationTemplates?.email?.bookingReminder;
     let subject = `Reminder: ${data.serviceName} Booking`;
-    if (emailTemplate && emailTemplate.includes('|')) {
-      subject = emailTemplate.split('|')[0];
-      subject = renderNotificationTemplate(subject, {
+    const templateSubject = parseEmailTemplate(emailTemplate).subject;
+    if (templateSubject) {
+      subject = renderNotificationTemplate(templateSubject, {
         serviceName: data.serviceName,
       }, tenantSettings);
     }
@@ -520,8 +519,7 @@ Attendance Management System
     const emailTemplate = tenantSettings.notificationTemplates?.email?.attendanceAlert;
     let emailBody = defaultBody;
     if (emailTemplate) {
-      const parts = emailTemplate.split('|');
-      const body = parts.length > 1 ? parts[1] : parts[0];
+      const { subject: templateSubject, body } = parseEmailTemplate(emailTemplate);
       const templateVars = {
         employeeName: data.userName,
         clockInTime: `${clockInDate} ${clockInTime}`,
@@ -529,8 +527,8 @@ Attendance Management System
         hours: data.hoursSinceClockIn ? data.hoursSinceClockIn.toFixed(1) : undefined,
       };
       emailBody = renderNotificationTemplate(body, templateVars, tenantSettings);
-      if (parts.length > 1) {
-        subject = renderNotificationTemplate(parts[0], templateVars, tenantSettings);
+      if (templateSubject) {
+        subject = renderNotificationTemplate(templateSubject, templateVars, tenantSettings);
       }
     }
 
@@ -584,11 +582,10 @@ export async function sendBookingCancellation(
   let emailMessage = defaultMessage;
   let emailSubject = `Booking Cancelled: ${data.serviceName}`;
   if (emailTemplate) {
-    const parts = emailTemplate.split('|');
-    const body = parts.length > 1 ? parts[1] : parts[0];
+    const { subject, body } = parseEmailTemplate(emailTemplate);
     emailMessage = renderNotificationTemplate(body, templateVars, tenantSettings);
-    if (parts.length > 1) {
-      emailSubject = renderNotificationTemplate(parts[0], templateVars, tenantSettings);
+    if (subject) {
+      emailSubject = renderNotificationTemplate(subject, templateVars, tenantSettings);
     }
   }
 

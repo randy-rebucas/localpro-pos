@@ -821,14 +821,17 @@ function ProductModal({
     try {
       const fd = new FormData();
       fd.append('file', file);
+      fd.append('type', 'products'); // Cloudinary folder 1pos/{slug}/products/
       const res = await fetch('/api/upload', { method: 'POST', credentials: 'include', body: fd });
-      const data = await res.json();
-      if (data.success) {
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.success) {
         updateFormData({ image: data.data.url });
         setShowImagePicker(false);
+      } else {
+        alert(data?.error || dict?.products?.failedToUploadImage || 'Failed to upload image');
       }
     } catch {
-      // silent
+      alert(dict?.products?.uploadFailed || 'Upload failed');
     } finally {
       setPickerUploading(false);
       if (pickerFileInputRef.current) pickerFileInputRef.current.value = '';
@@ -1076,6 +1079,7 @@ function ProductModal({
                           try {
                             const fd = new FormData();
                             fd.append('file', file);
+                            fd.append('type', 'products'); // Cloudinary folder 1pos/{slug}/products/
                             const res = await fetch('/api/upload', {
                               method: 'POST',
                               credentials: 'include',

@@ -108,6 +108,8 @@ export const PERMISSIONS: PermissionDef[] = [
   { key: 'devices.manage', label: 'Registered Devices (Terminals)', section: 'configuration', defaultMinRole: 'admin' },
   { key: 'branches.delete', label: 'Delete Branches', section: 'configuration', defaultMinRole: 'admin' },
   { key: 'business_hours.manage', label: 'Business Hours', section: 'configuration', defaultMinRole: 'manager' },
+  { key: 'holidays.manage', label: 'Holidays', section: 'configuration', defaultMinRole: 'manager' },
+  { key: 'notifications.manage', label: 'Notification Templates', section: 'configuration', defaultMinRole: 'manager' },
   { key: 'tax_rules.manage', label: 'Tax Rules', section: 'configuration', defaultMinRole: 'admin' },
   { key: 'subscriptions.manage', label: 'Subscriptions', section: 'configuration', defaultMinRole: 'admin' },
   { key: 'audit_logs.view', label: 'Audit Logs', section: 'configuration', defaultMinRole: 'manager' },

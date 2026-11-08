@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Tenant from '@/models/Tenant';
 import { getCurrentUser } from '@/lib/auth';
-import { roleAtLeast } from '@/lib/permissions';
+import { hasTenantPermission } from '@/lib/permissions-server';
 import { logger } from '@/lib/logger';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -40,7 +40,7 @@ export async function GET(
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     logger.error('Error fetching holidays:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, error: 'Failed to process holiday request' }, { status: 500 });
   }
 }
 
@@ -54,7 +54,7 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (!roleAtLeast(user.role, 'manager')) {
+    if (!(await hasTenantPermission(user.role, user.tenantId, 'holidays.manage'))) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
@@ -135,7 +135,7 @@ export async function POST(
       logger.error('Error saving holiday to database:', saveError);
       return NextResponse.json({
         success: false,
-        error: `Failed to save holiday: ${saveError.message || 'Database error'}`
+        error: 'Failed to save holiday'
       }, { status: 500 });
     }
 
@@ -154,9 +154,12 @@ export async function POST(
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     logger.error('Error creating holiday:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, error: 'Failed to process holiday request' }, { status: 500 });
   }
 }
+
+/** Fields a holiday PUT may change (id and createdAt are server-owned). */
+const EDITABLE_HOLIDAY_FIELDS = new Set(['name', 'date', 'type', 'recurring', 'isBusinessClosed']);
 
 export async function PUT(
   request: NextRequest,
@@ -168,7 +171,7 @@ export async function PUT(
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (!roleAtLeast(user.role, 'manager')) {
+    if (!(await hasTenantPermission(user.role, user.tenantId, 'holidays.manage'))) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
@@ -203,7 +206,16 @@ export async function PUT(
       return NextResponse.json({ success: false, error: 'Holiday not found' }, { status: 404 });
     }
 
-    const updatedHoliday = { ...existing, ...updates };
+    // `existing` is a hydrated subdocument: spreading it copies Mongoose
+    // internals ($__parent, _doc), which serialized the whole Tenant document
+    // into the response and the log. Work from a plain object, and only take
+    // the editable fields from the body (id/createdAt stay as stored).
+    const sub = existing as typeof existing & { toObject?: () => typeof existing };
+    const base = typeof sub.toObject === 'function' ? sub.toObject() : { ...existing };
+    const allowedUpdates = Object.fromEntries(
+      Object.entries(updates).filter(([key]) => EDITABLE_HOLIDAY_FIELDS.has(key))
+    );
+    const updatedHoliday = { ...base, ...allowedUpdates, id: existing.id };
 
     try {
       // Positional $set on the matched entry avoids clobbering concurrent edits
@@ -215,12 +227,12 @@ export async function PUT(
       if (result.matchedCount === 0) {
         return NextResponse.json({ success: false, error: 'Holiday not found' }, { status: 404 });
       }
-      logger.info('Holiday updated successfully:', updatedHoliday);
+      logger.info('Holiday updated successfully:', { tenantId: tenant._id.toString(), holidayId: id });
     } catch (saveError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       logger.error('Error saving holiday update to database:', saveError);
       return NextResponse.json({
         success: false,
-        error: `Failed to update holiday: ${saveError.message || 'Database error'}`
+        error: 'Failed to update holiday'
       }, { status: 500 });
     }
 
@@ -230,7 +242,7 @@ export async function PUT(
       action: AuditActions.UPDATE,
       entityType: 'holiday',
       entityId: id,
-      changes: updates,
+      changes: allowedUpdates,
     });
 
     return NextResponse.json({
@@ -239,7 +251,7 @@ export async function PUT(
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     logger.error('Error updating holiday:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, error: 'Failed to process holiday request' }, { status: 500 });
   }
 }
 
@@ -253,7 +265,7 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (!roleAtLeast(user.role, 'manager')) {
+    if (!(await hasTenantPermission(user.role, user.tenantId, 'holidays.manage'))) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
@@ -300,7 +312,7 @@ export async function DELETE(
       logger.error('Error saving holiday deletion to database:', saveError);
       return NextResponse.json({
         success: false,
-        error: `Failed to delete holiday: ${saveError.message || 'Database error'}`
+        error: 'Failed to delete holiday'
       }, { status: 500 });
     }
 
@@ -315,6 +327,6 @@ export async function DELETE(
     return NextResponse.json({ success: true });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     logger.error('Error deleting holiday:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, error: 'Failed to process holiday request' }, { status: 500 });
   }
 }

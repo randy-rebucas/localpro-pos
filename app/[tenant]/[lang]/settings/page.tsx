@@ -18,7 +18,8 @@ import MultiCurrencyDisplaySettings from '@/components/settings/MultiCurrencyDis
 import ReceiptTemplatesManager from '@/components/settings/ReceiptTemplatesManager';
 import SettingsPageSkeleton from '@/components/settings/SettingsPageSkeleton';
 import { useAuth } from '@/contexts/AuthContext';
-import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { pickChangedSettings, useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { stripSecretSettings } from '@/lib/tenant-settings-access';
 import EcommerceIntegrationsSettings from '@/components/settings/EcommerceIntegrationsSettings';
 import ImageUploadField from '@/components/settings/ImageUploadField';
 import ErrorState from '@/components/ui/ErrorState';
@@ -106,10 +107,14 @@ export default function SettingsPage() {
   const { loading: authLoading } = useAuth();
   const { canAccess } = usePermissions();
   const canManageSettings = canAccess('settings.manage');
+  // BIR fields need the same permission as the BIR Compliance page (enforced by the API)
+  const canManageBir = canAccess('bir_compliance.manage');
   const [dict, setDict] = useState<TranslationDict | null>(null);
   const {
     settings,
     setSettings,
+    baseline,
+    commitSaved,
     status,
     error: settingsError,
     refetch,
@@ -249,6 +254,15 @@ export default function SettingsPage() {
       return;
     }
 
+    // Only the keys edited here. Sending the whole object would overwrite
+    // anything changed since this page loaded (other admin pages, other users).
+    const changes = pickChangedSettings(settings, baseline);
+    if (Object.keys(changes).length === 0) {
+      setMessage({ type: 'success', text: dict?.settings?.saved || 'Settings saved successfully!' });
+      setTimeout(() => setMessage(null), 3000);
+      return;
+    }
+
     try {
       setSaving(true);
       setMessage(null);
@@ -258,15 +272,15 @@ export default function SettingsPage() {
           'Content-Type': 'application/json',
         },
         credentials: 'include', // Include cookies for authentication
-        body: JSON.stringify({ settings }),
+        body: JSON.stringify({ settings: changes }),
       });
 
       const data = await res.json();
       if (data.success) {
         setMessage({ type: 'success', text: dict?.settings?.saved || 'Settings saved successfully!' });
-        setSettings(data.data);
+        commitSaved(data.data);
         // Keep the shared context in sync so other pages don't see stale values
-        applySettings(data.data);
+        applySettings(stripSecretSettings(data.data));
         // Clear message after 3 seconds
         setTimeout(() => setMessage(null), 3000);
       } else {
@@ -1085,6 +1099,12 @@ export default function SettingsPage() {
                   <p className="text-sm text-ink/60 mb-4">
                     {settingsDict.birComplianceDesc || 'Required fields for Bureau of Internal Revenue (BIR) official receipts in the Philippines.'}
                   </p>
+                  {!canManageBir && (
+                    <p className="text-xs text-ink/60 mb-4">
+                      {settingsDict.birReadOnlyHint || 'Read-only: changing BIR details requires the BIR Compliance permission.'}
+                    </p>
+                  )}
+                  <fieldset disabled={!canManageBir} className="m-0 min-w-0 border-0 p-0 disabled:opacity-60">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className={LABEL}>
@@ -1219,6 +1239,7 @@ export default function SettingsPage() {
                       </p>
                     </div>
                   </div>
+                  </fieldset>
                   <p className="text-xs text-ink/60 mt-3">
                     {settingsDict.birVatNote || 'Set Tax Label to "VAT" in General → Tax Settings to print a VAT receipt. Non-VAT receipts will show "THIS DOCUMENT IS NOT VALID FOR CLAIM OF INPUT TAX".'}
                   </p>

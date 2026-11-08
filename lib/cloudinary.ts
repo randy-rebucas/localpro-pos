@@ -1,201 +1,191 @@
 /**
- * Cloudinary integration with tenant isolation
- * Files are stored in folder: tenants/{tenantId}/
- * All files tagged with: tenantId for easier querying and access control
+ * Cloudinary storage for tenant files.
+ *
+ * The Cloudinary account is shared, so every asset lives under a folder this
+ * app owns, organised by tenant and purpose:
+ *
+ *   1pos/{tenant_slug}/{type}/<file>
+ *
+ *   type = products  product images
+ *        = branding  store logo, favicon
+ *        = files     general file library (images, PDFs, spreadsheets)
+ *
+ * Assets are also tagged (`1pos`, `tenant:{slug}`, `type:{type}`) and carry the
+ * tenant id in their context metadata, so they can be found from the Cloudinary
+ * console even if a folder is moved.
+ *
+ * Config: CLOUDINARY_URL (cloudinary://API_KEY:API_SECRET@CLOUD_NAME), or
+ * CLOUDINARY_CLOUD_NAME + CLOUDINARY_API_KEY + CLOUDINARY_API_SECRET.
+ * Optional: CLOUDINARY_ROOT_FOLDER (default "1pos"; e.g. "1pos-staging" so a
+ * staging deploy doesn't write into production's folders), and
+ * CLOUDINARY_SIGNATURE_ALGORITHM ("sha1" default, or "sha256" if the account
+ * is set to it).
  */
+import { v2 as cloudinary, type UploadApiResponse } from 'cloudinary';
 
-interface CloudinaryUploadResult {
-  public_id: string;
+export const ASSET_TYPES = ['products', 'branding', 'files'] as const;
+export type AssetType = (typeof ASSET_TYPES)[number];
+
+export function isAssetType(value: unknown): value is AssetType {
+  return typeof value === 'string' && (ASSET_TYPES as readonly string[]).includes(value);
+}
+
+export class StorageNotConfiguredError extends Error {
+  constructor() {
+    super('File storage (Cloudinary) is not configured');
+    this.name = 'StorageNotConfiguredError';
+  }
+}
+
+let configured = false;
+
+function ensureConfigured(): void {
+  if (configured) return;
+
+  let cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+  let apiKey = process.env.CLOUDINARY_API_KEY;
+  let apiSecret = process.env.CLOUDINARY_API_SECRET;
+
+  const url = process.env.CLOUDINARY_URL;
+  if (url) {
+    try {
+      const parsed = new URL(url);
+      cloudName = parsed.hostname || cloudName;
+      apiKey = decodeURIComponent(parsed.username) || apiKey;
+      apiSecret = decodeURIComponent(parsed.password) || apiSecret;
+    } catch {
+      throw new StorageNotConfiguredError();
+    }
+  }
+  if (!cloudName || !apiKey || !apiSecret) throw new StorageNotConfiguredError();
+
+  const algorithm = process.env.CLOUDINARY_SIGNATURE_ALGORITHM === 'sha256' ? 'sha256' : 'sha1';
+  cloudinary.config({
+    cloud_name: cloudName,
+    api_key: apiKey,
+    api_secret: apiSecret,
+    secure: true,
+    signature_algorithm: algorithm,
+  });
+  configured = true;
+}
+
+/** Top-level folder this app owns in the shared account. */
+export function rootFolder(): string {
+  const raw = process.env.CLOUDINARY_ROOT_FOLDER?.trim() || '1pos';
+  return raw.replace(/^\/+|\/+$/g, '');
+}
+
+/** Folder-safe form of a tenant slug (slugs are already URL-safe; this is belt and braces). */
+function safeSegment(value: string): string {
+  const s = value.toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '');
+  if (!s) throw new Error('Invalid tenant slug for storage folder');
+  return s;
+}
+
+/** 1pos/{tenant_slug} */
+export function tenantFolder(tenantSlug: string): string {
+  return `${rootFolder()}/${safeSegment(tenantSlug)}`;
+}
+
+/** 1pos/{tenant_slug}/{type} */
+export function tenantAssetFolder(tenantSlug: string, type: AssetType): string {
+  return `${tenantFolder(tenantSlug)}/${type}`;
+}
+
+/** Filename without extension, reduced to characters Cloudinary keeps in public ids. */
+function safeBaseName(filename: string): string {
+  const base = filename.replace(/\.[^.]*$/, '');
+  const s = base.normalize('NFKD').replace(/[^\w-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
+  return s || 'file';
+}
+
+export interface StoredAsset {
+  publicId: string; // includes the folder
   url: string;
-  secure_url: string;
-  format: string;
+  resourceType: 'image' | 'video' | 'raw';
+  folder: string;
   bytes: number;
+  format?: string;
   width?: number;
   height?: number;
 }
 
-interface CloudinaryErrorResponse {
-  error: {
-    message: string;
+export async function uploadTenantAsset(params: {
+  buffer: Buffer;
+  filename: string;
+  tenantId: string;
+  tenantSlug: string;
+  type: AssetType;
+}): Promise<StoredAsset> {
+  ensureConfigured();
+  const folder = tenantAssetFolder(params.tenantSlug, params.type);
+  const slugTag = safeSegment(params.tenantSlug);
+
+  const result = await new Promise<UploadApiResponse>((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      {
+        folder,
+        resource_type: 'auto',
+        // Keep a readable name; Cloudinary appends a random suffix so names never collide
+        use_filename: true,
+        unique_filename: true,
+        filename_override: safeBaseName(params.filename),
+        overwrite: false,
+        tags: ['1pos', `tenant:${slugTag}`, `type:${params.type}`],
+        context: { tenantId: params.tenantId, tenantSlug: slugTag, assetType: params.type },
+      },
+      (error, res) => {
+        if (error || !res) reject(new Error(`Cloudinary upload failed: ${error?.message || 'no response'}`));
+        else resolve(res);
+      }
+    );
+    stream.end(params.buffer);
+  });
+
+  return {
+    publicId: result.public_id,
+    url: result.secure_url,
+    resourceType: (result.resource_type as StoredAsset['resourceType']) || 'image',
+    folder,
+    bytes: result.bytes,
+    format: result.format,
+    width: result.width,
+    height: result.height,
   };
 }
 
 /**
- * Upload file to Cloudinary with tenant isolation
- * Files are organized in: tenants/{tenantId}/
- * Tagged with tenantId for access control and querying
+ * Whether `publicId` sits inside a folder this tenant owns. Checked before
+ * every delete: on a shared account a bad public id must never reach another
+ * tenant's — or another app's — assets.
+ *
+ * `recordFolder` is the folder stored on the File record at upload time (so a
+ * later slug rename doesn't orphan old files). Legacy uploads went to
+ * tenants/{tenantId}/.
  */
-export async function uploadToCloudinary(
-  fileBuffer: Buffer,
-  filename: string,
-  tenantId: string,
-  fileType: string
-): Promise<CloudinaryUploadResult> {
-  const cloudinaryUrl = process.env.CLOUDINARY_URL;
-
-  if (!cloudinaryUrl) {
-    throw new Error('CLOUDINARY_URL environment variable not configured');
+export function isOwnedByTenant(publicId: string, opts: { tenantId: string; recordFolder?: string | null }): boolean {
+  const allowed: string[] = [`tenants/${opts.tenantId}/`];
+  if (opts.recordFolder && opts.recordFolder.startsWith(`${rootFolder()}/`)) {
+    allowed.push(`${opts.recordFolder.replace(/\/+$/, '')}/`);
   }
-
-  // Extract credentials from CLOUDINARY_URL
-  // Format: cloudinary://API_KEY:API_SECRET@CLOUD_NAME
-  const url = new URL(cloudinaryUrl);
-  const cloudName = url.hostname;
-  const apiKey = url.username;
-  const apiSecret = url.password;
-
-  if (!cloudName || !apiKey || !apiSecret) {
-    throw new Error('Invalid CLOUDINARY_URL format. Expected: cloudinary://API_KEY:API_SECRET@CLOUD_NAME');
-  }
-
-  // Tenant isolation: organize by folder and tag
-  // Folder: tenants/{tenantId} - provides URL organization
-  // Tags: [tenantId, fileType] - for querying and access control
-  // Note: publicId should NOT include folder (folder param handles directory structure)
-  const publicId = `${Date.now()}-${Math.random().toString(36).substring(7)}-${filename}`;
-  const folderValue = `tenants/${tenantId}`;
-  const tags = `${tenantId},${fileType.split('/')[0]}`;
-
-  // Create signature for signed upload (more secure than unsigned)
-  const crypto = await import('crypto');
-  const timestamp = Math.floor(Date.now() / 1000);
-  
-  // Build signature: alphabetically ordered params + api_secret
-  // Format: param1=value1&param2=value2&...&paramN=valueN{api_secret}
-  const contextValue = `tenantId=${tenantId}`;
-  
-  // Build the signature string in alphabetical order (Cloudinary requirement)
-  const signatureParams = [
-    `context=${contextValue}`,
-    `folder=${folderValue}`,
-    `public_id=${publicId}`,
-    `tags=${tags}`,
-    `timestamp=${timestamp}`,
-  ].sort();
-  
-  const signatureString = signatureParams.join('&') + apiSecret;
-  const signature = crypto.createHash('sha256').update(signatureString).digest('hex');
-
-  // Prepare form data
-  const formData = new FormData();
-  const blob = new Blob([fileBuffer as unknown as BufferSource], { type: fileType });
-  formData.append('file', blob, filename);
-  formData.append('api_key', apiKey);
-  formData.append('timestamp', timestamp.toString());
-  formData.append('signature', signature);
-  formData.append('public_id', publicId);
-  formData.append('tags', tags);
-  formData.append('folder', folderValue);
-  formData.append('context', `tenantId=${tenantId}`);
-
-  try {
-    const uploadUrl = `https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`;
-
-    const response = await fetch(uploadUrl, {
-      method: 'POST',
-      body: formData,
-    });
-
-    if (!response.ok) {
-      const errorData = (await response.json()) as CloudinaryErrorResponse;
-      throw new Error(`Cloudinary upload failed: ${errorData.error.message}`);
-    }
-
-    return (await response.json()) as CloudinaryUploadResult;
-  } catch (error) {
-    if (error instanceof Error) {
-      throw new Error(`Cloudinary upload error: ${error.message}`);
-    }
-    throw error;
-  }
+  return !publicId.includes('..') && allowed.some((prefix) => publicId.startsWith(prefix));
 }
 
-/**
- * Delete file from Cloudinary
- * Only admins can delete files from other users, tenant isolation enforced at API level
- */
-export async function deleteFromCloudinary(publicId: string): Promise<void> {
-  const cloudinaryUrl = process.env.CLOUDINARY_URL;
-
-  if (!cloudinaryUrl) {
-    throw new Error('CLOUDINARY_URL environment variable not configured');
+export async function deleteTenantAsset(params: {
+  publicId: string;
+  resourceType?: string | null;
+  tenantId: string;
+  recordFolder?: string | null;
+}): Promise<void> {
+  if (!isOwnedByTenant(params.publicId, { tenantId: params.tenantId, recordFolder: params.recordFolder })) {
+    throw new Error('Refusing to delete an asset outside the tenant folder');
   }
-
-  const url = new URL(cloudinaryUrl);
-  const cloudName = url.hostname;
-  const apiKey = url.username;
-  const apiSecret = url.password;
-
-  if (!cloudName || !apiKey || !apiSecret) {
-    throw new Error('Invalid CLOUDINARY_URL format');
+  ensureConfigured();
+  const resourceType = params.resourceType === 'raw' || params.resourceType === 'video' ? params.resourceType : 'image';
+  const res = await cloudinary.uploader.destroy(params.publicId, { resource_type: resourceType, invalidate: true });
+  // "not found" = already gone, which is the outcome we wanted
+  if (res?.result !== 'ok' && res?.result !== 'not found') {
+    throw new Error(`Cloudinary delete failed: ${res?.result ?? 'unknown result'}`);
   }
-
-  // Sign the deletion request (required for signed operations)
-  const timestamp = Math.floor(Date.now() / 1000);
-  const signatureInput = `public_id=${publicId}&timestamp=${timestamp}${apiSecret}`;
-  const crypto = await import('crypto');
-  const signature = crypto.createHash('sha1').update(signatureInput).digest('hex');
-
-  const formData = new FormData();
-  formData.append('public_id', publicId);
-  formData.append('api_key', apiKey);
-  formData.append('timestamp', timestamp.toString());
-  formData.append('signature', signature);
-
-  try {
-    const deleteUrl = `https://api.cloudinary.com/v1_1/${cloudName}/image/destroy`;
-
-    const response = await fetch(deleteUrl, {
-      method: 'POST',
-      body: formData,
-    });
-
-    if (!response.ok) {
-      const errorData = (await response.json()) as CloudinaryErrorResponse;
-      throw new Error(`Cloudinary delete failed: ${errorData.error.message}`);
-    }
-  } catch (error) {
-    if (error instanceof Error) {
-      throw new Error(`Cloudinary delete error: ${error.message}`);
-    }
-    throw error;
-  }
-}
-
-/**
- * Get transformation URL for Cloudinary image
- * Useful for resizing, optimizing images served from Cloudinary
- */
-export function getCloudinaryImageUrl(
-  publicId: string,
-  options?: {
-    width?: number;
-    height?: number;
-    quality?: string;
-  }
-): string {
-  const cloudinaryUrl = process.env.CLOUDINARY_URL;
-  if (!cloudinaryUrl) {
-    throw new Error('CLOUDINARY_URL not configured');
-  }
-
-  const url = new URL(cloudinaryUrl);
-  const cloudName = url.hostname;
-
-  let path = `https://res.cloudinary.com/${cloudName}/image/fetch`;
-
-  if (options && (options.width || options.height || options.quality)) {
-    path = `https://res.cloudinary.com/${cloudName}/image/upload`;
-
-    const transforms: string[] = [];
-    if (options.width) transforms.push(`w_${options.width}`);
-    if (options.height) transforms.push(`h_${options.height}`);
-    if (options.quality) transforms.push(`q_${options.quality}`);
-
-    if (transforms.length > 0) {
-      path += `/${transforms.join(',')}`;
-    }
-  }
-
-  return `${path}/${publicId}`;
 }

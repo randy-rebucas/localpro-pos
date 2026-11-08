@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { publicEcommerceError } from '@/lib/ecommerce/public-error';
+import { assertPublicHttpUrl, UnsafeOutboundUrlError } from '@/lib/net/outbound-url';
 import crypto from 'crypto';
 import connectDB from '@/lib/mongodb';
 import { requireTenantAccess } from '@/lib/api-tenant';
@@ -47,6 +49,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: msg }, { status: 400 });
     }
 
+    // Credentials go in the query string and the server fetches this URL:
+    // require https and a public address before sending anything to it.
+    await assertPublicHttpUrl(normalized);
+
     await wooFetchJson<unknown[]>(normalized, consumerKey, consumerSecret, '/products?per_page=1');
 
     const signingSecret = crypto.randomBytes(24).toString('hex');
@@ -88,8 +94,11 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (e: unknown) {
+    if (e instanceof UnsafeOutboundUrlError) {
+      return NextResponse.json({ success: false, error: e.message }, { status: 400 });
+    }
     const msg = e instanceof Error ? e.message : 'Connection failed';
     const status = msg.includes('Unauthorized') ? 401 : msg.includes('Forbidden') ? 403 : msg.includes('feature') ? 403 : 500;
-    return NextResponse.json({ success: false, error: msg }, { status });
+    return NextResponse.json({ success: false, error: publicEcommerceError(msg, status, 'Connection failed') }, { status });
   }
 }

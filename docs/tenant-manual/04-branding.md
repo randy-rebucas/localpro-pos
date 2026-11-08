@@ -124,6 +124,8 @@ Create multiple receipt templates for different purposes:
 - **Invoice** — Detailed invoice format
 - **Gift Receipt** — No prices shown
 - Each template uses HTML with template variables
+- Templates may use layout HTML, tables, images, inline styles and `<style>` blocks. Saving is rejected for scripts, event-handler attributes (`onclick`, `onerror`, …), `javascript:` links, frames, forms and `<link>`/`<meta>`/`<base>` tags, and these are also stripped when a receipt prints.
+- Variable values (customer and item names, notes) are inserted as plain text. HTML inside them is shown literally, not rendered.
 
 Template variables available:
 ```

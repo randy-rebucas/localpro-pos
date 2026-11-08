@@ -57,6 +57,8 @@
     "@tailwindcss/typography": "^0.5.19",
     "@types/jsbarcode": "^3.11.4",
     "bcryptjs": "^3.0.3",
+    "cloudinary": "2.5.1",
+    "dompurify": "3.2.6",
     "dotenv": "^17.2.3",
     "embla-carousel-react": "^8.6.0",
     "exceljs": "^4.4.0",

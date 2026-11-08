@@ -3,6 +3,7 @@
  * Supports ESC/POS printers via WebUSB, Serial API, or network printing
  */
 import { logger } from '@/lib/logger';
+import { sanitizeReceiptHtml } from '@/lib/receipt-template-sanitize';
 import { findProfile } from './printer-profiles';
 import { isDevicePickerCancelled, isUsbAccessDeniedError } from './usb-probe';
 
@@ -513,7 +514,10 @@ class ReceiptPrinterService {
   private printViaBrowser(data: ReceiptData): boolean {
     // Use a hidden iframe instead of window.open so printing works from async
     // callbacks (after await fetch) without being blocked by popup blockers.
-    const html = this.generateReceiptHTML(data);
+    // The iframe is same-origin, so anything that runs in it runs as the
+    // signed-in user. Receipt HTML carries tenant-authored templates and
+    // customer/product names, so it is always sanitized before writing.
+    const html = sanitizeReceiptHtml(this.generateReceiptHTML(data));
 
     const iframe = document.createElement('iframe');
     iframe.style.cssText =
@@ -529,6 +533,16 @@ class ReceiptPrinterService {
     doc.open();
     doc.write(html);
     doc.close();
+
+    // Hide images that fail to load (e.g. a dead logo URL). Done from here
+    // because the sanitizer strips inline onerror handlers.
+    doc.querySelectorAll('img').forEach((img) => {
+      if (img.complete && img.naturalWidth === 0 && img.getAttribute('src')) {
+        img.remove();
+      } else {
+        img.addEventListener('error', () => img.remove(), { once: true });
+      }
+    });
 
     // Give the iframe a moment to render before triggering print
     setTimeout(() => {
@@ -604,7 +618,7 @@ class ReceiptPrinterService {
 </head>
 <body>
   <div class="header center">
-    ${data.logo ? `<img src="${data.logo}" alt="Logo" onerror="this.remove()" style="max-width:100px;max-height:60px;display:block;margin:0 auto 4px;" />` : ''}
+    ${data.logo ? `<img src="${data.logo}" alt="Logo" style="max-width:100px;max-height:60px;display:block;margin:0 auto 4px;" />` : ''}
     ${data.storeName ? `<h2>${data.storeName}</h2>` : ''}
     ${data.businessStyle ? `<div>${data.businessStyle}</div>` : ''}
     ${data.address ? `<div>${data.address}</div>` : ''}

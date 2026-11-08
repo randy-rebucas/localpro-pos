@@ -4,6 +4,7 @@
  */
 
 import connectDB from '@/lib/mongodb';
+import { parseEmailTemplate } from '@/lib/notification-template-format';
 import Tenant from '@/models/Tenant';
 import { getLowStockProducts } from '@/lib/stock';
 import { sendEmail, sendSMS } from '@/lib/notifications';
@@ -99,7 +100,7 @@ export async function sendLowStockAlerts(
               threshold: product.threshold || threshold,
             };
             if (emailTemplate) {
-              const body = emailTemplate.includes('|') ? emailTemplate.split('|')[1] : emailTemplate;
+              const body = parseEmailTemplate(emailTemplate).body;
               return renderNotificationTemplate(body, vars, tenantSettings);
             }
             return `- ${product.name}${product.sku ? ` (SKU: ${product.sku})` : ''}: ${product.currentStock || 0} units (Threshold: ${product.threshold || threshold})`;
@@ -110,8 +111,9 @@ export async function sendLowStockAlerts(
           ? `\n... and ${lowStockProducts.length - 20} more products`
           : '';
 
-        const emailSubject = emailTemplate && emailTemplate.includes('|')
-          ? renderNotificationTemplate(emailTemplate.split('|')[0], {
+        const templateSubject = parseEmailTemplate(emailTemplate).subject;
+        const emailSubject = templateSubject
+          ? renderNotificationTemplate(templateSubject, {
               productName: lowStockProducts[0].name,
               currentStock: lowStockProducts[0].currentStock || 0,
               threshold: lowStockProducts[0].threshold || threshold,

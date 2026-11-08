@@ -1,4 +1,5 @@
 import { logger } from '@/lib/logger';
+import { safeFetch } from '@/lib/net/outbound-url';
 
 /** Normalize store base URL for Woo REST (`/wp-json/wc/v3`). */
 export function normalizeWooCommerceSiteUrl(raw: string): string {
@@ -39,7 +40,8 @@ export async function wooFetchJson<T>(
   init?: RequestInit
 ): Promise<T> {
   const url = wooApiUrl(siteUrl, path, consumerKey, consumerSecret);
-  const res = await fetch(url.toString(), {
+  // safeFetch: the store URL is tenant-supplied (SSRF guard, re-checked on every call)
+  const res = await safeFetch(url.toString(), {
     ...init,
     headers: {
       Accept: 'application/json',
@@ -65,7 +67,8 @@ export async function wooDelete(
   path: string
 ): Promise<void> {
   const url = wooApiUrl(siteUrl, path, consumerKey, consumerSecret);
-  const res = await fetch(url.toString(), {
+  // safeFetch: the store URL is tenant-supplied (SSRF guard, re-checked on every call)
+  const res = await safeFetch(url.toString(), {
     method: 'DELETE',
     headers: {
       Accept: 'application/json',

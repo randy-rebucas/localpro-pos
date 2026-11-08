@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { getDictionaryClient } from '@/app/[tenant]/[lang]/dictionaries-client';
 import JsBarcode from 'jsbarcode';
+import { escapeHtml } from '@/lib/html-escape';
 
 interface BarcodeModalProps {
   value: string;       // barcode value
@@ -101,12 +102,14 @@ export default function BarcodeModal({ value, productName, onClose }: BarcodeMod
     const serializer = new XMLSerializer();
     const svgStr = serializer.serializeToString(svgRef.current);
     const win = window.open('', '_blank', 'width=400,height=300');
+    // The popup is same-origin with the app; an unescaped product name would run as script there.
+    const safeName = escapeHtml(productName);
     if (!win) return;
     win.document.write(`
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Barcode – ${productName}</title>
+        <title>Barcode – ${safeName}</title>
         <style>
           body { margin: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; font-family: sans-serif; }
           h2 { font-size: 14px; margin-bottom: 8px; color: #374151; }
@@ -114,7 +117,7 @@ export default function BarcodeModal({ value, productName, onClose }: BarcodeMod
         </style>
       </head>
       <body>
-        <h2>${productName}</h2>
+        <h2>${safeName}</h2>
         ${svgStr}
         <script>window.onload = () => { window.print(); window.close(); }<\/script>
       </body>

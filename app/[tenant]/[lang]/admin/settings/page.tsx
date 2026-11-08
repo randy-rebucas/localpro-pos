@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import DailyReportRecipients from '@/components/settings/DailyReportRecipients';
+import ImageUploadField from '@/components/settings/ImageUploadField';
 import { Settings } from 'lucide-react';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { isBusinessTypeSelectable } from '@/lib/business-types';
@@ -461,16 +462,17 @@ export default function AdminSettingsPage() {
                   <p className="text-xs text-gray-400 mt-0.5">{dict?.settings?.brandingSectionDesc || 'Colors and logo used across your store and receipts'}</p>
                 </div>
                 <div className="p-5 space-y-4">
-                  <div>
-                    <label className={labelCls}>{dict?.settings?.logoUrl || 'Logo URL'}</label>
-                    <input type="url" value={form.logo} onChange={e => set('logo', e.target.value)} placeholder="https://..." className={inputCls} />
-                    {form.logo && (
-                      <div className="mt-3 border border-gray-200 p-3 inline-block">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={form.logo} alt={dict?.settings?.logoPreviewAlt || 'Logo preview'} className="h-16 object-contain" />
-                      </div>
-                    )}
-                  </div>
+                  {/* Uploads to Cloudinary (1pos/{slug}/branding/), same as the main settings page */}
+                  <ImageUploadField
+                    tenant={tenant}
+                    label={dict?.settings?.logoUrl || 'Logo'}
+                    value={form.logo || ''}
+                    onChange={(url) => set('logo', url)}
+                    recommendedSize={dict?.settings?.logoRecommendedSize || '200x200px (square) or 400x100px (wide)'}
+                    helpText={dict?.settings?.logoHelp || 'Shown on your login page and receipts.'}
+                    labels={dict?.settings as Record<string, unknown> | undefined}
+                    previewClassName="h-16 w-16"
+                  />
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className={labelCls}>{dict?.settings?.primaryColor || 'Primary Color'}</label>

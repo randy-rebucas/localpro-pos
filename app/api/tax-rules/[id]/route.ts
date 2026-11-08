@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { handleApiError } from '@/lib/error-handler';
 import connectDB from '@/lib/mongodb';
 import TaxRule from '@/models/TaxRule';
 import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant';
@@ -32,8 +33,8 @@ export async function GET(
     }
     
     return NextResponse.json({ success: true, data: taxRule });
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return handleApiError(error, 'Failed to fetch tax rule');
   }
 }
 
@@ -101,8 +102,8 @@ export async function PATCH(
     });
     
     return NextResponse.json({ success: true, data: taxRule });
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+  } catch (error: unknown) {
+    return handleApiError(error, 'Failed to update tax rule');
   }
 }
 
@@ -147,7 +148,7 @@ export async function DELETE(
     });
     
     return NextResponse.json({ success: true, message: 'Tax rule deleted' });
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+  } catch (error: unknown) {
+    return handleApiError(error, 'Failed to delete tax rule');
   }
 }
