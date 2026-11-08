@@ -10,6 +10,13 @@ afterEach(() => {
   cacheClear();
 });
 
+// next/font only works inside the Next compiler; under vitest its loaders are not functions.
+// components/marketing/fonts.ts calls them at import time, and ConfirmDialog (so lib/confirm) imports it.
+const fakeFont = () => ({ className: 'font-mock', variable: 'font-mock-var', style: { fontFamily: 'mock' } });
+vi.mock('next/font/local', () => ({ default: fakeFont }));
+// Name every Google font the app imports (vitest needs real exports); add new ones here.
+vi.mock('next/font/google', () => ({ Doto: fakeFont, Hanken_Grotesk: fakeFont, IBM_Plex_Mono: fakeFont }));
+
 // Mock next/navigation
 vi.mock('next/navigation', () => ({
   useRouter: () => ({

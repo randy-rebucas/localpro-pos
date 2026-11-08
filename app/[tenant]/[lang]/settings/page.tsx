@@ -135,8 +135,8 @@ export default function SettingsPage() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const tab = new URLSearchParams(window.location.search).get('tab');
-    if (tab === 'ecommerce') {
-      setActiveTab('ecommerce');
+    if (tab === 'ecommerce' || tab === 'multiCurrency') {
+      setActiveTab(tab);
     }
   }, []);
 

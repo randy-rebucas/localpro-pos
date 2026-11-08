@@ -53,6 +53,7 @@ When multiple rules apply to a product:
 - The rule with the **highest priority number** wins
 - Rules with priority 0 are the default fallback
 - Example: A "VAT-Exempt" rule with priority 10 overrides "Standard VAT" with priority 0
+- A sale that **no active rule matches** uses the tax rate in **Settings** (or no tax if tax is off there). Admin → Tax Rules says which applies.
 
 ### Common Tax Rule Configurations
 

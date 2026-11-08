@@ -7,6 +7,7 @@ import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
+import { tenantBranchExists } from '@/lib/device-identity-server';
 
 export async function PUT(
   request: NextRequest,
@@ -35,17 +36,35 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const { label, serialNumber, terminalId, branchId, ptuNumber, ptuStatus, isActive } = body;
+    const { branchId, ptuNumber, ptuStatus, isActive } = body;
+    const trimmed = (v: unknown) => (typeof v === 'string' ? v.trim() : undefined);
+    const label = trimmed(body.label);
+    const serialNumber = trimmed(body.serialNumber);
+    const terminalId = trimmed(body.terminalId);
+
+    if ((body.label !== undefined && !label) || (body.serialNumber !== undefined && !serialNumber) || (body.terminalId !== undefined && !terminalId)) {
+      return NextResponse.json(
+        { success: false, error: t('validation.deviceFieldsRequired', 'Label, serial number, and terminal ID are required') },
+        { status: 400 }
+      );
+    }
+    // The list populates the branch name, so a branch id from another tenant would leak it.
+    if (branchId && !(await tenantBranchExists(branchId, tenantId))) {
+      return NextResponse.json({ success: false, error: t('validation.deviceBranchInvalid', 'The chosen branch is not part of this store') }, { status: 400 });
+    }
+    if (ptuStatus !== undefined && ptuStatus !== 'pending' && ptuStatus !== 'approved') {
+      return NextResponse.json({ success: false, error: 'Invalid PTU status' }, { status: 400 });
+    }
 
     const oldData = device.toObject();
 
-    if (label !== undefined) device.label = label;
-    if (serialNumber !== undefined) device.serialNumber = serialNumber;
-    if (terminalId !== undefined) device.terminalId = terminalId;
-    if (branchId !== undefined) device.branchId = branchId || undefined;
-    if (ptuNumber !== undefined) device.ptuNumber = ptuNumber;
+    if (label) device.label = label;
+    if (serialNumber) device.serialNumber = serialNumber;
+    if (terminalId) device.terminalId = terminalId;
+    if (branchId !== undefined) device.set('branchId', branchId || undefined);
+    if (ptuNumber !== undefined) device.set('ptuNumber', trimmed(ptuNumber) || undefined);
     if (ptuStatus !== undefined) device.ptuStatus = ptuStatus;
-    if (isActive !== undefined) device.isActive = isActive;
+    if (typeof isActive === 'boolean') device.isActive = isActive;
 
     try {
       await device.save();

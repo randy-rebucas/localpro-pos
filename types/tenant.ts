@@ -116,8 +116,10 @@ export interface ITenantSettings {
     printer?: {
       type: 'browser' | 'usb' | 'serial' | 'network';
       profile?: string;
+      name?: string;
       vendorId?: number;
       productId?: number;
+      port?: string;
       ipAddress?: string;
       portNumber?: number;
     };

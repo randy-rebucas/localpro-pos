@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { Search, Usb } from 'lucide-react';
 import {
   hardwareService,
   printerConfigFromDetected,
@@ -9,11 +10,12 @@ import {
 } from '@/lib/hardware';
 import { showToast } from '@/lib/toast';
 import { hardwareStatusChecker } from '@/lib/hardware/status-checker';
+import { KEY, KEY_PRIMARY } from '@/components/admin/register-ui';
 
 interface PrinterDetectionPanelProps {
   dictValue: (key: string, fallback: string) => string;
-  primaryColor: string;
   onApplyPrinter: (printer: PrinterSetupRecommendation['printer']) => void;
+  disabled?: boolean;
 }
 
 function formatVidPid(vendorId?: number, productId?: number): string | null {
@@ -24,16 +26,16 @@ function formatVidPid(vendorId?: number, productId?: number): string | null {
   return `${vid}:${pid}`;
 }
 
-function statusBadgeClass(status: DetectedPrinter['probeStatus']): string {
+/** The tag beside each detected printer: teal when it can print directly, red when it cannot. */
+function statusTagClass(status: DetectedPrinter['probeStatus']): string {
   switch (status) {
     case 'ready':
-      return 'bg-green-100 text-green-800 border-green-200';
+      return 'bg-brand text-ink';
     case 'os_driver_claimed':
-      return 'bg-amber-100 text-amber-900 border-amber-200';
-    case 'unsupported':
-      return 'bg-gray-100 text-gray-700 border-gray-200';
+    case 'error':
+      return 'bg-stamp text-paper-white';
     default:
-      return 'bg-red-100 text-red-800 border-red-200';
+      return 'bg-ink/10 text-ink/70';
   }
 }
 
@@ -50,16 +52,16 @@ function statusLabel(status: DetectedPrinter['probeStatus'], dictValue: PrinterD
   }
 }
 
-export default function PrinterDetectionPanel({
-  dictValue,
-  primaryColor,
-  onApplyPrinter,
-}: PrinterDetectionPanelProps) {
+/** Finds printers this browser can reach and offers the setup that suits them. */
+export default function PrinterDetectionPanel({ dictValue, onApplyPrinter, disabled = false }: PrinterDetectionPanelProps) {
   const [scanning, setScanning] = useState(false);
   const [pairing, setPairing] = useState(false);
   const [detected, setDetected] = useState<DetectedPrinter[]>([]);
   const [recommendation, setRecommendation] = useState<PrinterSetupRecommendation | null>(null);
   const [scanned, setScanned] = useState(false);
+  // Read after mount so the server render and the first client render agree.
+  const [usbSupported, setUsbSupported] = useState(false);
+  useEffect(() => setUsbSupported('usb' in navigator), []);
 
   const runScan = async (requestNewUsb: boolean) => {
     if (requestNewUsb) setPairing(true);
@@ -95,110 +97,75 @@ export default function PrinterDetectionPanel({
     showToast.success(dictValue('setupApplied', 'Printer setup applied'));
   };
 
+  const busy = disabled || scanning || pairing;
+
   return (
-    <div className="rounded border border-gray-200 bg-gray-50 p-4 mb-4">
-      <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
-        <div>
-          <h4 className="text-sm font-semibold text-gray-900">
-            {dictValue('detectDevices', 'Detect Devices')}
-          </h4>
-          <p className="text-xs text-gray-500 mt-0.5">
-            {dictValue(
-              'detectDevicesHint',
-              'Scan paired printers or pair a new USB device, then apply the recommended setup.'
-            )}
+    <div className="border border-dashed border-ink/30 bg-paper p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1 basis-56">
+          <h4 className="font-receipt text-xs font-semibold uppercase tracking-[0.08em]">{dictValue('detectDevices', 'Detect Devices')}</h4>
+          <p className="mt-1 text-sm text-ink/70">
+            {dictValue('detectDevicesHint', 'Scan paired printers or pair a new USB device, then apply the recommended setup.')}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => runScan(false)}
-            disabled={scanning || pairing}
-            className="px-3 py-1.5 text-xs font-semibold text-white border disabled:opacity-50"
-            style={{ backgroundColor: primaryColor, borderColor: primaryColor }}
-          >
-            {scanning
-              ? dictValue('scanning', 'Scanning...')
-              : dictValue('scanForPrinters', 'Scan for printers')}
+          <button type="button" onClick={() => runScan(false)} disabled={busy} className={KEY_PRIMARY}>
+            <Search className="h-4 w-4" strokeWidth={1.75} aria-hidden />
+            {scanning ? dictValue('scanning', 'Scanning...') : dictValue('scanForPrinters', 'Scan for printers')}
           </button>
-          {'usb' in navigator && (
-            <button
-              type="button"
-              onClick={() => runScan(true)}
-              disabled={scanning || pairing}
-              className="px-3 py-1.5 text-xs font-semibold border border-gray-300 bg-white text-gray-700 hover:bg-gray-100 disabled:opacity-50"
-            >
-              {pairing
-                ? dictValue('pairing', 'Pairing...')
-                : dictValue('pairUsbPrinter', 'Pair USB printer')}
+          {usbSupported && (
+            <button type="button" onClick={() => runScan(true)} disabled={busy} className={`${KEY} bg-paper-white`}>
+              <Usb className="h-4 w-4" strokeWidth={1.75} aria-hidden />
+              {pairing ? dictValue('pairing', 'Pairing...') : dictValue('pairUsbPrinter', 'Pair USB printer')}
             </button>
           )}
         </div>
       </div>
 
       {scanned && detected.length === 0 && (
-        <p className="text-sm text-gray-600 mb-3">
-          {dictValue(
-            'noPrintersFound',
-            'No printers found. Try Pair USB printer, or use Browser Print / Network printer.'
-          )}
+        <p className="mt-3 font-receipt text-xs text-ink/70">
+          {dictValue('noPrintersFound', 'No printers found. Try Pair USB printer, or use Browser Print / Network printer.')}
         </p>
       )}
 
       {detected.length > 0 && (
-        <div className="space-y-2 mb-3">
-          <p className="text-xs font-medium text-gray-600 uppercase tracking-wide">
-            {dictValue('detectedDevices', 'Detected devices')}
-          </p>
-          {detected.map((device) => {
-            const ids = formatVidPid(device.vendorId, device.productId);
-            return (
-              <div
-                key={device.id}
-                className="flex flex-wrap items-center justify-between gap-2 border border-gray-200 bg-white p-3"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-gray-900 truncate">{device.label}</p>
-                  <p className="text-xs text-gray-500">
-                    {device.connection.toUpperCase()}
-                    {ids ? ` · ${ids}` : ''}
-                    {device.matchedProfileName ? ` · ${device.matchedProfileName}` : ''}
-                  </p>
-                  {device.probeMessage && (
-                    <p className="text-xs text-gray-500 mt-0.5">{device.probeMessage}</p>
-                  )}
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <span
-                    className={`text-[10px] font-bold px-2 py-0.5 border ${statusBadgeClass(device.probeStatus)}`}
-                  >
-                    {statusLabel(device.probeStatus, dictValue)}
-                  </span>
-                  {device.probeStatus !== 'unsupported' && (
-                    <button
-                      type="button"
-                      onClick={() => applyDevice(device)}
-                      className="text-xs font-semibold text-gray-700 hover:text-gray-900 underline"
-                    >
-                      {dictValue('useThisPrinter', 'Use this printer')}
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+        <div className="mt-4">
+          <p className="mb-2 font-receipt text-xs uppercase tracking-[0.08em] text-ink/60">{dictValue('detectedDevices', 'Detected devices')}</p>
+          <ul className="divide-y divide-dashed divide-ink/20 border-y border-dashed border-ink/20 bg-paper-white">
+            {detected.map((device) => {
+              const ids = formatVidPid(device.vendorId, device.productId);
+              return (
+                <li key={device.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
+                  <div className="min-w-0 flex-1 basis-48">
+                    <p className="truncate text-sm font-medium">{device.label}</p>
+                    <p className="font-receipt text-xs text-ink/60">
+                      {device.connection.toUpperCase()}
+                      {ids ? ` · ${ids}` : ''}
+                      {device.matchedProfileName ? ` · ${device.matchedProfileName}` : ''}
+                    </p>
+                    {device.probeMessage && <p className="mt-0.5 text-xs text-ink/60">{device.probeMessage}</p>}
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span className={`px-2 py-0.5 font-receipt text-[11px] uppercase ${statusTagClass(device.probeStatus)}`}>
+                      {statusLabel(device.probeStatus, dictValue)}
+                    </span>
+                    {device.probeStatus !== 'unsupported' && (
+                      <button type="button" disabled={disabled} onClick={() => applyDevice(device)} className={`${KEY} min-h-[36px] px-3`}>
+                        {dictValue('useThisPrinter', 'Use this printer')}
+                      </button>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
         </div>
       )}
 
       {recommendation && (
-        <div className="border border-teal-200 bg-teal-50/60 p-3">
-          <p className="text-sm text-gray-800 mb-2">{recommendation.summary}</p>
-          <button
-            type="button"
-            onClick={applyRecommendation}
-            className="px-3 py-1.5 text-xs font-bold text-white border"
-            style={{ backgroundColor: primaryColor, borderColor: primaryColor }}
-          >
+        <div className="mt-4 border-l-4 border-brand-hover bg-paper-white px-3 py-3">
+          <p className="text-sm">{recommendation.summary}</p>
+          <button type="button" disabled={disabled} onClick={applyRecommendation} className={`${KEY_PRIMARY} mt-3`}>
             {dictValue('useRecommendedSetup', 'Use recommended setup')}
           </button>
         </div>

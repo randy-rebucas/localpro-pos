@@ -2,54 +2,50 @@
  * Subscriptions page helper functions
  */
 
-export function formatDate(value: string | Date | undefined | null, timeZone?: string): string {
+type Dict = { admin?: Record<string, string | undefined> } | null | undefined;
+
+export function formatDate(value: string | Date | undefined | null, timeZone?: string, locale?: string): string {
   if (!value) return '—';
   const d = new Date(value);
-  return isNaN(d.getTime()) ? '—' : d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric', timeZone });
+  return isNaN(d.getTime()) ? '—' : d.toLocaleDateString(locale, { year: 'numeric', month: 'short', day: 'numeric', timeZone });
 }
 
-export function getSubscriptionStatusBadgeStyles(status: string): string {
-  const styles: Record<string, string> = {
-    active: 'bg-green-100 text-green-800',
-    inactive: 'bg-gray-100 text-gray-800',
-    trial: 'bg-brand-soft text-brand-navy',
-    suspended: 'bg-yellow-100 text-yellow-800',
-    cancelled: 'bg-red-100 text-red-800',
-  };
-  return styles[status] || 'bg-gray-100 text-gray-800';
+/** Whole days from now until `value`, never below zero; null when there is no date. */
+export function daysUntil(value: string | Date | undefined | null, now: Date = new Date()): number | null {
+  if (!value) return null;
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return null;
+  return Math.max(0, Math.ceil((d.getTime() - now.getTime()) / 86_400_000));
 }
 
-export function getSubscriptionStatusLabel(status: string, dict: any): string { // eslint-disable-line @typescript-eslint/no-explicit-any
+/** An amount in its own currency, e.g. ₱1,499.00, falling back to the code when Intl does not know it. */
+export function formatMoney(amount: number, currency: string | undefined, locale?: string): string {
+  const code = (currency || 'PHP').toUpperCase();
+  try {
+    return new Intl.NumberFormat(locale, { style: 'currency', currency: code, currencyDisplay: 'narrowSymbol' }).format(amount);
+  } catch {
+    return `${code} ${amount.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  }
+}
+
+export function getSubscriptionStatusLabel(status: string, dict: Dict): string {
   const labels: Record<string, string> = {
     active: dict?.admin?.active || 'Active',
     inactive: dict?.admin?.inactive || 'Inactive',
     trial: dict?.admin?.trial || 'Trial',
     suspended: dict?.admin?.suspended || 'Suspended',
-    cancelled: 'Cancelled',
+    cancelled: dict?.admin?.cancelled || 'Cancelled',
+    paused: dict?.admin?.subscriptionPaused || 'Paused',
   };
   return labels[status] || status;
 }
 
-export function getBillingTransactionStatusBadgeStyles(status: string): string {
-  const styles: Record<string, string> = {
-    paid: 'bg-green-100 text-green-800',
-    pending: 'bg-yellow-100 text-yellow-800',
-    failed: 'bg-red-100 text-red-800',
-    refunded: 'bg-gray-100 text-gray-800',
+export function getBillingStatusLabel(status: string, dict: Dict): string {
+  const labels: Record<string, string> = {
+    paid: dict?.admin?.statusPaid || 'Paid',
+    pending: dict?.admin?.statusPending || 'Pending',
+    failed: dict?.admin?.statusFailed || 'Failed',
+    refunded: dict?.admin?.statusRefunded || 'Refunded',
   };
-  return styles[status] || 'bg-gray-100 text-gray-800';
-}
-
-export function getBillingTransactionStatusLabel(status: string): string {
-  return status.charAt(0).toUpperCase() + status.slice(1);
-}
-
-export function getBillingTransactionIconStyles(status: string): string {
-  const styles: Record<string, string> = {
-    paid: 'bg-green-100 text-green-600',
-    pending: 'bg-yellow-100 text-yellow-600',
-    failed: 'bg-red-100 text-red-600',
-    refunded: 'bg-gray-100 text-gray-600',
-  };
-  return styles[status] || 'bg-gray-100 text-gray-600';
+  return labels[status] || status;
 }

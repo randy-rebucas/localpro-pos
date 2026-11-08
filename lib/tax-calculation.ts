@@ -144,14 +144,13 @@ export async function calculateTax(
   );
 
   // Only calculate tax on the taxable portion (excludes VAT-exempt items)
-  if (taxRules.length > 0) {
+  let ruleMatched = false;
+  // Rules only look at non-exempt, non-zero-rated items
+  const taxableItems = items.filter(item => !item.taxExempt && !item.zeroRated);
+  if (taxRules.length > 0 && taxableItems.length > 0) {
     // Use TaxRule model - apply the highest priority matching rule
     for (const rule of taxRules) {
       let applies = false;
-
-      // Check if rule applies to this transaction (only non-exempt, non-zero-rated items)
-      const taxableItems = items.filter(item => !item.taxExempt && !item.zeroRated);
-      if (taxableItems.length === 0) break; // All items are exempt or zero-rated
 
       if (rule.appliesTo === 'all') {
         applies = true;
@@ -185,11 +184,15 @@ export async function calculateTax(
         taxAmount = taxOn(taxableAmount, taxRate, tenantSettings?.pricesIncludeTax);
         // Ensure tax doesn't exceed taxable amount
         taxAmount = Math.min(taxAmount, taxableAmount);
+        ruleMatched = true;
         break; // Use first matching rule
       }
     }
-  } else {
-    // Fall back to Tenant settings
+  }
+  // No rules: use the rate in Tenant settings. Rules but none matched a taxable item: the same,
+  // as getProductTaxRate does (before, such a sale was charged no tax at all). A sale whose items
+  // are all exempt or zero-rated still pays nothing when rules exist, as before.
+  if (!ruleMatched && (taxRules.length === 0 || taxableItems.length > 0)) {
     if (tenantSettings?.taxEnabled && tenantSettings.taxRate != null && tenantSettings.taxRate > 0) {
       taxRate = Math.min(Math.max(tenantSettings.taxRate, 0), 100);
       taxLabel = tenantSettings.taxLabel || 'Tax';

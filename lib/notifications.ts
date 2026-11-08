@@ -311,8 +311,15 @@ export async function sendBookingConfirmation(
     let subject = `Booking Confirmation: ${data.serviceName}`;
     const templateSubject = parseEmailTemplate(emailTemplate).subject;
     if (templateSubject) {
+      // The subject gets the same variables as the email body (it used to get serviceName only).
       subject = renderNotificationTemplate(templateSubject, {
+        customerName: data.customerName,
         serviceName: data.serviceName,
+        date: data.startTime,
+        time: data.startTime,
+        staffName: data.staffName,
+        notes: data.notes,
+        companyName: tenantSettings.companyName || 'Business',
       }, tenantSettings);
     }
     results.email = await sendEmail({
@@ -421,8 +428,14 @@ export async function sendBookingReminder(
     let subject = `Reminder: ${data.serviceName} Booking`;
     const templateSubject = parseEmailTemplate(emailTemplate).subject;
     if (templateSubject) {
+      // The subject gets the same variables as the email body (it used to get serviceName only).
       subject = renderNotificationTemplate(templateSubject, {
+        customerName: data.customerName,
         serviceName: data.serviceName,
+        date: data.startTime,
+        time: data.startTime,
+        staffName: data.staffName,
+        companyName: tenantSettings.companyName || 'Business',
       }, tenantSettings);
     }
     results.email = await sendEmail({

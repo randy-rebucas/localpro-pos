@@ -39,6 +39,15 @@ vi.mock('@/models/Subscription', () => ({
 
 vi.mock('@/models/SubscriptionPlan', () => ({}));
 
+const mockUserCount = vi.fn();
+const mockBranchCount = vi.fn();
+const mockProductCount = vi.fn();
+const mockMonthlyTx = vi.fn();
+vi.mock('@/models/User', () => ({ default: { countDocuments: (...a: unknown[]) => mockUserCount(...a) } }));
+vi.mock('@/models/Branch', () => ({ default: { countDocuments: (...a: unknown[]) => mockBranchCount(...a) } }));
+vi.mock('@/models/Product', () => ({ default: { countDocuments: (...a: unknown[]) => mockProductCount(...a) } }));
+vi.mock('@/lib/subscription', () => ({ SubscriptionService: { getMonthlyTransactionCount: (...a: unknown[]) => mockMonthlyTx(...a) } }));
+
 import { GET as getCurrent } from '@/app/api/subscriptions/current/route';
 import { GET as getBillingHistory } from '@/app/api/subscriptions/billing-history/route';
 
@@ -67,6 +76,10 @@ function authAs(tenantId: string, role: string = 'owner', userId: string = 'user
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockUserCount.mockResolvedValue(0);
+  mockBranchCount.mockResolvedValue(0);
+  mockProductCount.mockResolvedValue(0);
+  mockMonthlyTx.mockResolvedValue(null);
 });
 
 // ---------------------------------------------------------------------------
@@ -98,13 +111,31 @@ describe('GET /api/subscriptions/current', () => {
     expect(mockSubscriptionFindOne).toHaveBeenCalledWith({ tenantId: TENANT_B });
   });
 
-  it('returns 500 with a translated error when the tenant lookup throws', async () => {
+  it('reports live usage counts scoped to the tenant instead of the stored counters', async () => {
+    authAs(TENANT_A);
+    const stored = { _id: 'sub-1', tenantId: TENANT_A, usage: { currentUsers: 9, currentBranches: 9, currentProducts: 9, currentTransactions: 9 } };
+    mockSubscriptionFindOne.mockReturnValue({ populate: vi.fn().mockReturnValue({ lean: vi.fn().mockResolvedValue(stored) }) });
+    mockUserCount.mockResolvedValue(3);
+    mockBranchCount.mockResolvedValue(1);
+    mockProductCount.mockResolvedValue(42);
+    mockMonthlyTx.mockResolvedValue(null);
+
+    const { body } = await parseResponse(await getCurrent(createRequest('/api/subscriptions/current')));
+
+    expect(body.data.usage).toMatchObject({ currentUsers: 3, currentBranches: 1, currentProducts: 42, currentTransactions: 0 });
+    for (const count of [mockUserCount, mockBranchCount, mockProductCount]) {
+      expect(count).toHaveBeenCalledWith({ tenantId: TENANT_A, isActive: true });
+    }
+    expect(mockMonthlyTx).toHaveBeenCalledWith(TENANT_A);
+  });
+
+  it('returns 401 when the request is not signed in', async () => {
     mockRequireTenantAccess.mockRejectedValue(new Error('Unauthorized: Authentication required'));
 
     const res = await getCurrent(createRequest('/api/subscriptions/current'));
     const { status, body } = await parseResponse(res);
 
-    expect(status).toBe(500);
+    expect(status).toBe(401);
     expect(body.success).toBe(false);
   });
 });
@@ -141,9 +172,10 @@ describe('GET /api/subscriptions/billing-history', () => {
     const { status, body } = await parseResponse(res);
 
     expect(status).toBe(200);
+    // Newest first
     expect(body.data).toEqual([
-      { _id: 'b1', amount: 500, currency: 'PHP', status: 'paid', date: '2026-01-01T00:00:00.000Z', transactionId: undefined, invoiceUrl: undefined },
-      { _id: 'b2', amount: 300, currency: 'USD', status: 'failed', date: '2026-02-01T00:00:00.000Z', transactionId: 'tx-2', invoiceUrl: undefined },
+      { _id: 'b2', amount: 300, currency: 'USD', status: 'failed', date: '2026-02-01T00:00:00.000Z', transactionId: 'tx-2' },
+      { _id: 'b1', amount: 500, currency: 'PHP', status: 'paid', date: '2026-01-01T00:00:00.000Z' },
     ]);
   });
 

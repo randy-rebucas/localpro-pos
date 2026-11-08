@@ -204,15 +204,7 @@ export async function importPaidChannelOrder(
   }
 
   try {
-    await SubscriptionService.recordTransaction(tenantId, () =>
-      Transaction.countDocuments({
-        tenantId,
-        createdAt: {
-          $gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
-          $lt: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1),
-        },
-      })
-    );
+    await SubscriptionService.recordTransaction(tenantId, () => SubscriptionService.countTransactionsThisMonth(tenantId));
   } catch (e) {
     logger.warn('subscription usage update skipped', { error: e instanceof Error ? e.message : String(e) });
   }

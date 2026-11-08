@@ -10,7 +10,7 @@ import {
   useState,
   ReactNode,
 } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, usePathname } from 'next/navigation';
 import { ITenantSettings } from '@/types/tenant';
 import { getDefaultTenantSettings } from '@/lib/currency';
 
@@ -89,6 +89,9 @@ interface TenantSettingsProviderProps {
 export function TenantSettingsProvider({ children, initialSettings }: TenantSettingsProviderProps) {
   const params = useParams();
   const tenant = (params?.tenant as string) || 'default';
+  // Custom CSS is the store's look, not the back office's: skipping it on admin pages means a
+  // rule like `body{display:none}` can always be undone from Advanced Branding.
+  const onAdminPage = /\/admin(\/|$)/.test(usePathname() || '');
   const hasInitial = initialSettings != null;
   const [settings, setSettings] = useState<ITenantSettings | null>(() =>
     hasInitial ? withDefaults(initialSettings) : null
@@ -251,13 +254,13 @@ export function TenantSettingsProvider({ children, initialSettings }: TenantSett
     // Custom CSS
     const customCssStyleId = 'tenant-custom-css';
     document.getElementById(customCssStyleId)?.remove();
-    if (branding?.customTheme?.css) {
+    if (branding?.customTheme?.css && !onAdminPage) {
       const style = document.createElement('style');
       style.id = customCssStyleId;
       style.textContent = branding.customTheme.css;
       document.head.appendChild(style);
     }
-  }, [settings?.advancedBranding]);
+  }, [settings?.advancedBranding, onAdminPage]);
 
   const value = useMemo<TenantSettingsContextType>(
     () => ({

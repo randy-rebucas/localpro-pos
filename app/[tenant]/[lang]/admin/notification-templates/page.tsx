@@ -2,59 +2,65 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import Link from 'next/link';
+import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import { RegisterPage } from '@/components/admin/register-ui';
 import { getDictionaryClient } from '../../dictionaries-client';
-import NotificationTemplatesManager from '@/components/settings/NotificationTemplatesManager';
-import { useNotificationTemplatesSettings } from '@/hooks/useNotificationTemplatesSettings';
+import NotificationTemplatesManager, { type TemplatesDict } from '@/components/settings/NotificationTemplatesManager';
+import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { usePermissions } from '@/hooks/usePermissions';
 
 export default function NotificationTemplatesPage() {
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
-
-  const { settings, loading, fetchSettings, updateSettings } = useNotificationTemplatesSettings(tenant);
+  const [dict, setDict] = useState<TemplatesDict | null>(null);
+  const { settings } = useTenantSettings();
+  const { canAccess } = usePermissions();
+  // Saving needs notifications.manage; check it here so the page does not offer edits that fail.
+  const canManage = canAccess('notifications.manage');
 
   useEffect(() => {
-    getDictionaryClient(lang).then(setDict);
-    fetchSettings();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lang, tenant]);
+    getDictionaryClient(lang).then((d) => setDict(d as TemplatesDict));
+  }, [lang]);
 
-  if (!dict || loading || !settings) {
+  if (!dict || !settings) {
     return (
-      <div className="flex items-center justify-center py-24">
-        <div className="text-center">
-          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-brand"></div>
-          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
+      <div className="mk-root pos-register">
+        <div className="flex min-h-[calc(100dvh-3.5rem)] items-center justify-center bg-brand-navy-deep lg:min-h-dvh">
+          <LoadingSpinner size="md" color="#8fe3d0" />
         </div>
       </div>
     );
   }
 
-  return (
-    <div>
-      <div className="px-4 sm:px-6 py-6">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">
-            {dict?.admin?.notificationTemplates || 'Notification Templates'}
-          </h1>
-          <p className="text-gray-600">
-            {dict?.admin?.notificationTemplatesDescription || 'Customize email and SMS templates for bookings, alerts, and notifications'}
-          </p>
-        </div>
+  const title = dict.admin?.notificationTemplates || 'Notification Templates';
 
-        <div className="bg-white border border-gray-300 p-6">
-          <NotificationTemplatesManager
-            settings={settings}
-            tenant={tenant}
-            dict={dict}
-            onUpdate={(updates) => {
-              updateSettings(updates);
-            }}
-          />
-        </div>
-      </div>
-    </div>
+  return (
+    <RegisterPage
+      tagNo="NT"
+      tag={settings.companyName}
+      title={title}
+      subtitle={dict.admin?.notificationTemplatesDescription || 'Customize email and SMS templates'}
+    >
+      {canManage ? (
+        <NotificationTemplatesManager
+          tenant={tenant}
+          dict={dict}
+          emailOn={!!settings.emailNotifications}
+          smsOn={!!settings.smsNotifications}
+          settingsHref={`/${tenant}/${lang}/settings?tab=notifications`}
+        />
+      ) : (
+        <section className="mt-6 max-w-2xl">
+          <div className="border-l-4 border-stamp bg-paper-white px-5 py-4 text-ink">
+            <h2 className="text-3xl">{dict.admin?.accessRestricted || 'Access Restricted'}</h2>
+            <p className="mt-2 text-sm">
+              {dict.admin?.accessRestrictedNotificationTemplates || "You don't have permission to edit notification templates. Contact an admin or owner."}
+            </p>
+          </div>
+          <div className="mk-tear-b h-3 bg-paper-white" aria-hidden />
+        </section>
+      )}
+    </RegisterPage>
   );
 }

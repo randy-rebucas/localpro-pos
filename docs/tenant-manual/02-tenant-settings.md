@@ -37,7 +37,7 @@ language: "en"
 | `logo` | String (URL) | — | Store logo image URL |
 | `favicon` | String (URL) | — | Browser favicon URL |
 | `primaryColor` | Hex | `#2563eb` | Primary brand color |
-| `secondaryColor` | Hex | — | Secondary brand color |
+| `secondaryColor` | Hex | — | Stored only; not used anywhere and no longer editable in Settings |
 | `accentColor` | Hex | — | Accent/highlight color |
 | `backgroundColor` | Hex | — | Background color |
 | `textColor` | Hex | — | Primary text color |
@@ -63,7 +63,7 @@ language: "en"
 | `receiptFooter` | String | — | Custom text at bottom of receipts |
 | `receiptShowLogo` | Boolean | `true` | Show logo on receipts |
 | `receiptShowAddress` | Boolean | `true` | Show address on receipts |
-| `receiptShowPhone` | Boolean | `false` | Show phone on receipts |
+| `receiptShowPhone` | Boolean | `false` (new stores) | Show phone on receipts. If never saved, the phone prints |
 | `receiptShowEmail` | Boolean | `false` | Show email on receipts |
 | `taxEnabled` | Boolean | `false` | Enable tax calculations |
 | `taxRate` | Number | `0` | Default tax rate (0-100) |
@@ -75,7 +75,19 @@ language: "en"
 |---------|------|-------------|
 | `businessType` | String | `retail` or `general`. Stores already on `restaurant`, `laundry`, `service` or `pharmacy` keep it, but no store can move onto those types. |
 | `taxId` | String | Tax Identification Number (TIN) |
-| `registrationNumber` | String | Business registration number |
+| `registrationNumber` | String | Business registration number (DTI / SEC / CDA). Printed on receipts as "Reg. No" when set |
+
+## Business Hours
+
+Set in **Admin → Business Hours** (`businessHours`): a weekly schedule, optional breaks, and special dates that override it. Hours are read in `businessHours.timezone`, or the store time zone if that is empty.
+
+| Where it applies | Effect |
+|------------------|--------|
+| Booking time slots (`/api/booking/availability`, `/api/bookings/time-slots`) | Slots only cover open hours; closed days have none; breaks are unavailable |
+| Customer bookings (`POST /api/bookings`) | Rejected outside open hours, on a closed day or during a break (409) |
+| Staff bookings | Not restricted, so staff can book by arrangement |
+
+A store with no weekly hours set keeps the old default slots (09:00–17:00 at the store).
 
 ## Notification Settings
 
@@ -113,12 +125,15 @@ See also [Feature Flags](./10-feature-flags.md) for operational detail and [User
 | Printer type | `hardwareConfig.printer.type` | `browser` / `usb` / `serial` / `network` | Receipt printer connection |
 | Printer IP | `hardwareConfig.printer.ipAddress` | String | Network printer IP address |
 | Printer port | `hardwareConfig.printer.portNumber` | Number | Network printer port |
+| Printer name | `hardwareConfig.printer.name` | String | Name of a paired USB/serial printer |
+| Serial port | `hardwareConfig.printer.port` | String | Serial port of a serial printer |
 | Scanner type | `hardwareConfig.barcodeScanner.type` | `keyboard` / `camera` / `usb` | Barcode scanner input mode |
 | Scanner enabled | `hardwareConfig.barcodeScanner.enabled` | Boolean | Enable barcode scanning |
 | QR enabled | `hardwareConfig.qrReader.enabled` | Boolean | Enable QR code reading |
 | QR camera | `hardwareConfig.qrReader.cameraId` | String | Specific camera for QR reading |
 | Cash drawer | `hardwareConfig.cashDrawer.enabled` | Boolean | Enable cash drawer |
 | Drawer via printer | `hardwareConfig.cashDrawer.connectedToPrinter` | Boolean | Open drawer via printer command |
+| Standalone drawer | `hardwareConfig.cashDrawer.direct` | `{ type: usb / serial, vendorId?, productId? }` | A drawer connected directly, when not via the printer |
 | Touchscreen | `hardwareConfig.touchscreen.enabled` | Boolean | Optimize for touchscreen |
 
 ## Multi-Currency

@@ -3,7 +3,7 @@
  * Supports ESC/POS printers via WebUSB, Serial API, or network printing
  */
 import { logger } from '@/lib/logger';
-import { sanitizeReceiptHtml } from '@/lib/receipt-template-sanitize';
+import { escapeHtml, sanitizeReceiptHtml } from '@/lib/receipt-template-sanitize';
 import { findProfile } from './printer-profiles';
 import { isDevicePickerCancelled, isUsbAccessDeniedError } from './usb-probe';
 
@@ -43,6 +43,8 @@ export interface ReceiptData {
   phone?: string;
   email?: string;
   website?: string;
+  /** Business registration number (DTI / SEC / CDA), printed with the store details when set. */
+  registrationNumber?: string;
   receiptNumber: string;
   date: string;
   time?: string;
@@ -336,7 +338,9 @@ class ReceiptPrinterService {
       if (data.businessStyle) commands.push(this.encodeText(data.businessStyle + '\n'));
       if (data.address) commands.push(this.encodeText(data.address + '\n'));
       if (data.phone) commands.push(this.encodeText(data.phone + '\n'));
+      if (data.email) commands.push(this.encodeText(data.email + '\n'));
       if (data.tin) commands.push(this.encodeText(`TIN: ${data.tin}\n`));
+      if (data.registrationNumber) commands.push(this.encodeText(`Reg. No: ${data.registrationNumber}\n`));
       commands.push(this.setBold(true));
       commands.push(this.encodeText((isVAT ? 'VAT REGISTERED' : 'NON-VAT REGISTERED') + '\n'));
       commands.push(this.setBold(false));
@@ -618,27 +622,29 @@ class ReceiptPrinterService {
 </head>
 <body>
   <div class="header center">
-    ${data.logo ? `<img src="${data.logo}" alt="Logo" style="max-width:100px;max-height:60px;display:block;margin:0 auto 4px;" />` : ''}
-    ${data.storeName ? `<h2>${data.storeName}</h2>` : ''}
-    ${data.businessStyle ? `<div>${data.businessStyle}</div>` : ''}
-    ${data.address ? `<div>${data.address}</div>` : ''}
-    ${data.phone ? `<div>${data.phone}</div>` : ''}
-    ${data.tin ? `<div>TIN: ${data.tin}</div>` : ''}
+    ${data.logo ? `<img src="${escapeHtml(data.logo)}" alt="Logo" style="max-width:100px;max-height:60px;display:block;margin:0 auto 4px;" />` : ''}
+    ${data.storeName ? `<h2>${escapeHtml(data.storeName)}</h2>` : ''}
+    ${data.businessStyle ? `<div>${escapeHtml(data.businessStyle)}</div>` : ''}
+    ${data.address ? `<div>${escapeHtml(data.address)}</div>` : ''}
+    ${data.phone ? `<div>${escapeHtml(data.phone)}</div>` : ''}
+    ${data.email ? `<div>${escapeHtml(data.email)}</div>` : ''}
+    ${data.tin ? `<div>TIN: ${escapeHtml(data.tin)}</div>` : ''}
+    ${data.registrationNumber ? `<div>Reg. No: ${escapeHtml(data.registrationNumber)}</div>` : ''}
     <div><strong>${isVAT ? 'VAT REGISTERED' : 'NON-VAT REGISTERED'}</strong></div>
     <br>
     <div><strong>OFFICIAL RECEIPT</strong></div>
-    ${data.terminalSN ? `<div>Terminal SN: ${data.terminalSN}</div>` : ''}
-    ${data.terminalId ? `<div>Terminal ID: ${data.terminalId}</div>` : ''}
-    ${data.minNumber ? `<div>MIN: ${data.minNumber}</div>` : ''}
-    <div>Invoice No: ${data.receiptNumber}</div>
-    <div>Date &amp; Time: ${data.date}${data.time ? ' ' + data.time : ''}</div>
-    ${data.cashierName ? `<div>Cashier Name: ${data.cashierName}</div>` : ''}
+    ${data.terminalSN ? `<div>Terminal SN: ${escapeHtml(data.terminalSN)}</div>` : ''}
+    ${data.terminalId ? `<div>Terminal ID: ${escapeHtml(data.terminalId)}</div>` : ''}
+    ${data.minNumber ? `<div>MIN: ${escapeHtml(data.minNumber)}</div>` : ''}
+    <div>Invoice No: ${escapeHtml(data.receiptNumber)}</div>
+    <div>Date &amp; Time: ${escapeHtml(data.date)}${data.time ? ' ' + escapeHtml(data.time) : ''}</div>
+    ${data.cashierName ? `<div>Cashier Name: ${escapeHtml(data.cashierName)}</div>` : ''}
   </div>
 
   ${data.customerName ? `
   <div class="small">
-    Customer: ${data.customerName}<br>
-    ${data.customerTIN ? `TIN: ${data.customerTIN}<br>` : ''}
+    Customer: ${escapeHtml(data.customerName)}<br>
+    ${data.customerTIN ? `TIN: ${escapeHtml(data.customerTIN)}<br>` : ''}
   </div>
   <br>` : ''}
 
@@ -647,7 +653,7 @@ class ReceiptPrinterService {
     return `
   <div class="item">
     <div>
-      ${item.name} ${item.quantity}${taxable ? 'V' : 'E'}<br>
+      ${escapeHtml(item.name)} ${item.quantity}${taxable ? 'V' : 'E'}<br>
       <span class="small">@ ${fmt(item.price)}</span>
     </div>
     <div>${fmt(item.subtotal)}</div>
@@ -668,7 +674,7 @@ class ReceiptPrinterService {
     `}
     <div class="item"><div>Zero-Rated Sales:</div><div>${fmt(zeroRatedSales)}</div></div>
     <div class="item"><div><strong>GRAND TOTAL:</strong></div><div>${fmt(data.total)}</div></div>
-    <div class="item"><div>Payment:</div><div>${data.paymentMethod.toUpperCase()}</div></div>
+    <div class="item"><div>Payment:</div><div>${escapeHtml(data.paymentMethod.toUpperCase())}</div></div>
     ${data.cashReceived ? `<div class="item"><div>Cash:</div><div>${fmt(data.cashReceived)}</div></div>` : ''}
     ${data.change ? `<div class="item"><div>Change:</div><div>${fmt(data.change)}</div></div>` : ''}
   </div>
@@ -676,8 +682,8 @@ class ReceiptPrinterService {
   ${hasScPwd ? `
   <div class="total">
     <div class="center"><strong>SENIOR CITIZEN / PWD</strong></div>
-    <div>SC/PWD Name: ${data.scPwdName || ''}</div>
-    <div>SC/PWD ID: ${data.scPwdId || ''}</div>
+    <div>SC/PWD Name: ${escapeHtml(data.scPwdName || '')}</div>
+    <div>SC/PWD ID: ${escapeHtml(data.scPwdId || '')}</div>
     <div class="item"><div>Gross Sales (Less VAT):</div><div>${fmt(grossLessVat)}</div></div>
     <div class="item"><div>20% Discount:</div><div>${fmt(data.scPwdDiscount ?? 0)}</div></div>
     <div class="item"><div><strong>NET AMOUNT DUE:</strong></div><div>${fmt(data.total)}</div></div>
@@ -685,16 +691,16 @@ class ReceiptPrinterService {
   ` : ''}
 
   <div class="footer">
-    ${data.ptuNumber ? `<div>PTU No: ${data.ptuNumber}</div>` : ''}
-    ${data.systemProvider ? `<div>Accredited System Provider: ${data.systemProvider}</div>` : ''}
-    ${data.ptuDate ? `<div>Date Issued: ${data.ptuDate}</div>` : ''}
-    ${data.ptuValidUntil ? `<div>Valid Until: ${data.ptuValidUntil}</div>` : ''}
-    ${data.accreditationNo ? `<div>Accreditation No: ${data.accreditationNo}</div>` : ''}
-    ${data.accreditationDate ? `<div>Date Issued: ${data.accreditationDate}</div>` : ''}
-    ${data.accreditationValidUntil ? `<div>Valid Until: ${data.accreditationValidUntil}</div>` : ''}
+    ${data.ptuNumber ? `<div>PTU No: ${escapeHtml(data.ptuNumber)}</div>` : ''}
+    ${data.systemProvider ? `<div>Accredited System Provider: ${escapeHtml(data.systemProvider)}</div>` : ''}
+    ${data.ptuDate ? `<div>Date Issued: ${escapeHtml(data.ptuDate)}</div>` : ''}
+    ${data.ptuValidUntil ? `<div>Valid Until: ${escapeHtml(data.ptuValidUntil)}</div>` : ''}
+    ${data.accreditationNo ? `<div>Accreditation No: ${escapeHtml(data.accreditationNo)}</div>` : ''}
+    ${data.accreditationDate ? `<div>Date Issued: ${escapeHtml(data.accreditationDate)}</div>` : ''}
+    ${data.accreditationValidUntil ? `<div>Valid Until: ${escapeHtml(data.accreditationValidUntil)}</div>` : ''}
     <br>
     <div class="small">${isVAT ? 'THIS SERVES AS AN OFFICIAL RECEIPT' : 'THIS DOCUMENT IS NOT VALID FOR CLAIM OF INPUT TAX'}</div>
-    ${data.footer ? `<br><div class="small">${data.footer}</div>` : ''}
+    ${data.footer ? `<br><div class="small">${escapeHtml(data.footer)}</div>` : ''}
   </div>
 </body>
 </html>`;

@@ -28,6 +28,7 @@ import {
   type CatalogView,
 } from '@/hooks/useTransactionsCatalog';
 import type { TranslationDict } from '@/types/dictionary';
+import { receiptStoreInfo } from '@/lib/receipt-store-info';
 
 type Transaction = CatalogTransaction;
 type Expense = CatalogExpense;
@@ -451,11 +452,7 @@ export default function TransactionsWorkspace({ requireView = false }: Transacti
 
     const receiptData = {
       storeName: settings?.companyName || dict.pos.receiptTitle || 'POS SYSTEM',
-      address: settings?.address
-        ? [settings.address.street, settings.address.city, settings.address.state, settings.address.zipCode]
-          .filter(Boolean).join(', ')
-        : undefined,
-      phone: settings?.phone,
+      ...receiptStoreInfo(settings),
       receiptNumber: transaction.receiptNumber || transaction._id.slice(-8),
       date: formatDateForReceipt(transaction.createdAt),
       items: transaction.items.map((item) => ({

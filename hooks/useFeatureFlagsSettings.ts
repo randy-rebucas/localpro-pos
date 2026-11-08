@@ -4,72 +4,43 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { ITenantSettings } from '@/types/tenant';
 import { pickChangedSettings, useTenantSettings } from '@/contexts/TenantSettingsContext';
 
-export interface FeatureFlagsMessage {
-  type: 'success' | 'error';
-  text: string;
-}
+export type FeatureFlagsSaveResult =
+  | { success: true; data: ITenantSettings }
+  | { success: false; status?: number; error?: string; network?: boolean; cancelled?: boolean };
 
 export const useFeatureFlagsSettings = (tenant: string) => {
   const { settings: contextSettings, ensureSettings, applySettings } = useTenantSettings();
   const [settings, setSettings] = useState<ITenantSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<FeatureFlagsMessage | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   // Seeded from TenantSettingsContext (already loaded by the layout) instead of
   // a separate GET /api/tenants/[slug]/settings.
   const fetchSettings = useCallback(async () => {
     setLoading(true);
-    setMessage(null);
+    setLoadError(null);
     const result = await ensureSettings();
     if (result.error) {
-      setMessage({ type: 'error', text: result.error });
+      setLoadError(result.error);
     } else {
-      const defaultSettings: ITenantSettings = {
-        enableInventory: true,
-        enableCategories: true,
-        enableDiscounts: false,
-        enableLoyaltyProgram: false,
-        enableCustomerManagement: false,
-        enableBookingScheduling: false,
-        ...(result.settings as ITenantSettings),
-      };
-      setSettings(defaultSettings);
+      setSettings(result.settings as ITenantSettings);
     }
     setLoading(false);
   }, [ensureSettings]);
 
-  const updateSetting = useCallback((path: string, value: unknown) => {
-    setSettings((prevSettings) => {
-      if (!prevSettings) return prevSettings;
-
-      const keys = path.split('.');
-      const newSettings = JSON.parse(JSON.stringify(prevSettings));
-      let current: Record<string, unknown> = newSettings;
-
-      for (let i = 0; i < keys.length - 1; i++) {
-        if (!current[keys[i]]) {
-          current[keys[i]] = {};
-        }
-        current = current[keys[i]] as Record<string, unknown>;
-      }
-
-      current[keys[keys.length - 1]] = value;
-      return newSettings;
-    });
+  const updateSetting = useCallback((key: keyof ITenantSettings, value: unknown) => {
+    setSettings((prev) => (prev ? ({ ...prev, [key]: value } as ITenantSettings) : prev));
   }, []);
 
   const saveSettings = useCallback(
-    async (settingsToSave: ITenantSettings) => {
+    async (settingsToSave: ITenantSettings): Promise<FeatureFlagsSaveResult> => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 20000);
+      abortControllerRef.current = controller;
+      setSaving(true);
       try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 20000);
-        abortControllerRef.current = controller;
-
-        setSaving(true);
-        setMessage(null);
-
         const res = await fetch(`/api/tenants/${tenant}/settings`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -78,51 +49,26 @@ export const useFeatureFlagsSettings = (tenant: string) => {
           body: JSON.stringify({ settings: pickChangedSettings(settingsToSave, contextSettings) }),
           signal: controller.signal,
         });
-
-        clearTimeout(timeoutId);
-        const data = await res.json();
-
-        if (data.success) {
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.success) {
           setSettings(data.data);
           applySettings(data.data);
           return { success: true, data: data.data };
-        } else {
-          const errorMessage =
-            res.status === 401 || res.status === 403
-              ? 'Unauthorized. Please login with admin account.'
-              : data.error || 'Failed to save feature flags';
-          setMessage({ type: 'error', text: errorMessage });
-          return { success: false, error: errorMessage };
         }
+        return { success: false, status: res.status, error: data.error };
       } catch (error: unknown) {
-        if (error instanceof Error && error.name !== 'AbortError') {
-          console.error('Error saving settings:', error);
-          const errorText = 'Failed to save feature flags. Please check your connection.';
-          setMessage({ type: 'error', text: errorText });
-          return { success: false, error: errorText };
-        }
-        return { success: false, error: 'Request cancelled' };
+        if (error instanceof Error && error.name === 'AbortError') return { success: false, cancelled: true };
+        console.error('Error saving feature flags:', error);
+        return { success: false, network: true };
       } finally {
+        clearTimeout(timeoutId);
         setSaving(false);
       }
     },
     [tenant, contextSettings, applySettings]
   );
 
-  useEffect(() => {
-    return () => {
-      abortControllerRef.current?.abort();
-    };
-  }, []);
+  useEffect(() => () => abortControllerRef.current?.abort(), []);
 
-  return {
-    settings,
-    loading,
-    saving,
-    message,
-    setMessage,
-    fetchSettings,
-    updateSetting,
-    saveSettings,
-  };
+  return { settings, loading, saving, loadError, fetchSettings, updateSetting, saveSettings };
 };

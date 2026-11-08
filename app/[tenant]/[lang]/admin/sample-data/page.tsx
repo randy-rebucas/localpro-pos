@@ -1,361 +1,322 @@
 ﻿'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
-import Link from 'next/link';
-import { getDictionaryClient } from '../../dictionaries-client';
-import { useTenantSettings } from '@/contexts/TenantSettingsContext';
-import { getDefaultTenantSettings } from '@/lib/currency';
-import { useSampleDataManager } from '@/hooks/useSampleDataManager';
-import { usePermissions } from '@/hooks/usePermissions';
+import { PackagePlus, Search } from 'lucide-react';
+import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import Currency from '@/components/Currency';
+import { Barcode, ReceiptRow } from '@/components/marketing/primitives';
 import {
-  getBusinessTypeLabel,
-  getBusinessTypeColor,
-  getColorStyles,
-} from '@/lib/sample-data-helpers';
+  CHECK_ROW, CHECKBOX, ICON, INPUT, KEY_PRIMARY,
+  LedReadout, RegisterPage, Strip,
+} from '@/components/admin/register-ui';
+import { getDictionaryClient } from '../../dictionaries-client';
+import { useSampleDataManager, type PreviewData } from '@/hooks/useSampleDataManager';
+import { usePermissions } from '@/hooks/usePermissions';
+import { useConfirm } from '@/lib/confirm';
+
+type Dict = Record<string, Record<string, unknown> | undefined>;
+type ItemKey = keyof PreviewData['preview'];
+
+const ITEMS: ItemKey[] = ['categories', 'products', 'customers', 'discounts'];
+const SLIP = 'bg-paper-white p-5 text-ink sm:p-6';
+
+/** The sample set the server picked: Retail for retail stores, General for everyone else. */
+const BIZ_LABEL_KEYS: Record<string, [string, string]> = {
+  retail: ['businessTypeRetail', 'Retail Store'],
+  general: ['businessTypeGeneralOption', 'General'],
+};
 
 export default function SampleDataPage() {
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-
-  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
-  const [pageLoading, setPageLoading] = useState(true);
-  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set(['categories', 'products', 'customers', 'discounts']));
-  const [productSearch, setProductSearch] = useState('');
-  const { preview, previewLoading, installing, message, installResults, loadPreview, installSampleData } = useSampleDataManager(tenant);
   const { canAccess } = usePermissions();
   const canManage = canAccess('sample_data.manage');
+  const { confirm, Dialog: ConfirmDialog } = useConfirm();
 
-  const { settings } = useTenantSettings();
-  const tenantSettings = settings || getDefaultTenantSettings();
-  const primaryColor = tenantSettings.primaryColor || '#35979c';
+  const [dict, setDict] = useState<Dict | null>(null);
+  const [selected, setSelected] = useState<Set<ItemKey>>(new Set(ITEMS));
+  const [productSearch, setProductSearch] = useState('');
+  const { preview, previewLoading, installing, message, installResults, loadPreview, installSampleData } = useSampleDataManager(tenant);
 
   useEffect(() => {
-    getDictionaryClient(lang).then((d) => {
-      setDict(d);
-      setPageLoading(false);
-    });
+    getDictionaryClient(lang).then((d) => setDict(d as unknown as Dict));
   }, [lang]);
 
+  // The preview route needs sample_data.manage; without it there is nothing to show.
   useEffect(() => {
-    loadPreview();
-  }, [tenant, loadPreview]);
+    if (canManage) loadPreview();
+  }, [canManage, loadPreview]);
 
-  const handleInstall = async () => {
-    await installSampleData(Array.from(selectedItems));
+  const t = useCallback((key: string, fallback: string) => {
+    const v = dict?.sampleData?.[key];
+    return typeof v === 'string' ? v : fallback;
+  }, [dict]);
+  const tr = useCallback((section: string, key: string, fallback: string) => {
+    const v = dict?.[section]?.[key];
+    return typeof v === 'string' ? v : fallback;
+  }, [dict]);
+
+  const itemLabel = useCallback((key: ItemKey) => ({
+    categories: tr('admin', 'categories', 'Categories'),
+    products: tr('admin', 'products', 'Products'),
+    customers: tr('admin', 'customers', 'Customers'),
+    discounts: tr('admin', 'discounts', 'Discounts'),
+  })[key], [tr]);
+
+  /** Sample records of this kind not in the store yet. */
+  const toAdd = useCallback((key: ItemKey) => {
+    if (!preview) return 0;
+    return preview.missing?.[key] ?? Math.max(0, preview.preview[key] - preview.existing[key]);
+  }, [preview]);
+
+  const addCount = useMemo(
+    () => ITEMS.filter((k) => selected.has(k)).reduce((sum, k) => sum + toAdd(k), 0),
+    [selected, toAdd],
+  );
+
+  const products = useMemo(() => {
+    const q = productSearch.trim().toLowerCase();
+    return (preview?.sample.products ?? []).filter((p) => p.name.toLowerCase().includes(q));
+  }, [preview, productSearch]);
+
+  const toggle = (key: ItemKey, on: boolean) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(key); else next.delete(key);
+      return next;
+    });
   };
 
-  if (pageLoading || !dict) {
+  const handleInstall = async () => {
+    const keys = ITEMS.filter((k) => selected.has(k));
+    const ok = await confirm(
+      t('confirmInstallTitle', 'Add sample data to this store?'),
+      t('confirmInstallMessage', 'This adds up to {count} sample record(s) to your live store: {items}. Remove them from their own screens when you are done.')
+        .replace('{count}', String(addCount))
+        .replace('{items}', keys.map(itemLabel).join(', ')),
+      { confirmText: t('installSampleData', 'Install Sample Data'), cancelText: tr('common', 'cancel', 'Cancel'), variant: 'warning' },
+    );
+    if (!ok) return;
+    await installSampleData(keys);
+  };
+
+  if (!dict) {
     return (
-      <div className="flex items-center justify-center py-24">
-        <div className="text-center">
-          <div className="inline-block animate-spin h-8 w-8 border-b-2" style={{ borderColor: primaryColor }} />
-          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
-        </div>
+      <div className="flex min-h-[60vh] items-center justify-center bg-brand-navy-deep">
+        <LoadingSpinner size="lg" />
       </div>
     );
   }
 
   const bizType = preview?.businessType ?? 'general';
-  const bizLabel = getBusinessTypeLabel(bizType);
-  const colorKey = getBusinessTypeColor(bizType);
-  const colors = getColorStyles(colorKey);
+  const [bizKey, bizFallback] = BIZ_LABEL_KEYS[bizType] ?? [bizType, bizType];
+  const bizLabel = tr('settings', bizKey, bizFallback);
+  const hasData = !!preview && ITEMS.some((k) => preview.existing[k] > 0);
+  const firstLoad = previewLoading && !preview;
 
-  const hasData = preview && (
-    preview.existing.categories > 0 ||
-    preview.existing.products > 0 ||
-    preview.existing.customers > 0 ||
-    preview.existing.discounts > 0
-  );
+  const typeLabel = (type: string) => ({
+    regular: t('typeRegular', 'Item'),
+    service: t('typeService', 'Service'),
+    bundle: t('typeBundle', 'Bundle'),
+  } as Record<string, string>)[type] ?? type;
+
+  const itemDetail = (key: ItemKey) => {
+    if (!preview) return null;
+    switch (key) {
+      case 'categories':
+        return preview.sample.categories.join(', ');
+      case 'products':
+        return t('productsDetail', '{count} items across {categories} categories')
+          .replace('{count}', String(preview.preview.products))
+          .replace('{categories}', String(preview.preview.categories));
+      case 'customers':
+        return t('customersDetailSample', '{count} customers named “Sample Customer”, with no phone or email')
+          .replace('{count}', String(preview.preview.customers));
+      case 'discounts':
+        return preview.sample.discounts.map((d) => (
+          <span key={d.code} className="mr-3 inline-block whitespace-nowrap">
+            {d.code} · {d.type === 'percentage' ? `${d.value}%` : <Currency amount={d.value} />}
+          </span>
+        ));
+    }
+  };
 
   return (
-    <div>
-      <div className="px-4 sm:px-6 py-6">
-
-        {/* Header */}
-        <div className="mb-6 sm:mb-8">
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">{dict?.sampleData?.title || 'Install Sample Data'}</h1>
-          <p className="text-gray-600">
-            {dict?.sampleData?.subtitle || 'Quickly populate your store with realistic sample products, categories, customers, and discount codes tailored to your business type.'}
-          </p>
+    <RegisterPage
+      tag={t('tag', 'Training mode')}
+      tagNo="TR"
+      title={t('titleShort', 'Sample data')}
+      subtitle={t('subtitleShort', 'Load a made-up catalog, customers and coupons to practise on before you open.')}
+      side={canManage && preview ? <LedReadout value={String(addCount).padStart(2, '0')} label={t('toAddLed', 'to add')} /> : undefined}
+    >
+      {!canManage ? (
+        <div className="mt-8">
+          <Strip tone="error">{t('accessRestricted', 'You don’t have permission to install sample data. Contact an admin or owner.')}</Strip>
         </div>
-
-        {/* Status message */}
-        {message && (
-          <div className={`mb-6 p-4 border flex items-start gap-3 ${
-            message.type === 'success'
-              ? 'bg-green-50 text-green-800 border-green-300'
-              : 'bg-red-50 text-red-800 border-red-300'
-          }`}>
-            {message.type === 'success' ? (
-              <svg className="w-5 h-5 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-            ) : (
-              <svg className="w-5 h-5 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-            )}
-            <span>{message.text}</span>
-          </div>
-        )}
-
-        {/* Install results */}
-        {installResults && (
-          <div className="mb-6 bg-white border border-gray-200 p-5">
-            <h3 className="font-semibold text-gray-900 mb-4">{dict?.sampleData?.installationResults || 'Installation Results'}</h3>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              {([
-                { label: dict?.admin?.categories || 'Categories', value: installResults.categories, icon: '🏷️' },
-                { label: dict?.admin?.products || 'Products',   value: installResults.products,   icon: '📦' },
-                { label: dict?.admin?.customers || 'Customers',  value: installResults.customers,  icon: '👤' },
-                { label: dict?.admin?.discounts || 'Discounts',  value: installResults.discounts,  icon: '🎫' },
-              ] as { label: string; value: number; icon: string }[]).map(stat => (
-                <div key={stat.label} className="text-center p-4 bg-gray-50 border border-gray-200">
-                  <div className="text-2xl mb-1">{stat.icon}</div>
-                  <div className="text-2xl font-bold text-gray-900">{stat.value}</div>
-                  <div className="text-sm text-gray-500">{stat.label} {dict?.sampleData?.added || 'added'}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div className="space-y-6">
-          {/* Business type banner */}
-          {previewLoading ? (
-            <div className="bg-white border border-gray-200 p-6 animate-pulse">
-              <div className="h-5 bg-gray-200 w-1/3 mb-3" />
-              <div className="h-4 bg-gray-200 w-2/3" />
-            </div>
-          ) : preview && (
-            <div className={`border p-5 ${colors.bg} ${colors.border}`}>
-              <div className="flex items-center gap-3 mb-1">
-                <span className={`text-xs font-semibold px-2 py-0.5 uppercase tracking-wide ${colors.badge}`}>
-                  {bizType}
-                </span>
-                <h2 className={`font-semibold ${colors.text}`}>{bizLabel}</h2>
-              </div>
-              <p className="text-sm text-gray-600">
-                {dict?.sampleData?.businessTypeBannerDesc || 'Sample data has been curated specifically for this business type. All records will be added to your store and ready to use immediately.'}
-              </p>
-            </div>
+      ) : firstLoad ? (
+        <div className="flex justify-center py-24"><LoadingSpinner size="lg" /></div>
+      ) : !preview ? (
+        <div className="mt-8">
+          <Strip tone="error">{t('couldNotLoadPreview', 'Could not load preview.')}</Strip>
+        </div>
+      ) : (
+        <>
+          {message?.type === 'error' && (
+            <div className="mt-8"><Strip tone="error">{t('installFailed', 'Sample data could not be installed. Nothing was changed if no counts appear below.')}</Strip></div>
           )}
 
-          {/* Preview table */}
-          <div className="bg-white border border-gray-300">
-            <div className="px-5 py-4 border-b border-gray-200">
-              <h2 className="font-semibold text-gray-900">{dict?.sampleData?.whatWillBeInstalled || 'What will be installed'}</h2>
-              <p className="text-sm text-gray-500 mt-0.5">{dict?.sampleData?.onlyNewRecords || 'Only new records will be added — existing data is never overwritten.'}</p>
-            </div>
+          <div className="mt-8 grid gap-6 lg:grid-cols-12">
+            <div className="space-y-6 lg:col-span-7">
+              {/* Training kit */}
+              <section className={SLIP} aria-labelledby="kit-heading">
+                <p className="font-receipt text-xs uppercase tracking-[0.14em] text-ink/60">01 · {bizLabel}</p>
+                <h2 id="kit-heading" className="text-3xl sm:text-4xl">{t('whatWillBeInstalled', 'What will be installed')}</h2>
+                <p className="mt-1 text-sm text-ink/70">{t('onlyNewRecords', 'Only new records will be added — existing data is never overwritten.')}</p>
 
-            {previewLoading ? (
-              <div className="p-6 space-y-3 animate-pulse">
-                {[1,2,3,4].map(i => <div key={i} className="h-12 bg-gray-100" />)}
-              </div>
-            ) : preview ? (
-              <div className="divide-y divide-gray-100">
-                {([
-                  { key: 'categories', label: dict?.admin?.categories || 'Categories', icon: '🏷️', items: preview.sample.categories.join(', ') },
-                  { key: 'products',   label: dict?.admin?.products || 'Products',   icon: '📦', items: `${preview.preview.products} products across ${preview.preview.categories} categories` },
-                  { key: 'customers',  label: dict?.admin?.customers || 'Customers',  icon: '👤', items: `${preview.preview.customers} sample customers with contact details and tags` },
-                  { key: 'discounts',  label: dict?.admin?.discounts || 'Discounts',  icon: '🎫', items: preview.sample.discounts.map(d => `${d.code} (${d.type === 'percentage' ? d.value + '%' : '₱' + d.value} off)`).join(', ') },
-                ] as { key: keyof typeof preview.preview; label: string; icon: string; items: string }[]).map(row => {
-                  const toAdd    = preview.preview[row.key];
-                  const existing = preview.existing[row.key];
-                  const willAdd  = Math.max(0, toAdd - existing);
-                  const isSelected = selectedItems.has(row.key);
-                  return (
-                    <div key={row.key} className="px-5 py-4 flex items-start gap-4">
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={(e) => {
-                          const newSelected = new Set(selectedItems);
-                          if (e.target.checked) {
-                            newSelected.add(row.key);
-                          } else {
-                            newSelected.delete(row.key);
-                          }
-                          setSelectedItems(newSelected);
-                        }}
-                        className="checkbox-win8 w-4 h-4 mt-1 cursor-pointer"
-                      />
-                      <span className="text-xl">{row.icon}</span>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-medium text-gray-900">{row.label}</span>
-                          <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5">
-                            {toAdd} {dict?.sampleData?.totalInSet || 'total in set'}
+                <ul className="mt-4 divide-y divide-dashed divide-ink/25 border-y border-dashed border-ink/25">
+                  {ITEMS.map((key) => {
+                    const n = toAdd(key);
+                    return (
+                      <li key={key} className="py-2">
+                        <label className={`${CHECK_ROW} items-start`}>
+                          <input
+                            type="checkbox"
+                            className={`${CHECKBOX} mt-3`}
+                            checked={selected.has(key)}
+                            disabled={installing}
+                            onChange={(e) => toggle(key, e.target.checked)}
+                          />
+                          <span className="min-w-0 flex-1 py-2">
+                            <span className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                              <span className="font-semibold">{itemLabel(key)}</span>
+                              <span className="font-receipt text-xs uppercase tracking-[0.08em] text-ink/60">
+                                {preview.preview[key]} {t('totalInSet', 'total in set')}
+                              </span>
+                              <span className={`font-receipt text-xs uppercase tracking-[0.08em] ${n > 0 ? 'text-brand-hover' : 'text-ink/45'}`}>
+                                {n > 0 ? t('newBadge', '+{count} new').replace('{count}', String(n)) : t('alreadyInstalled', 'already installed')}
+                              </span>
+                            </span>
+                            <span className="mt-1 block text-sm text-ink/65">{itemDetail(key)}</span>
                           </span>
-                          <span className={`text-xs px-2 py-0.5 font-medium ${
-                            willAdd > 0
-                              ? 'bg-green-100 text-green-700'
-                              : 'bg-gray-100 text-gray-500'
-                          }`}>
-                            {willAdd > 0 ? (dict?.sampleData?.newBadge || '+{count} new').replace('{count}', String(willAdd)) : (dict?.sampleData?.alreadyInstalled || 'already installed')}
-                          </span>
-                        </div>
-                        <p className="text-sm text-gray-500 mt-1 truncate">{row.items}</p>
-                      </div>
+                        </label>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+
+              {/* Sample price list */}
+              {preview.sample.products.length > 0 && (
+                <section className="drop-shadow-[0_10px_18px_rgba(0,0,0,0.35)]" aria-labelledby="pricelist-heading">
+                  <div className={`${SLIP} font-receipt`}>
+                    <div className="text-center">
+                      <p className="text-xs uppercase tracking-[0.2em] text-ink/60">{t('trainingBanner', '*** Training mode ***')}</p>
+                      <h3 id="pricelist-heading" className="mt-1 font-receipt text-lg font-semibold uppercase tracking-[0.08em]">
+                        {t('sampleProductsPreview', 'Sample Products Preview')}
+                      </h3>
+                      <p className="text-xs text-ink/60">{t('sampleStoreName', 'YOUR STORE NAME')}</p>
                     </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="p-6 text-center text-gray-500">{dict?.sampleData?.couldNotLoadPreview || 'Could not load preview.'}</div>
-            )}
-          </div>
 
-          {/* Products preview */}
-          {preview && preview.sample.products.length > 0 && (
-            <div className="bg-white border border-gray-300">
-              <div className="px-5 py-4 border-b border-gray-200">
-                <h2 className="font-semibold text-gray-900 mb-3">{dict?.sampleData?.sampleProductsPreview || 'Sample Products Preview'}</h2>
-                <input
-                  type="text"
-                  placeholder={dict?.common?.search || 'Search products...'}
-                  value={productSearch}
-                  onChange={(e) => setProductSearch(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all"
-                />
-              </div>
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-100">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">{dict?.admin?.name || 'Name'}</th>
-                      <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">{dict?.common?.type || 'Type'}</th>
-                      <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">{dict?.admin?.price || 'Price'}</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {preview.sample.products
-                      .filter(p => p.name.toLowerCase().includes(productSearch.toLowerCase()))
-                      .map((p, i) => (
-                      <tr key={i} className="hover:bg-gray-50">
-                        <td className="px-5 py-3 text-sm text-gray-900">{p.name}</td>
-                        <td className="px-5 py-3">
-                          <span className={`text-xs px-2 py-0.5 font-medium ${
-                            p.type === 'service' ? 'bg-purple-100 text-purple-700' :
-                            p.type === 'bundle'  ? 'bg-amber-100  text-amber-700'  :
-                                                    'bg-brand-soft   text-brand-hover'
-                          }`}>
-                            {p.type}
-                          </span>
-                        </td>
-                        <td className="px-5 py-3 text-sm text-right font-medium text-gray-900">
-                          ₱{p.price.toLocaleString()}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {preview.sample.products.filter(p => p.name.toLowerCase().includes(productSearch.toLowerCase())).length === 0 && (
-                  <div className="px-5 py-6 text-center text-gray-500">
-                    {dict?.sampleData?.noProductsMatch || 'No products match your search'}
+                    <div className="relative mt-4">
+                      <Search className={`${ICON} pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink/40`} strokeWidth={1.75} aria-hidden />
+                      <input
+                        type="search"
+                        aria-label={t('searchProducts', 'Search sample products')}
+                        placeholder={t('searchProducts', 'Search sample products')}
+                        value={productSearch}
+                        onChange={(e) => setProductSearch(e.target.value)}
+                        className={`${INPUT} pl-9 font-body`}
+                      />
+                    </div>
+
+                    <div className="mt-4 space-y-1.5 border-t border-dashed border-ink/30 pt-3 text-sm">
+                      {products.map((p) => (
+                        <ReceiptRow
+                          key={p.name}
+                          label={
+                            <span className="min-w-0">
+                              {p.name}
+                              {p.type !== 'regular' && (
+                                <span className="ml-2 border border-ink/25 px-1 text-[10px] uppercase tracking-[0.08em] text-ink/60">{typeLabel(p.type)}</span>
+                              )}
+                            </span>
+                          }
+                          value={<Currency amount={p.price} />}
+                        />
+                      ))}
+                      {products.length === 0 && (
+                        <p className="py-4 text-center text-ink/60">{t('noProductsMatch', 'No products match your search')}</p>
+                      )}
+                    </div>
+
+                    <div className="mt-4 border-t border-dashed border-ink/30 pt-3 text-center">
+                      <Barcode className="mx-auto h-8 w-40 text-ink/70" />
+                      <p className="mt-2 text-xs uppercase tracking-[0.14em] text-ink/60">{tr('admin', 'proofSampleNote', 'Sample only · not a receipt')}</p>
+                    </div>
                   </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Warning if data exists */}
-          {hasData && (
-            <div className="bg-yellow-50 border border-yellow-200 p-4 flex items-start gap-3">
-              <svg className="w-5 h-5 text-yellow-600 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
-              </svg>
-              <div>
-                <p className="text-sm font-medium text-yellow-800">{dict?.sampleData?.storeHasData || 'This store already has data'}</p>
-                <p className="text-sm text-yellow-700 mt-0.5">
-                  {dict?.sampleData?.storeHasDataDesc || 'Existing records will not be modified. Only new sample records (those not already present) will be added.'}
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* Selected Items Summary */}
-          {selectedItems.size > 0 && (
-            <div className="bg-brand-soft border border-teal-200 p-4">
-              <p className="text-sm font-medium text-brand-navy-deep mb-2">{dict?.sampleData?.selectedForInstallation || 'Selected for installation:'}</p>
-              <div className="flex flex-wrap gap-2">
-                {Array.from(selectedItems).map(item => (
-                  <span
-                    key={item}
-                    className="inline-flex items-center gap-1 px-3 py-1 bg-brand-soft text-brand-hover text-sm font-medium"
-                  >
-                    {item.charAt(0).toUpperCase() + item.slice(1)}
-                    <button
-                      onClick={() => {
-                        const newSelected = new Set(selectedItems);
-                        newSelected.delete(item);
-                        setSelectedItems(newSelected);
-                      }}
-                      className="ml-1 text-brand hover:text-brand-navy"
-                    >
-                      ✕
-                    </button>
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Action button */}
-          <div className="bg-white border border-gray-300 p-5 sm:p-6">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div>
-                <h3 className="font-semibold text-gray-900">{dict?.sampleData?.readyToInstall || 'Ready to install'}</h3>
-                <p className="text-sm text-gray-500 mt-0.5">
-                  {preview && selectedItems.size > 0
-                    ? (() => {
-                        const items: string[] = [];
-                        if (selectedItems.has('categories')) items.push(`${preview.preview.categories} ${dict?.admin?.categories || 'categories'}`);
-                        if (selectedItems.has('products')) items.push(`${preview.preview.products} ${dict?.admin?.products || 'products'}`);
-                        if (selectedItems.has('customers')) items.push(`${preview.preview.customers} ${dict?.admin?.customers || 'customers'}`);
-                        if (selectedItems.has('discounts')) items.push(`${preview.preview.discounts} ${dict?.admin?.discounts || 'discounts'}`);
-                        return (dict?.sampleData?.willAdd || 'Will add: {items}').replace('{items}', items.join(', '));
-                      })()
-                    : (dict?.sampleData?.selectAtLeastOne || 'Select at least one item type to install')
-                  }
-                </p>
-              </div>
-              {canManage && (
-                <button
-                  onClick={handleInstall}
-                  disabled={installing || previewLoading || selectedItems.size === 0}
-                  style={{ backgroundColor: (installing || previewLoading || selectedItems.size === 0) ? undefined : primaryColor }}
-                  className={`inline-flex items-center justify-center gap-2 px-6 py-3 text-white font-semibold transition-all min-w-[180px] ${
-                    installing || previewLoading || selectedItems.size === 0
-                      ? 'bg-gray-400 cursor-not-allowed'
-                      : 'hover:brightness-110 cursor-pointer'
-                  }`}
-                >
-                  {installing ? (
-                    <>
-                      <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                      </svg>
-                      {dict?.sampleData?.installing || 'Installing\u2026'}
-                    </>
-                  ) : (
-                    <>
-                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                      </svg>
-                      {dict?.sampleData?.installSampleData || 'Install Sample Data'}
-                    </>
-                  )}
-                </button>
+                  <div className="mk-tear-b h-3 bg-paper-white" aria-hidden />
+                </section>
               )}
             </div>
-          </div>
 
-          {/* Info note */}
-          <p className="text-xs text-gray-400 text-center">
-            {dict?.sampleData?.infoNote || 'Sample data is intended for testing and demo purposes. You can delete individual records from their respective management screens at any time.'}
-          </p>
-        </div>
-      </div>
-    </div>
+            <div className="space-y-6 lg:col-span-5">
+              {hasData && (
+                <Strip tone="ok">
+                  <span className="font-semibold">{t('storeHasData', 'This store already has data')}.</span>{' '}
+                  {t('storeHasDataDesc', 'Existing records will not be modified. Only new sample records (those not already present) will be added.')}
+                </Strip>
+              )}
+
+              {/* Install */}
+              <section className={SLIP} aria-labelledby="install-heading">
+                <p className="font-receipt text-xs uppercase tracking-[0.14em] text-ink/60">02</p>
+                <h2 id="install-heading" className="text-3xl sm:text-4xl">{t('readyToInstall', 'Ready to install')}</h2>
+                <div className="mt-4 space-y-1 border-t border-dashed border-ink/30 pt-4 font-receipt text-sm">
+                  {ITEMS.filter((k) => selected.has(k)).map((k) => (
+                    <ReceiptRow key={k} label={itemLabel(k)} value={`+${toAdd(k)}`} />
+                  ))}
+                  {selected.size === 0 && <p className="text-ink/60">{t('selectAtLeastOne', 'Select at least one item type to install')}</p>}
+                  {selected.size > 0 && (
+                    <div className="border-t border-dashed border-ink/30 pt-2">
+                      <ReceiptRow strong label={t('totalToAdd', 'Records to add')} value={addCount} />
+                    </div>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={handleInstall}
+                  disabled={installing || previewLoading || selected.size === 0 || addCount === 0}
+                  className={`${KEY_PRIMARY} mt-4 w-full sm:w-auto`}
+                >
+                  {installing ? <LoadingSpinner size="sm" /> : <PackagePlus className={ICON} strokeWidth={1.75} aria-hidden />}
+                  {installing ? t('installing', 'Installing…') : t('installSampleData', 'Install Sample Data')}
+                </button>
+                {selected.size > 0 && addCount === 0 && (
+                  <p className="mt-2 font-receipt text-xs text-ink/60">{t('nothingToAdd', 'Everything selected is already in the store.')}</p>
+                )}
+
+                {installResults && (
+                  <div className="mt-5 border-t border-dashed border-ink/30 pt-4 font-receipt text-sm" role="status">
+                    <p className="mb-2 text-xs uppercase tracking-[0.14em] text-ink/60">{t('installationResults', 'Installation Results')}</p>
+                    <div className="space-y-1">
+                      {ITEMS.map((k) => (
+                        <ReceiptRow key={k} label={itemLabel(k)} value={`+${installResults[k]}`} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </section>
+
+              <p className="font-receipt text-xs leading-relaxed text-white/60">
+                {t('infoNote', 'Sample data is intended for testing and demo purposes. You can delete individual records from their respective management screens at any time.')}
+              </p>
+            </div>
+          </div>
+        </>
+      )}
+      {ConfirmDialog}
+    </RegisterPage>
   );
 }

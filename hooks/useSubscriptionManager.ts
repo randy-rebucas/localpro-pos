@@ -48,7 +48,7 @@ export interface Subscription {
     name: string;
   };
   planId: SubscriptionPlan;
-  status: 'active' | 'inactive' | 'cancelled' | 'suspended' | 'trial';
+  status: 'active' | 'inactive' | 'cancelled' | 'suspended' | 'trial' | 'paused';
   billingCycle: 'monthly' | 'yearly';
   startDate: string;
   endDate?: string;
@@ -56,6 +56,10 @@ export interface Subscription {
   nextBillingDate?: string;
   isTrial: boolean;
   autoRenew: boolean;
+  paymentOverdue?: boolean;
+  outstandingBalance?: number;
+  gracePeriodEndDate?: string;
+  pauseEndsAt?: string;
   usage: {
     currentUsers: number;
     currentBranches: number;

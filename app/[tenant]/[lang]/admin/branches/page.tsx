@@ -1,28 +1,52 @@
 ﻿'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import toast from 'react-hot-toast';
+import { MapPin, Pencil, Plus, Power, Store } from 'lucide-react';
+import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import { ReceiptRow } from '@/components/marketing/primitives';
+import {
+  ICON, DARK_KEY_PRIMARY, HINT, INPUT, KEY, KEY_PRIMARY, LABEL, ROW_KEY,
+  LedReadout, RegisterPage, Sheet, Strip,
+} from '@/components/admin/register-ui';
 import { getDictionaryClient } from '../../dictionaries-client';
+import { type TranslationDict } from '@/types/dictionary';
+import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { usePermissions } from '@/hooks/usePermissions';
+import { useConfirm } from '@/lib/confirm';
 import { useBranchesList, type Branch } from '@/hooks/useBranchesList';
 import { useBranchForm } from '@/hooks/useBranchForm';
-import { useUsersList } from '@/hooks/useUsersList';
-import { usePermissions } from '@/hooks/usePermissions';
-import {
-  getStatusColor,
-  formatAddress,
-  getManagerName,
-  getDeactivateConfirmMessage,
-} from '@/lib/branches-helpers';
+import { useUsersList, type User } from '@/hooks/useUsersList';
+import { getRoleLabel } from '@/lib/users-helpers';
+
+type Manager = { _id: string; name: string; email: string };
+
+const managerOf = (branch: Branch): Manager | null =>
+  branch.managerId && typeof branch.managerId === 'object' ? branch.managerId : null;
+
+/** The address as a receipt prints it: street on one line, the rest on the next. */
+function addressLines(address: Branch['address']): string[] {
+  if (!address) return [];
+  const clean = (s?: string) => (s || '').trim();
+  const second = [clean(address.city), clean(address.state), clean(address.zipCode)].filter(Boolean).join(', ');
+  return [clean(address.street), second, clean(address.country)].filter(Boolean);
+}
 
 export default function BranchesPage() {
   const params = useParams();
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<Record<string, any> | null>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
-  const [showBranchModal, setShowBranchModal] = useState(false);
-  const [editingBranch, setEditingBranch] = useState<Branch | null>(null);
+
+  const [dict, setDict] = useState<TranslationDict | null>(null);
+  const [sheetBranch, setSheetBranch] = useState<Branch | null | undefined>(undefined); // undefined: closed, null: new branch
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const { settings } = useTenantSettings();
   const { canAccess } = usePermissions();
   const canManage = canAccess('branches.manage');
+  // The user list needs users.manage; without it the manager picker only keeps the current manager.
+  const canListUsers = canAccess('users.manage');
+  const { confirm, Dialog: ConfirmDialog } = useConfirm();
 
   const { branches, loading, fetchBranches, toggleBranchStatus } = useBranchesList();
   const { users: staff, fetchUsers } = useUsersList();
@@ -33,313 +57,280 @@ export default function BranchesPage() {
 
   useEffect(() => {
     fetchBranches((error) => toast.error(error));
-    fetchUsers((error) => toast.error(error));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleToggleBranchStatus = async (branch: Branch) => {
-    if (!dict) return;
-    if (!confirm(getDeactivateConfirmMessage(dict))) return;
+  useEffect(() => {
+    if (canManage && canListUsers) fetchUsers((error) => toast.error(error));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canManage, canListUsers]);
 
+  const t = useCallback((key: string, fallback: string) => dict?.admin?.[key] || fallback, [dict]);
+
+  const handleToggle = async (branch: Branch) => {
+    if (branch.isActive) {
+      const ok = await confirm(
+        t('deactivateBranchTitle', 'Deactivate {name}?').replace('{name}', branch.name),
+        t('deactivateBranchWarning', 'It is taken off the register, device and inventory branch lists until you activate it again. Its past records are kept.'),
+        { variant: 'warning', confirmText: t('deactivate', 'Deactivate'), cancelText: dict?.common?.cancel || 'Cancel' }
+      );
+      if (!ok) return;
+    }
+    setBusyId(branch._id);
     await toggleBranchStatus(
       branch._id,
       branch.isActive,
-      (message) => {
-        toast.success(message);
-        fetchBranches();
-      },
+      () => toast.success(branch.isActive ? t('branchDeactivated', 'Branch deactivated') : t('branchActivated', 'Branch activated')),
       (error) => toast.error(error)
     );
+    setBusyId(null);
   };
 
-  // Show the spinner only for the first load, so refetches after a save or delete keep the page (and any open modal) mounted.
+  // Show the spinner only for the first load, so refetches after a save keep the page (and any open sheet) mounted.
   const [loadedOnce, setLoadedOnce] = useState(false);
   if (!loading && !loadedOnce) setLoadedOnce(true);
 
   if (!dict || !loadedOnce) {
     return (
-      <div className="flex items-center justify-center py-24">
-        <div className="text-center">
-          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-brand"></div>
-          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
+      <div className="mk-root pos-register">
+        <div className="flex min-h-[calc(100dvh-3.5rem)] items-center justify-center bg-brand-navy-deep lg:min-h-dvh">
+          <LoadingSpinner size="md" color="#8fe3d0" />
         </div>
       </div>
     );
   }
 
-  return (
-    <div>
-      <div className="px-4 sm:px-6 py-6">
-        <div className="mb-6 sm:mb-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-2">
-                {dict.admin?.branches || 'Branches'}
-              </h1>
-              <p className="text-gray-600">{dict.admin?.branchesSubtitle || 'Manage store branches and locations'}</p>
-            </div>
-          </div>
-        </div>
+  const activeCount = branches.filter((b) => b.isActive).length;
+  // Open branches first, then closed ones; the API already sorts by name.
+  const ordered = [...branches].sort((a, b) => Number(b.isActive) - Number(a.isActive));
+  const editLabel = dict.common?.edit || 'Edit';
 
-        <div className="bg-white border border-gray-300 p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-bold text-gray-900">{dict.admin?.branches || 'Branches'}</h2>
+  return (
+    <RegisterPage
+      tagNo="BR"
+      tag={settings?.companyName}
+      title={t('branches', 'Branches')}
+      subtitle={t('branchesSubtitle', 'Manage store branches and locations')}
+      side={<LedReadout value={`${activeCount}/${branches.length}`} label={t('activeNow', 'Active')} />}
+    >
+      {ConfirmDialog}
+
+      {canManage && (
+        <div className="mt-6 flex justify-end">
+          <button type="button" onClick={() => setSheetBranch(null)} className={DARK_KEY_PRIMARY}>
+            <Plus className={ICON} strokeWidth={1.75} aria-hidden />
+            {t('addBranch', 'Add Branch')}
+          </button>
+        </div>
+      )}
+
+      {branches.length === 0 ? (
+        <div className="mt-6">
+          <div className="bg-paper-white px-4 py-14 text-center text-ink">
+            <Store className="mx-auto mb-2 h-8 w-8 text-ink/20" strokeWidth={1.75} aria-hidden />
+            <p className="font-receipt text-sm text-ink/60">{t('noBranchesYet', 'No branches yet')}</p>
             {canManage && (
-              <button
-                onClick={() => {
-                  setEditingBranch(null);
-                  setShowBranchModal(true);
-                }}
-                className="px-4 py-2 bg-brand text-white hover:bg-brand-hover font-medium border border-brand-hover"
-              >
-                {dict.common?.add || 'Add'} {dict.admin?.branch || 'Branch'}
+              <button type="button" onClick={() => setSheetBranch(null)} className={`${KEY_PRIMARY} mx-auto mt-4`}>
+                <Plus className={ICON} strokeWidth={1.75} aria-hidden />
+                {t('addBranch', 'Add Branch')}
               </button>
             )}
           </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.name || 'Name'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.code || 'Code'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.address || 'Address'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.manager || 'Manager'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.status || 'Status'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.common?.actions || 'Actions'}</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {branches.map((branch) => (
-                  <tr key={branch._id}>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{branch.name}</td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">{branch.code || '-'}</td>
-                    <td className="px-4 py-4 text-sm text-gray-500">{formatAddress(branch.address)}</td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{getManagerName(branch.managerId)}</td>
-                    <td className="px-4 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 text-xs font-semibold border ${getStatusColor(branch.isActive)}`}>
-                        {branch.isActive ? (dict.admin?.active || 'Active') : (dict.admin?.inactive || 'Inactive')}
-                      </span>
-                    </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
-                      {canManage ? (
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => {
-                              setEditingBranch(branch);
-                              setShowBranchModal(true);
-                            }}
-                            className="text-brand hover:text-brand-navy-deep"
-                          >
-                            {dict.common?.edit || 'Edit'}
-                          </button>
-                          <button
-                            onClick={() => handleToggleBranchStatus(branch)}
-                            className={branch.isActive ? 'text-orange-600 hover:text-orange-900' : 'text-green-600 hover:text-green-900'}
-                          >
-                            {branch.isActive ? (dict.admin?.deactivate || 'Deactivate') : (dict.admin?.activate || 'Activate')}
-                          </button>
-                        </div>
-                      ) : (
-                        <span className="text-gray-400">-</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {branches.length === 0 && (
-              <div className="text-center py-8 text-gray-500">{dict.common?.noResults || 'No branches found'}</div>
-            )}
-          </div>
+          <div className="mk-tear-b h-3 bg-paper-white" aria-hidden />
         </div>
+      ) : (
+        <ul className={`mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3 transition-opacity ${loading ? 'opacity-60' : ''}`} aria-busy={loading}>
+          {ordered.map((branch) => {
+            const manager = managerOf(branch);
+            const lines = addressLines(branch.address);
+            const busy = busyId === branch._id;
+            const toggleLabel = branch.isActive ? t('deactivate', 'Deactivate') : t('activate', 'Activate');
+            return (
+              // Each branch prints like the head of its own receipt: name, address, contact, who runs it.
+              <li key={branch._id} className={`flex min-w-0 flex-col text-ink ${branch.isActive ? '' : 'opacity-70'}`}>
+                <div className={`flex flex-1 flex-col ${branch.isActive ? 'bg-paper-white' : 'bg-paper-white/80'}`}>
+                  <div className={`flex items-center justify-between gap-2 px-4 py-1.5 font-receipt text-[11px] font-medium uppercase tracking-[0.08em] ${branch.isActive ? 'bg-brand text-ink' : 'bg-ink/10 text-ink/60'}`}>
+                    <span>{branch.code ? `${t('code', 'Code')} ${branch.code}` : t('branch', 'Branch')}</span>
+                    <span>{branch.isActive ? t('active', 'Active') : t('inactive', 'Inactive')}</span>
+                  </div>
+                  <div className="flex-1 px-4 pb-4 pt-3">
+                    <h3 className="break-words font-display text-3xl font-bold uppercase leading-none sm:text-4xl">{branch.name}</h3>
+                    {lines.length > 0 ? (
+                      <address className="mt-2 flex gap-1.5 font-receipt text-xs not-italic leading-relaxed text-ink/70">
+                        <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+                        <span>{lines.map((l) => <span key={l} className="block break-words">{l}</span>)}</span>
+                      </address>
+                    ) : (
+                      <p className="mt-2 font-receipt text-xs text-ink/40">{t('noAddress', 'No address on file')}</p>
+                    )}
+                    <div className="mt-3 space-y-1 border-t border-dashed border-ink/30 pt-3 font-receipt text-xs">
+                      <ReceiptRow label={t('manager', 'Manager')} value={<span className="block max-w-[11rem] truncate sm:max-w-[14rem]" title={manager?.name}>{manager?.name || '—'}</span>} />
+                      {branch.phone && <ReceiptRow label={t('phone', 'Phone')} value={branch.phone} />}
+                      {branch.email && <ReceiptRow label={<span className="whitespace-nowrap">{t('email', 'Email')}</span>} value={<span className="block max-w-[11rem] truncate sm:max-w-[14rem]" title={branch.email}>{branch.email}</span>} />}
+                    </div>
+                  </div>
+                  {canManage && (
+                    <div className="flex justify-end border-t border-dashed border-ink/25">
+                      <button type="button" disabled={busy} onClick={() => setSheetBranch(branch)} className={`${ROW_KEY} disabled:opacity-40`} aria-label={`${editLabel} ${branch.name}`} title={editLabel}>
+                        <Pencil className={ICON} strokeWidth={1.75} aria-hidden />
+                      </button>
+                      {branch.isActive ? (
+                        <button type="button" disabled={busy} onClick={() => handleToggle(branch)} className={`${ROW_KEY} hover:text-stamp disabled:opacity-40`} aria-label={`${toggleLabel} ${branch.name}`} title={toggleLabel}>
+                          <Power className={ICON} strokeWidth={1.75} aria-hidden />
+                        </button>
+                      ) : (
+                        <button type="button" disabled={busy} onClick={() => handleToggle(branch)} className={`${ROW_KEY} w-auto gap-2 px-3 font-receipt text-xs uppercase disabled:opacity-40`} aria-label={`${toggleLabel} ${branch.name}`}>
+                          <Power className={ICON} strokeWidth={1.75} aria-hidden />
+                          {toggleLabel}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <div className={`mk-tear-b h-3 ${branch.isActive ? 'bg-paper-white' : 'bg-paper-white/80'}`} aria-hidden />
+              </li>
+            );
+          })}
+        </ul>
+      )}
 
-        {showBranchModal && (
-          <BranchModal
-            branch={editingBranch}
-            users={staff.filter((u) => u.isActive)}
-            onClose={() => {
-              setShowBranchModal(false);
-              setEditingBranch(null);
-            }}
-            onSave={() => {
-              fetchBranches();
-              setShowBranchModal(false);
-              setEditingBranch(null);
-            }}
-            dict={dict}
-          />
-        )}
-      </div>
-    </div>
+      {sheetBranch !== undefined && (
+        <BranchSheet
+          branch={sheetBranch}
+          staff={staff}
+          canListUsers={canListUsers}
+          dict={dict}
+          onClose={() => setSheetBranch(undefined)}
+          onSaved={() => {
+            setSheetBranch(undefined);
+            fetchBranches();
+          }}
+        />
+      )}
+    </RegisterPage>
   );
 }
 
-function BranchModal({
-  branch,
-  users,
-  onClose,
-  onSave,
-  dict,
-}: {
+/** Add a branch, or change its name, code, address, contact details or manager. */
+function BranchSheet({ branch, staff, canListUsers, dict, onClose, onSaved }: {
   branch: Branch | null;
-  users: any[]; // eslint-disable-line @typescript-eslint/no-explicit-any
+  staff: User[];
+  canListUsers: boolean;
+  dict: TranslationDict;
   onClose: () => void;
-  onSave: () => void;
-  dict: Record<string, Record<string, string>> | null;
+  onSaved: () => void;
 }) {
-  const { formData, setFormData, error, handleSubmit } = useBranchForm(branch);
+  const { formData, setFormData, submitting, error, handleSubmit } = useBranchForm(branch);
+  const t = (key: string, fallback: string) => dict.admin?.[key] || fallback;
+  const optional = dict.common?.optional || 'optional';
 
-  const handleFormSubmit = async (e: React.FormEvent) => {
+  // Active staff, plus the current manager even if they are inactive or the list could not be loaded.
+  const current = branch ? managerOf(branch) : null;
+  const choices: { _id: string; label: string }[] = staff
+    .filter((u) => u.isActive)
+    .map((u) => ({ _id: u._id, label: `${u.name} · ${getRoleLabel(u.role, dict)}` }));
+  if (current && !choices.some((c) => c._id === current._id)) choices.unshift({ _id: current._id, label: current.name });
+
+  const setAddress = (field: keyof NonNullable<Branch['address']>, value: string) =>
+    setFormData({ ...formData, address: { ...(formData.address || {}), [field]: value } });
+
+  const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await handleSubmit(
-      async () => {
-        toast.success(dict?.common?.branchSavedSuccess || 'Branch saved successfully');
-        onSave();
-      },
-      (errorMsg) => toast.error(errorMsg)
-    );
+    if (submitting) return;
+    await handleSubmit(() => {
+      toast.success(branch ? t('branchUpdated', 'Branch updated') : t('branchCreated', 'Branch added'));
+      onSaved();
+    });
   };
 
+  const addressFields: { key: keyof NonNullable<Branch['address']>; label: string; wide?: boolean; auto: string }[] = [
+    { key: 'street', label: t('streetPlaceholder', 'Street'), wide: true, auto: 'address-line1' },
+    { key: 'city', label: t('cityPlaceholder', 'City'), auto: 'address-level2' },
+    { key: 'state', label: t('statePlaceholder', 'State'), auto: 'address-level1' },
+    { key: 'zipCode', label: t('zipPlaceholder', 'ZIP Code'), auto: 'postal-code' },
+    { key: 'country', label: t('countryPlaceholder', 'Country'), auto: 'country-name' },
+  ];
+
   return (
-    <div className="fixed inset-0 bg-gray-900/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white border border-gray-300 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="p-6">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">
-            {branch ? (dict?.admin?.editBranch || 'Edit Branch') : (dict?.admin?.addBranch || 'Add Branch')}
-          </h2>
-          <form onSubmit={handleFormSubmit} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict?.admin?.name || 'Name'} *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict?.admin?.code || 'Code'} (optional)
-                </label>
-                <input
-                  type="text"
-                  value={formData.code}
-                  onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-                  placeholder={dict?.admin?.branchCodePlaceholder || 'BR001'}
-                />
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict?.admin?.address || 'Address'}
-              </label>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <input
-                  type="text"
-                  value={formData.address?.street || ''}
-                  onChange={(e) => setFormData({ ...formData, address: { ...(formData.address || {}), street: e.target.value } })}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-                  placeholder={dict?.admin?.streetPlaceholder || 'Street'}
-                />
-                <input
-                  type="text"
-                  value={formData.address?.city || ''}
-                  onChange={(e) => setFormData({ ...formData, address: { ...(formData.address || {}), city: e.target.value } })}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-                  placeholder={dict?.admin?.cityPlaceholder || 'City'}
-                />
-                <input
-                  type="text"
-                  value={formData.address?.state || ''}
-                  onChange={(e) => setFormData({ ...formData, address: { ...(formData.address || {}), state: e.target.value } })}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-                  placeholder={dict?.admin?.statePlaceholder || 'State'}
-                />
-                <input
-                  type="text"
-                  value={formData.address?.zipCode || ''}
-                  onChange={(e) => setFormData({ ...formData, address: { ...(formData.address || {}), zipCode: e.target.value } })}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-                  placeholder={dict?.admin?.zipPlaceholder || 'ZIP Code'}
-                />
-                <input
-                  type="text"
-                  value={formData.address?.country || ''}
-                  onChange={(e) => setFormData({ ...formData, address: { ...(formData.address || {}), country: e.target.value } })}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-                  placeholder={dict?.admin?.countryPlaceholder || 'Country'}
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict?.admin?.phone || 'Phone'}
-                </label>
-                <input
-                  type="tel"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict?.admin?.email || 'Email'}
-                </label>
-                <input
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-                />
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict?.admin?.manager || 'Manager'} (optional)
-              </label>
-              <select
-                value={formData.managerId}
-                onChange={(e) => setFormData({ ...formData, managerId: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
-              >
-                <option value="">{dict?.common?.select || 'Select Manager'}</option>
-                {users.map((u) => (
-                  <option key={u._id} value={u._id}>
-                    {u.name} ({u.email})
-                  </option>
-                ))}
-              </select>
-            </div>
-            {error && (
-              <div className="bg-red-50 text-red-800 border border-red-300 p-3">
-                {error}
-              </div>
-            )}
-            <div className="flex gap-3 justify-end pt-4">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 bg-white"
-              >
-                {dict?.common?.cancel || 'Cancel'}
-              </button>
-              <button
-                type="submit"
-                className="px-4 py-2 bg-brand text-white hover:bg-brand-hover border border-brand-hover"
-              >
-                {dict?.common?.save || 'Save'}
-              </button>
-            </div>
-          </form>
+    <Sheet
+      wide
+      title={branch ? t('editBranch', 'Edit Branch') : t('addBranch', 'Add Branch')}
+      subtitle={branch?.name}
+      onClose={onClose}
+      closeLabel={dict.common?.close || 'Close'}
+      footer={
+        <>
+          <button type="button" onClick={onClose} className={KEY}>{dict.common?.cancel || 'Cancel'}</button>
+          <button type="submit" form="branch-form" disabled={submitting} className={KEY_PRIMARY}>
+            {submitting ? (dict.common?.saving || 'Saving...') : (dict.common?.save || 'Save')}
+          </button>
+        </>
+      }
+    >
+      <form id="branch-form" onSubmit={onSubmit} className="space-y-5">
+        <div className="grid gap-4 sm:grid-cols-[1fr_10rem]">
+          <div>
+            <label htmlFor="branch-name" className={LABEL}>{t('name', 'Name')} *</label>
+            <input id="branch-name" type="text" required autoFocus maxLength={100} value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className={INPUT} />
+          </div>
+          <div>
+            <label htmlFor="branch-code" className={LABEL}>{t('code', 'Code')} ({optional})</label>
+            <input
+              id="branch-code"
+              type="text"
+              maxLength={20}
+              value={formData.code}
+              onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
+              className={`${INPUT} font-receipt uppercase`}
+              placeholder={t('branchCodePlaceholder', 'BR001')}
+            />
+          </div>
         </div>
-      </div>
-    </div>
+
+        <fieldset>
+          <legend className={LABEL}>{t('address', 'Address')} ({optional})</legend>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {addressFields.map((f) => (
+              <div key={f.key} className={f.wide ? 'sm:col-span-2' : ''}>
+                <label htmlFor={`branch-${f.key}`} className="mb-0.5 block font-receipt text-[11px] uppercase tracking-[0.08em] text-ink/50">{f.label}</label>
+                <input
+                  id={`branch-${f.key}`}
+                  type="text"
+                  autoComplete={f.auto}
+                  value={formData.address?.[f.key] || ''}
+                  onChange={(e) => setAddress(f.key, e.target.value)}
+                  className={INPUT}
+                  placeholder={f.label}
+                />
+              </div>
+            ))}
+          </div>
+        </fieldset>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label htmlFor="branch-phone" className={LABEL}>{t('phone', 'Phone')} ({optional})</label>
+            <input id="branch-phone" type="tel" autoComplete="tel" value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} className={`${INPUT} font-receipt`} />
+          </div>
+          <div>
+            <label htmlFor="branch-email" className={LABEL}>{t('email', 'Email')} ({optional})</label>
+            <input id="branch-email" type="email" autoComplete="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} className={`${INPUT} font-receipt`} />
+          </div>
+        </div>
+
+        <div>
+          <label htmlFor="branch-manager" className={LABEL}>{t('manager', 'Manager')} ({optional})</label>
+          <select id="branch-manager" value={formData.managerId} onChange={(e) => setFormData({ ...formData, managerId: e.target.value })} className={INPUT}>
+            <option value="">{t('noManager', 'No manager')}</option>
+            {choices.map((c) => (
+              <option key={c._id} value={c._id}>{c.label}</option>
+            ))}
+          </select>
+          {!canListUsers && <p className={HINT}>{t('managerListRestricted', 'Only people who can manage users can pick from the staff list.')}</p>}
+        </div>
+
+        {error && <Strip tone="error">{error}</Strip>}
+      </form>
+    </Sheet>
   );
 }

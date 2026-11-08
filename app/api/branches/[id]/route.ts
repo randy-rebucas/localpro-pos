@@ -7,6 +7,8 @@ import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
+import { checkFeatureAccess, checkSubscriptionLimit } from '@/lib/subscription';
+import { normalizeBranchCode, resolveBranchManager } from '@/lib/branch-manager';
 
 export async function GET(
   request: NextRequest,
@@ -54,23 +56,56 @@ export async function PUT(
       return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
     }
 
+    const t = await getValidationTranslatorFromRequest(request);
+
     const branch = await Branch.findOne({ _id: id, tenantId });
     if (!branch) {
-      return NextResponse.json({ success: false, error: 'Branch not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.branchNotFound', 'Branch not found') }, { status: 404 });
     }
 
     const body = await request.json();
-    const { name, code, address, phone, email, managerId, isActive } = body;
+    const { address, phone, email, isActive } = body;
+    const name = typeof body.name === 'string' ? body.name.trim() : undefined;
+    const code = normalizeBranchCode(body.code);
+
+    if (name === '') {
+      return NextResponse.json({ success: false, error: t('validation.branchNameRequired', 'Branch name is required') }, { status: 400 });
+    }
+
+    const manager = await resolveBranchManager(body.managerId, tenantId);
+    if (!manager.ok) {
+      return NextResponse.json({ success: false, error: t('validation.branchManagerInvalid', 'The chosen manager is not a user of this store') }, { status: 400 });
+    }
+
+    if (code && (await Branch.exists({ tenantId, code: code.toUpperCase(), _id: { $ne: branch._id } }))) {
+      return NextResponse.json({ success: false, error: t('validation.branchCodeTaken', 'Another branch already uses this code') }, { status: 409 });
+    }
+
+    // Reactivating counts against the plan the same way creating does, or deactivate,
+    // create, reactivate would get around the branch limit.
+    if (isActive === true && branch.isActive === false) {
+      const activeCount = await Branch.countDocuments({ tenantId, isActive: true });
+      try {
+        if (activeCount >= 1) await checkFeatureAccess(tenantId.toString(), 'enableMultiBranch');
+        await checkSubscriptionLimit(tenantId.toString(), 'maxBranches', activeCount);
+      } catch (limitError) {
+        return NextResponse.json(
+          { success: false, error: limitError instanceof Error ? limitError.message : 'Branch limit reached' },
+          { status: 403 }
+        );
+      }
+    }
 
     const oldData = branch.toObject();
 
     if (name) branch.name = name;
-    if (code !== undefined) branch.code = code;
-    if (address !== undefined) branch.address = address;
-    if (phone !== undefined) branch.phone = phone;
-    if (email !== undefined) branch.email = email;
-    if (managerId !== undefined) branch.managerId = managerId;
-    if (isActive !== undefined) branch.isActive = isActive;
+    // Cleared fields arrive as null; unset them rather than store '' (the code index is unique per tenant).
+    if (code !== undefined) branch.set('code', code ?? undefined);
+    if (address !== undefined) branch.set('address', address ?? undefined);
+    if (phone !== undefined) branch.set('phone', phone || undefined);
+    if (email !== undefined) branch.set('email', email || undefined);
+    if (manager.value !== undefined) branch.set('managerId', manager.value ?? undefined);
+    if (typeof isActive === 'boolean') branch.isActive = isActive;
 
     await branch.save();
 

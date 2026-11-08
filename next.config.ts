@@ -96,9 +96,11 @@ const nextConfig: NextConfig = {
             value: [
               "default-src 'self'",
               `script-src 'self' 'unsafe-inline'${process.env.NODE_ENV !== 'production' ? " 'unsafe-eval'" : ''} https://vercel.live https://*.vercel.live https://*.live https://challenges.cloudflare.com`,
-              "style-src 'self' 'unsafe-inline' https://vercel.live https://*.vercel.live https://*.live",
+              // fonts.googleapis.com: a tenant's Google font stylesheet (Advanced Branding).
+              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://vercel.live https://*.vercel.live https://*.live",
               "img-src 'self' data: blob: https:",
-              "font-src 'self' data: https://vercel.live https://*.vercel.live https://*.live",
+              // https: covers fonts.gstatic.com and a tenant's custom font file (branding only accepts https URLs).
+              "font-src 'self' data: https:",
               `connect-src 'self' https://api-m.paypal.com https://api-m.sandbox.paypal.com https://vercel.live https://*.vercel.live https://*.live wss://vercel.live wss://*.vercel.live wss://*.live https://res.cloudinary.com https://api.cloudinary.com https://*.cloudinary.com${CSP_DEV_CONNECT_EXTRAS}`,
               "frame-src https://vercel.live https://*.vercel.live https://*.live https://challenges.cloudflare.com",
               "worker-src 'self'",

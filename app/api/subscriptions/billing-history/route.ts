@@ -6,6 +6,7 @@ import { hasTenantPermission } from '@/lib/permissions-server';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
+import { authErrorStatus } from '../auth-error-status';
 
 export async function GET(request: NextRequest) {
   try {
@@ -37,6 +38,7 @@ export async function GET(request: NextRequest) {
     const billingHistory = subscription.billingHistory || [];
 
     // Transform the billing history to include proper date formatting
+    // Entries are pushed oldest first; show the latest bill at the top.
     const formattedHistory = billingHistory.map((billing: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
       _id: billing._id,
       amount: billing.amount,
@@ -45,7 +47,7 @@ export async function GET(request: NextRequest) {
       date: billing.date ?? billing.createdAt ?? null,
       transactionId: billing.transactionId,
       invoiceUrl: billing.invoiceUrl,
-    }));
+    })).sort((a, b) => (b.date ? new Date(b.date).getTime() : 0) - (a.date ? new Date(a.date).getTime() : 0));
 
     return NextResponse.json({
       success: true,
@@ -53,6 +55,10 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+    const authStatus = authErrorStatus(error);
+    if (authStatus) {
+      return NextResponse.json({ success: false, error: error.message }, { status: authStatus });
+    }
     logger.error('Error fetching billing history:', error);
     const t = await getValidationTranslatorFromRequest(request);
     return NextResponse.json(

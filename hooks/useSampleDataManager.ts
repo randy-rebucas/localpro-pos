@@ -4,6 +4,8 @@ export interface PreviewData {
   businessType: string;
   preview: { categories: number; products: number; customers: number; discounts: number };
   existing: { categories: number; products: number; customers: number; discounts: number };
+  /** Sample records not in the store yet (older servers may not send it). */
+  missing?: { categories: number; products: number; customers: number; discounts: number };
   sample: {
     categories: string[];
     products: { name: string; price: number; type: string }[];

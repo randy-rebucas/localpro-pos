@@ -1,11 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import toast from 'react-hot-toast';
+import { Save, ToggleRight } from 'lucide-react';
 import DailyReportRecipients from '@/components/settings/DailyReportRecipients';
 import ImageUploadField from '@/components/settings/ImageUploadField';
-import { Settings } from 'lucide-react';
+import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import { RegisterPage, Strip, CHECKBOX, HINT, ICON, INPUT, INPUT_BASE, KEY, KEY_PRIMARY, LABEL } from '@/components/admin/register-ui';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { isBusinessTypeSelectable } from '@/lib/business-types';
 import type { ITenantSettings } from '@/types/tenant';
@@ -33,7 +36,6 @@ interface FormData {
   timeFormat: '12h' | '24h';
   // Branding
   primaryColor: string;
-  secondaryColor: string;
   logo: string;
   // Contact
   email: string;
@@ -56,13 +58,6 @@ interface FormData {
   taxLabel: string;
   pricesIncludeTax: boolean;
   // Features
-  enableInventory: boolean;
-  enableCategories: boolean;
-  enableDiscounts: boolean;
-  enableLoyaltyProgram: boolean;
-  enableCustomerManagement: boolean;
-  enableBookingScheduling: boolean;
-  enableTableManagement: boolean;
   enableOnAccountSales: boolean;
   autoOpenDrawerOnShiftStart: boolean;
   autoOpenDrawerOnShiftEnd: boolean;
@@ -71,6 +66,151 @@ interface FormData {
   lowStockThreshold: number;
   emailNotifications: boolean;
   smsNotifications: boolean;
+}
+
+const DEFAULT_FORM: FormData = {
+  companyName: '', businessType: '', taxId: '', registrationNumber: '',
+  language: 'en', timezone: 'Asia/Manila', currency: 'PHP', currencySymbol: '₱',
+  currencyPosition: 'before', dateFormat: 'MM/DD/YYYY', timeFormat: '12h',
+  primaryColor: '#35979c',
+  logo: '',
+  email: '', phone: '', website: '',
+  addressStreet: '', addressCity: '', addressState: '', addressZipCode: '', addressCountry: '',
+  receiptHeader: '', receiptFooter: '',
+  receiptShowLogo: true, receiptShowAddress: true, receiptShowPhone: true, receiptShowEmail: false,
+  taxEnabled: false, taxRate: 0, taxLabel: 'VAT', pricesIncludeTax: false,
+  enableOnAccountSales: false,
+  autoOpenDrawerOnShiftStart: false, autoOpenDrawerOnShiftEnd: false,
+  lowStockAlert: true, lowStockThreshold: 10,
+  emailNotifications: false, smsNotifications: false,
+};
+
+function formFromSettings(s: ITenantSettings): FormData {
+  return {
+    companyName: s.companyName ?? '',
+    businessType: s.businessType ?? '',
+    taxId: s.taxId ?? '',
+    registrationNumber: s.registrationNumber ?? '',
+    language: s.language ?? 'en',
+    timezone: s.timezone ?? 'Asia/Manila',
+    currency: s.currency ?? 'PHP',
+    currencySymbol: s.currencySymbol ?? '₱',
+    currencyPosition: s.currencyPosition ?? 'before',
+    dateFormat: s.dateFormat ?? 'MM/DD/YYYY',
+    timeFormat: s.timeFormat ?? '12h',
+    primaryColor: s.primaryColor ?? '#35979c',
+    logo: s.logo ?? '',
+    email: s.email ?? '',
+    phone: s.phone ?? '',
+    website: s.website ?? '',
+    addressStreet: s.address?.street ?? '',
+    addressCity: s.address?.city ?? '',
+    addressState: s.address?.state ?? '',
+    addressZipCode: s.address?.zipCode ?? '',
+    addressCountry: s.address?.country ?? '',
+    receiptHeader: s.receiptHeader ?? '',
+    receiptFooter: s.receiptFooter ?? '',
+    receiptShowLogo: s.receiptShowLogo ?? true,
+    receiptShowAddress: s.receiptShowAddress ?? true,
+    receiptShowPhone: s.receiptShowPhone ?? true,
+    receiptShowEmail: s.receiptShowEmail ?? false,
+    taxEnabled: s.taxEnabled ?? false,
+    taxRate: s.taxRate ?? 0,
+    taxLabel: s.taxLabel ?? 'VAT',
+    pricesIncludeTax: s.pricesIncludeTax ?? false,
+    enableOnAccountSales: s.enableOnAccountSales ?? false,
+    autoOpenDrawerOnShiftStart: s.autoOpenDrawerOnShiftStart ?? false,
+    autoOpenDrawerOnShiftEnd: s.autoOpenDrawerOnShiftEnd ?? false,
+    lowStockAlert: s.lowStockAlert ?? true,
+    lowStockThreshold: s.lowStockThreshold ?? 10,
+    emailNotifications: s.emailNotifications ?? false,
+    smsNotifications: s.smsNotifications ?? false,
+  };
+}
+
+type SectionId = 'general' | 'branding' | 'contact' | 'receipt' | 'features' | 'notifications';
+
+const ADDRESS_FIELDS = ['addressStreet', 'addressCity', 'addressState', 'addressZipCode', 'addressCountry'] as const;
+
+// Which tab owns each field. Saving sends only the fields that changed, from any tab, and the
+// API $sets only the keys it receives, so values loaded once at mount never overwrite later edits made elsewhere.
+const SECTION_FIELDS: Record<SectionId, (keyof FormData)[]> = {
+  general: ['companyName', 'businessType', 'taxId', 'registrationNumber', 'language', 'timezone', 'currency', 'currencySymbol', 'currencyPosition', 'dateFormat', 'timeFormat'],
+  branding: ['primaryColor', 'logo'],
+  contact: ['email', 'phone', 'website', ...ADDRESS_FIELDS],
+  receipt: ['receiptHeader', 'receiptFooter', 'receiptShowLogo', 'receiptShowAddress', 'receiptShowPhone', 'receiptShowEmail', 'taxEnabled', 'taxRate', 'taxLabel', 'pricesIncludeTax'],
+  features: ['enableOnAccountSales', 'autoOpenDrawerOnShiftStart', 'autoOpenDrawerOnShiftEnd'],
+  notifications: ['lowStockAlert', 'lowStockThreshold', 'emailNotifications', 'smsNotifications'],
+};
+const SECTION_ORDER = Object.keys(SECTION_FIELDS) as SectionId[];
+
+const HEX_COLOR_RE = /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/;
+/** `<input type="color">` only takes #rrggbb. */
+const toColorInput = (value: string) => {
+  if (/^#[A-Fa-f0-9]{6}$/.test(value)) return value.toLowerCase();
+  if (/^#[A-Fa-f0-9]{3}$/.test(value)) return `#${value.slice(1).split('').map((c) => c + c).join('')}`.toLowerCase();
+  return '#000000';
+};
+
+const SELECT = `${INPUT} font-receipt`;
+const COLOR_SWATCH = 'h-11 w-14 shrink-0 cursor-pointer border border-ink/25 bg-white p-1 disabled:cursor-not-allowed';
+
+function Toggle({ label, desc, checked, onChange }: { label: string; desc?: string; checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <label className="flex min-h-[44px] cursor-pointer items-start gap-3 border-b border-dashed border-ink/15 py-3 last:border-b-0">
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className={`${CHECKBOX} mt-0.5`} />
+      <span className="min-w-0">
+        <span className="block text-sm font-medium text-ink">{label}</span>
+        {desc && <span className="mt-0.5 block text-xs text-ink/60">{desc}</span>}
+      </span>
+    </label>
+  );
+}
+
+/** A number field that can be emptied while typing; the form only takes a value once it parses. */
+function NumberField({ id, value, onChange, min, max, step, className }: {
+  id: string; value: number; onChange: (v: number) => void; min?: number; max?: number; step?: number; className?: string;
+}) {
+  const [text, setText] = useState(String(value));
+  const [seen, setSeen] = useState(value);
+  // Follow outside changes (load, reset) without fighting the user's own typing.
+  if (seen !== value) {
+    setSeen(value);
+    if (text.trim() === '' || Number(text) !== value) setText(String(value));
+  }
+  return (
+    <input
+      id={id}
+      type="number"
+      inputMode="decimal"
+      min={min}
+      max={max}
+      step={step}
+      value={text}
+      onChange={(e) => {
+        setText(e.target.value);
+        const n = e.target.valueAsNumber;
+        if (e.target.value.trim() !== '' && Number.isFinite(n)) onChange(n);
+      }}
+      onBlur={() => setText(String(value))}
+      className={className}
+    />
+  );
+}
+
+/** One part of the setup slip. */
+function Section({ title, desc, children }: { title: string; desc?: string; children: ReactNode }) {
+  return (
+    <section className="border-t border-dashed border-ink/30 pt-6 first:border-t-0 first:pt-0">
+      <h2 className="text-3xl sm:text-4xl">{title}</h2>
+      {desc && <p className="mt-1 text-sm text-ink/60">{desc}</p>}
+      <div className="mt-5">{children}</div>
+    </section>
+  );
+}
+
+function SubHead({ children }: { children: ReactNode }) {
+  return <p className="mb-3 font-receipt text-xs font-semibold uppercase tracking-[0.14em] text-brand-hover">{children}</p>;
 }
 
 export default function AdminSettingsPage() {
@@ -86,7 +226,7 @@ export default function AdminSettingsPage() {
     getDictionaryClient(lang as 'en' | 'es').then(setDict);
   }, [lang]);
 
-  const SECTIONS = [
+  const SECTIONS: { id: SectionId; label: string }[] = [
     { id: 'general', label: dict?.settings?.tabs?.general || 'General' },
     { id: 'branding', label: dict?.settings?.tabs?.branding || 'Branding' },
     { id: 'contact', label: dict?.settings?.tabs?.contact || 'Contact' },
@@ -114,27 +254,13 @@ export default function AdminSettingsPage() {
     { value: 'general', label: dict?.settings?.businessTypeGeneralOption || 'General' },
   ];
 
-  const [activeSection, setActiveSection] = useState('general');
+  const [activeSection, setActiveSection] = useState<SectionId>('general');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState<FormData>({
-    companyName: '', businessType: '', taxId: '', registrationNumber: '',
-    language: 'en', timezone: 'Asia/Manila', currency: 'PHP', currencySymbol: '₱',
-    currencyPosition: 'before', dateFormat: 'MM/DD/YYYY', timeFormat: '12h',
-    primaryColor: '#35979c', secondaryColor: '',
-    logo: '',
-    email: '', phone: '', website: '',
-    addressStreet: '', addressCity: '', addressState: '', addressZipCode: '', addressCountry: '',
-    receiptHeader: '', receiptFooter: '',
-    receiptShowLogo: true, receiptShowAddress: true, receiptShowPhone: true, receiptShowEmail: false,
-    taxEnabled: false, taxRate: 0, taxLabel: 'VAT', pricesIncludeTax: false,
-    enableInventory: true, enableCategories: true, enableDiscounts: true,
-    enableLoyaltyProgram: false, enableCustomerManagement: true,
-    enableBookingScheduling: false, enableTableManagement: false, enableOnAccountSales: false,
-    autoOpenDrawerOnShiftStart: false, autoOpenDrawerOnShiftEnd: false,
-    lowStockAlert: true, lowStockThreshold: 10,
-    emailNotifications: false, smsNotifications: false,
-  });
+  const savingRef = useRef(false);
+  const [form, setForm] = useState<FormData>(DEFAULT_FORM);
+  // What the server last held, so Save sends only real changes and each tab can show it has unsaved edits.
+  const [baseline, setBaseline] = useState<FormData>(DEFAULT_FORM);
 
   // Form is initialised from TenantSettingsContext (already loaded by the
   // layout) instead of a separate GET /api/tenants/[slug]/settings.
@@ -146,56 +272,9 @@ export default function AdminSettingsPage() {
       const result = await ensureSettings();
       if (result.error) throw new Error(result.error);
       if (result.settings) {
-        const s = result.settings;
-        setForm(prev => ({
-          ...prev,
-          companyName: s.companyName ?? '',
-          businessType: s.businessType ?? '',
-          taxId: s.taxId ?? '',
-          registrationNumber: s.registrationNumber ?? '',
-          language: s.language ?? 'en',
-          timezone: s.timezone ?? 'Asia/Manila',
-          currency: s.currency ?? 'PHP',
-          currencySymbol: s.currencySymbol ?? '₱',
-          currencyPosition: s.currencyPosition ?? 'before',
-          dateFormat: s.dateFormat ?? 'MM/DD/YYYY',
-          timeFormat: s.timeFormat ?? '12h',
-          primaryColor: s.primaryColor ?? '#35979c',
-          secondaryColor: s.secondaryColor ?? '',
-          logo: s.logo ?? '',
-          email: s.email ?? '',
-          phone: s.phone ?? '',
-          website: s.website ?? '',
-          addressStreet: s.address?.street ?? '',
-          addressCity: s.address?.city ?? '',
-          addressState: s.address?.state ?? '',
-          addressZipCode: s.address?.zipCode ?? '',
-          addressCountry: s.address?.country ?? '',
-          receiptHeader: s.receiptHeader ?? '',
-          receiptFooter: s.receiptFooter ?? '',
-          receiptShowLogo: s.receiptShowLogo ?? true,
-          receiptShowAddress: s.receiptShowAddress ?? true,
-          receiptShowPhone: s.receiptShowPhone ?? true,
-          receiptShowEmail: s.receiptShowEmail ?? false,
-          taxEnabled: s.taxEnabled ?? false,
-          taxRate: s.taxRate ?? 0,
-          taxLabel: s.taxLabel ?? 'VAT',
-          pricesIncludeTax: s.pricesIncludeTax ?? false,
-          enableInventory: s.enableInventory ?? true,
-          enableCategories: s.enableCategories ?? true,
-          enableDiscounts: s.enableDiscounts ?? true,
-          enableLoyaltyProgram: s.enableLoyaltyProgram ?? false,
-          enableCustomerManagement: s.enableCustomerManagement ?? true,
-          enableBookingScheduling: s.enableBookingScheduling ?? false,
-          enableTableManagement: s.enableTableManagement ?? false,
-          enableOnAccountSales: s.enableOnAccountSales ?? false,
-          autoOpenDrawerOnShiftStart: s.autoOpenDrawerOnShiftStart ?? false,
-          autoOpenDrawerOnShiftEnd: s.autoOpenDrawerOnShiftEnd ?? false,
-          lowStockAlert: s.lowStockAlert ?? true,
-          lowStockThreshold: s.lowStockThreshold ?? 10,
-          emailNotifications: s.emailNotifications ?? false,
-          smsNotifications: s.smsNotifications ?? false,
-        }));
+        const next = formFromSettings(result.settings);
+        setForm(next);
+        setBaseline(next);
       }
     } catch {
       toast.error(dictRef.current?.settings?.failedToLoad || 'Failed to load settings');
@@ -209,58 +288,53 @@ export default function AdminSettingsPage() {
   const set = <K extends keyof FormData>(key: K, value: FormData[K]) =>
     setForm(f => ({ ...f, [key]: value }));
 
-  // Only the fields owned by the active tab are sent on save — the API does a
-  // per-key $set so a stale read of other tabs' fields (loaded once at mount)
-  // never overwrites concurrent changes made elsewhere.
-  const SECTION_FIELDS: Record<string, (keyof FormData)[]> = {
-    general: ['companyName', 'businessType', 'taxId', 'registrationNumber', 'language', 'timezone', 'currency', 'currencySymbol', 'currencyPosition', 'dateFormat', 'timeFormat'],
-    branding: ['primaryColor', 'secondaryColor', 'logo'],
-    contact: ['email', 'phone', 'website'],
-    receipt: ['receiptHeader', 'receiptFooter', 'receiptShowLogo', 'receiptShowAddress', 'receiptShowPhone', 'receiptShowEmail', 'taxEnabled', 'taxRate', 'taxLabel', 'pricesIncludeTax'],
-    features: ['enableInventory', 'enableCategories', 'enableDiscounts', 'enableLoyaltyProgram', 'enableCustomerManagement', 'enableBookingScheduling', 'enableTableManagement', 'enableOnAccountSales', 'autoOpenDrawerOnShiftStart', 'autoOpenDrawerOnShiftEnd'],
-    notifications: ['lowStockAlert', 'lowStockThreshold', 'emailNotifications', 'smsNotifications'],
-  };
+  const changedKeys = (Object.keys(form) as (keyof FormData)[]).filter((k) => form[k] !== baseline[k]);
+  const dirtySections = new Set(SECTION_ORDER.filter((id) => SECTION_FIELDS[id].some((k) => changedKeys.includes(k))));
 
-  const HEX_COLOR_RE = /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/;
-
-  const validateActiveSection = (): string | null => {
-    if (activeSection === 'general' && form.currency && form.currency.length !== 3) {
-      return dict?.validation?.invalidCurrencyCode || 'Invalid currency code';
+  const validate = (): { section: SectionId; message: string } | null => {
+    if (dirtySections.has('general') && form.currency && form.currency.length !== 3) {
+      return { section: 'general', message: dict?.validation?.invalidCurrencyCode || 'Invalid currency code' };
     }
-    if (activeSection === 'branding') {
+    if (dirtySections.has('branding')) {
+      const colorError = (field: string) =>
+        (dict?.validation?.invalidColorFormat || 'Invalid color format for {field}. Use hex format (e.g., #FF5733)').replace('{field}', field);
       if (form.primaryColor && !HEX_COLOR_RE.test(form.primaryColor)) {
-        return (dict?.validation?.invalidColorFormat || 'Invalid color format for {field}. Use hex format (e.g., #FF5733)').replace('{field}', dict?.settings?.primaryColor || 'Primary Color');
-      }
-      if (form.secondaryColor && !HEX_COLOR_RE.test(form.secondaryColor)) {
-        return (dict?.validation?.invalidColorFormat || 'Invalid color format for {field}. Use hex format (e.g., #FF5733)').replace('{field}', dict?.settings?.secondaryColor || 'Secondary Color');
+        return { section: 'branding', message: colorError(dict?.settings?.primaryColor || 'Primary Color') };
       }
     }
-    if (activeSection === 'receipt' && form.taxEnabled && (form.taxRate < 0 || form.taxRate > 100)) {
-      return dict?.validation?.taxRateRange || 'Tax rate must be between 0 and 100';
+    if (dirtySections.has('receipt') && form.taxEnabled && (form.taxRate < 0 || form.taxRate > 100)) {
+      return { section: 'receipt', message: dict?.validation?.taxRateRange || 'Tax rate must be between 0 and 100' };
+    }
+    if (dirtySections.has('notifications') && (!Number.isInteger(form.lowStockThreshold) || form.lowStockThreshold < 0)) {
+      return { section: 'notifications', message: dict?.settings?.lowStockThresholdInvalid || 'Low stock threshold must be a whole number, 0 or more' };
     }
     return null;
   };
 
   const handleSave = async () => {
-    const validationError = validateActiveSection();
-    if (validationError) {
-      toast.error(validationError);
+    if (savingRef.current || changedKeys.length === 0) return;
+    const problem = validate();
+    if (problem) {
+      setActiveSection(problem.section);
+      toast.error(problem.message);
       return;
     }
 
+    savingRef.current = true;
     setSaving(true);
+    const sent = form;
     try {
       const payload: Record<string, unknown> = {};
-      for (const key of SECTION_FIELDS[activeSection] || []) {
-        payload[key] = form[key];
+      for (const key of changedKeys) {
+        if (!(ADDRESS_FIELDS as readonly string[]).includes(key)) payload[key] = sent[key];
       }
-      if (activeSection === 'contact') {
+      if (changedKeys.some((k) => (ADDRESS_FIELDS as readonly string[]).includes(k))) {
         payload.address = {
-          street: form.addressStreet,
-          city: form.addressCity,
-          state: form.addressState,
-          zipCode: form.addressZipCode,
-          country: form.addressCountry,
+          street: sent.addressStreet,
+          city: sent.addressCity,
+          state: sent.addressState,
+          zipCode: sent.addressZipCode,
+          country: sent.addressCountry,
         };
       }
 
@@ -272,6 +346,8 @@ export default function AdminSettingsPage() {
       const json = await res.json();
       if (json.success) {
         toast.success(dict?.settings?.saved || 'Settings saved');
+        // Edits typed while the request was in flight stay unsaved.
+        setBaseline(sent);
         // Merge the saved settings into context (no extra GET)
         applySettings({ ...(payload as Partial<ITenantSettings>), ...(json.data || {}) });
       } else {
@@ -280,412 +356,356 @@ export default function AdminSettingsPage() {
     } catch {
       toast.error(dict?.settings?.error || 'Failed to save settings');
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };
 
-  const inputCls = 'w-full border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand focus:border-brand';
-  const labelCls = 'block text-xs font-medium text-gray-600 mb-1';
-  const checkboxCls = 'checkbox-win8 w-4 h-4';
+  const s = dict?.settings ?? {};
+  const unsavedLabel = (s.unsavedChangesCount || '{count} unsaved changes').replace('{count}', String(changedKeys.length));
 
-  const Toggle = ({ label, desc, checked, onChange }: { label: string; desc?: string; checked: boolean; onChange: (v: boolean) => void }) => (
-    <label className="flex items-start gap-3 cursor-pointer py-2">
-      <input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} className={`${checkboxCls} mt-0.5 shrink-0`} />
-      <div>
-        <span className="text-sm font-medium text-gray-700">{label}</span>
-        {desc && <p className="text-xs text-gray-400 mt-0.5">{desc}</p>}
+  if (loading) {
+    return (
+      <div className="mk-root pos-register">
+        <div className="flex min-h-[calc(100dvh-3.5rem)] items-center justify-center bg-brand-navy-deep lg:min-h-dvh">
+          <LoadingSpinner size="md" color="#8fe3d0" />
+          <span className="sr-only">{s.loading || 'Loading settings...'}</span>
+        </div>
       </div>
-    </label>
-  );
+    );
+  }
 
   return (
-    <div className="px-4 sm:px-6 py-6">
-
-      {/* Page header */}
-      <div className="flex items-start justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <Settings className="w-7 h-7 text-brand flex-shrink-0" />
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">{dict?.settings?.title || 'Settings'}</h1>
-            <p className="text-sm text-gray-500 mt-0.5">{dict?.settings?.subtitle || 'Configure your store preferences and business information'}</p>
-          </div>
-        </div>
-        {canManage && (
-          <button
-            onClick={handleSave}
-            disabled={saving || loading}
-            className="px-4 py-2 text-sm font-medium bg-brand text-white border border-brand-hover hover:bg-brand-hover disabled:opacity-50 transition-colors"
-          >
-            {saving ? (dict?.settings?.saving || 'Saving...') : (dict?.settings?.save || 'Save Settings')}
-          </button>
-        )}
-      </div>
-
-      {!loading && !canManage && (
-        <div className="mb-6 p-3 bg-yellow-50 border border-yellow-300 text-sm text-yellow-800">
-          {dict?.settings?.readOnlyNotice || "You don't have permission to change settings. Contact an admin or manager."}
+    <RegisterPage
+      tag={form.companyName || baseline.companyName || undefined}
+      tagNo="CFG"
+      title={s.title || 'Settings'}
+      subtitle={s.subtitle || 'Configure your store preferences and business information'}
+    >
+      {!canManage && (
+        <div className="mt-6">
+          <Strip tone="error">{s.readOnlyNotice || "You don't have permission to change settings. Contact an admin or manager."}</Strip>
         </div>
       )}
 
-      {loading ? (
-        <div className="flex items-center justify-center py-24">
-          <div className="text-center">
-            <div className="inline-block animate-spin h-7 w-7 border-b-2 border-brand mb-3" />
-            <p className="text-sm text-gray-400">{dict?.settings?.loading || 'Loading settings...'}</p>
-          </div>
-        </div>
-      ) : (
-        <div className="flex gap-6 items-start">
+      {/* Function keys pick which part of the setup slip to print. */}
+      <nav aria-label={s.sectionsNavLabel || 'Sections'} className="mt-6 grid grid-cols-2 gap-1 sm:grid-cols-3 xl:grid-cols-6">
+        {SECTIONS.map(({ id, label }, index) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setActiveSection(id)}
+            aria-current={activeSection === id ? 'true' : undefined}
+            className={`flex min-h-[44px] min-w-0 items-center gap-2 border px-3 py-2 text-left font-receipt text-xs font-medium uppercase transition-colors touch-manipulation ${
+              activeSection === id
+                ? 'border-paper-white bg-paper-white text-ink'
+                : 'border-white/15 bg-black/25 text-paper/80 hover:border-[#8fe3d0] hover:text-paper-white'
+            }`}
+          >
+            <span className="opacity-60" aria-hidden>F{index + 1}</span>
+            <span className="min-w-0 flex-1 break-words">{label}</span>
+            {dirtySections.has(id) && (
+              <span className={`h-2 w-2 shrink-0 ${activeSection === id ? 'bg-brand-hover' : 'bg-[#8fe3d0]'}`} title={s.unsavedChanges || 'Unsaved changes'}>
+                <span className="sr-only">{s.unsavedChanges || 'Unsaved changes'}</span>
+              </span>
+            )}
+          </button>
+        ))}
+      </nav>
 
-          {/* Left — section nav */}
-          <aside className="w-44 shrink-0 sticky top-6">
-            <div className="bg-white border border-gray-300">
-              <p className="px-4 pt-4 pb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">{dict?.settings?.sectionsNavLabel || 'Sections'}</p>
-              <nav className="pb-2">
-                {SECTIONS.map(s => (
-                  <button
-                    key={s.id}
-                    onClick={() => setActiveSection(s.id)}
-                    className={`w-full text-left px-4 py-2 text-sm transition-colors ${
-                      activeSection === s.id
-                        ? 'bg-brand text-white font-medium'
-                        : 'text-gray-600 hover:bg-gray-50'
-                    }`}
-                  >
-                    {s.label}
-                  </button>
-                ))}
-              </nav>
-            </div>
-          </aside>
+      <div className="mt-1 bg-paper-white text-ink">
+        <fieldset disabled={!canManage} className="min-w-0 space-y-8 px-4 py-6 sm:px-6 lg:px-8">
 
-          {/* Right — section content */}
-          <fieldset disabled={!canManage} className="flex-1 min-w-0">
-
-            {/* General */}
-            {activeSection === 'general' && (
-              <div className="bg-white border border-gray-300">
-                <div className="px-5 py-3 border-b border-gray-200 bg-gray-50">
-                  <h2 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{dict?.settings?.tabs?.general || 'General'}</h2>
-                  <p className="text-xs text-gray-400 mt-0.5">{dict?.settings?.generalSectionDesc || 'Business identity, locale, and currency settings'}</p>
+          {activeSection === 'general' && (
+            <Section title={s.tabs?.general || 'General'} desc={s.generalSectionDesc || 'Business identity, locale, and currency settings'}>
+              <div className="space-y-8">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="sm:col-span-2">
+                    <label htmlFor="set-companyName" className={LABEL}>{s.companyStoreNameLabel || 'Company / Store Name'}</label>
+                    <input id="set-companyName" type="text" value={form.companyName} onChange={e => set('companyName', e.target.value)} placeholder={s.businessNamePlaceholder || 'Your business name'} className={INPUT} />
+                  </div>
+                  <div>
+                    <label htmlFor="set-businessType" className={LABEL}>{s.businessType || 'Business Type'}</label>
+                    <select id="set-businessType" value={form.businessType} onChange={e => set('businessType', e.target.value)} className={SELECT}>
+                      <option value="">{s.selectTypePlaceholder || 'Select type...'}</option>
+                      {BUSINESS_TYPES.filter(t => isBusinessTypeSelectable(t.value, tenantSettings?.businessType)).map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="set-taxId" className={LABEL}>{s.taxIdEin || 'Tax ID / TIN'}</label>
+                    <input id="set-taxId" type="text" value={form.taxId} onChange={e => set('taxId', e.target.value)} placeholder={s.taxIdPlaceholderExample || 'e.g. 123-456-789-000'} className={`${INPUT} font-receipt`} />
+                  </div>
+                  <div>
+                    <label htmlFor="set-registrationNumber" className={LABEL}>{s.registrationNumberLabel || 'Registration Number'}</label>
+                    <input id="set-registrationNumber" type="text" value={form.registrationNumber} onChange={e => set('registrationNumber', e.target.value)} placeholder={s.registrationNumberDtiPlaceholder || 'DTI / SEC / CDA'} className={`${INPUT} font-receipt`} />
+                  </div>
                 </div>
-                <div className="p-5 space-y-6">
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="sm:col-span-2">
-                      <label className={labelCls}>{dict?.settings?.companyStoreNameLabel || 'Company / Store Name'}</label>
-                      <input type="text" value={form.companyName} onChange={e => set('companyName', e.target.value)} placeholder={dict?.settings?.businessNamePlaceholder || 'Your business name'} className={inputCls} />
-                    </div>
+                <div>
+                  <SubHead>{s.localeSectionLabel || 'Locale'}</SubHead>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div>
-                      <label className={labelCls}>{dict?.settings?.businessType || 'Business Type'}</label>
-                      <select value={form.businessType} onChange={e => set('businessType', e.target.value)} className={inputCls}>
-                        <option value="">{dict?.settings?.selectTypePlaceholder || 'Select type...'}</option>
-                        {BUSINESS_TYPES.filter(t => isBusinessTypeSelectable(t.value, tenantSettings?.businessType)).map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                      <label htmlFor="set-language" className={LABEL}>{s.language || 'Language'}</label>
+                      <select id="set-language" value={form.language} onChange={e => set('language', e.target.value)} className={SELECT}>
+                        <option value="en">{s.englishOption || 'English'}</option>
+                        <option value="es">{s.spanishOption || 'Spanish'}</option>
                       </select>
                     </div>
                     <div>
-                      <label className={labelCls}>{dict?.settings?.taxIdEin || 'Tax ID / TIN'}</label>
-                      <input type="text" value={form.taxId} onChange={e => set('taxId', e.target.value)} placeholder={dict?.settings?.taxIdPlaceholderExample || 'e.g. 123-456-789-000'} className={inputCls} />
+                      <label htmlFor="set-timezone" className={LABEL}>{s.timezone || 'Timezone'}</label>
+                      <select id="set-timezone" value={form.timezone} onChange={e => set('timezone', e.target.value)} className={SELECT}>
+                        {!TIMEZONES.includes(form.timezone) && <option value={form.timezone}>{form.timezone}</option>}
+                        {TIMEZONES.map(tz => <option key={tz} value={tz}>{tz}</option>)}
+                      </select>
                     </div>
                     <div>
-                      <label className={labelCls}>{dict?.settings?.registrationNumberLabel || 'Registration Number'}</label>
-                      <input type="text" value={form.registrationNumber} onChange={e => set('registrationNumber', e.target.value)} placeholder={dict?.settings?.registrationNumberDtiPlaceholder || 'DTI / SEC / CDA'} className={inputCls} />
-                    </div>
-                  </div>
-
-                  <div className="border-t border-gray-100 pt-5">
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">{dict?.settings?.localeSectionLabel || 'Locale'}</p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className={labelCls}>{dict?.settings?.language || 'Language'}</label>
-                        <select value={form.language} onChange={e => set('language', e.target.value)} className={inputCls}>
-                          <option value="en">{dict?.settings?.englishOption || 'English'}</option>
-                          <option value="es">{dict?.settings?.spanishOption || 'Spanish'}</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className={labelCls}>{dict?.settings?.timezone || 'Timezone'}</label>
-                        <select value={form.timezone} onChange={e => set('timezone', e.target.value)} className={inputCls}>
-                          {TIMEZONES.map(tz => <option key={tz} value={tz}>{tz}</option>)}
-                        </select>
-                      </div>
-                      <div>
-                        <label className={labelCls}>{dict?.settings?.dateFormat || 'Date Format'}</label>
-                        <select value={form.dateFormat} onChange={e => set('dateFormat', e.target.value)} className={inputCls}>
-                          <option value="MM/DD/YYYY">MM/DD/YYYY</option>
-                          <option value="DD/MM/YYYY">DD/MM/YYYY</option>
-                          <option value="YYYY-MM-DD">YYYY-MM-DD</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className={labelCls}>{dict?.settings?.timeFormat || 'Time Format'}</label>
-                        <select value={form.timeFormat} onChange={e => set('timeFormat', e.target.value as '12h' | '24h')} className={inputCls}>
-                          <option value="12h">{dict?.settings?.timeFormat12h || '12-hour (AM/PM)'}</option>
-                          <option value="24h">{dict?.settings?.timeFormat24h || '24-hour'}</option>
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="border-t border-gray-100 pt-5">
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">{dict?.settings?.currencySectionLabel || 'Currency'}</p>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                      <div className="sm:col-span-2">
-                        <label className={labelCls}>{dict?.settings?.currencySectionLabel || 'Currency'}</label>
-                        <select value={form.currency} onChange={e => set('currency', e.target.value)} className={inputCls}>
-                          {CURRENCIES.map(c => <option key={c.code} value={c.code}>{c.label}</option>)}
-                        </select>
-                      </div>
-                      <div>
-                        <label className={labelCls}>{dict?.settings?.currencySymbol || 'Symbol'}</label>
-                        <input type="text" value={form.currencySymbol} onChange={e => set('currencySymbol', e.target.value)} placeholder="₱" className={inputCls} />
-                      </div>
-                      <div>
-                        <label className={labelCls}>{dict?.settings?.currencyPosition || 'Symbol Position'}</label>
-                        <select value={form.currencyPosition} onChange={e => set('currencyPosition', e.target.value as 'before' | 'after')} className={inputCls}>
-                          <option value="before">{dict?.settings?.currencyPositionBefore || 'Before amount (₱100)'}</option>
-                          <option value="after">{dict?.settings?.currencyPositionAfter || 'After amount (100₱)'}</option>
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-
-                </div>
-              </div>
-            )}
-
-            {/* Branding */}
-            {activeSection === 'branding' && (
-              <div className="bg-white border border-gray-300">
-                <div className="px-5 py-3 border-b border-gray-200 bg-gray-50">
-                  <h2 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{dict?.settings?.tabs?.branding || 'Branding'}</h2>
-                  <p className="text-xs text-gray-400 mt-0.5">{dict?.settings?.brandingSectionDesc || 'Colors and logo used across your store and receipts'}</p>
-                </div>
-                <div className="p-5 space-y-4">
-                  {/* Uploads to Cloudinary (1pos/{slug}/branding/), same as the main settings page */}
-                  <ImageUploadField
-                    tenant={tenant}
-                    label={dict?.settings?.logoUrl || 'Logo'}
-                    value={form.logo || ''}
-                    onChange={(url) => set('logo', url)}
-                    recommendedSize={dict?.settings?.logoRecommendedSize || '200x200px (square) or 400x100px (wide)'}
-                    helpText={dict?.settings?.logoHelp || 'Shown on your login page and receipts.'}
-                    labels={dict?.settings as Record<string, unknown> | undefined}
-                    previewClassName="h-16 w-16"
-                  />
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className={labelCls}>{dict?.settings?.primaryColor || 'Primary Color'}</label>
-                      <div className="flex gap-2">
-                        <input type="color" value={form.primaryColor} onChange={e => set('primaryColor', e.target.value)} className="h-9 w-14 border border-gray-300 bg-white p-0.5 cursor-pointer" />
-                        <input type="text" value={form.primaryColor} onChange={e => set('primaryColor', e.target.value)} placeholder="#35979c" className={`${inputCls} flex-1`} />
-                      </div>
+                      <label htmlFor="set-dateFormat" className={LABEL}>{s.dateFormat || 'Date Format'}</label>
+                      <select id="set-dateFormat" value={form.dateFormat} onChange={e => set('dateFormat', e.target.value)} className={SELECT}>
+                        <option value="MM/DD/YYYY">MM/DD/YYYY</option>
+                        <option value="DD/MM/YYYY">DD/MM/YYYY</option>
+                        <option value="YYYY-MM-DD">YYYY-MM-DD</option>
+                      </select>
                     </div>
                     <div>
-                      <label className={labelCls}>{dict?.settings?.secondaryColor || 'Secondary Color'}</label>
-                      <div className="flex gap-2">
-                        <input type="color" value={form.secondaryColor || '#000000'} onChange={e => set('secondaryColor', e.target.value)} className="h-9 w-14 border border-gray-300 bg-white p-0.5 cursor-pointer" />
-                        <input type="text" value={form.secondaryColor} onChange={e => set('secondaryColor', e.target.value)} placeholder="#000000" className={`${inputCls} flex-1`} />
-                      </div>
+                      <label htmlFor="set-timeFormat" className={LABEL}>{s.timeFormat || 'Time Format'}</label>
+                      <select id="set-timeFormat" value={form.timeFormat} onChange={e => set('timeFormat', e.target.value as '12h' | '24h')} className={SELECT}>
+                        <option value="12h">{s.timeFormat12h || '12-hour (AM/PM)'}</option>
+                        <option value="24h">{s.timeFormat24h || '24-hour'}</option>
+                      </select>
                     </div>
-                  </div>
-                  <div className="mt-2">
-                    <p className="text-xs text-gray-400">
-                      {dict?.settings?.advancedBrandingHintPrefix || 'For advanced branding (fonts, themes, custom CSS), go to'}{' '}
-                      <span className="text-brand font-medium">{dict?.settings?.advancedBrandingHintLink || 'Advanced Branding'}</span>{' '}
-                      {dict?.settings?.advancedBrandingHintSuffix || 'in the sidebar.'}
-                    </p>
                   </div>
                 </div>
-              </div>
-            )}
 
-            {/* Contact */}
-            {activeSection === 'contact' && (
-              <div className="bg-white border border-gray-300">
-                <div className="px-5 py-3 border-b border-gray-200 bg-gray-50">
-                  <h2 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{dict?.settings?.contactInformation || 'Contact Information'}</h2>
-                  <p className="text-xs text-gray-400 mt-0.5">{dict?.settings?.contactSectionDesc || 'Displayed on receipts and customer-facing documents'}</p>
-                </div>
-                <div className="p-5 space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className={labelCls}>{dict?.settings?.emailAddressLabel || 'Email Address'}</label>
-                      <input type="email" value={form.email} onChange={e => set('email', e.target.value)} placeholder="store@example.com" className={inputCls} />
-                    </div>
-                    <div>
-                      <label className={labelCls}>{dict?.settings?.phoneNumberLabel || 'Phone Number'}</label>
-                      <input type="tel" value={form.phone} onChange={e => set('phone', e.target.value)} placeholder="+63 9XX XXX XXXX" className={inputCls} />
-                    </div>
+                <div>
+                  <SubHead>{s.currencySectionLabel || 'Currency'}</SubHead>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div className="sm:col-span-2">
-                      <label className={labelCls}>{dict?.settings?.website || 'Website'}</label>
-                      <input type="url" value={form.website} onChange={e => set('website', e.target.value)} placeholder="https://yourstore.com" className={inputCls} />
-                    </div>
-                  </div>
-
-                  <div className="border-t border-gray-100 pt-4">
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">{dict?.settings?.addressSectionLabel || 'Address'}</p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="sm:col-span-2">
-                        <label className={labelCls}>{dict?.settings?.streetLabel || 'Street'}</label>
-                        <input type="text" value={form.addressStreet} onChange={e => set('addressStreet', e.target.value)} placeholder={dict?.settings?.streetPlaceholder || '123 Main St.'} className={inputCls} />
-                      </div>
-                      <div>
-                        <label className={labelCls}>{dict?.settings?.cityMunicipalityLabel || 'City / Municipality'}</label>
-                        <input type="text" value={form.addressCity} onChange={e => set('addressCity', e.target.value)} placeholder={dict?.settings?.cityPlaceholder || 'City'} className={inputCls} />
-                      </div>
-                      <div>
-                        <label className={labelCls}>{dict?.settings?.provinceStateLabel || 'Province / State'}</label>
-                        <input type="text" value={form.addressState} onChange={e => set('addressState', e.target.value)} placeholder={dict?.settings?.provincePlaceholder || 'Province'} className={inputCls} />
-                      </div>
-                      <div>
-                        <label className={labelCls}>{dict?.settings?.zipCodeLabel || 'ZIP Code'}</label>
-                        <input type="text" value={form.addressZipCode} onChange={e => set('addressZipCode', e.target.value)} placeholder={dict?.settings?.zipPlaceholder || '1234'} className={inputCls} />
-                      </div>
-                      <div>
-                        <label className={labelCls}>{dict?.settings?.country || 'Country'}</label>
-                        <input type="text" value={form.addressCountry} onChange={e => set('addressCountry', e.target.value)} placeholder={dict?.settings?.countryPlaceholder || 'Philippines'} className={inputCls} />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Receipt */}
-            {activeSection === 'receipt' && (
-              <div className="space-y-4">
-                <div className="bg-white border border-gray-300">
-                  <div className="px-5 py-3 border-b border-gray-200 bg-gray-50">
-                    <h2 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{dict?.settings?.receiptContentTitle || 'Receipt Content'}</h2>
-                    <p className="text-xs text-gray-400 mt-0.5">{dict?.settings?.receiptContentSectionDesc || 'Text printed at the top and bottom of every receipt'}</p>
-                  </div>
-                  <div className="p-5 space-y-4">
-                    <div>
-                      <label className={labelCls}>{dict?.settings?.receiptHeader || 'Receipt Header'}</label>
-                      <textarea value={form.receiptHeader} onChange={e => set('receiptHeader', e.target.value)} rows={3} placeholder={dict?.settings?.receiptHeaderExamplePlaceholder || 'e.g. Thank you for shopping with us!'} className={inputCls} />
+                      <label htmlFor="set-currency" className={LABEL}>{s.currencySectionLabel || 'Currency'}</label>
+                      <select id="set-currency" value={form.currency} onChange={e => set('currency', e.target.value)} className={SELECT}>
+                        {!CURRENCIES.some(c => c.code === form.currency) && <option value={form.currency}>{form.currency}</option>}
+                        {CURRENCIES.map(c => <option key={c.code} value={c.code}>{c.label}</option>)}
+                      </select>
                     </div>
                     <div>
-                      <label className={labelCls}>{dict?.settings?.receiptFooter || 'Receipt Footer'}</label>
-                      <textarea value={form.receiptFooter} onChange={e => set('receiptFooter', e.target.value)} rows={3} placeholder={dict?.settings?.receiptFooterExamplePlaceholder || 'e.g. All sales are final. Goods once sold cannot be returned.'} className={inputCls} />
+                      <label htmlFor="set-currencySymbol" className={LABEL}>{s.currencySymbol || 'Symbol'}</label>
+                      <input id="set-currencySymbol" type="text" value={form.currencySymbol} onChange={e => set('currencySymbol', e.target.value)} placeholder="₱" className={`${INPUT} font-receipt`} />
+                    </div>
+                    <div>
+                      <label htmlFor="set-currencyPosition" className={LABEL}>{s.currencyPosition || 'Symbol Position'}</label>
+                      <select id="set-currencyPosition" value={form.currencyPosition} onChange={e => set('currencyPosition', e.target.value as 'before' | 'after')} className={SELECT}>
+                        <option value="before">{s.currencyPositionBefore || 'Before amount (₱100)'}</option>
+                        <option value="after">{s.currencyPositionAfter || 'After amount (100₱)'}</option>
+                      </select>
                     </div>
                   </div>
                 </div>
+              </div>
+            </Section>
+          )}
 
-                <div className="bg-white border border-gray-300">
-                  <div className="px-5 py-3 border-b border-gray-200 bg-gray-50">
-                    <h2 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{dict?.settings?.showOnReceiptTitle || 'Show on Receipt'}</h2>
+          {activeSection === 'branding' && (
+            <Section title={s.tabs?.branding || 'Branding'} desc={s.brandingSectionDesc || 'Colors and logo used across your store and receipts'}>
+              <div className="space-y-6">
+                {/* Uploads to Cloudinary (1pos/{slug}/branding/), same as the main settings page */}
+                <ImageUploadField
+                  tenant={tenant}
+                  label={s.logoUrl || 'Logo'}
+                  value={form.logo || ''}
+                  onChange={(url) => set('logo', url)}
+                  recommendedSize={s.logoRecommendedSize || '200x200px (square) or 400x100px (wide)'}
+                  helpText={s.logoHelp || 'Shown on your login page and receipts.'}
+                  labels={dict?.settings as Record<string, unknown> | undefined}
+                  previewClassName="h-16 w-16"
+                />
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label htmlFor="set-primaryColor" className={LABEL}>{s.primaryColor || 'Primary Color'}</label>
+                    <div className="flex gap-2">
+                      <input type="color" aria-label={s.primaryColor || 'Primary Color'} value={toColorInput(form.primaryColor)} onChange={e => set('primaryColor', e.target.value)} className={COLOR_SWATCH} />
+                      <input id="set-primaryColor" type="text" value={form.primaryColor} onChange={e => set('primaryColor', e.target.value)} placeholder="#35979c" className={`${INPUT_BASE} min-w-0 flex-1 font-receipt`} />
+                    </div>
                   </div>
-                  <div className="p-5 divide-y divide-gray-50">
-                    <Toggle label={dict?.settings?.storeLogoLabel || 'Store Logo'} desc={dict?.settings?.storeLogoDesc || 'Print logo at the top of receipts'} checked={form.receiptShowLogo} onChange={v => set('receiptShowLogo', v)} />
-                    <Toggle label={dict?.settings?.storeAddressLabel || 'Store Address'} desc={dict?.settings?.storeAddressDesc || 'Print full address on receipts'} checked={form.receiptShowAddress} onChange={v => set('receiptShowAddress', v)} />
-                    <Toggle label={dict?.settings?.phoneNumberLabel || 'Phone Number'} desc={dict?.settings?.phoneNumberDesc || 'Print contact phone on receipts'} checked={form.receiptShowPhone} onChange={v => set('receiptShowPhone', v)} />
-                    <Toggle label={dict?.settings?.emailAddressLabel || 'Email Address'} desc={dict?.settings?.emailAddressDesc || 'Print email on receipts'} checked={form.receiptShowEmail} onChange={v => set('receiptShowEmail', v)} />
+                </div>
+                <p className={HINT}>
+                  {s.advancedBrandingHintPrefix || 'For advanced branding (fonts, themes, custom CSS), go to'}{' '}
+                  <Link href={`/${tenant}/${lang}/admin/advanced-branding`} className="font-semibold text-brand-hover underline underline-offset-2 hover:text-ink">
+                    {s.advancedBrandingHintLink || 'Advanced Branding'}
+                  </Link>{' '}
+                  {s.advancedBrandingHintSuffix || 'in the sidebar.'}
+                </p>
+              </div>
+            </Section>
+          )}
+
+          {activeSection === 'contact' && (
+            <Section title={s.contactInformation || 'Contact Information'} desc={s.contactSectionDesc || 'Displayed on receipts and customer-facing documents'}>
+              <div className="space-y-8">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label htmlFor="set-email" className={LABEL}>{s.emailAddressLabel || 'Email Address'}</label>
+                    <input id="set-email" type="email" value={form.email} onChange={e => set('email', e.target.value)} placeholder="store@example.com" className={INPUT} />
+                  </div>
+                  <div>
+                    <label htmlFor="set-phone" className={LABEL}>{s.phoneNumberLabel || 'Phone Number'}</label>
+                    <input id="set-phone" type="tel" value={form.phone} onChange={e => set('phone', e.target.value)} placeholder="+63 9XX XXX XXXX" className={INPUT} />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label htmlFor="set-website" className={LABEL}>{s.website || 'Website'}</label>
+                    <input id="set-website" type="url" value={form.website} onChange={e => set('website', e.target.value)} placeholder="https://yourstore.com" className={INPUT} />
                   </div>
                 </div>
 
-                <div className="bg-white border border-gray-300">
-                  <div className="px-5 py-3 border-b border-gray-200 bg-gray-50">
-                    <h2 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{dict?.settings?.taxSectionTitle || 'Tax'}</h2>
-                  </div>
-                  <div className="p-5 space-y-4">
-                    <Toggle label={dict?.settings?.enableTax || 'Enable Tax'} desc={dict?.settings?.enableTaxDesc || 'Apply tax to all transactions'} checked={form.taxEnabled} onChange={v => set('taxEnabled', v)} />
-                    {form.taxEnabled && (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                        <div>
-                          <label className={labelCls}>{dict?.settings?.taxRate || 'Tax Rate (%)'}</label>
-                          <input type="number" min={0} max={100} step={0.01} value={form.taxRate} onChange={e => set('taxRate', Number(e.target.value))} className={inputCls} />
-                        </div>
-                        <div>
-                          <label className={labelCls}>{dict?.settings?.taxLabel || 'Tax Label'}</label>
-                          <input type="text" value={form.taxLabel} onChange={e => set('taxLabel', e.target.value)} placeholder="VAT" className={inputCls} />
-                        </div>
-                      </div>
-                    )}
-                    {form.taxEnabled && (
-                      <Toggle label={dict?.settings?.pricesIncludeTax || 'Prices already include tax'} desc={dict?.settings?.pricesIncludeTaxDesc || 'On: a ₱112 item charges ₱112, with the tax inside it. Off: tax is added on top at checkout.'} checked={form.pricesIncludeTax} onChange={v => set('pricesIncludeTax', v)} />
-                    )}
+                <div>
+                  <SubHead>{s.addressSectionLabel || 'Address'}</SubHead>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div className="sm:col-span-2">
+                      <label htmlFor="set-street" className={LABEL}>{s.streetLabel || 'Street'}</label>
+                      <input id="set-street" type="text" value={form.addressStreet} onChange={e => set('addressStreet', e.target.value)} placeholder={s.streetPlaceholder || '123 Main St.'} className={INPUT} />
+                    </div>
+                    <div>
+                      <label htmlFor="set-city" className={LABEL}>{s.cityMunicipalityLabel || 'City / Municipality'}</label>
+                      <input id="set-city" type="text" value={form.addressCity} onChange={e => set('addressCity', e.target.value)} placeholder={s.cityPlaceholder || 'City'} className={INPUT} />
+                    </div>
+                    <div>
+                      <label htmlFor="set-state" className={LABEL}>{s.provinceStateLabel || 'Province / State'}</label>
+                      <input id="set-state" type="text" value={form.addressState} onChange={e => set('addressState', e.target.value)} placeholder={s.provincePlaceholder || 'Province'} className={INPUT} />
+                    </div>
+                    <div>
+                      <label htmlFor="set-zip" className={LABEL}>{s.zipCodeLabel || 'ZIP Code'}</label>
+                      <input id="set-zip" type="text" value={form.addressZipCode} onChange={e => set('addressZipCode', e.target.value)} placeholder={s.zipPlaceholder || '1234'} className={`${INPUT} font-receipt`} />
+                    </div>
+                    <div>
+                      <label htmlFor="set-country" className={LABEL}>{s.country || 'Country'}</label>
+                      <input id="set-country" type="text" value={form.addressCountry} onChange={e => set('addressCountry', e.target.value)} placeholder={s.countryPlaceholder || 'Philippines'} className={INPUT} />
+                    </div>
                   </div>
                 </div>
               </div>
-            )}
+            </Section>
+          )}
 
-            {/* Features */}
-            {activeSection === 'features' && (
-              <div className="bg-white border border-gray-300">
-                <div className="px-5 py-3 border-b border-gray-200 bg-gray-50">
-                  <h2 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{dict?.settings?.featureFlagsTitle || 'Feature Flags'}</h2>
-                  <p className="text-xs text-gray-400 mt-0.5">{dict?.settings?.featureFlagsDesc || 'Enable or disable modules for your store'}</p>
-                </div>
-                <div className="p-5 divide-y divide-gray-50">
-                  <Toggle label={dict?.settings?.inventoryTrackingLabel || 'Inventory Tracking'} desc={dict?.settings?.inventoryTrackingDesc || 'Track stock levels for products'} checked={form.enableInventory} onChange={v => set('enableInventory', v)} />
-                  <Toggle label={dict?.settings?.categoriesLabel || 'Categories'} desc={dict?.settings?.categoriesDesc || 'Organise products into categories'} checked={form.enableCategories} onChange={v => set('enableCategories', v)} />
-                  <Toggle label={dict?.settings?.discountsLabel || 'Discounts'} desc={dict?.settings?.discountsDesc || 'Apply discount codes and percentage discounts'} checked={form.enableDiscounts} onChange={v => set('enableDiscounts', v)} />
-                  <Toggle label={dict?.settings?.loyaltyProgram || 'Loyalty Program'} desc={dict?.settings?.loyaltyProgramDescShort || 'Earn and redeem loyalty points at checkout'} checked={form.enableLoyaltyProgram} onChange={v => set('enableLoyaltyProgram', v)} />
-                  <Toggle label={dict?.settings?.customerManagementLabel || 'Customer Management'} desc={dict?.settings?.customerManagementDescShort || 'Maintain a customer database with profiles'} checked={form.enableCustomerManagement} onChange={v => set('enableCustomerManagement', v)} />
-                  <Toggle label={dict?.settings?.bookingScheduling || 'Booking & Scheduling'} desc={dict?.settings?.bookingSchedulingDescShort || 'Accept service appointments and reservations'} checked={form.enableBookingScheduling} onChange={v => set('enableBookingScheduling', v)} />
-                  <Toggle label={dict?.settings?.tableManagementLabel || 'Table Management'} desc={dict?.settings?.tableManagementDesc || 'Manage dining tables and floor layout'} checked={form.enableTableManagement} onChange={v => set('enableTableManagement', v)} />
-                  <Toggle label={dict?.settings?.onAccountSalesLabel || 'On-Account Sales'} desc={dict?.settings?.onAccountSalesDescShort || 'Allow customers to purchase on credit / pay later'} checked={form.enableOnAccountSales} onChange={v => set('enableOnAccountSales', v)} />
-                </div>
-              </div>
-            )}
-
-            {/* Cash Drawer */}
-            {activeSection === 'features' && (
-              <div className="bg-white border border-gray-300 mt-4">
-                <div className="px-5 py-3 border-b border-gray-200 bg-gray-50">
-                  <h2 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{dict?.admin?.cashDrawer || 'Cash Drawer'}</h2>
-                  <p className="text-xs text-gray-400 mt-0.5">{dict?.settings?.cashDrawerSectionDesc || 'Requires a cash drawer configured under Hardware settings'}</p>
-                </div>
-                <div className="p-5 divide-y divide-gray-50">
-                  <Toggle label={dict?.settings?.autoOpenShiftStartLabel || 'Auto-Open on Shift Start'} desc={dict?.settings?.autoOpenShiftStartDesc || 'Automatically pop open the cash drawer when a cashier starts their shift'} checked={form.autoOpenDrawerOnShiftStart} onChange={v => set('autoOpenDrawerOnShiftStart', v)} />
-                  <Toggle label={dict?.settings?.autoOpenShiftEndLabel || 'Auto-Open on Shift End'} desc={dict?.settings?.autoOpenShiftEndDesc || 'Automatically pop open the cash drawer when a cashier ends their shift'} checked={form.autoOpenDrawerOnShiftEnd} onChange={v => set('autoOpenDrawerOnShiftEnd', v)} />
-                </div>
-              </div>
-            )}
-
-            {/* Notifications */}
-            {activeSection === 'notifications' && (
-              <div className="space-y-4">
-                <div className="bg-white border border-gray-300">
-                  <div className="px-5 py-3 border-b border-gray-200 bg-gray-50">
-                    <h2 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{dict?.settings?.inventoryAlertsTitle || 'Inventory Alerts'}</h2>
+          {activeSection === 'receipt' && (
+            <>
+              <Section title={s.receiptContentTitle || 'Receipt Content'} desc={s.receiptContentSectionDesc || 'Text printed at the top and bottom of every receipt'}>
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                  <div>
+                    <label htmlFor="set-receiptHeader" className={LABEL}>{s.receiptHeader || 'Receipt Header'}</label>
+                    <textarea id="set-receiptHeader" value={form.receiptHeader} onChange={e => set('receiptHeader', e.target.value)} rows={3} placeholder={s.receiptHeaderExamplePlaceholder || 'e.g. Thank you for shopping with us!'} className={`${INPUT} font-receipt`} />
                   </div>
-                  <div className="p-5 space-y-4">
-                    <Toggle label={dict?.settings?.enableLowStockAlerts || 'Low Stock Alerts'} desc={dict?.settings?.lowStockAlertDesc || 'Get notified when products fall below the threshold'} checked={form.lowStockAlert} onChange={v => set('lowStockAlert', v)} />
-                    {form.lowStockAlert && (
+                  <div>
+                    <label htmlFor="set-receiptFooter" className={LABEL}>{s.receiptFooter || 'Receipt Footer'}</label>
+                    <textarea id="set-receiptFooter" value={form.receiptFooter} onChange={e => set('receiptFooter', e.target.value)} rows={3} placeholder={s.receiptFooterExamplePlaceholder || 'e.g. All sales are final. Goods once sold cannot be returned.'} className={`${INPUT} font-receipt`} />
+                  </div>
+                </div>
+              </Section>
+
+              <Section title={s.showOnReceiptTitle || 'Show on Receipt'}>
+                <div className="grid grid-cols-1 gap-x-8 sm:grid-cols-2">
+                  <div>
+                    <Toggle label={s.storeLogoLabel || 'Store Logo'} desc={s.storeLogoDesc || 'Print logo at the top of receipts'} checked={form.receiptShowLogo} onChange={v => set('receiptShowLogo', v)} />
+                    <Toggle label={s.storeAddressLabel || 'Store Address'} desc={s.storeAddressDesc || 'Print full address on receipts'} checked={form.receiptShowAddress} onChange={v => set('receiptShowAddress', v)} />
+                  </div>
+                  <div>
+                    <Toggle label={s.phoneNumberLabel || 'Phone Number'} desc={s.phoneNumberDesc || 'Print contact phone on receipts'} checked={form.receiptShowPhone} onChange={v => set('receiptShowPhone', v)} />
+                    <Toggle label={s.emailAddressLabel || 'Email Address'} desc={s.emailAddressDesc || 'Print email on receipts'} checked={form.receiptShowEmail} onChange={v => set('receiptShowEmail', v)} />
+                  </div>
+                </div>
+              </Section>
+
+              <Section title={s.taxSectionTitle || 'Tax'}>
+                <Toggle label={s.enableTax || 'Enable Tax'} desc={s.enableTaxDesc || 'Apply tax to all transactions'} checked={form.taxEnabled} onChange={v => set('taxEnabled', v)} />
+                {form.taxEnabled && (
+                  <>
+                    <div className="grid grid-cols-1 gap-4 pt-3 sm:grid-cols-2">
                       <div>
-                        <label className={labelCls}>{dict?.settings?.lowStockThresholdUnitsLabel || 'Low Stock Threshold (units)'}</label>
-                        <input type="number" min={1} value={form.lowStockThreshold} onChange={e => set('lowStockThreshold', Number(e.target.value))} className={`${inputCls} w-32`} />
+                        <label htmlFor="set-taxRate" className={LABEL}>{s.taxRate || 'Tax Rate (%)'}</label>
+                        <NumberField id="set-taxRate" min={0} max={100} step={0.01} value={form.taxRate} onChange={v => set('taxRate', v)} className={`${INPUT} font-receipt`} />
                       </div>
-                    )}
-                  </div>
+                      <div>
+                        <label htmlFor="set-taxLabel" className={LABEL}>{s.taxLabel || 'Tax Label'}</label>
+                        <input id="set-taxLabel" type="text" value={form.taxLabel} onChange={e => set('taxLabel', e.target.value)} placeholder="VAT" className={`${INPUT} font-receipt`} />
+                      </div>
+                    </div>
+                    <div className="pt-2">
+                      <Toggle label={s.pricesIncludeTax || 'Prices already include tax'} desc={s.pricesIncludeTaxDesc || 'On: a ₱112 item charges ₱112, with the tax inside it. Off: tax is added on top at checkout.'} checked={form.pricesIncludeTax} onChange={v => set('pricesIncludeTax', v)} />
+                    </div>
+                  </>
+                )}
+              </Section>
+            </>
+          )}
+
+          {activeSection === 'features' && (
+            <>
+              <Section title={s.modulesTitle || 'Modules'} desc={s.modulesMovedDesc || 'Inventory, categories, discounts, loyalty, customers, bookings and tables are switched on and off on the Feature Flags page.'}>
+                <Link href={`/${tenant}/${lang}/admin/feature-flags`} className={`${KEY} w-full sm:w-fit`}>
+                  <ToggleRight className={ICON} strokeWidth={1.75} aria-hidden />
+                  {s.openFeatureFlags || 'Open Feature Flags'}
+                </Link>
+              </Section>
+
+              <Section title={s.salesOptionsTitle || 'Sales'}>
+                <Toggle label={s.onAccountSalesLabel || 'On-Account Sales'} desc={s.onAccountSalesDescShort || 'Allow customers to purchase on credit / pay later'} checked={form.enableOnAccountSales} onChange={v => set('enableOnAccountSales', v)} />
+              </Section>
+
+              <Section title={dict?.admin?.cashDrawer || 'Cash Drawer'} desc={s.cashDrawerSectionDesc || 'Requires a cash drawer configured under Hardware settings'}>
+                <div className="grid grid-cols-1 gap-x-8 sm:grid-cols-2">
+                  <div><Toggle label={s.autoOpenShiftStartLabel || 'Auto-Open on Shift Start'} desc={s.autoOpenShiftStartDesc || 'Automatically pop open the cash drawer when a cashier starts their shift'} checked={form.autoOpenDrawerOnShiftStart} onChange={v => set('autoOpenDrawerOnShiftStart', v)} /></div>
+                  <div><Toggle label={s.autoOpenShiftEndLabel || 'Auto-Open on Shift End'} desc={s.autoOpenShiftEndDesc || 'Automatically pop open the cash drawer when a cashier ends their shift'} checked={form.autoOpenDrawerOnShiftEnd} onChange={v => set('autoOpenDrawerOnShiftEnd', v)} /></div>
                 </div>
+              </Section>
+            </>
+          )}
 
-                <DailyReportRecipients tenant={tenant} labels={dict?.settings} />
+          {activeSection === 'notifications' && (
+            <>
+              <Section title={s.inventoryAlertsTitle || 'Inventory Alerts'}>
+                <Toggle label={s.enableLowStockAlerts || 'Low Stock Alerts'} desc={s.lowStockAlertDesc || 'Get notified when products fall below the threshold'} checked={form.lowStockAlert} onChange={v => set('lowStockAlert', v)} />
+                {form.lowStockAlert && (
+                  <div className="pt-3">
+                    <label htmlFor="set-lowStockThreshold" className={LABEL}>{s.lowStockThresholdUnitsLabel || 'Low Stock Threshold (units)'}</label>
+                    <NumberField id="set-lowStockThreshold" min={0} step={1} value={form.lowStockThreshold} onChange={v => set('lowStockThreshold', v)} className={`${INPUT_BASE} w-32 font-receipt`} />
+                    <p className={HINT}>{s.lowStockZeroHint || 'Set 0 to alert only when a product is out of stock.'}</p>
+                  </div>
+                )}
+              </Section>
 
-                <div className="bg-white border border-gray-300">
-                  <div className="px-5 py-3 border-b border-gray-200 bg-gray-50">
-                    <h2 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{dict?.settings?.notificationChannels || 'Notification Channels'}</h2>
-                  </div>
-                  <div className="p-5 divide-y divide-gray-50">
-                    <Toggle label={dict?.settings?.emailNotificationsLabel || 'Email Notifications'} desc={dict?.settings?.emailNotificationsDescShort || 'Receive alerts and summaries via email'} checked={form.emailNotifications} onChange={v => set('emailNotifications', v)} />
-                    <Toggle label={dict?.settings?.smsNotificationsLabel || 'SMS Notifications'} desc={dict?.settings?.smsNotificationsDescShort || 'Receive alerts via SMS (requires SMS provider)'} checked={form.smsNotifications} onChange={v => set('smsNotifications', v)} />
-                  </div>
-                  <div className="px-5 py-3 border-t border-gray-100">
-                    <p className="text-xs text-gray-400">
-                      {dict?.settings?.notificationTemplatesHintPrefix || 'For notification templates (booking confirmations, attendance alerts), go to'}{' '}
-                      <span className="text-brand font-medium">{dict?.settings?.notificationTemplatesHintLink || 'Notifications'}</span>{' '}
-                      {dict?.settings?.notificationTemplatesHintSuffix || 'in the sidebar.'}
-                    </p>
-                  </div>
+              <Section title={s.dailyReportTitle || 'Daily Sales Report'}>
+                {/* Saves on its own key, apart from the total line below. */}
+                <DailyReportRecipients tenant={tenant} labels={{ ...(dict?.settings || {}), save: s.saveRecipients || 'Save recipients' }} showTitle={false} />
+              </Section>
+
+              <Section title={s.notificationChannels || 'Notification Channels'}>
+                <div className="grid grid-cols-1 gap-x-8 sm:grid-cols-2">
+                  <div><Toggle label={s.emailNotificationsLabel || 'Email Notifications'} desc={s.emailNotificationsDescShort || 'Receive alerts and summaries via email'} checked={form.emailNotifications} onChange={v => set('emailNotifications', v)} /></div>
+                  <div><Toggle label={s.smsNotificationsLabel || 'SMS Notifications'} desc={s.smsNotificationsDescShort || 'Receive alerts via SMS (requires SMS provider)'} checked={form.smsNotifications} onChange={v => set('smsNotifications', v)} /></div>
                 </div>
-              </div>
-            )}
+                <p className={`${HINT} mt-4`}>
+                  {s.notificationTemplatesHintPrefix || 'For notification templates (booking confirmations, attendance alerts), go to'}{' '}
+                  <Link href={`/${tenant}/${lang}/admin/notification-templates`} className="font-semibold text-brand-hover underline underline-offset-2 hover:text-ink">
+                    {s.notificationTemplatesHintLink || 'Notifications'}
+                  </Link>{' '}
+                  {s.notificationTemplatesHintSuffix || 'in the sidebar.'}
+                </p>
+              </Section>
+            </>
+          )}
+        </fieldset>
 
-          </fieldset>
-        </div>
-      )}
-    </div>
+        {/* The total line: what is waiting to be saved, and the key that saves it. Stays in view on long tabs. */}
+        {canManage && (
+          <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 border-t border-dashed border-ink/30 bg-paper-white px-4 py-3 sm:px-6 lg:px-8">
+            <p className="font-receipt text-xs uppercase tracking-[0.08em] text-ink/60" aria-live="polite">
+              {changedKeys.length > 0 ? unsavedLabel : (s.allSaved || 'All changes saved')}
+            </p>
+            <button type="button" onClick={handleSave} disabled={saving || changedKeys.length === 0} className={KEY_PRIMARY}>
+              <Save className={ICON} strokeWidth={1.75} aria-hidden />
+              {saving ? (s.saving || 'Saving...') : (s.save || 'Save Settings')}
+            </button>
+          </div>
+        )}
+      </div>
+      <div className="mk-tear-b h-3 bg-paper-white" aria-hidden />
+    </RegisterPage>
   );
 }

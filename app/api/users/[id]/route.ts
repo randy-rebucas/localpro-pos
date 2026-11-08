@@ -10,6 +10,7 @@ import { handleApiError } from '@/lib/error-handler';
 import { revokeAllUserTokens } from '@/lib/token-blacklist';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { canManageUserAccount } from '@/lib/permissions';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -78,9 +79,12 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ success: false, error: t('validation.userNotFound', 'User not found') }, { status: 404 });
     }
 
-    // SECURITY: A manager/admin cannot modify an account ranked above their
-    // own (e.g. a manager editing an admin or owner account).
-    if (getRoleRank(oldUser.role) > getRoleRank(actingUser.role)) {
+    const isSelf = id === actingUser.userId;
+
+    // SECURITY: only accounts ranked below the actor's (owners may manage
+    // co-owners). Equal rank would let one admin reset another admin's email
+    // and password and take the account over.
+    if (!canManageUserAccount(actingUser.role, oldUser.role, isSelf)) {
       return NextResponse.json(
         { success: false, error: t('validation.cannotModifyHigherRole', 'You cannot modify a user with a higher role than your own') },
         { status: 403 }
@@ -88,7 +92,14 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     // SECURITY: prevent privilege escalation via role changes.
-    if (role !== undefined) {
+    if (role !== undefined && role !== oldUser.role) {
+      // Your own role is changed by someone above you, never by yourself.
+      if (isSelf) {
+        return NextResponse.json(
+          { success: false, error: t('validation.cannotChangeOwnRole', 'You cannot change your own role') },
+          { status: 400 }
+        );
+      }
       if (getRoleRank(role) > getRoleRank(actingUser.role)) {
         return NextResponse.json(
           { success: false, error: t('validation.cannotGrantHigherRole', 'You cannot assign a role higher than your own') },
@@ -111,8 +122,13 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       );
     }
 
-    // SECURITY: prevent a tenant from being left with no active owner/admin.
-    if (isActive === false && oldUser.isActive !== false && ['owner', 'admin'].includes(oldUser.role)) {
+    // SECURITY: prevent a tenant from being left with no active owner/admin —
+    // by deactivating the last one or by demoting them.
+    const losesAdminSeat =
+      oldUser.isActive !== false &&
+      ['owner', 'admin'].includes(oldUser.role) &&
+      (isActive === false || (role !== undefined && !['owner', 'admin'].includes(role)));
+    if (losesAdminSeat) {
       const remainingActiveAdmins = await User.countDocuments({
         tenantId,
         _id: { $ne: id },
@@ -175,18 +191,20 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       updateData.password = password;
     }
 
-    const user = await User.findOneAndUpdate(
-      { _id: id, tenantId },
-      updateData,
-      { new: true, runValidators: true }
-    ).select('-password');
-
-    if (!user) {
+    // Through the document and save(), not findOneAndUpdate: the password is
+    // hashed by the pre('save') hook, which an update query never runs.
+    const userDoc = await User.findOne({ _id: id, tenantId });
+    if (!userDoc) {
       return NextResponse.json({ success: false, error: 'User not found' }, { status: 404 });
     }
+    userDoc.set(updateData);
+    await userDoc.save();
+    const { password: _password, qrToken: _qrToken, ...user } = userDoc.toObject();
 
-    // Revoke all existing tokens when password is changed or account is deactivated
-    if (updateData.password || updateData.isActive === false) {
+    // Revoke all existing tokens when the password or role changes or the
+    // account is deactivated — the role travels inside the token, so a demoted
+    // user would otherwise keep their old rights until it expired.
+    if (updateData.password || updateData.isActive === false || (updateData.role && updateData.role !== oldUser.role)) {
       await revokeAllUserTokens(id);
     }
 
@@ -263,7 +281,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     if (id === actingUser.userId) {
       return NextResponse.json({ success: false, error: t('validation.cannotDeleteSelf', 'You cannot delete your own account') }, { status: 400 });
     }
-    if (getRoleRank(user.role) > getRoleRank(actingUser.role)) {
+    if (!canManageUserAccount(actingUser.role, user.role)) {
       return NextResponse.json(
         { success: false, error: t('validation.cannotDeleteHigherRole', 'You cannot delete a user with a higher role than your own') },
         { status: 403 }

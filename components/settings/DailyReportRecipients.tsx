@@ -6,13 +6,15 @@ import toast from 'react-hot-toast';
 interface DailyReportRecipientsProps {
   tenant: string;
   labels?: Record<string, unknown>;
+  /** Off when the page prints its own heading above this block. */
+  showTitle?: boolean;
 }
 
 const LABEL = 'mb-1 block font-receipt text-xs font-medium uppercase tracking-[0.08em] text-ink/70';
 const INPUT = 'w-full min-h-[44px] border-2 border-ink/25 bg-paper-white px-3 py-2 font-receipt text-sm text-ink placeholder:text-ink/45 focus:border-ink focus:outline-none disabled:opacity-60';
 
 /** Saves on its own because recipients are kept apart from the publicly readable tenant settings. */
-export default function DailyReportRecipients({ tenant, labels }: DailyReportRecipientsProps) {
+export default function DailyReportRecipients({ tenant, labels, showTitle = true }: DailyReportRecipientsProps) {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [loaded, setLoaded] = useState(false);
@@ -65,7 +67,7 @@ export default function DailyReportRecipients({ tenant, labels }: DailyReportRec
 
   return (
     <div>
-      <h3 className="mb-1 text-lg font-semibold text-ink">{text('dailyReportTitle', 'Daily Sales Report')}</h3>
+      {showTitle && <h3 className="mb-1 text-lg font-semibold text-ink">{text('dailyReportTitle', 'Daily Sales Report')}</h3>}
       <div className="space-y-4">
         <p className="text-sm text-ink/60">
           {text('dailyReportDesc', "Sent shortly after midnight once the day's Z-Reading is ready. Leave both blank to stop it.")}

@@ -1,77 +1,52 @@
 ﻿'use client';
 
 import { useEffect, useState } from 'react';
-import BusinessHoursManager from '@/components/settings/BusinessHoursManager';
 import { useParams } from 'next/navigation';
-import Link from 'next/link';
-import toast from 'react-hot-toast';
+import BusinessHoursManager from '@/components/settings/BusinessHoursManager';
+import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import { getDictionaryClient } from '../../dictionaries-client';
-import { useBusinessHoursSettings } from '@/hooks/useBusinessHoursSettings';
+import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { usePermissions } from '@/hooks/usePermissions';
+
+type Dict = Record<string, Record<string, string | undefined> | undefined>;
 
 export default function BusinessHoursAdminPage() {
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const [dict, setDict] = useState<Dict | null>(null);
+  // Settings come from TenantSettingsContext (loaded by the layout). The manager saves through
+  // /business-hours and only merges the result here; it no longer PUTs the same hours to /settings too.
+  const { settings, applySettings } = useTenantSettings();
   const { canAccess } = usePermissions();
   const canManage = canAccess('business_hours.manage');
 
-  const { settings, loading, fetchSettings, updateSettings } = useBusinessHoursSettings(tenant);
-
   useEffect(() => {
-    getDictionaryClient(lang).then(setDict);
+    getDictionaryClient(lang).then((d) => setDict(d as unknown as Dict));
   }, [lang]);
 
-  useEffect(() => {
-    fetchSettings();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tenant]);
-
-  if (!dict || loading || !settings) {
+  if (!dict || !settings) {
     return (
-      <div className="flex items-center justify-center py-24">
-        <div className="text-center">
-          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-brand"></div>
-          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
+      <div className="mk-root pos-register">
+        <div className="flex min-h-[calc(100dvh-3.5rem)] items-center justify-center bg-brand-navy-deep lg:min-h-dvh">
+          <LoadingSpinner size="md" color="#8fe3d0" />
         </div>
       </div>
     );
   }
 
   return (
-    <div>
-      <div className="px-4 sm:px-6 py-6">
-        <div className="mb-6 sm:mb-8">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">
-            {dict?.admin?.businessHours || 'Business Hours'}
-          </h1>
-          <p className="text-gray-600">
-            {dict?.admin?.businessHoursSubtitle || 'Configure weekly schedule, special hours, and break times. This affects booking availability and business operations.'}
-          </p>
-        </div>
-
-        <div className="bg-white border border-gray-300 p-5 sm:p-6 lg:p-8">
-          <fieldset disabled={!canManage}>
-            <BusinessHoursManager
-              settings={settings}
-              tenant={tenant}
-              dict={dict}
-              onUpdate={(updates) => {
-                updateSettings(
-                  updates,
-                  () => {
-                    toast.success(dict?.admin?.businessHoursUpdated || 'Business hours updated successfully');
-                  },
-                  (error) => {
-                    toast.error(error || dict?.admin?.updateBusinessHoursError || 'Failed to update business hours');
-                  }
-                );
-              }}
-            />
-          </fieldset>
-        </div>
-      </div>
-    </div>
+    <BusinessHoursManager
+      settings={settings}
+      tenant={tenant}
+      dict={dict}
+      canManage={canManage}
+      header={{
+        tag: settings.companyName,
+        title: dict.admin?.businessHours || 'Business Hours',
+        subtitle: dict.admin?.businessHoursSubtitleShort || 'Your weekly opening hours and the dates they change. Customers can only book within them.',
+      }}
+      onSaved={(hours) => applySettings({ businessHours: hours } as Parameters<typeof applySettings>[0])}
+    />
   );
 }

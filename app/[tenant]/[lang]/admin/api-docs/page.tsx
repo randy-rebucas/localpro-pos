@@ -1,225 +1,239 @@
 ﻿'use client';
 
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useParams } from 'next/navigation';
-import Link from 'next/link';
+import { ExternalLink } from 'lucide-react';
 import { getDictionaryClient } from '../../dictionaries-client';
+import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import { LineTag } from '@/components/marketing/primitives';
+import { ICON, RegisterPage } from '@/components/admin/register-ui';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
-import { getDefaultTenantSettings } from '@/lib/currency';
+
+type Dict = any; // eslint-disable-line @typescript-eslint/no-explicit-any
+type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+interface Endpoint { method: Method; path: string; description: string }
+
+/** Reads print in ink, writes in teal, removals in stamp red. */
+const METHOD_CLASS: Record<Method, string> = {
+  GET: 'border-ink/30 text-ink',
+  POST: 'border-brand-hover/60 text-brand-hover',
+  PUT: 'border-brand-hover/60 text-brand-hover',
+  PATCH: 'border-brand-hover/60 text-brand-hover',
+  DELETE: 'border-stamp/60 text-stamp',
+};
+
+const CODE = 'overflow-x-auto border border-dashed border-ink/30 bg-paper p-3 font-receipt text-xs leading-relaxed text-ink sm:text-sm';
+
+/** One price-list style section of the spec sheet. */
+function SpecSection({ no, title, children }: { no: string; title: string; children: ReactNode }) {
+  return (
+    <section className="border-t border-dashed border-ink/30 px-4 py-6 first:border-t-0 sm:px-6">
+      <LineTag no={no} className="mb-2 text-brand-hover">{title}</LineTag>
+      {children}
+    </section>
+  );
+}
 
 export default function ApiDocsPage() {
   const params = useParams();
-  const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
-  const [loading, setLoading] = useState(true);
+  const [dict, setDict] = useState<Dict>(null);
+  const [origin, setOrigin] = useState('');
   const { settings } = useTenantSettings();
-  const tenantSettings = settings || getDefaultTenantSettings();
-  const primaryColor = tenantSettings.primaryColor || '#35979c';
 
   useEffect(() => {
-    getDictionaryClient(lang).then((d) => {
-      setDict(d);
-      setLoading(false);
+    getDictionaryClient(lang).then((loaded) => {
+      setDict(loaded);
+      setOrigin(window.location.origin);
     });
   }, [lang]);
 
-  if (!dict || loading) {
+  if (!dict) {
     return (
-      <div className="flex items-center justify-center py-24">
-        <div className="text-center">
-          <div
-            className="inline-block animate-spin h-8 w-8 border-b-2"
-            style={{ borderColor: primaryColor, borderBottomColor: 'transparent' }}
-          ></div>
-          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
+      <div className="mk-root pos-register">
+        <div className="flex min-h-[calc(100dvh-3.5rem)] items-center justify-center bg-brand-navy-deep lg:min-h-dvh">
+          <LoadingSpinner size="md" color="#8fe3d0" />
         </div>
       </div>
     );
   }
 
-  const apiEndpoints = [
+  const d = dict.apiDocs || {};
+
+  // Only routes that exist under app/api, with the methods they answer.
+  const groups: { title: string; endpoints: Endpoint[] }[] = [
     {
-      category: dict?.apiDocs?.categoryProducts || 'Products',
+      title: d.categorySession || 'Session',
       endpoints: [
-        { method: 'GET', path: '/api/products', description: dict?.apiDocs?.descProductsList || 'List all products' },
-        { method: 'POST', path: '/api/products', description: dict?.apiDocs?.descProductsCreate || 'Create a new product' },
-        { method: 'GET', path: '/api/products/:id', description: dict?.apiDocs?.descProductsGet || 'Get product details' },
-        { method: 'PUT', path: '/api/products/:id', description: dict?.apiDocs?.descProductsUpdate || 'Update a product' },
-        { method: 'DELETE', path: '/api/products/:id', description: dict?.apiDocs?.descProductsDelete || 'Delete a product' },
+        { method: 'POST', path: '/api/auth/login', description: d.descLogin || 'Sign in with email, password and store slug; sets the auth-token cookie' },
+        { method: 'GET', path: '/api/auth/me', description: d.descMe || 'The signed-in user, role and store' },
+        { method: 'POST', path: '/api/auth/logout', description: d.descLogout || 'Sign out and revoke the token' },
       ],
     },
     {
-      category: dict?.apiDocs?.categoryTransactions || 'Transactions',
+      title: d.categoryProducts || 'Products',
       endpoints: [
-        { method: 'GET', path: '/api/transactions', description: dict?.apiDocs?.descTransactionsList || 'List all transactions' },
-        { method: 'POST', path: '/api/transactions', description: dict?.apiDocs?.descTransactionsCreate || 'Create a new transaction' },
-        { method: 'GET', path: '/api/transactions/:id', description: dict?.apiDocs?.descTransactionsGet || 'Get transaction details' },
+        { method: 'GET', path: '/api/products', description: d.descProductsList || 'List all products' },
+        { method: 'POST', path: '/api/products', description: d.descProductsCreate || 'Create a new product' },
+        { method: 'GET', path: '/api/products/:id', description: d.descProductsGet || 'Get product details' },
+        { method: 'PUT', path: '/api/products/:id', description: d.descProductsUpdate || 'Update a product' },
+        { method: 'PATCH', path: '/api/products/:id', description: d.descProductsPatch || 'Change some fields of a product' },
+        { method: 'DELETE', path: '/api/products/:id', description: d.descProductsDeactivate || 'Deactivate a product (it stays on past receipts)' },
+        { method: 'GET', path: '/api/products/by-barcode?code=', description: d.descProductsByBarcode || 'Find a product by its barcode' },
+        { method: 'POST', path: '/api/products/:id/refill', description: d.descProductsRefill || 'Add stock to a product' },
       ],
     },
     {
-      category: dict?.apiDocs?.categoryCustomers || 'Customers',
+      title: d.categoryCategories || 'Categories',
       endpoints: [
-        { method: 'GET', path: '/api/customers', description: dict?.apiDocs?.descCustomersList || 'List all customers' },
-        { method: 'POST', path: '/api/customers', description: dict?.apiDocs?.descCustomersCreate || 'Create a new customer' },
-        { method: 'GET', path: '/api/customers/:id', description: dict?.apiDocs?.descCustomersGet || 'Get customer details' },
-        { method: 'PUT', path: '/api/customers/:id', description: dict?.apiDocs?.descCustomersUpdate || 'Update a customer' },
-        { method: 'DELETE', path: '/api/customers/:id', description: dict?.apiDocs?.descCustomersDelete || 'Delete a customer' },
+        { method: 'GET', path: '/api/categories', description: d.descCategoriesList || 'List categories' },
+        { method: 'POST', path: '/api/categories', description: d.descCategoriesCreate || 'Create a category' },
+        { method: 'GET', path: '/api/categories/:id', description: d.descCategoriesGet || 'Get a category' },
+        { method: 'PUT', path: '/api/categories/:id', description: d.descCategoriesUpdate || 'Update a category' },
+        { method: 'DELETE', path: '/api/categories/:id', description: d.descCategoriesDelete || 'Delete a category' },
       ],
     },
     {
-      category: dict?.apiDocs?.categoryInventory || 'Inventory',
+      title: d.categoryTransactions || 'Transactions',
       endpoints: [
-        { method: 'GET', path: '/api/inventory/stock', description: dict?.apiDocs?.descInventoryStock || 'Get stock levels' },
-        { method: 'POST', path: '/api/inventory/adjust', description: dict?.apiDocs?.descInventoryAdjust || 'Adjust stock levels' },
-        { method: 'GET', path: '/api/inventory/movements', description: dict?.apiDocs?.descInventoryMovements || 'Get stock movements' },
+        { method: 'GET', path: '/api/transactions', description: d.descTransactionsList || 'List all transactions' },
+        { method: 'POST', path: '/api/transactions', description: d.descTransactionsCreate || 'Create a new transaction' },
+        { method: 'GET', path: '/api/transactions/:id', description: d.descTransactionsGet || 'Get transaction details' },
+        { method: 'PUT', path: '/api/transactions/:id', description: d.descTransactionsStatus || 'Change a sale’s status, such as a void' },
+        { method: 'POST', path: '/api/transactions/:id/refund', description: d.descTransactionsRefund || 'Refund all or part of a sale' },
+      ],
+    },
+    {
+      title: d.categoryCustomers || 'Customers',
+      endpoints: [
+        { method: 'GET', path: '/api/customers', description: d.descCustomersList || 'List all customers' },
+        { method: 'POST', path: '/api/customers', description: d.descCustomersCreate || 'Create a new customer' },
+        { method: 'GET', path: '/api/customers/:id', description: d.descCustomersGet || 'Get customer details' },
+        { method: 'PATCH', path: '/api/customers/:id', description: d.descCustomersUpdate || 'Update a customer' },
+        { method: 'DELETE', path: '/api/customers/:id', description: d.descCustomersDeactivate || 'Deactivate a customer' },
+      ],
+    },
+    {
+      title: d.categoryInventory || 'Inventory',
+      endpoints: [
+        { method: 'GET', path: '/api/inventory/low-stock', description: d.descInventoryLowStock || 'Products at or below their low-stock level' },
+        { method: 'GET', path: '/api/inventory/realtime', description: d.descInventoryRealtime || 'Live stock changes as a server-sent event stream' },
+        { method: 'GET', path: '/api/stock-movements', description: d.descInventoryMovements || 'Get stock movements' },
       ],
     },
   ];
 
-  const methodColors: Record<string, string> = {
-    GET: 'bg-brand-soft text-brand-hover',
-    POST: 'bg-green-100 text-green-700',
-    PUT: 'bg-yellow-100 text-yellow-700',
-    DELETE: 'bg-red-100 text-red-700',
-    PATCH: 'bg-purple-100 text-purple-700',
-  };
+  const base = `${origin || ''}/api`;
+  let line = 0;
 
   return (
-    <div>
-      <div className="px-4 sm:px-6 py-6">
-        <div className="mb-6 sm:mb-8">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">
-            {dict?.apiDocs?.title || 'API Documentation'}
-          </h1>
-          <p className="text-gray-600">
-            {dict?.apiDocs?.subtitle || 'Comprehensive API endpoints and integration guides for 1POS. All API endpoints require authentication via JWT token in the Authorization header or auth-token cookie.'}
-          </p>
-        </div>
+    <RegisterPage
+      tagNo="API"
+      tag={settings?.companyName}
+      title={d.title || 'API Documentation'}
+      subtitle={d.subtitleShort || 'The endpoints behind this register, for your own scripts and integrations.'}
+    >
+      <div className="mt-8 max-w-4xl">
+        <div className="mk-tear-t h-3 bg-paper-white" aria-hidden />
+        <div className="bg-paper-white text-ink">
 
-        <div className="space-y-8">
-          {/* Authentication Section */}
-          <div className="bg-white border border-gray-300 p-5 sm:p-6 lg:p-8">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">{dict?.apiDocs?.authSection || 'Authentication'}</h2>
-            <div className="space-y-4">
+          <SpecSection no="01" title={d.authSection || 'Authentication'}>
+            <p className="max-w-prose text-sm text-ink/80">
+              {d.authIntro || 'There are no separate API keys. Every call runs as a signed-in user: signing in sets an httpOnly auth-token cookie, and each request only sees this store’s data, within that user’s role and permissions.'}
+            </p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <div>
-                <h3 className="text-sm font-semibold text-gray-700 mb-2">{dict?.apiDocs?.authHeader || 'Authorization Header'}</h3>
-                <div className="bg-gray-100 p-4 border border-gray-300 font-mono text-sm overflow-x-auto">
-                  <code>Authorization: Bearer {'<JWT_TOKEN>'}</code>
-                </div>
+                <p className="mb-1 font-receipt text-xs font-medium uppercase tracking-[0.08em] text-ink/60">{d.authCookie || 'Cookie'}</p>
+                <pre className={CODE}><code>Cookie: auth-token={'<JWT>'}</code></pre>
               </div>
               <div>
-                <h3 className="text-sm font-semibold text-gray-700 mb-2">{dict?.apiDocs?.authCookie || 'Cookie'}</h3>
-                <div className="bg-gray-100 p-4 border border-gray-300 font-mono text-sm">
-                  <code>auth-token: {'<JWT_TOKEN>'}</code>
-                </div>
+                <p className="mb-1 font-receipt text-xs font-medium uppercase tracking-[0.08em] text-ink/60">{d.authHeader || 'Authorization Header'}</p>
+                <pre className={CODE}><code>Authorization: Bearer {'<JWT>'}</code></pre>
               </div>
             </div>
-          </div>
+            <p className="mt-3 font-receipt text-xs text-ink/60">
+              {d.authNote || 'Sign-in is protected by a bot check, so scripts work best with the session of a browser that is already signed in.'}
+            </p>
+          </SpecSection>
 
-          {/* API Endpoints Section */}
-          <div className="bg-white border border-gray-300 p-5 sm:p-6 lg:p-8">
-            <h2 className="text-xl font-bold text-gray-900 mb-6">{dict?.apiDocs?.endpointsSection || 'API Endpoints'}</h2>
-            <div className="space-y-8">
-              {apiEndpoints.map((category, idx) => (
-                <div key={idx}>
-                  <h3 className="text-lg font-semibold text-gray-800 mb-4 pb-2 border-b-2 border-gray-300">
-                    {category.category}
-                  </h3>
-                  <div className="space-y-3">
-                    {category.endpoints.map((endpoint, endIdx) => (
-                      <div
-                        key={endIdx}
-                        className="border border-gray-300 p-4 hover:bg-gray-50 transition-colors"
-                      >
-                        <div className="flex items-start gap-4 flex-wrap">
-                          <span
-                            className={`px-3 py-1 font-semibold text-sm whitespace-nowrap ${
-                              methodColors[endpoint.method] || 'bg-gray-100 text-gray-700'
-                            }`}
-                          >
+          <SpecSection no="02" title={d.baseUrlSection || 'Base URL'}>
+            <pre className={CODE}><code>{base}</code></pre>
+            <p className="mt-3 text-sm text-ink/80">
+              {d.baseUrlDescStore || 'The store comes from the signed-in user, so the address is the same for every store on this site.'}
+            </p>
+          </SpecSection>
+
+          <SpecSection no="03" title={d.endpointsSection || 'API Endpoints'}>
+            <div className="space-y-6">
+              {groups.map((group) => (
+                <div key={group.title}>
+                  <h2 className="border-b border-ink/30 pb-1 text-3xl">{group.title}</h2>
+                  <ul className="divide-y divide-dashed divide-ink/20">
+                    {group.endpoints.map((endpoint) => {
+                      line += 1;
+                      return (
+                        <li key={`${endpoint.method} ${endpoint.path}`} className="grid grid-cols-[2.25rem_4.5rem_1fr] items-baseline gap-x-2 py-2.5 sm:grid-cols-[2.5rem_5rem_minmax(0,22rem)_1fr] sm:gap-x-3">
+                          <span className="font-receipt text-xs text-ink/40">{String(line).padStart(3, '0')}</span>
+                          <span className={`justify-self-start border px-1.5 py-0.5 font-receipt text-[11px] font-semibold ${METHOD_CLASS[endpoint.method]}`}>
                             {endpoint.method}
                           </span>
-                          <div className="flex-1 min-w-0">
-                            <div className="font-mono text-sm text-gray-900 break-all">
-                              {endpoint.path}
-                            </div>
-                            <p className="text-sm text-gray-600 mt-1">{endpoint.description}</p>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                          <code className="min-w-0 break-all font-receipt text-sm text-ink">{endpoint.path}</code>
+                          <p className="col-start-3 mt-0.5 text-sm text-ink/70 sm:col-start-auto sm:mt-0">{endpoint.description}</p>
+                        </li>
+                      );
+                    })}
+                  </ul>
                 </div>
               ))}
             </div>
-          </div>
+          </SpecSection>
 
-          {/* Response Format Section */}
-          <div className="bg-white border border-gray-300 p-5 sm:p-6 lg:p-8">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">{dict?.apiDocs?.responseFormatSection || 'Response Format'}</h2>
-            <p className="text-gray-600 mb-4">
-              {dict?.apiDocs?.responseFormatDesc || 'All API responses follow a standard JSON format with success status and data or error information.'}
+          <SpecSection no="04" title={d.responseFormatSection || 'Response Format'}>
+            <p className="max-w-prose text-sm text-ink/80">
+              {d.responseFormatDesc || 'All API responses follow a standard JSON format with success status and data or error information.'}
             </p>
-            <div className="bg-gray-100 p-4 border border-gray-300 font-mono text-sm overflow-x-auto">
-              <pre>{`{
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <pre className={CODE}>{`{
   "success": true,
-  "data": { /* response data */ }
-}
-
-// Error response:
-{
+  "data": { … }
+}`}</pre>
+              <pre className={CODE}>{`{
   "success": false,
-  "error": "Error message"
+  "error": "…"
 }`}</pre>
             </div>
-          </div>
+            <dl className="mt-4 space-y-1 font-receipt text-sm">
+              {[
+                ['401', d.status401 || 'Not signed in, or the session has ended'],
+                ['403', d.status403 || 'The user’s role does not allow this'],
+                ['404', d.status404 || 'Not found in this store'],
+                ['429', d.status429 || 'Too many requests; wait and try again'],
+              ].map(([code, text]) => (
+                <div key={code} className="flex gap-3">
+                  <dt className="w-10 shrink-0 font-semibold">{code}</dt>
+                  <dd className="text-ink/70">{text}</dd>
+                </div>
+              ))}
+            </dl>
+          </SpecSection>
 
-          {/* Base URL Section */}
-          <div className="bg-white border border-gray-300 p-5 sm:p-6 lg:p-8">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">{dict?.apiDocs?.baseUrlSection || 'Base URL'}</h2>
-            <div className="bg-gray-100 p-4 border border-gray-300 font-mono text-sm">
-              <code>https://your-instance.localpro.app/api</code>
-            </div>
-            <p className="text-gray-600 mt-4">
-              {(dict?.apiDocs?.baseUrlDesc || 'Replace {placeholder} with your actual tenant slug.').replace('{placeholder}', 'your-instance')}
+          <SpecSection no="05" title={d.additionalResources || 'Additional Resources'}>
+            <a
+              href="/openapi.json"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex min-h-[44px] items-center gap-2 font-receipt text-sm font-medium uppercase tracking-[0.08em] text-brand-hover underline-offset-4 hover:underline"
+            >
+              {d.openApiSchema || 'OpenAPI Schema'}
+              <ExternalLink className={ICON} strokeWidth={1.75} aria-hidden />
+            </a>
+            <p className="font-receipt text-xs text-ink/60">
+              {d.openApiNote || 'Covers sign-in, products, transactions, subscriptions and health so far.'}
             </p>
-          </div>
-
-          {/* Additional Resources */}
-          <div className="bg-white border border-gray-300 p-5 sm:p-6 lg:p-8">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">{dict?.apiDocs?.additionalResources || 'Additional Resources'}</h2>
-            <ul className="space-y-3">
-              <li>
-                <a
-                  href="/openapi.json"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-brand hover:text-brand-hover font-medium flex items-center gap-2"
-                >
-                  <span>{dict?.apiDocs?.openApiSchema || 'OpenAPI Schema'}</span>
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                  </svg>
-                </a>
-              </li>
-              <li>
-                <a
-                  href="/README.md"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-brand hover:text-brand-hover font-medium flex items-center gap-2"
-                >
-                  <span>{dict?.apiDocs?.projectDocs || 'Project Documentation'}</span>
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                  </svg>
-                </a>
-              </li>
-            </ul>
-          </div>
+          </SpecSection>
         </div>
+        <div className="mk-tear-b h-3 bg-paper-white" aria-hidden />
       </div>
-    </div>
+    </RegisterPage>
   );
 }

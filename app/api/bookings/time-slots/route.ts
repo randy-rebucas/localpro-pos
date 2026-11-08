@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
-import Booking from '@/models/Booking';
+import { buildSlots } from '@/lib/booking-slots';
+import { getTenantSettingsById } from '@/lib/tenant';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { getCurrentUser } from '@/lib/auth';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
@@ -47,10 +48,6 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const dateParam = searchParams.get('date');
     const staffId = searchParams.get('staffId');
-    const duration = parseInt(searchParams.get('duration') || '60', 10);
-    const slotInterval = parseInt(searchParams.get('slotInterval') || '30', 10);
-    const startHour = parseInt(searchParams.get('startHour') || '9', 10);
-    const endHour = parseInt(searchParams.get('endHour') || '17', 10);
 
     if (!dateParam) {
       return NextResponse.json(
@@ -59,69 +56,25 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Parse as a local calendar date directly — `new Date(dateParam)` parses a
-    // bare "YYYY-MM-DD" string as UTC midnight, and the server's local timezone
-    // may be behind UTC, so a subsequent setHours(0,0,0,0) would silently shift
-    // the selected day back by one.
-    const [dateYear, dateMonth, dateDay] = dateParam.split('-').map(Number);
-    const selectedDate = new Date(dateYear, (dateMonth || 1) - 1, dateDay || 1, 0, 0, 0, 0);
-
-    const endDate = new Date(selectedDate);
-    endDate.setHours(23, 59, 59, 999);
-
-    // Get existing bookings for the date
-    const query: any = { // eslint-disable-line @typescript-eslint/no-explicit-any
+    // Laid out in the store's time zone, within Admin → Business Hours when set (see lib/booking-slots).
+    const settings = await getTenantSettingsById(tenantId.toString());
+    const { slots, dayStart, duration, slotInterval, closedByHours } = await buildSlots({
       tenantId,
-      startTime: { $gte: selectedDate, $lte: endDate },
-      status: { $in: ['pending', 'confirmed'] },
-    };
-
-    if (staffId) {
-      query.staffId = staffId;
-    }
-
-    const existingBookings = await Booking.find(query).lean();
-
-    // Generate time slots
-    const slots: Array<{ time: string; available: boolean; bookingId?: string }> = [];
-    const startTime = new Date(selectedDate);
-    startTime.setHours(startHour, 0, 0, 0);
-
-    const endTime = new Date(selectedDate);
-    endTime.setHours(endHour, 0, 0, 0);
-
-    let currentSlot = new Date(startTime);
-
-    while (currentSlot < endTime) {
-      const slotEnd = new Date(currentSlot.getTime() + duration * 60000);
-      
-      // Check if slot conflicts with existing bookings
-      const conflict = existingBookings.find((booking) => {
-        const bookingStart = new Date(booking.startTime);
-        const bookingEnd = new Date(booking.endTime);
-        return (
-          (currentSlot >= bookingStart && currentSlot < bookingEnd) ||
-          (slotEnd > bookingStart && slotEnd <= bookingEnd) ||
-          (currentSlot <= bookingStart && slotEnd >= bookingEnd)
-        );
-      });
-
-      slots.push({
-        time: currentSlot.toISOString(),
-        available: !conflict,
-        bookingId: conflict?._id.toString(),
-      });
-
-      currentSlot = new Date(currentSlot.getTime() + slotInterval * 60000);
-    }
+      settings,
+      dateParam,
+      staffId,
+      searchParams,
+      withBookingIds: true,
+    });
 
     return NextResponse.json({
       success: true,
       data: {
-        date: selectedDate.toISOString(),
+        date: dayStart.toISOString(),
         slots,
         duration,
         slotInterval,
+        closed: closedByHours,
       },
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any

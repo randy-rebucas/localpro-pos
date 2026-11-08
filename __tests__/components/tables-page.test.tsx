@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor, act } from '@testing-library/react';
+import { screen, waitFor, act, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithProviders } from '../../test-utils';
 import TablesPage from '@/app/[tenant]/[lang]/admin/tables/page';
@@ -84,7 +84,8 @@ describe('Tables Management Page', () => {
       await act(async () => {
         renderWithProviders(<TablesPage />);
       });
-      expect(screen.getByRole('heading', { name: /^tables$/i })).toBeInTheDocument();
+      // The page renders once the dictionary and the first load arrive, so wait for it.
+      expect(await screen.findByRole('heading', { level: 1, name: /^tables$/i })).toBeInTheDocument();
     });
 
     it('should render Add Table button', async () => {
@@ -92,7 +93,7 @@ describe('Tables Management Page', () => {
       await act(async () => {
         renderWithProviders(<TablesPage />);
       });
-      expect(screen.getAllByRole('button', { name: /\+ add table/i })[0]).toBeInTheDocument();
+      expect((await screen.findAllByRole('button', { name: /^add table$/i }))[0]).toBeInTheDocument();
     });
 
     it('should display empty state when no tables exist', async () => {
@@ -128,10 +129,10 @@ describe('Tables Management Page', () => {
       await act(async () => {
         renderWithProviders(<TablesPage />);
       });
-      const addButton = screen.getAllByRole('button', { name: /\+ add table/i })[0];
+      const addButton = (await screen.findAllByRole('button', { name: /^add table$/i }))[0];
       await user.click(addButton);
       await waitFor(() => {
-        expect(screen.getByRole('heading', { name: /add table/i })).toBeInTheDocument();
+        expect(within(screen.getByRole('dialog')).getByRole('heading', { name: /add table/i })).toBeInTheDocument();
       });
     });
 
@@ -141,7 +142,7 @@ describe('Tables Management Page', () => {
       await act(async () => {
         renderWithProviders(<TablesPage />);
       });
-      const addButton = screen.getAllByRole('button', { name: /\+ add table/i })[0];
+      const addButton = (await screen.findAllByRole('button', { name: /^add table$/i }))[0];
       await user.click(addButton);
       await waitFor(() => {
         expect(screen.getByPlaceholderText(/e\.g\. T1/i)).toBeInTheDocument();
@@ -158,14 +159,14 @@ describe('Tables Management Page', () => {
       await act(async () => {
         renderWithProviders(<TablesPage />);
       });
-      const addButton = screen.getAllByRole('button', { name: /\+ add table/i })[0];
+      const addButton = (await screen.findAllByRole('button', { name: /^add table$/i }))[0];
       await act(async () => { await user.click(addButton); });
       const nameInput = await screen.findByPlaceholderText(/e\.g\. T1/i);
       const capInput = await screen.findByPlaceholderText(/e\.g\. 4/i);
       await user.type(nameInput, 'New Table');
       await user.type(capInput, '4');
-      // The modal submit button has text "Add Table" (no + prefix)
-      const submitButton = screen.getByRole('button', { name: /^add table$/i });
+      // The page and the sheet both have an Add Table key; submit the one in the sheet.
+      const submitButton = within(screen.getByRole('dialog')).getByRole('button', { name: /^add table$/i });
       await act(async () => { await user.click(submitButton); });
       await waitFor(() => {
         expect(global.fetch).toHaveBeenCalledWith(
@@ -192,12 +193,12 @@ describe('Tables Management Page', () => {
       await waitFor(() => {
         expect(screen.getByText('Table 1')).toBeInTheDocument();
       });
-      const editButton = screen.getByRole('button', { name: /edit/i });
+      const editButton = screen.getByRole('button', { name: /edit table 1/i });
       await act(async () => {
         await user.click(editButton);
       });
       await waitFor(() => {
-        expect(screen.getByRole('heading', { name: /edit table/i })).toBeInTheDocument();
+        expect(within(screen.getByRole('dialog')).getByRole('heading', { name: /edit table/i })).toBeInTheDocument();
         expect(screen.getByDisplayValue('Table 1')).toBeInTheDocument();
       });
     });
@@ -209,7 +210,7 @@ describe('Tables Management Page', () => {
       await act(async () => {
         renderWithProviders(<TablesPage />);
       });
-      expect(screen.getByRole('heading', { level: 1 })).toBeInTheDocument();
+      expect(await screen.findByRole('heading', { level: 1 })).toBeInTheDocument();
     });
   });
 });

@@ -11,6 +11,7 @@ import { hasTenantPermission } from '@/lib/permissions-server';
 import { logger } from '@/lib/logger';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { createAuditLog, AuditActions } from '@/lib/audit';
+import { parseHolidayInput } from '@/lib/holidays';
 
 export async function GET(
   request: NextRequest,
@@ -65,32 +66,9 @@ export async function POST(
 
     const { slug } = await params;
     const body = await request.json();
-    const { name, date, type, recurring, isBusinessClosed } = body;
-
-    if (!name || !type) {
-      return NextResponse.json({ success: false, error: 'Name and type are required' }, { status: 400 });
-    }
-
-    // For single date holidays, date is required
-    if (type === 'single' && !date) {
-      return NextResponse.json({ success: false, error: 'Date is required for single date holidays' }, { status: 400 });
-    }
-
-    // For recurring holidays, recurring pattern is required
-    if (type === 'recurring') {
-      if (!recurring || !recurring.pattern) {
-        return NextResponse.json({ success: false, error: 'Recurring pattern is required for recurring holidays' }, { status: 400 });
-      }
-      // Validate recurring pattern based on type
-      if (recurring.pattern === 'yearly' && (!recurring.month || !recurring.dayOfMonth)) {
-        return NextResponse.json({ success: false, error: 'Month and day of month are required for yearly recurring holidays' }, { status: 400 });
-      }
-      if (recurring.pattern === 'monthly' && !recurring.dayOfMonth) {
-        return NextResponse.json({ success: false, error: 'Day of month is required for monthly recurring holidays' }, { status: 400 });
-      }
-      if (recurring.pattern === 'weekly' && recurring.dayOfWeek === undefined) {
-        return NextResponse.json({ success: false, error: 'Day of week is required for weekly recurring holidays' }, { status: 400 });
-      }
+    const parsed = parseHolidayInput(body ?? {});
+    if (!parsed.ok) {
+      return NextResponse.json({ success: false, error: parsed.error }, { status: 400 });
     }
 
     await connectDB();
@@ -104,24 +82,11 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
-    const newHoliday: any = { // eslint-disable-line @typescript-eslint/no-explicit-any
+    const newHoliday = {
       id: `holiday_${Date.now()}`,
-      name,
-      type,
-      isBusinessClosed: isBusinessClosed !== undefined ? isBusinessClosed : true,
+      ...parsed.value,
       createdAt: new Date(),
     };
-
-    // Add date for single holidays, or recurring pattern for recurring holidays
-    if (type === 'single') {
-      newHoliday.date = date;
-    } else if (type === 'recurring') {
-      newHoliday.recurring = recurring;
-      // For recurring holidays, we can use a placeholder date or pattern-based date
-      newHoliday.date = recurring?.month && recurring?.dayOfMonth
-        ? `${new Date().getFullYear()}-${String(recurring.month).padStart(2, '0')}-${String(recurring.dayOfMonth).padStart(2, '0')}`
-        : '';
-    }
 
     try {
       // Atomic $push avoids clobbering concurrent edits to other holidays
@@ -215,7 +180,19 @@ export async function PUT(
     const allowedUpdates = Object.fromEntries(
       Object.entries(updates).filter(([key]) => EDITABLE_HOLIDAY_FIELDS.has(key))
     );
-    const updatedHoliday = { ...base, ...allowedUpdates, id: existing.id };
+    // Check the merged holiday as a whole, keeping only the fields its type uses
+    // (switching recurring -> single used to keep the old pattern, and PUT skipped validation).
+    const parsed = parseHolidayInput({ ...base, ...allowedUpdates });
+    if (!parsed.ok) {
+      return NextResponse.json({ success: false, error: parsed.error }, { status: 400 });
+    }
+    const { _id: subId, createdAt } = base as { _id?: unknown; createdAt?: unknown };
+    const updatedHoliday = {
+      ...(subId !== undefined ? { _id: subId } : {}),
+      id: existing.id,
+      ...parsed.value,
+      ...(createdAt !== undefined ? { createdAt } : {}),
+    };
 
     try {
       // Positional $set on the matched entry avoids clobbering concurrent edits

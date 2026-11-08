@@ -9,6 +9,7 @@ import { checkSubscriptionLimit, checkFeatureAccess, SubscriptionService } from 
 import { logger } from '@/lib/logger';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
+import { normalizeBranchCode, resolveBranchManager } from '@/lib/branch-manager';
 
 export async function GET(request: NextRequest) {
   try {
@@ -54,10 +55,22 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { name, code, address, phone, email, managerId } = body;
+    const { address, phone, email } = body;
+    const name = typeof body.name === 'string' ? body.name.trim() : '';
+    const code = normalizeBranchCode(body.code) ?? undefined;
 
     if (!name) {
       return NextResponse.json({ success: false, error: t('validation.branchNameRequired', 'Branch name is required') }, { status: 400 });
+    }
+
+    const manager = await resolveBranchManager(body.managerId, tenantId);
+    if (!manager.ok) {
+      return NextResponse.json({ success: false, error: t('validation.branchManagerInvalid', 'The chosen manager is not a user of this store') }, { status: 400 });
+    }
+    const managerId = manager.value ?? undefined;
+
+    if (code && (await Branch.exists({ tenantId, code: code.toUpperCase() }))) {
+      return NextResponse.json({ success: false, error: t('validation.branchCodeTaken', 'Another branch already uses this code') }, { status: 409 });
     }
 
     // Check if multi-branch feature is enabled (skip for first branch)

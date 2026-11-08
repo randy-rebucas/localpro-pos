@@ -25,6 +25,22 @@ export function roleAtLeast(role: string | undefined, floor: string): boolean {
   return (ROLE_HIERARCHY[role || ''] || 0) >= (ROLE_HIERARCHY[floor] || 0);
 }
 
+/**
+ * Whether `actorRole` may act on another user's account (edit, reset the
+ * password, see or regenerate their QR sign-in badge, deactivate, delete).
+ * Only accounts ranked strictly below the actor's — an admin can't take over
+ * another admin, a manager can't touch another manager. Owners may manage
+ * co-owners; a super_admin may manage anyone. Your own account is always yours.
+ */
+export function canManageUserAccount(actorRole: string | undefined, targetRole: string | undefined, isSelf = false): boolean {
+  if (isSelf) return true;
+  if (actorRole === 'super_admin') return true;
+  const actor = ROLE_HIERARCHY[actorRole || ''] || 0;
+  const target = ROLE_HIERARCHY[targetRole || ''] || 0;
+  if (actorRole === 'owner') return target <= actor;
+  return target < actor;
+}
+
 /** Roles that always have full access and can never be restricted by an override. */
 export function isAlwaysAllowedRole(role: string | undefined): boolean {
   return role === 'admin' || role === 'owner' || role === 'super_admin';
@@ -148,4 +164,48 @@ export function hasPermission(
   const def = getPermissionDef(key);
   if (!def) return false;
   return roleAtLeast(role, def.defaultMinRole);
+}
+
+/** Whether `editorRole` may change the overrides of `targetRole` at all. */
+export function canEditRoleOverrides(editorRole: string | undefined, targetRole: string): boolean {
+  if (isAlwaysAllowedRole(editorRole)) return true;
+  return (ROLE_HIERARCHY[targetRole] || 0) < (ROLE_HIERARCHY[editorRole || ''] || 0);
+}
+
+export interface ForbiddenOverrideChange {
+  role: string;
+  key: string;
+  reason: 'rank' | 'grant';
+}
+
+/**
+ * Changes an editor may not make. Owner/admin/super_admin may change anything. Anyone else
+ * (a manager who was given roles_permissions.manage) may only change roles below their own,
+ * and may only switch on permissions they hold themselves, so nobody can raise their own
+ * access or hand out more than they have.
+ */
+export function findForbiddenOverrideChanges(
+  editorRole: string | undefined,
+  previous: RolePermissionOverrides | null | undefined,
+  next: RolePermissionOverrides | null | undefined
+): ForbiddenOverrideChange[] {
+  if (isAlwaysAllowedRole(editorRole)) return [];
+  const forbidden: ForbiddenOverrideChange[] = [];
+  for (const role of OVERRIDABLE_ROLES) {
+    for (const def of PERMISSIONS) {
+      const before = previous?.[role]?.[def.key];
+      const after = next?.[role]?.[def.key];
+      if (before === after) continue;
+      if (!canEditRoleOverrides(editorRole, role)) {
+        forbidden.push({ role, key: def.key, reason: 'rank' });
+      } else if (
+        hasPermission(role, def.key, next) &&
+        !hasPermission(role, def.key, previous) &&
+        !hasPermission(editorRole, def.key, previous)
+      ) {
+        forbidden.push({ role, key: def.key, reason: 'grant' });
+      }
+    }
+  }
+  return forbidden;
 }

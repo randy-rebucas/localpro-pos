@@ -1,12 +1,17 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 
-export function useBackupCollections(tenant: string) {
+/** Wording the page passes in so errors read in the tenant's language; English otherwise. */
+export type BackupMessages = Partial<Record<'selectFirst' | 'unauthorized' | 'failed' | 'invalidFormat' | 'invalidFile', string>>;
+
+export function useBackupCollections(tenant: string, messages?: BackupMessages) {
+  const msgs = useRef(messages);
+  msgs.current = messages;
   const [backing, setBacking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const createBackup = useCallback(async (collections: string[], onSuccess?: (message: string) => void, onError?: (error: string) => void) => {
     if (collections.length === 0) {
-      const errorMsg = 'Please select at least one collection to backup.';
+      const errorMsg = msgs.current?.selectFirst || 'Please select at least one collection to backup.';
       setError(errorMsg);
       onError?.(errorMsg);
       return false;
@@ -29,13 +34,13 @@ export function useBackupCollections(tenant: string) {
       });
 
       if (!res.ok) {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         if (res.status === 401 || res.status === 403) {
-          const errorMsg = 'Unauthorized. Only admins can backup collections.';
+          const errorMsg = msgs.current?.unauthorized || 'Unauthorized. Only admins can backup collections.';
           setError(errorMsg);
           onError?.(errorMsg);
         } else {
-          const errorMsg = data.error || 'Failed to create backup';
+          const errorMsg = data.error || msgs.current?.failed || 'Failed to create backup';
           setError(errorMsg);
           onError?.(errorMsg);
         }
@@ -57,7 +62,7 @@ export function useBackupCollections(tenant: string) {
       onSuccess?.(successMsg);
       return true;
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to create backup. Please check your connection.';
+      const errorMsg = msgs.current?.failed || (err instanceof Error ? err.message : 'Failed to create backup. Please check your connection.');
       setError(errorMsg);
       onError?.(errorMsg);
       return false;

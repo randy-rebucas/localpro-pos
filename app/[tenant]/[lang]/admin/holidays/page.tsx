@@ -1,60 +1,50 @@
 ﻿'use client';
 
 import { useEffect, useState } from 'react';
-import HolidaysManager from '@/components/settings/HolidaysManager';
 import { useParams } from 'next/navigation';
-import Link from 'next/link';
+import HolidaysManager from '@/components/settings/HolidaysManager';
+import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import { getDictionaryClient } from '../../dictionaries-client';
-import { useHolidaysSettings } from '@/hooks/useHolidaysSettings';
+import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { usePermissions } from '@/hooks/usePermissions';
+
+type Dict = Record<string, Record<string, string | undefined> | undefined>;
 
 export default function HolidaysAdminPage() {
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
-
-  const { settings, loading, fetchSettings, updateSettings } = useHolidaysSettings(tenant);
+  const [dict, setDict] = useState<Dict | null>(null);
+  // Settings come from TenantSettingsContext (already loaded by the layout); holidays load from their own endpoint.
+  const { settings } = useTenantSettings();
+  const { canAccess } = usePermissions();
 
   useEffect(() => {
-    getDictionaryClient(lang).then(setDict);
-    fetchSettings();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lang, tenant]);
+    getDictionaryClient(lang).then((d) => setDict(d as unknown as Dict));
+  }, [lang]);
 
-  if (!dict || loading || !settings) {
+  if (!dict || !settings) {
     return (
-      <div className="flex items-center justify-center py-24">
-        <div className="text-center">
-          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-brand"></div>
-          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
+      <div className="mk-root pos-register">
+        <div className="flex min-h-[calc(100dvh-3.5rem)] items-center justify-center bg-brand-navy-deep lg:min-h-dvh">
+          <LoadingSpinner size="md" color="#8fe3d0" />
         </div>
       </div>
     );
   }
 
   return (
-    <div>
-      <div className="px-4 sm:px-6 py-6">
-        <div className="mb-6 sm:mb-8">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">
-            {dict?.admin?.holidayCalendar || 'Holiday Calendar'}
-          </h1>
-          <p className="text-gray-600">
-            {dict?.admin?.holidaysSubtitle || 'Manage holidays and recurring holidays. Mark holidays when the business is closed to affect booking availability.'}
-          </p>
-        </div>
-
-        <div className="bg-white border border-gray-300 p-5 sm:p-6 lg:p-8">
-          <HolidaysManager
-            settings={settings}
-            tenant={tenant}
-            dict={dict}
-            onUpdate={(updates) => {
-              updateSettings(updates);
-            }}
-          />
-        </div>
-      </div>
-    </div>
+    <HolidaysManager
+      settings={settings}
+      tenant={tenant}
+      lang={lang}
+      dict={dict}
+      canManage={canAccess('holidays.manage')}
+      header={{
+        tag: settings.companyName,
+        title: dict.admin?.holidayCalendar || 'Holiday Calendar',
+        subtitle: dict.admin?.holidaysSubtitleShort || 'Days the shop closes. Closed days take no bookings.',
+      }}
+    />
   );
 }

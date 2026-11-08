@@ -118,11 +118,11 @@ const SEED_CONFIGS: SeedTenantConfig[] = [
       { name: 'Tech Starter Bundle',     description: 'Earbuds + USB-C charger combo deal',               price: 3699,  stock: 20,  sku: 'BUN-001',  category: 'Bundles',       productType: 'bundle',  trackInventory: false },
     ],
     customers: [
-      { firstName: 'Maria',   lastName: 'Santos',    email: 'maria.s@email.com',   phone: '+63-917-000-0001', tags: ['VIP', 'Regular'] },
-      { firstName: 'Juan',    lastName: 'dela Cruz', email: 'juan.dc@email.com',   phone: '+63-917-000-0002', tags: ['Regular'] },
-      { firstName: 'Angela',  lastName: 'Reyes',     email: 'angela.r@email.com',  phone: '+63-917-000-0003', tags: ['Wholesale'] },
-      { firstName: 'Ricardo', lastName: 'Lim',       email: 'ric.lim@email.com',   phone: '+63-917-000-0004', tags: ['VIP'] },
-      { firstName: 'Sofia',   lastName: 'Tan',       email: 'sofia.t@email.com',   phone: '+63-917-000-0005', tags: ['Regular'] },
+      { firstName: 'Maria',   lastName: 'Santos', tags: ['VIP', 'Regular'] },
+      { firstName: 'Juan',    lastName: 'dela Cruz', tags: ['Regular'] },
+      { firstName: 'Angela',  lastName: 'Reyes', tags: ['Wholesale'] },
+      { firstName: 'Ricardo', lastName: 'Lim', tags: ['VIP'] },
+      { firstName: 'Sofia',   lastName: 'Tan', tags: ['Regular'] },
     ],
     discounts: [
       { code: 'WELCOME10',  name: 'Welcome 10% Off',         type: 'percentage', value: 10, description: 'First-time customer discount' },
@@ -187,10 +187,10 @@ const SEED_CONFIGS: SeedTenantConfig[] = [
       { name: 'Date Night for Two',    description: 'Shared appetizer + 2 mains + 1 dessert + 2 drinks', price: 1480, stock: 999, category: 'Set Meals', productType: 'bundle', trackInventory: false },
     ],
     customers: [
-      { firstName: 'Elena',  lastName: 'Garcia',   email: 'elena.g@email.com',  phone: '+63-917-100-0001', tags: ['Regular'] },
-      { firstName: 'Marco',  lastName: 'Bautista',                               phone: '+63-917-100-0002', tags: ['VIP', 'Regular'] },
-      { firstName: 'Lena',   lastName: 'Ocampo',   email: 'lena.o@email.com',   phone: '+63-917-100-0003', tags: ['Regular'] },
-      { firstName: 'Paolo',  lastName: 'Villanueva',email: 'paolo.v@email.com', phone: '+63-917-100-0004', tags: ['Staff'] },
+      { firstName: 'Elena',  lastName: 'Garcia', tags: ['Regular'] },
+      { firstName: 'Marco',  lastName: 'Bautista', tags: ['VIP', 'Regular'] },
+      { firstName: 'Lena',   lastName: 'Ocampo', tags: ['Regular'] },
+      { firstName: 'Paolo',  lastName: 'Villanueva', tags: ['Staff'] },
     ],
     discounts: [
       { code: 'LUNCH15',    name: 'Lunch Promo 15%',  type: 'percentage', value: 15, minPurchaseAmount: 400, description: '11am–2pm Mon–Fri' },
@@ -229,10 +229,10 @@ const SEED_CONFIGS: SeedTenantConfig[] = [
       { name: 'Express Same-Day (per kg)',description: 'Delivered by 6pm if dropped by 9am',          price: 120,  stock: 999, category: 'Express',      productType: 'service', trackInventory: false, serviceType: 'wash',      weightBased: true,  estimatedDuration: 480, pickupDelivery: true },
     ],
     customers: [
-      { firstName: 'Rosario', lastName: 'Mendez',  phone: '+63-917-200-0001', tags: ['Regular'] },
-      { firstName: 'Dante',   lastName: 'Cruz',    phone: '+63-917-200-0002', email: 'dante.c@email.com', tags: ['Regular', 'VIP'] },
-      { firstName: 'Ligaya',  lastName: 'Flores',  phone: '+63-917-200-0003', tags: ['Regular'] },
-      { firstName: 'Bernard', lastName: 'Pascual', phone: '+63-917-200-0004', email: 'ben.p@email.com', tags: ['Regular'] },
+      { firstName: 'Rosario', lastName: 'Mendez', tags: ['Regular'] },
+      { firstName: 'Dante',   lastName: 'Cruz', tags: ['Regular', 'VIP'] },
+      { firstName: 'Ligaya',  lastName: 'Flores', tags: ['Regular'] },
+      { firstName: 'Bernard', lastName: 'Pascual', tags: ['Regular'] },
     ],
     discounts: [
       { code: 'FIRSTWASH',  name: '1st Visit 20% Off', type: 'percentage', value: 20, description: 'New customer welcome offer' },
@@ -272,11 +272,11 @@ const SEED_CONFIGS: SeedTenantConfig[] = [
       { name: 'Full Spa Day',            description: 'Hair color + Mani + Pedi + Swedish massage',    price: 3200, stock: 999, category: 'Packages',  productType: 'bundle',  trackInventory: false, serviceDuration: 300, staffRequired: 2 },
     ],
     customers: [
-      { firstName: 'Clarissa', lastName: 'Ramos',    email: 'clarissa.r@email.com', phone: '+63-917-300-0001', tags: ['VIP', 'Regular'] },
-      { firstName: 'Donna',    lastName: 'Espiritu',                                phone: '+63-917-300-0002', tags: ['Regular'] },
-      { firstName: 'Greta',    lastName: 'Valencia',  email: 'greta.v@email.com',   phone: '+63-917-300-0003', tags: ['Regular'] },
-      { firstName: 'Hannah',   lastName: 'Soriano',   email: 'hannah.s@email.com',  phone: '+63-917-300-0004', tags: ['VIP'] },
-      { firstName: 'Iris',     lastName: 'Dela Vega',                               phone: '+63-917-300-0005', tags: ['Regular'] },
+      { firstName: 'Clarissa', lastName: 'Ramos', tags: ['VIP', 'Regular'] },
+      { firstName: 'Donna',    lastName: 'Espiritu', tags: ['Regular'] },
+      { firstName: 'Greta',    lastName: 'Valencia', tags: ['Regular'] },
+      { firstName: 'Hannah',   lastName: 'Soriano', tags: ['VIP'] },
+      { firstName: 'Iris',     lastName: 'Dela Vega', tags: ['Regular'] },
     ],
     discounts: [
       { code: 'SPA15',      name: 'Spa 15% Off',         type: 'percentage', value: 15, minPurchaseAmount: 1000, description: 'Packages and treatments over ₱1,000' },
@@ -317,9 +317,9 @@ const SEED_CONFIGS: SeedTenantConfig[] = [
       { name: 'Office Starter Pack',     description: 'Ballpen box + ream + sticky notes + stapler',    price: 499,  stock: 30,  sku: 'COM-001', category: 'Combos',          productType: 'bundle',  trackInventory: true, lowStockThreshold: 5  },
     ],
     customers: [
-      { firstName: 'Carlos',   lastName: 'Manalo',   email: 'carlos.m@email.com',  phone: '+63-917-400-0001', tags: ['Regular'] },
-      { firstName: 'Shiela',   lastName: 'Navarro',  email: 'shiela.n@email.com',  phone: '+63-917-400-0002', tags: ['Regular'] },
-      { firstName: 'Roberto',  lastName: 'Castillo', phone: '+63-917-400-0003',                               tags: ['Wholesale'] },
+      { firstName: 'Carlos',   lastName: 'Manalo', tags: ['Regular'] },
+      { firstName: 'Shiela',   lastName: 'Navarro', tags: ['Regular'] },
+      { firstName: 'Roberto',  lastName: 'Castillo',                               tags: ['Wholesale'] },
     ],
     discounts: [
       { code: 'BULK5',     name: 'Bulk Purchase 5%',  type: 'percentage', value: 5,  minPurchaseAmount: 500, description: 'On orders ₱500 and above' },
@@ -451,7 +451,15 @@ async function seedTenant(cfg: SeedTenantConfig, existingTenantId?: mongoose.Typ
     if (existing && !FORCE) continue;
     if (existing && FORCE) await Customer.deleteOne({ _id: existing._id });
 
-    await Customer.create({ ...cust, tenantId, isActive: true });
+    // Sample customers never carry a phone or email, so a CRM campaign can't reach a real person.
+    await Customer.create({
+      firstName: cust.firstName,
+      lastName:  cust.lastName,
+      tags:      [...(cust.tags ?? []), 'Sample'],
+      notes:     'Sample record from the seed script. Not a real person.',
+      tenantId,
+      isActive:  true,
+    });
     custCreated++;
   }
   ok(`Customers   — ${custCreated} created`);

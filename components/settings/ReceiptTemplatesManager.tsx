@@ -439,7 +439,7 @@ function TemplateEditor({
         <div className="border-l-4 border-brand bg-paper p-3">
           <p className="mb-2 font-receipt text-xs font-medium uppercase text-ink">{dict?.receiptTemplates?.availableVariables || 'Available Variables:'}</p>
           <div className="space-y-1 text-xs text-ink/80">
-            <div><code className="bg-paper-white px-1 font-receipt">{'{{storeName}}'}</code>, <code className="bg-paper-white px-1 font-receipt">{'{{logo}}'}</code>, <code className="bg-paper-white px-1 font-receipt">{'{{address}}'}</code>, <code className="bg-paper-white px-1 font-receipt">{'{{phone}}'}</code>, <code className="bg-paper-white px-1 font-receipt">{'{{email}}'}</code></div>
+            <div><code className="bg-paper-white px-1 font-receipt">{'{{storeName}}'}</code>, <code className="bg-paper-white px-1 font-receipt">{'{{logo}}'}</code>, <code className="bg-paper-white px-1 font-receipt">{'{{address}}'}</code>, <code className="bg-paper-white px-1 font-receipt">{'{{phone}}'}</code>, <code className="bg-paper-white px-1 font-receipt">{'{{email}}'}</code>, <code className="bg-paper-white px-1 font-receipt">{'{{registrationNumber}}'}</code></div>
             <div><code className="bg-paper-white px-1 font-receipt">{'{{receiptNumber}}'}</code>, <code className="bg-paper-white px-1 font-receipt">{'{{date}}'}</code>, <code className="bg-paper-white px-1 font-receipt">{'{{time}}'}</code></div>
             <div><code className="bg-paper-white px-1 font-receipt">{'{{#each items}}'}</code> - {dict?.receiptTemplates?.loopThroughItems || 'Loop through items'}</div>
             <div><code className="bg-paper-white px-1 font-receipt">{'{{#if condition}}'}</code> - {dict?.receiptTemplates?.conditionalBlocks || 'Conditional blocks'}</div>

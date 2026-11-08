@@ -9,6 +9,9 @@ import { arrayToCSV } from '@/lib/export';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
+import { getTenantSettingsById } from '@/lib/tenant';
+import { tenantDayEdge, toTenantDateString } from '@/lib/timezone';
+import { buildAuditLogQuery } from '@/lib/audit-log-filter';
 
 /**
  * BIR Electronic Journal / Audit Trail raw dump.
@@ -39,36 +42,40 @@ export async function GET(request: NextRequest) {
     }
 
     const searchParams = request.nextUrl.searchParams;
-    const startDate = searchParams.get('startDate')
-      ? new Date(searchParams.get('startDate')!)
-      : new Date(new Date().setDate(new Date().getDate() - 30));
-    const endDate = searchParams.get('endDate')
-      ? new Date(searchParams.get('endDate')!)
-      : new Date();
-    startDate.setHours(0, 0, 0, 0);
-    if (searchParams.get('endDate')) endDate.setHours(23, 59, 59, 999);
+    // Days are store days in the tenant's zone, not the server's (setHours used the server clock).
+    const timeZone = (await getTenantSettingsById(String(user.tenantId)))?.timezone || 'Asia/Manila';
+    // Same filters as the journal list (action, entity type, user, dates); with no dates it
+    // covers the last 30 days up to now.
+    const built = buildAuditLogQuery(searchParams, String(user.tenantId), timeZone, {
+      start: tenantDayEdge(toTenantDateString(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), timeZone), 'start', timeZone),
+      end: new Date(),
+    });
+    if (!built.ok && built.reason === 'invalidDate') {
+      return NextResponse.json({ success: false, error: t('validation.invalidDate', 'Invalid date') }, { status: 400 });
+    }
+    // Both edges always exist here (the defaults fill any missing one).
+    const startDate = (built.ok && built.start) || new Date();
+    const endDate = (built.ok && built.end) || new Date();
     const format = searchParams.get('format') || 'json'; // json, csv
-
-    const query = {
-      tenantId: user.tenantId,
-      createdAt: { $gte: startDate, $lte: endDate },
-    };
 
     // Logs older than 90 days are moved to ArchivedAuditLog by the daily archive
     // job — read the archive too when the range reaches past that cutoff.
+    // A malformed user id matches nobody, so the export is empty rather than every user's entries.
     const archiveCutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
-    const [liveLogs, archivedLogs] = await Promise.all([
-      AuditLog.find(query)
-        .populate('userId', 'name email')
-        .sort({ createdAt: 1 })
-        .lean(),
-      startDate < archiveCutoff
-        ? ArchivedAuditLog.find(query)
+    const [liveLogs, archivedLogs] = built.ok
+      ? await Promise.all([
+        AuditLog.find(built.query)
           .populate('userId', 'name email')
           .sort({ createdAt: 1 })
-          .lean()
-        : Promise.resolve([]),
-    ]);
+          .lean(),
+        startDate < archiveCutoff
+          ? ArchivedAuditLog.find(built.query)
+            .populate('userId', 'name email')
+            .sort({ createdAt: 1 })
+            .lean()
+          : Promise.resolve([]),
+      ])
+      : [[], []];
     // chronological, matching an electronic journal's expected order
     const logs = [...archivedLogs, ...liveLogs].sort(
       (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
@@ -102,6 +109,11 @@ export async function GET(request: NextRequest) {
         startDate: startDate.toISOString(),
         endDate: endDate.toISOString(),
         entryCount: entries.length,
+        filters: {
+          action: built.ok ? built.query.action : undefined,
+          entityType: built.ok ? built.query.entityType : undefined,
+          userId: searchParams.get('userId') || undefined,
+        },
       },
     });
 
@@ -114,7 +126,7 @@ export async function GET(request: NextRequest) {
       return new NextResponse(csv, {
         headers: {
           'Content-Type': 'text/csv; charset=utf-8',
-          'Content-Disposition': `attachment; filename="electronic-journal-${startDate.toISOString().split('T')[0]}-to-${endDate.toISOString().split('T')[0]}.csv"`,
+          'Content-Disposition': `attachment; filename="electronic-journal-${toTenantDateString(startDate, timeZone)}-to-${toTenantDateString(endDate, timeZone)}.csv"`,
         },
       });
     }
@@ -123,7 +135,7 @@ export async function GET(request: NextRequest) {
       return new NextResponse(JSON.stringify({ startDate, endDate, entries }, null, 2), {
         headers: {
           'Content-Type': 'application/json; charset=utf-8',
-          'Content-Disposition': `attachment; filename="electronic-journal-${startDate.toISOString().split('T')[0]}-to-${endDate.toISOString().split('T')[0]}.json"`,
+          'Content-Disposition': `attachment; filename="electronic-journal-${toTenantDateString(startDate, timeZone)}-to-${toTenantDateString(endDate, timeZone)}.json"`,
         },
       });
     }

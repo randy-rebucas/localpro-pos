@@ -13,6 +13,7 @@ import { getCurrentUser } from '@/lib/auth';
 import { logger } from '@/lib/logger';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { createAuditLog, AuditActions } from '@/lib/audit';
+import { isTemplateSlot, MAX_TEMPLATE_LENGTH } from '@/lib/notification-template-slots';
 
 export async function GET(
   request: NextRequest,
@@ -46,12 +47,6 @@ export async function GET(
   }
 }
 
-/** Template slots defined in models/Tenant.ts settings.notificationTemplates. */
-const TEMPLATE_SLOTS = {
-  email: ['bookingConfirmation', 'bookingReminder', 'bookingCancellation', 'lowStockAlert', 'attendanceAlert'],
-  sms: ['bookingConfirmation', 'bookingReminder', 'bookingCancellation', 'lowStockAlert'],
-} as const satisfies Record<string, readonly string[]>;
-
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ slug: string }> }
@@ -74,30 +69,36 @@ export async function PUT(
     const { slug } = await params;
     const body = await request.json();
     const { type, category, subcategory, subject, body: templateBody } = body;
-
-    if (!type || !category || !templateBody) {
-      return NextResponse.json({ success: false, error: 'Type, category, and body are required' }, { status: 400 });
-    }
+    // reset: remove the custom template so the sender goes back to its built-in message.
+    const reset = body.reset === true;
 
     // The key becomes a dot-path in $set — only allow the slots the schema has
     // (unknown ones were silently dropped while the route reported success).
     const key = subcategory || category;
-    if (typeof type !== 'string' || !(type in TEMPLATE_SLOTS)
-      || typeof key !== 'string' || !(TEMPLATE_SLOTS[type as keyof typeof TEMPLATE_SLOTS] as readonly string[]).includes(key)) {
+    if (!isTemplateSlot(type, key)) {
       return NextResponse.json({ success: false, error: 'Unknown template type or category' }, { status: 400 });
     }
-    if (typeof templateBody !== 'string' || (subject !== undefined && subject !== null && typeof subject !== 'string')) {
-      return NextResponse.json({ success: false, error: 'Invalid template' }, { status: 400 });
-    }
-    // "|" separates subject from body in storage
-    if (typeof subject === 'string' && subject.includes('|')) {
-      return NextResponse.json({ success: false, error: 'Subject cannot contain "|"' }, { status: 400 });
-    }
 
-    // Validate template
-    const validation = validateNotificationTemplate(templateBody);
-    if (!validation.valid) {
-      return NextResponse.json({ success: false, error: validation.error }, { status: 400 });
+    if (!reset) {
+      if (typeof templateBody !== 'string' || !templateBody.trim()) {
+        return NextResponse.json({ success: false, error: 'Type, category, and body are required' }, { status: 400 });
+      }
+      if (subject !== undefined && subject !== null && typeof subject !== 'string') {
+        return NextResponse.json({ success: false, error: 'Invalid template' }, { status: 400 });
+      }
+      if (templateBody.length > MAX_TEMPLATE_LENGTH[type]
+        || (typeof subject === 'string' && subject.length > MAX_TEMPLATE_LENGTH.subject)) {
+        return NextResponse.json({ success: false, error: 'Template is too long' }, { status: 400 });
+      }
+      // "|" separates subject from body in storage
+      if (typeof subject === 'string' && subject.includes('|')) {
+        return NextResponse.json({ success: false, error: 'Subject cannot contain "|"' }, { status: 400 });
+      }
+
+      const validation = validateNotificationTemplate(templateBody);
+      if (!validation.valid) {
+        return NextResponse.json({ success: false, error: validation.error }, { status: 400 });
+      }
     }
 
     await connectDB();
@@ -111,15 +112,16 @@ export async function PUT(
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
-    const value = type === 'email' ? formatEmailTemplate(subject, templateBody) : templateBody;
-
-    // Atomic $set on the specific dot-path avoids clobbering concurrent edits to
+    // Atomic $set/$unset on the specific dot-path avoids clobbering concurrent edits to
     // other template categories (a full read-modify-write of the whole
     // notificationTemplates object + tenant.save() could lose them).
-    await Tenant.updateOne(
-      { _id: tenant._id },
-      { $set: { [`settings.notificationTemplates.${type}.${key}`]: value } }
-    );
+    const path = `settings.notificationTemplates.${type}.${key}`;
+    if (reset) {
+      await Tenant.updateOne({ _id: tenant._id }, { $unset: { [path]: '' } });
+    } else {
+      const value = type === 'email' ? formatEmailTemplate(subject, templateBody) : templateBody;
+      await Tenant.updateOne({ _id: tenant._id }, { $set: { [path]: value } });
+    }
 
     const updatedTenant = await Tenant.findOne({ _id: tenant._id }).select('settings.notificationTemplates').lean();
     const templates = updatedTenant?.settings?.notificationTemplates || {};
@@ -130,7 +132,7 @@ export async function PUT(
       action: AuditActions.UPDATE,
       entityType: 'notification_template',
       entityId: `${type}.${key}`,
-      changes: { subject, body: templateBody },
+      changes: reset ? { reset: true } : { subject, body: templateBody },
     });
 
     return NextResponse.json({

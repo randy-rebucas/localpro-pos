@@ -11,6 +11,8 @@ import { hasTenantPermission } from '@/lib/permissions-server';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { logger } from '@/lib/logger';
+import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { parseBusinessHoursInput } from '@/lib/business-hours-input';
 
 export async function GET(
   request: NextRequest,
@@ -44,42 +46,6 @@ export async function GET(
   }
 }
 
-const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
-
-/** Returns an error message for the first malformed time, or null. */
-function findInvalidTime(schedule: unknown, specialHours: unknown): string | null {
-  const check = (value: unknown, where: string) =>
-    value === undefined || value === null || value === '' || (typeof value === 'string' && HHMM.test(value))
-      ? null
-      : `Invalid time for ${where}: use HH:MM (24-hour)`;
-
-  if (schedule !== undefined) {
-    if (!schedule || typeof schedule !== 'object' || Array.isArray(schedule)) return 'Invalid schedule';
-    for (const [day, entry] of Object.entries(schedule as Record<string, unknown>)) {
-      if (!entry || typeof entry !== 'object') return `Invalid schedule for ${day}`;
-      const e = entry as { openTime?: unknown; closeTime?: unknown; breaks?: unknown };
-      const err = check(e.openTime, `${day} open`) || check(e.closeTime, `${day} close`);
-      if (err) return err;
-      if (e.breaks !== undefined) {
-        if (!Array.isArray(e.breaks)) return `Invalid breaks for ${day}`;
-        for (const b of e.breaks as Array<{ start?: unknown; end?: unknown }>) {
-          const berr = check(b?.start, `${day} break start`) || check(b?.end, `${day} break end`);
-          if (berr) return berr;
-        }
-      }
-    }
-  }
-  if (specialHours !== undefined) {
-    if (!Array.isArray(specialHours)) return 'Invalid special hours';
-    for (const sh of specialHours as Array<{ date?: unknown; openTime?: unknown; closeTime?: unknown }>) {
-      if (typeof sh?.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(sh.date)) return 'Invalid special hours date: use YYYY-MM-DD';
-      const err = check(sh.openTime, `${sh.date} open`) || check(sh.closeTime, `${sh.date} close`);
-      if (err) return err;
-    }
-  }
-  return null;
-}
-
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ slug: string }> }
@@ -102,16 +68,14 @@ export async function PUT(
     }
 
     const { slug } = await params;
-    const body = await request.json();
-    const { schedule, specialHours, timezone } = body ?? {};
-
-    if (timezone !== undefined && typeof timezone !== 'string') {
-      return NextResponse.json({ success: false, error: 'Invalid timezone' }, { status: 400 });
+    const body = await request.json().catch(() => null);
+    const parsed = parseBusinessHoursInput(body);
+    if (!parsed.ok) {
+      const t = await getValidationTranslatorFromRequest(request);
+      const message = t(parsed.error.key, parsed.error.fallback).replace('{value}', parsed.error.value ?? '');
+      return NextResponse.json({ success: false, error: message }, { status: 400 });
     }
-    const invalid = findInvalidTime(schedule, specialHours);
-    if (invalid) {
-      return NextResponse.json({ success: false, error: invalid }, { status: 400 });
-    }
+    const { schedule, specialHours, timezone } = parsed.data;
 
     await connectDB();
 

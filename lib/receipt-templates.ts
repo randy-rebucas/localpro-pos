@@ -21,6 +21,7 @@ export interface ReceiptData {
   phone?: string;
   email?: string;
   website?: string;
+  registrationNumber?: string;
   receiptNumber: string;
   date: string;
   time: string;

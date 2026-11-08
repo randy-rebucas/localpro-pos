@@ -8,6 +8,8 @@ import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { parseTaxRuleInput } from '@/lib/tax-rule-input';
+import { taxRuleIdsBelongToTenant } from '@/lib/tax-rule-ownership';
 
 export async function GET(request: NextRequest) {
   try {
@@ -67,44 +69,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
     }
 
-    const body = await request.json();
-    const { name, rate, label, appliesTo, categoryIds, productIds, region, priority, isActive } = body;
-    
-    // Validate required fields
-    if (!name || !name.trim()) {
-      return NextResponse.json(
-        { success: false, error: t('validation.taxRuleNameRequired', 'Tax rule name is required') },
-        { status: 400 }
-      );
+    const parsed = parseTaxRuleInput(await request.json().catch(() => null), false);
+    if (!parsed.ok) {
+      return NextResponse.json({ success: false, error: t(parsed.error.key, parsed.error.fallback) }, { status: 400 });
     }
-    
-    if (rate === undefined || rate === null || isNaN(rate) || rate < 0 || rate > 100) {
-      return NextResponse.json(
-        { success: false, error: t('validation.taxRateRequired', 'Tax rate must be between 0 and 100') },
-        { status: 400 }
-      );
+    const input = parsed.data;
+
+    const ownsIds = await taxRuleIdsBelongToTenant(tenantId, input.categoryIds, input.productIds);
+    if (!ownsIds) {
+      return NextResponse.json({ success: false, error: t('validation.taxRuleIdsInvalid', 'The tax rule lists an item that does not exist') }, { status: 400 });
     }
-    
-    const taxRule = await TaxRule.create({
-      tenantId,
-      name: name.trim(),
-      rate: parseFloat(rate),
-      label: label?.trim() || 'Tax',
-      appliesTo: appliesTo || 'all',
-      categoryIds: categoryIds || [],
-      productIds: productIds || [],
-      region: region || {},
-      priority: priority || 0,
-      isActive: isActive !== undefined ? isActive : true,
-    });
-    
+
+    const taxRule = await TaxRule.create({ tenantId, ...input });
+
     await createAuditLog(request, {
       tenantId,
       userId: user.userId,
       action: AuditActions.CREATE,
       entityType: 'taxRule',
       entityId: taxRule._id.toString(),
-      changes: { name, rate, label },
+      changes: { name: input.name, rate: input.rate, label: input.label, appliesTo: input.appliesTo, priority: input.priority },
     });
     
     return NextResponse.json({ success: true, data: taxRule }, { status: 201 });

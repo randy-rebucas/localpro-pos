@@ -101,11 +101,13 @@ import CartDiscountSection from '@/components/pos/CartDiscountSection';
 import { CartSummaryRows, CartTill } from '@/components/pos/CartSummaryFooter';
 import CartUpsellSuggestions from '@/components/pos/CartUpsellSuggestions';
 import ProductGrid from '@/components/pos/ProductGrid';
+import ClosedTodayStrip from '@/components/pos/ClosedTodayStrip';
 import { usePosProducts, type PosProduct } from '@/hooks/usePosProducts';
 import { CartVariant, CartItemModifier } from '@/hooks/useCart';
 import { RestaurantMeta, SplitPaymentEntry } from '@/hooks/usePayment';
 import type { SplitGuestPayment } from '@/components/pos/modals/PosSplitCheckModal';
 import type { RefundTransaction as PosRefundTransaction } from '@/components/pos/modals/PosRefundModal';
+import { receiptStoreInfo } from '@/lib/receipt-store-info';
 
 type Product = PosProduct;
 
@@ -965,10 +967,6 @@ export default function Dashboard() {
       ? settings.receiptTemplates?.templates?.find((t) => t.id === defaultTemplateId)?.html
       : undefined;
 
-    const addressStr = settings.address
-      ? [settings.address.street, settings.address.city, settings.address.state, settings.address.zipCode]
-        .filter(Boolean).join(', ')
-      : undefined;
     const taxEnabled = settings.taxEnabled && settings.taxRate;
     const isScPwd = transaction.discountCategory === 'senior' || transaction.discountCategory === 'pwd';
     // What was charged at the time, so a later change to the tax settings can't rewrite an old receipt.
@@ -990,9 +988,7 @@ export default function Dashboard() {
 
     const receiptData = {
       storeName: settings.companyName,
-      address: addressStr,
-      phone: settings.phone,
-      logo: settings.receiptShowLogo !== false ? settings.logo : undefined,
+      ...receiptStoreInfo(settings),
       receiptNumber: transaction.receiptNumber || transaction._id?.slice(-8) || 'N/A',
       date: transaction.date || formatDateTime(new Date(transaction.createdAt || Date.now()), settings || getDefaultTenantSettings()),
       items: (transaction.items || []).map((item: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -1545,6 +1541,11 @@ export default function Dashboard() {
         {/* Products column: nav width matches this column only */}
         <div className={`order-2 flex flex-col min-h-0 flex-1 min-w-0 md:order-1 ${roamingMode ? 'w-full' : ''}`}>
           <Navbar />
+          <ClosedTodayStrip
+            tenant={tenant}
+            timeZone={settings?.timezone}
+            template={dictValue('pos.closedTodayWarning', 'Closed today: {name}. Sales still work if you open anyway.')}
+          />
           <div
             ref={productsScrollRef}
             className="flex-1 overflow-y-auto min-h-0 mx-auto w-full px-3 sm:px-4 md:px-4 lg:px-5 py-3 sm:py-4 md:py-3 lg:py-4"

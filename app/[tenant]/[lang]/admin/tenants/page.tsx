@@ -277,14 +277,15 @@ function TenantModal({
         settings: {
           currency: formData.currency,
           language: formData.language,
-          email: formData.email || undefined,
-          phone: formData.phone || undefined,
-          companyName: formData.companyName || undefined,
+          // '' clears a field; undefined would be dropped and keep the old value
+          email: formData.email,
+          phone: formData.phone,
+          companyName: formData.companyName,
           businessType: formData.businessType || undefined,
         },
+        domain: formData.domain,
+        subdomain: formData.subdomain,
       };
-      if (formData.domain) body.domain = formData.domain;
-      if (formData.subdomain) body.subdomain = formData.subdomain;
 
       const res = await fetch(url, {
         method,

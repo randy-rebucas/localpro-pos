@@ -1,10 +1,15 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
+
+/** Wording the page passes in so errors read in the tenant's language; English otherwise. */
+export type ResetMessages = Partial<Record<'selectFirst' | 'unauthorized' | 'failed' | 'invalidFormat' | 'invalidFile', string>>;
 
 export interface ResetResults {
   [collection: string]: { deleted: number };
 }
 
-export function useResetCollections(tenant: string) {
+export function useResetCollections(tenant: string, messages?: ResetMessages) {
+  const msgs = useRef(messages);
+  msgs.current = messages;
   const [resetting, setResetting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resetResults, setResetResults] = useState<ResetResults | null>(null);
@@ -15,7 +20,7 @@ export function useResetCollections(tenant: string) {
     onError?: (error: string) => void
   ) => {
     if (collections.length === 0) {
-      const errorMsg = 'Please select at least one collection to reset.';
+      const errorMsg = msgs.current?.selectFirst || 'Please select at least one collection to reset.';
       setError(errorMsg);
       onError?.(errorMsg);
       return false;
@@ -46,18 +51,18 @@ export function useResetCollections(tenant: string) {
         return true;
       } else {
         if (res.status === 401 || res.status === 403) {
-          const errorMsg = 'Unauthorized. Only admins can reset collections.';
+          const errorMsg = msgs.current?.unauthorized || 'Unauthorized. Only admins can reset collections.';
           setError(errorMsg);
           onError?.(errorMsg);
         } else {
-          const errorMsg = data.error || 'Failed to reset collections';
+          const errorMsg = data.error || msgs.current?.failed || 'Failed to reset collections';
           setError(errorMsg);
           onError?.(errorMsg);
         }
         return false;
       }
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to reset collections. Please check your connection.';
+      const errorMsg = msgs.current?.failed || (err instanceof Error ? err.message : 'Failed to reset collections. Please check your connection.');
       setError(errorMsg);
       onError?.(errorMsg);
       return false;

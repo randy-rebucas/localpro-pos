@@ -10,7 +10,13 @@ import Tenant from '@/models/Tenant';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
-import { PERMISSIONS, OVERRIDABLE_ROLES, type RolePermissionOverrides } from '@/lib/permissions';
+import {
+  PERMISSIONS,
+  OVERRIDABLE_ROLES,
+  findForbiddenOverrideChanges,
+  type RolePermissionOverrides,
+} from '@/lib/permissions';
+import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 
 export async function GET(
@@ -49,8 +55,7 @@ export async function GET(
     });
   } catch (error) {
     logger.error('Error fetching role permission overrides:', error);
-    const message = error instanceof Error ? error.message : 'Failed to fetch role permissions';
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
+    return NextResponse.json({ success: false, error: 'Failed to fetch role permissions' }, { status: 500 });
   }
 }
 
@@ -68,8 +73,13 @@ export async function PUT(
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
+    const { allowed } = checkRateLimit(`write:role-permissions:${user.tenantId}:${getClientIp(request)}`, 20, 60_000);
+    if (!allowed) {
+      return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
+    }
+
     const { slug } = await params;
-    const body = await request.json();
+    const body = await request.json().catch(() => null);
     const overrides = body?.overrides as RolePermissionOverrides | undefined;
 
     if (!overrides || typeof overrides !== 'object' || Array.isArray(overrides)) {
@@ -105,6 +115,21 @@ export async function PUT(
     }
 
     const previous = tenant.settings?.rolePermissionOverrides || {};
+
+    // A manager who was given this page may only change roles below their own and only switch on
+    // permissions they hold, so the page cannot raise anyone's access above the editor's.
+    const forbidden = findForbiddenOverrideChanges(user.role, previous, sanitized);
+    if (forbidden.length > 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Forbidden: you can only change roles below your own and grant access you have',
+          code: 'forbidden_change',
+          forbidden,
+        },
+        { status: 403 }
+      );
+    }
     tenant.settings.rolePermissionOverrides = sanitized;
     tenant.markModified('settings.rolePermissionOverrides');
     await tenant.save();
@@ -121,7 +146,6 @@ export async function PUT(
     return NextResponse.json({ success: true, data: { overrides: sanitized } });
   } catch (error) {
     logger.error('Error updating role permission overrides:', error);
-    const message = error instanceof Error ? error.message : 'Failed to update role permissions';
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
+    return NextResponse.json({ success: false, error: 'Failed to update role permissions' }, { status: 500 });
   }
 }

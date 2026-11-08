@@ -45,7 +45,7 @@ Business hours affect:
    - **Recurring** — Toggle if it repeats annually
 4. Click **Save**
 
-Holidays mark dates as unavailable for bookings.
+Holidays marked as closed make those dates unavailable for bookings. On a closed day the register shows a "Closed today" warning at the top, but sales still work if you open anyway.
 
 ## Tax Rules
 

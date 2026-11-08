@@ -168,7 +168,7 @@ export async function PUT(
     // Block rescheduling onto a day the tenant has marked the business closed
     if (startTime) {
       const holidaySettings = await getTenantSettingsById(tenantId);
-      const closedHoliday = getClosedHolidayForDate(holidaySettings?.holidays, newStartTime);
+      const closedHoliday = getClosedHolidayForDate(holidaySettings?.holidays, newStartTime, holidaySettings?.timezone);
       if (closedHoliday) {
         return NextResponse.json(
           {

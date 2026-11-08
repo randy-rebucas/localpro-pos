@@ -51,6 +51,9 @@ const UserSchema: Schema = new Schema(
       type: String,
       unique: true,
       sparse: true, // Allow null values but enforce uniqueness when present
+      // A sign-in credential: never part of a user listing. Read it only by
+      // naming it (select('qrToken') / '+qrToken') where the caller may see it.
+      select: false,
     },
     tenantId: {
       type: Schema.Types.ObjectId,
@@ -92,6 +95,22 @@ UserSchema.pre('save', async function (next) {
   }
   
   next();
+});
+
+// Update queries skip pre('save'), so a password written through
+// findOneAndUpdate/updateOne would be stored as typed (and login would then
+// reject it). Hash it here too unless it already is a bcrypt hash.
+const BCRYPT_HASH = /^\$2[aby]\$\d{2}\$/;
+UserSchema.pre(['findOneAndUpdate', 'updateOne', 'updateMany'], async function () {
+  const update = this.getUpdate() as Record<string, unknown> | null;
+  if (!update || Array.isArray(update)) return;
+  const $set = update.$set as Record<string, unknown> | undefined;
+  for (const holder of [update, $set]) {
+    const value = holder?.password;
+    if (holder && typeof value === 'string' && !BCRYPT_HASH.test(value)) {
+      holder.password = await bcrypt.hash(value, await bcrypt.genSalt(10));
+    }
+  }
 });
 
 // Method to compare password

@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
 
     await connectDB();
     let user = await User.findById(currentUser.userId)
-      .select('-password')
+      .select('-password +qrToken')
       .lean();
 
     if (!user || !user.isActive) {
@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
     if (!user.qrToken) {
       const newQrToken = crypto.randomBytes(32).toString('hex');
       await User.findByIdAndUpdate(currentUser.userId, { qrToken: newQrToken });
-      user = await User.findById(currentUser.userId).select('-password').lean();
+      user = await User.findById(currentUser.userId).select('-password +qrToken').lean();
       
       if (!user) {
         return NextResponse.json({ success: false, error: 'User not found' }, { status: 404 });
@@ -87,7 +87,7 @@ export async function PUT(request: NextRequest) {
     // Fetch as a document (with password) so password changes go through the
     // pre('save') hash hook — findByIdAndUpdate skips document middleware and
     // would otherwise write the new password in plaintext.
-    const userDoc = await User.findById(currentUser.userId).select('+password');
+    const userDoc = await User.findById(currentUser.userId).select('+password +qrToken');
     if (!userDoc || !userDoc.isActive) {
       return NextResponse.json({ success: false, error: 'User not found' }, { status: 404 });
     }

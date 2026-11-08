@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import mongoose from 'mongoose';
 import { handleApiError } from '@/lib/error-handler';
 import connectDB from '@/lib/mongodb';
 import TaxRule from '@/models/TaxRule';
@@ -8,6 +9,8 @@ import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { parseTaxRuleInput } from '@/lib/tax-rule-input';
+import { taxRuleIdsBelongToTenant } from '@/lib/tax-rule-ownership';
 
 export async function GET(
   request: NextRequest,
@@ -16,6 +19,9 @@ export async function GET(
   try {
     await connectDB();
     const { id } = await params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return NextResponse.json({ success: false, error: 'Tax rule not found' }, { status: 404 });
+    }
 
     // Require authentication to prevent unauthenticated tax-rule lookups
     const authResult = await requireTenantAccess(request);
@@ -45,6 +51,9 @@ export async function PATCH(
   try {
     await connectDB();
     const { id } = await params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return NextResponse.json({ success: false, error: 'Tax rule not found' }, { status: 404 });
+    }
     const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const t = await getValidationTranslatorFromRequest(request);
@@ -69,27 +78,26 @@ export async function PATCH(
       return NextResponse.json({ success: false, error: t('validation.taxRuleNotFound', 'Tax rule not found') }, { status: 404 });
     }
 
-    const body = await request.json();
-    const oldData = { name: taxRule.name, rate: taxRule.rate, isActive: taxRule.isActive };
-    
-    if (body.name !== undefined) taxRule.name = body.name.trim();
-    if (body.rate !== undefined) {
-      if (isNaN(body.rate) || body.rate < 0 || body.rate > 100) {
-        return NextResponse.json(
-          { success: false, error: t('validation.taxRateRequired', 'Tax rate must be between 0 and 100') },
-          { status: 400 }
-        );
-      }
-      taxRule.rate = parseFloat(body.rate);
+    const parsed = parseTaxRuleInput(await request.json().catch(() => null), true);
+    if (!parsed.ok) {
+      return NextResponse.json({ success: false, error: t(parsed.error.key, parsed.error.fallback) }, { status: 400 });
     }
-    if (body.label !== undefined) taxRule.label = body.label.trim();
-    if (body.appliesTo !== undefined) taxRule.appliesTo = body.appliesTo;
-    if (body.categoryIds !== undefined) taxRule.categoryIds = body.categoryIds;
-    if (body.productIds !== undefined) taxRule.productIds = body.productIds;
-    if (body.region !== undefined) taxRule.region = body.region;
-    if (body.priority !== undefined) taxRule.priority = body.priority;
-    if (body.isActive !== undefined) taxRule.isActive = body.isActive;
-    
+    const input = parsed.data;
+
+    // Judge the rule as it will be saved, not just the fields sent: switching to "categories"
+    // without sending categories would leave a rule that never matches a sale.
+    const scope = input.appliesTo ?? taxRule.appliesTo;
+    const categoryCount = input.categoryIds?.length ?? taxRule.categoryIds?.length ?? 0;
+    if (scope === 'categories' && categoryCount === 0) {
+      return NextResponse.json({ success: false, error: t('validation.taxRuleCategoriesRequired', 'Pick at least one category for this tax rule') }, { status: 400 });
+    }
+
+    if (!(await taxRuleIdsBelongToTenant(tenantId, input.categoryIds, input.productIds))) {
+      return NextResponse.json({ success: false, error: t('validation.taxRuleIdsInvalid', 'The tax rule lists an item that does not exist') }, { status: 400 });
+    }
+
+    const oldData = { name: taxRule.name, rate: taxRule.rate, isActive: taxRule.isActive };
+    taxRule.set(input);
     await taxRule.save();
     
     await createAuditLog(request, {
@@ -114,6 +122,9 @@ export async function DELETE(
   try {
     await connectDB();
     const { id } = await params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return NextResponse.json({ success: false, error: 'Tax rule not found' }, { status: 404 });
+    }
     const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const t = await getValidationTranslatorFromRequest(request);

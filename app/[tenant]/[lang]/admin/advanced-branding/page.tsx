@@ -1,252 +1,324 @@
 ﻿'use client';
 
-import React, { useEffect, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import Link from 'next/link';
+import toast from 'react-hot-toast';
+import { RefreshCw, RotateCcw, Save } from 'lucide-react';
+import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import { ReceiptRow } from '@/components/marketing/primitives';
+import {
+  ICON, HINT, INPUT, KEY, KEY_PRIMARY, LABEL,
+  RegisterPage, Strip,
+} from '@/components/admin/register-ui';
 import { getDictionaryClient } from '../../dictionaries-client';
+import { type TranslationDict } from '@/types/dictionary';
+import { type ITenantSettings } from '@/types/tenant';
+import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { useBrandingSettings } from '@/hooks/useBrandingSettings';
 import { useBrandingSave } from '@/hooks/useBrandingSave';
-import {
-  getFontSourceOptions,
-  shouldShowGoogleFontUrl,
-  shouldShowCustomFontUrl,
-  getPlaceholderForFontFamily,
-  getPlaceholderForGoogleFontUrl,
-  getPlaceholderForCustomFontUrl,
-  getPlaceholderForCustomCSS,
-  getCustomCSSHint,
-} from '@/lib/branding-helpers';
-import toast from 'react-hot-toast';
 import { usePermissions } from '@/hooks/usePermissions';
+import {
+  FONT_SOURCES, cleanFontFamily, findBrandingProblems, isGoogleFontUrl, isHttpsUrl,
+  type BrandingProblem, type FontSource,
+} from '@/lib/branding-helpers';
+
+type Branding = NonNullable<ITenantSettings['advancedBranding']>;
+
+const PROOF_LINK_ID = 'branding-proof-font-link';
+const PROOF_FACE_ID = 'branding-proof-font-face';
+const PROOF_FAMILY = 'BrandingProof';
+
+/**
+ * Loads the font being edited for the proof only, so it can be judged before saving.
+ * The real font is applied app-wide by the tenant settings context after a save.
+ */
+function useProofFont(branding: Branding | undefined): string | undefined {
+  const source = branding?.fontSource || 'system';
+  const family = cleanFontFamily(branding?.fontFamily || '');
+  const googleUrl = branding?.googleFontUrl;
+  const customUrl = branding?.customFontUrl;
+
+  useEffect(() => {
+    document.getElementById(PROOF_LINK_ID)?.remove();
+    document.getElementById(PROOF_FACE_ID)?.remove();
+    if (source === 'google' && isGoogleFontUrl(googleUrl)) {
+      const link = document.createElement('link');
+      link.id = PROOF_LINK_ID;
+      link.rel = 'stylesheet';
+      link.href = googleUrl!;
+      document.head.appendChild(link);
+    } else if (source === 'custom' && isHttpsUrl(customUrl)) {
+      const style = document.createElement('style');
+      style.id = PROOF_FACE_ID;
+      style.textContent = `@font-face { font-family: '${PROOF_FAMILY}'; src: url(${JSON.stringify(customUrl)}); font-display: swap; }`;
+      document.head.appendChild(style);
+    }
+    return () => {
+      document.getElementById(PROOF_LINK_ID)?.remove();
+      document.getElementById(PROOF_FACE_ID)?.remove();
+    };
+  }, [source, googleUrl, customUrl]);
+
+  if (source === 'custom' && family) return `'${PROOF_FAMILY}', '${family}', sans-serif`;
+  if (family) return `'${family}', sans-serif`;
+  return undefined;
+}
 
 export default function AdvancedBrandingPage() {
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = React.useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+
+  const [dict, setDict] = useState<TranslationDict | null>(null);
+  const [showProblems, setShowProblems] = useState(false);
   const { canAccess } = usePermissions();
   const canManage = canAccess('settings.manage');
+  const { settings: saved } = useTenantSettings();
 
   const { settings, loading, error, fetchSettings, updateSetting } = useBrandingSettings(tenant);
-  const { saving, message, save } = useBrandingSave(tenant);
+  const { saving, save } = useBrandingSave(tenant);
 
-  // Load dictionary
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
   }, [lang]);
 
-  // Load settings on mount
   useEffect(() => {
-    if (tenant) {
-      fetchSettings((error) => {
-        toast.error(error);
-      });
-    }
+    if (tenant) fetchSettings();
   }, [tenant, fetchSettings]);
 
-  const handleSave = useCallback(async () => {
-    if (!settings) return;
+  const branding: Branding = settings?.advancedBranding || {};
+  const proofFont = useProofFont(settings?.advancedBranding);
 
-    const success = await save(settings, () => {
-      toast.success(dict?.admin?.advancedBrandingSaved || 'Advanced branding settings saved successfully!');
-    }, (error) => {
-      toast.error(error);
-    });
-
-    return success;
-  }, [settings, save, dict]);
+  const t = (key: string, fallback: string) => dict?.admin?.[key] || fallback;
 
   if (!dict || loading) {
     return (
-      <div className="flex items-center justify-center py-24">
-        <div className="text-center">
-          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-brand"></div>
-          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
+      <div className="mk-root pos-register">
+        <div className="flex min-h-[calc(100dvh-3.5rem)] items-center justify-center bg-brand-navy-deep lg:min-h-dvh">
+          <LoadingSpinner size="md" color="#8fe3d0" />
         </div>
       </div>
     );
   }
+
+  const title = t('advancedBranding', 'Advanced Branding');
 
   if (!settings) {
     return (
-      <div>
-        <div className="px-4 sm:px-6 py-6">
-          <div className="bg-red-50 border-2 border-red-300 p-5 sm:p-6">
-            <h2 className="text-xl font-bold text-red-800 mb-2">{dict?.settings?.failedToLoad || 'Failed to Load Settings'}</h2>
-            <p className="text-red-700 mb-4">
-              {error || 'Unable to load tenant settings. Please check your connection and try again.'}
-            </p>
-            <button
-              onClick={() => fetchSettings()}
-              className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 font-medium transition-colors border border-red-700"
-            >
-              {dict?.settings?.retry || 'Retry'}
+      <RegisterPage tagNo="BD" tag={saved?.companyName} title={title}>
+        <section className="mt-6 max-w-2xl">
+          <div className="border-l-4 border-stamp bg-paper-white px-5 py-4 text-ink" role="alert">
+            <h2 className="text-3xl">{dict.settings?.failedToLoad || 'Failed to Load Settings'}</h2>
+            <p className="mt-2 font-receipt text-sm text-ink/70">{error || t('settingsLoadFailedHint', 'The store settings could not be loaded. Check your connection and try again.')}</p>
+            <button type="button" onClick={() => fetchSettings()} className={`${KEY_PRIMARY} mt-4`}>
+              <RefreshCw className={ICON} strokeWidth={1.75} aria-hidden />
+              {dict.settings?.retry || 'Retry'}
             </button>
           </div>
-        </div>
-      </div>
+          <div className="mk-tear-b h-3 bg-paper-white" aria-hidden />
+        </section>
+      </RegisterPage>
     );
   }
 
+  const set = (patch: Partial<Branding>) => updateSetting('advancedBranding', { ...branding, ...patch });
+  const source = (branding.fontSource || 'system') as FontSource;
+  const dirty = JSON.stringify(settings.advancedBranding || {}) !== JSON.stringify(saved?.advancedBranding || {});
+  const problems = findBrandingProblems(branding);
+  const problemText: Record<BrandingProblem, string> = {
+    fontFamilyRequired: t('brandingFontFamilyRequired', 'Enter the font family name exactly as the font defines it.'),
+    googleUrlInvalid: t('brandingGoogleUrlInvalid', 'Use a Google Fonts stylesheet link that starts with https://fonts.googleapis.com/.'),
+    customUrlInvalid: t('brandingCustomUrlInvalid', 'Use a font file link that starts with https://.'),
+    cssBraces: t('brandingCssBraces', 'The custom CSS has an opening or closing brace without its partner.'),
+  };
+  const sourceLabel: Record<FontSource, string> = {
+    system: t('systemFont', 'System Font'),
+    google: t('googleFont', 'Google Font'),
+    custom: t('customFont', 'Custom Font'),
+  };
+
+  const handleSave = async () => {
+    if (problems.length > 0) {
+      setShowProblems(true);
+      return;
+    }
+    const cleaned: ITenantSettings = { ...settings, advancedBranding: { ...branding, fontFamily: cleanFontFamily(branding.fontFamily || '') } };
+    const result = await save(cleaned);
+    if (result.ok) {
+      setShowProblems(false);
+      toast.success(t('advancedBrandingSaved', 'Advanced branding settings saved successfully!'));
+      return;
+    }
+    const e = result.error;
+    toast.error(
+      e.kind === 'forbidden' ? t('brandingSaveForbidden', 'You do not have permission to change branding.')
+        : e.kind === 'network' ? t('brandingSaveNetwork', 'Could not reach the server. Check your connection and try again.')
+          : e.message || t('brandingSaveFailed', 'Branding could not be saved.')
+    );
+  };
+
+  const discard = () => {
+    updateSetting('advancedBranding', saved?.advancedBranding || {});
+    setShowProblems(false);
+  };
+
+  const fieldsDisabled = !canManage || saving;
+
   return (
-    <div>
-      <div className="px-4 sm:px-6 py-6">
-        <div className="mb-6">
-          <Link
-            href={`/${tenant}/${lang}/admin`}
-            className="text-brand hover:text-brand-hover font-medium mb-4 inline-flex items-center"
-          >
-            <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-            {dict?.admin?.backToAdmin || 'Back to Admin'}
-          </Link>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">
-            {dict?.admin?.advancedBranding || 'Advanced Branding'}
-          </h1>
-          <p className="text-gray-600">
-            {dict?.admin?.advancedBrandingDescription || 'Customize fonts, themes, and CSS for advanced branding control'}
-          </p>
-        </div>
+    <RegisterPage
+      tagNo="BD"
+      tag={saved?.companyName}
+      title={title}
+      subtitle={t('advancedBrandingDescription', 'Customize fonts, themes, and CSS')}
+    >
+      <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
+        {/* The settings, on a paper slip */}
+        <section aria-labelledby="branding-form-heading" className="min-w-0">
+          <div className="bg-paper-white px-4 py-4 text-ink sm:px-5">
+            <h2 id="branding-form-heading" className="border-b border-dashed border-ink/30 pb-3 text-4xl">{t('brandingTypeface', 'Typeface')}</h2>
 
-        {message && (
-          <div
-            className={`mb-6 p-4 border ${
-              message.type === 'success'
-                ? 'bg-green-50 text-green-800 border-green-300'
-                : 'bg-red-50 text-red-800 border-red-300'
-            }`}
-          >
-            {message.text}
-          </div>
-        )}
+            {!canManage && (
+              <div className="mt-4"><Strip tone="ok">{t('brandingReadOnly', 'You can view branding but not change it. Ask an admin or owner.')}</Strip></div>
+            )}
 
-        <div className="bg-white border border-gray-300 p-6 space-y-8">
-          <div>
-            <h2 className="text-xl font-bold text-gray-900 mb-5">
-              {dict?.settings?.advancedBranding || 'Advanced Branding'}
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict?.admin?.fontSource || 'Font Source'}
-                </label>
-                <select
-                  value={settings.advancedBranding?.fontSource || 'system'}
-                  onChange={(e) => {
-                    const fontSource = e.target.value as 'google' | 'custom' | 'system';
-                    updateSetting('advancedBranding', {
-                      ...settings.advancedBranding,
-                      fontSource,
-                    });
-                  }}
-                  className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
-                >
-                  {getFontSourceOptions().map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {dict?.admin?.[option.value === 'system' ? 'systemFont' : option.value === 'google' ? 'googleFont' : 'customFont'] || option.label}
-                    </option>
-                  ))}
-                </select>
+            <fieldset className="mt-4" disabled={fieldsDisabled}>
+              <legend className={LABEL}>{t('fontSource', 'Font Source')}</legend>
+              <div className="grid grid-cols-3 gap-2">
+                {FONT_SOURCES.map((value) => {
+                  const on = source === value;
+                  return (
+                    <label
+                      key={value}
+                      className={`flex min-h-[44px] cursor-pointer items-center justify-center border px-2 text-center font-receipt text-xs font-medium uppercase tracking-[0.08em] transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-brand-hover has-[:disabled]:cursor-not-allowed ${on ? 'border-ink bg-ink text-paper-white' : 'border-ink/25 text-ink hover:bg-paper'}`}
+                    >
+                      <input type="radio" name="font-source" value={value} checked={on} onChange={() => set({ fontSource: value })} className="sr-only" />
+                      {sourceLabel[value]}
+                    </label>
+                  );
+                })}
               </div>
+            </fieldset>
+
+            <div className="mt-4 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict?.admin?.fontFamilyName || 'Font Family Name'}
-                </label>
+                <label htmlFor="font-family" className={LABEL}>{t('fontFamilyName', 'Font Family Name')}</label>
                 <input
+                  id="font-family"
                   type="text"
-                  value={settings.advancedBranding?.fontFamily || ''}
-                  onChange={(e) => updateSetting('advancedBranding', {
-                    ...settings.advancedBranding,
-                    fontFamily: e.target.value,
-                  })}
-                  className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
-                  placeholder={getPlaceholderForFontFamily(dict)}
+                  disabled={fieldsDisabled}
+                  value={branding.fontFamily || ''}
+                  onChange={(e) => set({ fontFamily: e.target.value })}
+                  className={INPUT}
+                  placeholder={t('fontFamilyPlaceholder', 'e.g., Roboto, Inter, Arial')}
                 />
-              </div>
-              {shouldShowGoogleFontUrl(settings.advancedBranding?.fontSource) && (
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {dict?.admin?.googleFontURL || 'Google Font URL'}
-                  </label>
-                  <input
-                    type="url"
-                    value={settings.advancedBranding?.googleFontUrl || ''}
-                    onChange={(e) => updateSetting('advancedBranding', {
-                      ...settings.advancedBranding,
-                      googleFontUrl: e.target.value,
-                    })}
-                    className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
-                    placeholder={getPlaceholderForGoogleFontUrl(dict)}
-                  />
-                </div>
-              )}
-              {shouldShowCustomFontUrl(settings.advancedBranding?.fontSource) && (
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {dict?.admin?.customFontURL || 'Custom Font URL'}
-                  </label>
-                  <input
-                    type="url"
-                    value={settings.advancedBranding?.customFontUrl || ''}
-                    onChange={(e) => updateSetting('advancedBranding', {
-                      ...settings.advancedBranding,
-                      customFontUrl: e.target.value,
-                    })}
-                    className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
-                    placeholder={getPlaceholderForCustomFontUrl(dict)}
-                  />
-                </div>
-              )}
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict?.admin?.customCSS || 'Custom CSS'}
-                </label>
-                <textarea
-                  value={settings.advancedBranding?.customTheme?.css || ''}
-                  onChange={(e) => updateSetting('advancedBranding', {
-                    ...settings.advancedBranding,
-                    customTheme: {
-                      ...settings.advancedBranding?.customTheme,
-                      css: e.target.value,
-                    },
-                  })}
-                  rows={10}
-                  className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white font-mono text-sm"
-                  placeholder={getPlaceholderForCustomCSS(dict)}
-                />
-                <p className="mt-2 text-xs text-gray-500">
-                  {getCustomCSSHint(dict)}
+                <p className={HINT}>
+                  {source === 'system'
+                    ? t('fontFamilySystemHint', 'Leave blank to keep the default type. A name here is used only if the device already has that font.')
+                    : t('fontFamilyLinkedHint', 'Must match the family name inside the font, e.g. Inter.')}
                 </p>
               </div>
-            </div>
-          </div>
 
-          {canManage && (
-            <div className="flex justify-end pt-6 mt-8 border-t border-gray-200">
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="px-6 py-3 bg-brand text-white hover:bg-brand-hover font-semibold transition-all duration-200 border border-brand-hover disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-              >
-                {saving ? (
-                  <>
-                    <div className="animate-spin h-5 w-5 border-b-2 border-white"></div>
-                    <span>{dict?.common?.saving || 'Saving...'}</span>
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    <span>{dict?.common?.save || 'Save Settings'}</span>
-                  </>
-                )}
-              </button>
+              {source === 'google' && (
+                <div>
+                  <label htmlFor="google-font-url" className={LABEL}>{t('googleFontURL', 'Google Font URL')}</label>
+                  <input
+                    id="google-font-url"
+                    type="url"
+                    disabled={fieldsDisabled}
+                    value={branding.googleFontUrl || ''}
+                    onChange={(e) => set({ googleFontUrl: e.target.value.trim() })}
+                    className={`${INPUT} font-receipt`}
+                    placeholder={t('googleFontURLPlaceholder', 'https://fonts.googleapis.com/css2?family=Roboto')}
+                  />
+                </div>
+              )}
+
+              {source === 'custom' && (
+                <div>
+                  <label htmlFor="custom-font-url" className={LABEL}>{t('customFontURL', 'Custom Font URL')}</label>
+                  <input
+                    id="custom-font-url"
+                    type="url"
+                    disabled={fieldsDisabled}
+                    value={branding.customFontUrl || ''}
+                    onChange={(e) => set({ customFontUrl: e.target.value.trim() })}
+                    className={`${INPUT} font-receipt`}
+                    placeholder={t('customFontURLPlaceholder', 'https://example.com/fonts/custom-font.woff2')}
+                  />
+                  <p className={HINT}>{t('customFontUrlHint', 'A .woff2 or .woff file served over HTTPS that allows other sites to load it.')}</p>
+                </div>
+              )}
+
+              <div>
+                <label htmlFor="custom-css" className={LABEL}>{t('customCSS', 'Custom CSS')}</label>
+                <textarea
+                  id="custom-css"
+                  rows={9}
+                  spellCheck={false}
+                  disabled={fieldsDisabled}
+                  value={branding.customTheme?.css || ''}
+                  onChange={(e) => set({ customTheme: { ...branding.customTheme, css: e.target.value } })}
+                  className={`${INPUT} font-receipt`}
+                  placeholder={t('customCSSPlaceholder', ':root { --primary-color: #2563eb; }')}
+                />
+                <p className={HINT}>{t('customCssScopeHint', 'Applies to your store pages once saved. Admin pages skip it, so a rule that hides something can always be removed here.')}</p>
+              </div>
+
+              {showProblems && problems.length > 0 && (
+                <Strip tone="error">
+                  <ul className="space-y-1">{problems.map((p) => <li key={p}>{problemText[p]}</li>)}</ul>
+                </Strip>
+              )}
             </div>
-          )}
-        </div>
+
+            {canManage && (
+              <div className="mt-5 flex flex-wrap items-center justify-end gap-2 border-t border-dashed border-ink/30 pt-3">
+                {dirty && <span className="mr-auto font-receipt text-xs uppercase tracking-[0.08em] text-ink/60">{t('unsavedChanges', 'Unsaved changes')}</span>}
+                <button type="button" onClick={discard} disabled={!dirty || saving} className={KEY}>
+                  <RotateCcw className={ICON} strokeWidth={1.75} aria-hidden />
+                  {t('discardChanges', 'Discard')}
+                </button>
+                <button type="button" onClick={handleSave} disabled={!dirty || saving} className={KEY_PRIMARY}>
+                  <Save className={ICON} strokeWidth={1.75} aria-hidden />
+                  {saving ? (dict.common?.saving || 'Saving...') : (dict.common?.save || 'Save')}
+                </button>
+              </div>
+            )}
+          </div>
+          <div className="mk-tear-b h-3 bg-paper-white" aria-hidden />
+        </section>
+
+        {/* A test print in the chosen type */}
+        <section aria-labelledby="proof-heading" className="min-w-0">
+          <p id="proof-heading" className="font-receipt text-xs font-medium uppercase tracking-[0.14em] text-[#8fe3d0]">{t('brandingProof', 'Test print')}</p>
+          <div className="mt-3 mx-auto max-w-sm drop-shadow-[0_10px_20px_rgba(0,0,0,0.35)]">
+            <div className="bg-paper-white px-5 py-5 text-ink" style={proofFont ? { fontFamily: proofFont } : undefined}>
+              <p className="text-center text-2xl font-bold uppercase leading-tight">{saved?.companyName || t('yourStoreName', 'Your Store Name')}</p>
+              <p className="mt-1 text-center text-xs text-ink/70">{t('proofAddress', '000 Sample Street, Sample City')}</p>
+              <div className="my-3 border-t border-dashed border-ink/40" />
+              <div className="space-y-1 text-sm">
+                <ReceiptRow label={t('proofItemOne', 'Sample item × 2')} value="200.00" />
+                <ReceiptRow label={t('proofItemTwo', 'Sample item × 1')} value="136.00" />
+              </div>
+              <div className="my-3 border-t border-dashed border-ink/40" />
+              <div className="space-y-1 text-sm">
+                <ReceiptRow strong label={t('proofTotal', 'Total')} value="336.00" />
+                <ReceiptRow label={t('proofVat', 'VAT (12%) included')} value="36.00" />
+              </div>
+              <p className="mt-4 text-center text-xs text-ink/60">{t('proofThanks', 'Thank you, come again')}</p>
+              <p className="mt-3 border-t border-dashed border-ink/30 pt-2 text-center font-receipt text-[11px] uppercase tracking-[0.08em] text-ink/50">
+                {t('proofSampleNote', 'Sample only · not a receipt')}
+              </p>
+            </div>
+            <div className="mk-tear-b h-3 bg-paper-white" aria-hidden />
+          </div>
+          <p className="mt-3 font-receipt text-xs text-white/60">
+            {source === 'system' && !branding.fontFamily
+              ? t('proofDefaultHint', 'Printed in the default type.')
+              : t('proofFontHint', 'Printed in {font}. If it looks like the default type, the font did not load.').replace('{font}', cleanFontFamily(branding.fontFamily || '') || sourceLabel[source])}
+          </p>
+        </section>
       </div>
-    </div>
+    </RegisterPage>
   );
 }

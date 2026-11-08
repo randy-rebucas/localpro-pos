@@ -6,6 +6,8 @@ import { hasTenantPermission } from '@/lib/permissions-server';
 import User from '@/models/User'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
+import { getTenantSettingsById } from '@/lib/tenant';
+import { auditQueryNeedsTimeZone, buildAuditLogQuery } from '@/lib/audit-log-filter';
 
 export async function GET(request: NextRequest) {
   try {
@@ -29,37 +31,19 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(Math.max(1, rawLimit), 200);
     const skip = (page - 1) * limit;
 
-    // Filters
-    const action = searchParams.get('action');
-    const entityType = searchParams.get('entityType');
-    const userId = searchParams.get('userId');
-    const startDate = searchParams.get('startDate');
-    const endDate = searchParams.get('endDate');
-
-    // Build query
-    const query: any = { tenantId: user.tenantId }; // eslint-disable-line @typescript-eslint/no-explicit-any
-
-    if (action) {
-      query.action = action;
-    }
-
-    if (entityType) {
-      query.entityType = entityType;
-    }
-
-    if (userId) {
-      query.userId = userId;
-    }
-
-    if (startDate || endDate) {
-      query.createdAt = {};
-      if (startDate) {
-        query.createdAt.$gte = new Date(startDate);
+    // Filters (shared with the export, so an export prints what this list shows).
+    // Picked dates are store days in the tenant's zone, so the zone is only looked up when one is set.
+    const timeZone = auditQueryNeedsTimeZone(searchParams)
+      ? (await getTenantSettingsById(String(user.tenantId)))?.timezone || 'Asia/Manila'
+      : 'Asia/Manila';
+    const built = buildAuditLogQuery(searchParams, String(user.tenantId), timeZone);
+    if (!built.ok) {
+      if (built.reason === 'invalidDate') {
+        return NextResponse.json({ success: false, error: t('validation.invalidDate', 'Invalid date') }, { status: 400 });
       }
-      if (endDate) {
-        query.createdAt.$lte = new Date(endDate);
-      }
+      return NextResponse.json({ success: true, data: [], pagination: { page, limit, total: 0, pages: 0 } });
     }
+    const query = built.query;
 
     // Fetch audit logs with pagination
     const [auditLogs, total] = await Promise.all([

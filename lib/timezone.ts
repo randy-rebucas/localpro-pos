@@ -88,6 +88,27 @@ export function toTenantDateString(date: Date | string, tz: string = DEFAULT_TEN
 }
 
 /**
+ * The calendar month containing `now`, as observed in `tz`: `start` is 00:00 on the 1st
+ * at the store and `end` is 00:00 on the 1st of the next month (exclusive).
+ * Falls back to the default timezone if `tz` isn't one the runtime recognises.
+ */
+export function getTenantMonthRange(tz: string = DEFAULT_TENANT_TIMEZONE, now: Date = new Date()): { start: Date; end: Date } {
+  let zone = tz;
+  try {
+    new Intl.DateTimeFormat('en-CA', { timeZone: zone });
+  } catch {
+    zone = DEFAULT_TENANT_TIMEZONE;
+  }
+  const [y, m] = toTenantDateString(now, zone).split('-').map(Number);
+  const first = (year: number, month: number) => `${year}-${String(month).padStart(2, '0')}-01`;
+  const next = m === 12 ? first(y + 1, 1) : first(y, m + 1);
+  return {
+    start: getTenantDayBoundaries(first(y, m), zone).start,
+    end: getTenantDayBoundaries(next, zone).start,
+  };
+}
+
+/**
  * Turn a date picked in a form into the instant a validity window opens or closes.
  * A plain 'YYYY-MM-DD' day means the start (or, with `edge: 'end'`, the last
  * millisecond) of that day in `tz`, so "valid until Nov 8" lasts all of Nov 8 at

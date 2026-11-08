@@ -49,16 +49,18 @@ export function useBranchForm(branchToEdit?: Branch | null) {
       try {
         const url = branchToEdit ? `/api/branches/${branchToEdit._id}` : '/api/branches';
         const method = branchToEdit ? 'PUT' : 'POST';
+        // On an edit, an emptied field is sent as null so the server clears it (undefined is dropped and kept).
+        const empty = branchToEdit ? null : undefined;
+        const address = Object.fromEntries(
+          Object.entries(formData.address || {}).map(([k, v]) => [k, (v || '').trim()])
+        );
         const body: Record<string, unknown> = {
-          name: formData.name,
-          code: formData.code || undefined,
-          address:
-            formData.address?.street || formData.address?.city
-              ? formData.address
-              : undefined,
-          phone: formData.phone || undefined,
-          email: formData.email || undefined,
-          managerId: formData.managerId || undefined,
+          name: formData.name.trim(),
+          code: formData.code?.trim() || empty,
+          address: Object.values(address).some(Boolean) ? address : empty,
+          phone: formData.phone?.trim() || empty,
+          email: formData.email?.trim() || empty,
+          managerId: formData.managerId || empty,
         };
 
         const res = await globalThis.fetch(url, {

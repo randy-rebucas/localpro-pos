@@ -56,3 +56,30 @@ describe('calculateTax with a pricing mode', () => {
     expect(result).toMatchObject({ taxAmount: 0, exemptAmount: 80 });
   });
 });
+
+describe('calculateTax when rules exist but none matches', () => {
+  beforeEach(() => {
+    taxRules.list = [{ rate: 5, label: 'Food tax', appliesTo: 'categories', categoryIds: ['cat-food'] }];
+  });
+
+  it('uses the rule when it matches', async () => {
+    const result = await calculateTax('tenant-a', 1050, [{ subtotal: 1050, categoryId: 'cat-food' }], settings(true));
+    expect(result).toMatchObject({ taxAmount: 50, taxRate: 5, taxLabel: 'Food tax' });
+  });
+
+  it('falls back to the Settings rate instead of charging nothing', async () => {
+    const result = await calculateTax('tenant-a', 1120, [{ subtotal: 1120, categoryId: 'cat-other' }], settings(true));
+    expect(result).toMatchObject({ taxAmount: 120, taxRate: 12, taxLabel: 'VAT' });
+  });
+
+  it('still charges nothing when Settings tax is off', async () => {
+    const off = { ...settings(true), taxEnabled: false } as unknown as ITenantSettings;
+    const result = await calculateTax('tenant-a', 1120, [{ subtotal: 1120, categoryId: 'cat-other' }], off);
+    expect(result).toMatchObject({ taxAmount: 0, taxRate: 0 });
+  });
+
+  it('charges nothing when every item is exempt, even without item subtotals', async () => {
+    const result = await calculateTax('tenant-a', 500, [{ taxExempt: true }], settings(true));
+    expect(result.taxAmount).toBe(0);
+  });
+});

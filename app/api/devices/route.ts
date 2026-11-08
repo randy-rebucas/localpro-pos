@@ -7,6 +7,7 @@ import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
+import { tenantBranchExists } from '@/lib/device-identity-server';
 
 export async function GET(request: NextRequest) {
   try {
@@ -53,7 +54,20 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { label, serialNumber, terminalId, branchId, ptuNumber, ptuStatus } = body;
+    const { branchId, ptuStatus } = body;
+    const str = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
+    const label = str(body.label);
+    const serialNumber = str(body.serialNumber);
+    const terminalId = str(body.terminalId);
+    const ptuNumber = str(body.ptuNumber);
+
+    // The list populates the branch name, so a branch id from another tenant would leak it.
+    if (branchId && !(await tenantBranchExists(branchId, tenantId))) {
+      return NextResponse.json({ success: false, error: t('validation.deviceBranchInvalid', 'The chosen branch is not part of this store') }, { status: 400 });
+    }
+    if (ptuStatus !== undefined && ptuStatus !== 'pending' && ptuStatus !== 'approved') {
+      return NextResponse.json({ success: false, error: 'Invalid PTU status' }, { status: 400 });
+    }
 
     if (!label || !serialNumber || !terminalId) {
       return NextResponse.json(

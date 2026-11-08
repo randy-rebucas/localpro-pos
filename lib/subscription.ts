@@ -4,6 +4,8 @@ import SubscriptionPlan from '@/models/SubscriptionPlan';
 import Tenant from '@/models/Tenant';
 import { logger } from '@/lib/logger';
 import { cacheWrap, CacheKeys, TTL } from '@/lib/cache';
+import { getTenantSettingsById } from '@/lib/tenant';
+import { getTenantMonthRange } from '@/lib/timezone';
 import mongoose from 'mongoose'; // eslint-disable-line @typescript-eslint/no-unused-vars
 
 export interface SubscriptionLimits {
@@ -66,9 +68,14 @@ export interface SubscriptionStatus {
   nextBillingDate?: Date;
 }
 
-function startOfMonth(): Date {
-  const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), 1);
+/**
+ * This calendar month at the store, so the monthly sales counter resets at midnight on the 1st
+ * in the tenant's time zone, not the server's (UTC on Vercel, 8 hours late for Manila).
+ * Tenant settings are cached, so this adds no database read per sale.
+ */
+export async function tenantMonthRange(tenantId: string): Promise<{ start: Date; end: Date }> {
+  const settings = await getTenantSettingsById(String(tenantId)).catch(() => null);
+  return getTenantMonthRange(settings?.timezone || undefined);
 }
 
 export class SubscriptionService {
@@ -352,7 +359,7 @@ export class SubscriptionService {
         .lean()
     );
     const lastReset = sub?.usage?.lastResetDate ? new Date(sub.usage.lastResetDate) : null;
-    if (!lastReset || lastReset < startOfMonth()) return null;
+    if (!lastReset || lastReset < (await tenantMonthRange(tenantId)).start) return null;
     return sub!.usage.currentTransactions ?? 0;
   }
 
@@ -363,7 +370,7 @@ export class SubscriptionService {
    */
   static async recordTransaction(tenantId: string, countThisMonth: () => Promise<number>): Promise<void> {
     await connectDB();
-    const monthStart = startOfMonth();
+    const monthStart = (await tenantMonthRange(tenantId)).start;
     const res = await Subscription.updateOne(
       { tenantId, 'usage.lastResetDate': { $gte: monthStart } },
       { $inc: { 'usage.currentTransactions': 1 } }
@@ -376,6 +383,13 @@ export class SubscriptionService {
     }
   }
 
+  /** Transactions created so far in the tenant's current calendar month (the one count every caller shares). */
+  static async countTransactionsThisMonth(tenantId: string): Promise<number> {
+    const { default: Transaction } = await import('@/models/Transaction');
+    const { start, end } = await tenantMonthRange(tenantId);
+    return Transaction.countDocuments({ tenantId, createdAt: { $gte: start, $lt: end } });
+  }
+
   /**
    * recordTransaction() for any path that creates a Transaction document
    * (manual entry, refunds, offline sync…). Never throws — usage tracking must
@@ -383,17 +397,7 @@ export class SubscriptionService {
    */
   static async trackTransactionCreated(tenantId: string): Promise<void> {
     try {
-      const { default: Transaction } = await import('@/models/Transaction');
-      await this.recordTransaction(String(tenantId), () => {
-        const now = new Date();
-        return Transaction.countDocuments({
-          tenantId,
-          createdAt: {
-            $gte: new Date(now.getFullYear(), now.getMonth(), 1),
-            $lt: new Date(now.getFullYear(), now.getMonth() + 1, 1),
-          },
-        });
-      });
+      await this.recordTransaction(String(tenantId), () => this.countTransactionsThisMonth(String(tenantId)));
     } catch (error) {
       logger.error('Failed to update subscription usage:', error);
     }

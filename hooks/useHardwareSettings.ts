@@ -2,115 +2,95 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { ITenantSettings } from '@/types/tenant';
-import { pickChangedSettings, useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import type { HardwareConfig } from '@/lib/hardware';
 
-export interface HardwareSettingsMessage {
-  type: 'success' | 'error';
-  text: string;
-}
+export type HardwareSaveResult =
+  | { success: true }
+  | { success: false; reason: 'forbidden' | 'server' | 'network' | 'cancelled'; error?: string };
 
+/**
+ * The tenant's saved hardware setup plus a working copy the page edits. Saving sends
+ * only `hardwareConfig`, and the copy kept in this browser's localStorage (which the
+ * register reads first) is what was saved.
+ */
 export const useHardwareSettings = (tenant: string) => {
-  const { settings: contextSettings, ensureSettings, applySettings } = useTenantSettings();
-  const [settings, setSettings] = useState<ITenantSettings | null>(null);
+  const { ensureSettings, applySettings } = useTenantSettings();
+  const [saved, setSaved] = useState<HardwareConfig | null>(null);
+  const [draft, setDraft] = useState<HardwareConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<HardwareSettingsMessage | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  // Seeded from TenantSettingsContext (already loaded by the layout) instead of
-  // a separate GET /api/tenants/[slug]/settings.
+  // Seeded from TenantSettingsContext (already loaded by the layout).
   const fetchSettings = useCallback(async () => {
     setLoading(true);
-    setMessage(null);
+    setLoadError(null);
     const result = await ensureSettings();
-    if (result.error) {
-      setMessage({ type: 'error', text: result.error });
+    if (result.error || !result.settings) {
+      setLoadError(result.error || 'Unable to load settings');
     } else {
-      const defaultSettings: ITenantSettings = {
-        hardwareConfig: {},
-        ...(result.settings as ITenantSettings),
-      };
-      setSettings(defaultSettings);
+      const config = ((result.settings as ITenantSettings).hardwareConfig || {}) as HardwareConfig;
+      setSaved(config);
+      setDraft(config);
     }
     setLoading(false);
   }, [ensureSettings]);
 
-  const updateHardwareConfig = useCallback((hardwareConfig: ITenantSettings['hardwareConfig']) => {
-    setSettings((prevSettings) => {
-      if (!prevSettings) return prevSettings;
-      return { ...prevSettings, hardwareConfig };
-    });
-  }, []);
+  const saveSettings = useCallback(async (): Promise<HardwareSaveResult> => {
+    if (!draft) return { success: false, reason: 'cancelled' };
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
+    abortControllerRef.current = controller;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/tenants/${tenant}/settings`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ settings: { hardwareConfig: draft } }),
+        signal: controller.signal,
+      });
+      const data = await res.json().catch(() => ({}));
 
-  const saveSettings = useCallback(
-    async (settingsToSave: ITenantSettings) => {
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 20000);
-        abortControllerRef.current = controller;
-
-        setSaving(true);
-        setMessage(null);
-
-        const res = await fetch(`/api/tenants/${tenant}/settings`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          // Only the keys this page changed (the route merges server-side)
-          body: JSON.stringify({ settings: pickChangedSettings(settingsToSave, contextSettings) }),
-          signal: controller.signal,
-        });
-
-        clearTimeout(timeoutId);
-        const data = await res.json();
-
-        if (data.success) {
-          setSettings(data.data);
-          applySettings(data.data);
-
-          // Sync to localStorage so the POS page picks up the new config immediately
-          if (data.data?.hardwareConfig !== undefined) {
-            localStorage.setItem(`hardware_config_${tenant}`, JSON.stringify(data.data.hardwareConfig));
-          }
-
-          return { success: true, data: data.data };
-        } else {
-          const errorMessage =
-            res.status === 401 || res.status === 403
-              ? 'Unauthorized. Please login with admin account.'
-              : data.error || 'Failed to save hardware settings';
-          setMessage({ type: 'error', text: errorMessage });
-          return { success: false, error: errorMessage };
-        }
-      } catch (error: unknown) {
-        if (error instanceof Error && error.name !== 'AbortError') {
-          console.error('Error saving settings:', error);
-          const errorText = 'Failed to save hardware settings. Please check your connection.';
-          setMessage({ type: 'error', text: errorText });
-          return { success: false, error: errorText };
-        }
-        return { success: false, error: 'Request cancelled' };
-      } finally {
-        setSaving(false);
+      if (!res.ok || !data.success) {
+        if (res.status === 401 || res.status === 403) return { success: false, reason: 'forbidden' };
+        return { success: false, reason: 'server', error: data.error };
       }
-    },
-    [tenant, contextSettings, applySettings]
-  );
 
-  useEffect(() => {
-    return () => {
-      abortControllerRef.current?.abort();
-    };
-  }, []);
+      applySettings(data.data);
+      setSaved(draft);
+      // The register reads this browser's copy first, so keep it to what was just saved.
+      try {
+        localStorage.setItem(`hardware_config_${tenant}`, JSON.stringify(draft));
+      } catch {
+        // Storage can be blocked (private mode); the tenant record still has it.
+      }
+      return { success: true };
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') return { success: false, reason: 'cancelled' };
+      return { success: false, reason: 'network' };
+    } finally {
+      clearTimeout(timeoutId);
+      setSaving(false);
+    }
+  }, [tenant, draft, applySettings]);
+
+  useEffect(() => () => abortControllerRef.current?.abort(), []);
+
+  const dirty = !!draft && !!saved && JSON.stringify(draft) !== JSON.stringify(saved);
 
   return {
-    settings,
+    saved,
+    draft,
+    setDraft,
+    dirty,
     loading,
     saving,
-    message,
-    setMessage,
+    loadError,
     fetchSettings,
-    updateHardwareConfig,
     saveSettings,
+    discard: () => setDraft(saved),
   };
 };

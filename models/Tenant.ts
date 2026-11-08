@@ -351,8 +351,10 @@ const TenantSchema: Schema = new Schema(
             enum: ['browser', 'usb', 'serial', 'network'],
           },
           profile: String,
+          name: String,
           vendorId: Number,
           productId: Number,
+          port: String,
           ipAddress: String,
           portNumber: Number,
         },
@@ -370,6 +372,15 @@ const TenantSchema: Schema = new Schema(
         cashDrawer: {
           enabled: Boolean,
           connectedToPrinter: Boolean,
+          // A standalone USB/serial drawer; without this the settings $set dropped it on save.
+          direct: {
+            type: {
+              type: String,
+              enum: ['usb', 'serial'],
+            },
+            vendorId: Number,
+            productId: Number,
+          },
         },
         touchscreen: {
           enabled: Boolean,

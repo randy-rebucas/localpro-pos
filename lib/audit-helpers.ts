@@ -1,125 +1,48 @@
-import { AuditLog } from '@/hooks/useAuditLogs';
+import type { AuditLog } from '@/hooks/useAuditLogs';
 
-export interface ActionOption {
-  value: string;
-  label: string;
-}
+/**
+ * Every action code the server writes (the values of `AuditActions` in lib/audit.ts).
+ * Kept here because lib/audit.ts pulls in the database and cannot load in the browser;
+ * __tests__/lib/audit-helpers.test.ts keeps the two lists equal.
+ */
+export const AUDIT_ACTION_CODES = [
+  'create', 'update', 'delete', 'view', 'login', 'logout',
+  'transaction.create', 'transaction.cancel', 'transaction.refund', 'transaction.export',
+  'stock.adjust', 'stock.purchase',
+  'discount.create', 'discount.update', 'discount.delete',
+  'attendance.clock_in', 'attendance.clock_out',
+  'payment.create', 'payment.refund',
+  'invoice.create', 'invoice.update', 'invoice.send', 'invoice.mark_paid',
+  'prescription.create', 'prescription.update', 'prescription.dispense', 'prescription.cancel',
+  'pharmacy_settings.update', 'expiry_report.view',
+  'x_reading.view', 'z_reading.generate', 'z_reading.view',
+  'cash_drawer.kick', 'audit_log.export',
+  'device.create', 'device.update', 'device.delete',
+  'subscription.activate',
+] as const;
 
-export function getActionOptions(): ActionOption[] {
-  return [
-    { value: 'create', label: 'Create' },
-    { value: 'update', label: 'Update' },
-    { value: 'delete', label: 'Delete' },
-    { value: 'view', label: 'View' },
-    { value: 'login', label: 'Login' },
-    { value: 'logout', label: 'Logout' },
-  ];
-}
-
-export function extractUserInfo(userId: unknown): { name: string; email: string } {
+export function extractUserInfo(userId: AuditLog['userId']): { name: string; email: string } | null {
   if (typeof userId === 'object' && userId !== null) {
-    const user = userId as Record<string, unknown>;
-    return {
-      name: (user.name as string) || 'System',
-      email: (user.email as string) || '',
-    };
+    return { name: userId.name || '', email: userId.email || '' };
   }
-  return { name: 'System', email: '' };
+  return null;
 }
 
-export function formatAuditTimestamp(dateString: string, lang: 'en' | 'es' = 'en', timeZone?: string): string {
-  try {
-    const date = new Date(dateString);
-    const locale = lang === 'es' ? 'es-ES' : 'en-US';
-    return date.toLocaleDateString(locale, { timeZone }) + ' ' + date.toLocaleTimeString(locale, { hour12: true, timeZone });
-  } catch {
-    return dateString;
-  }
+/** How an action prints on the journal: removals and money going back in stamp red, new records in teal. */
+export function actionTone(action: string): 'out' | 'in' | 'plain' {
+  const verb = action.split('.').pop() || action;
+  if (['delete', 'cancel', 'refund'].includes(verb)) return 'out';
+  if (['create', 'activate', 'generate', 'purchase'].includes(verb)) return 'in';
+  return 'plain';
 }
 
-export function getActionBadgeClass(action: string): string {
-  const baseClass = 'px-2 py-1 text-xs font-semibold border';
-  
-  switch (action.toLowerCase()) {
-    case 'create':
-      return `${baseClass} border-green-300 bg-green-100 text-green-800`;
-    case 'update':
-      return `${baseClass} border-teal-300 bg-brand-soft text-brand-navy`;
-    case 'delete':
-      return `${baseClass} border-red-300 bg-red-100 text-red-800`;
-    case 'view':
-      return `${baseClass} border-gray-300 bg-gray-100 text-gray-800`;
-    case 'login':
-      return `${baseClass} border-yellow-300 bg-yellow-100 text-yellow-800`;
-    case 'logout':
-      return `${baseClass} border-purple-300 bg-purple-100 text-purple-800`;
-    default:
-      return `${baseClass} border-teal-300 bg-brand-soft text-brand-navy`;
-  }
-}
-
+/** Long ids print as their last 12 characters, the part that tells them apart. */
 export function formatEntityId(entityId: string | undefined): string {
-  if (!entityId) return '-';
-  // Show last 12 characters if ID is very long
-  if (entityId.length > 20) {
-    return entityId.substring(entityId.length - 12);
-  }
-  return entityId;
+  if (!entityId) return '';
+  return entityId.length > 20 ? `…${entityId.slice(-12)}` : entityId;
 }
 
-export function formatIpAddress(ipAddress: string | undefined): string {
-  return ipAddress || '-';
-}
-
-export function getPaginationInfo(
-  page: number,
-  limit: number,
-  total: number,
-  dict: any // eslint-disable-line @typescript-eslint/no-explicit-any
-): string {
-  const start = (page - 1) * limit + 1;
-  const end = Math.min(page * limit, total);
-  
-  return `${dict?.admin?.showing || 'Showing'} ${start} ${dict?.admin?.to || 'to'} ${end} ${dict?.admin?.of || 'of'} ${total} ${dict?.admin?.results || 'results'}`;
-}
-
-export function canGoToPreviousPage(page: number): boolean {
-  return page > 1;
-}
-
-export function canGoToNextPage(page: number, pages: number): boolean {
-  return page < pages;
-}
-
-export function validateDateRange(startDate: string, endDate: string): { valid: boolean; errors: string[] } {
-  const errors: string[] = [];
-
-  if (startDate && endDate) {
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-
-    if (start > end) {
-      errors.push('Start date must be before end date');
-    }
-
-    // Check if range is more than 1 year
-    const diffTime = Math.abs(end.getTime() - start.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    if (diffDays > 365) {
-      errors.push('Date range cannot exceed 1 year');
-    }
-  }
-
-  return {
-    valid: errors.length === 0,
-    errors,
-  };
-}
-
-export function isAuditLogEmpty(logs: AuditLog[]): boolean {
-  return logs.length === 0;
-}
-
-export function shouldShowPagination(pages: number): boolean {
-  return pages > 1;
+/** Whether a details object has anything to print. */
+export function hasDetails(value: Record<string, unknown> | undefined): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && Object.keys(value).length > 0;
 }

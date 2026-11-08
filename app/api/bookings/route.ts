@@ -14,6 +14,7 @@ import { getTenantSettingsById } from '@/lib/tenant';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { requireBookingSchedulingAccess } from '@/lib/booking-scheduling-access';
 import { getClosedHolidayForDate } from '@/lib/holidays';
+import { bookingFitsHours } from '@/lib/booking-hours';
 import { logger } from '@/lib/logger';
 
 class BookingConflictError extends Error {
@@ -204,7 +205,7 @@ export async function POST(request: NextRequest) {
     // Block bookings on days the tenant has marked the business closed
     // (Admin → Holidays) — this is the whole point of that calendar.
     const holidaySettings = await getTenantSettingsById(tenantId);
-    const closedHoliday = getClosedHolidayForDate(holidaySettings?.holidays, start);
+    const closedHoliday = getClosedHolidayForDate(holidaySettings?.holidays, start, holidaySettings?.timezone);
     if (closedHoliday) {
       return NextResponse.json(
         {
@@ -213,6 +214,20 @@ export async function POST(request: NextRequest) {
         },
         { status: 409 }
       );
+    }
+
+    // Customers can only book within Admin → Business Hours (when set). Staff may still book
+    // outside them, e.g. an appointment the owner agreed to open early for.
+    if (isCustomer) {
+      const fit = bookingFitsHours(start, end, holidaySettings?.businessHours, holidaySettings?.timezone);
+      if (!fit.ok) {
+        const message = {
+          closedDay: t('validation.bookingClosedDay', 'The business is closed on this day'),
+          outsideHours: t('validation.bookingOutsideHours', 'This time is outside business hours'),
+          break: t('validation.bookingDuringBreak', 'This time falls during a break'),
+        }[fit.reason];
+        return NextResponse.json({ success: false, error: message }, { status: 409 });
+      }
     }
 
     // Verify staff exists if provided (only for staff-created bookings, not customer bookings)

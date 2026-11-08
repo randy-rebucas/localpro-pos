@@ -1,126 +1,64 @@
+export type CollectionGroup = 'stock' | 'sales' | 'customers' | 'promos' | 'loyalty' | 'store' | 'staff' | 'records';
+
 export interface CollectionOption {
   key: string;
+  /** English name; the page looks up `backupReset.collection_<key>` first. */
   label: string;
+  group: CollectionGroup;
+  /** Can be backed up but never cleared or restored (the server refuses it too). */
+  backupOnly?: boolean;
 }
 
-export const BACKUP_RESET_COLLECTIONS: CollectionOption[] = [
-  // Products & Inventory
-  { key: 'products', label: 'Products' },
-  { key: 'productBundles', label: 'Product Bundles' },
-  { key: 'categories', label: 'Categories' },
-  { key: 'stockMovements', label: 'Stock Movements' },
-  
-  // Sales & Transactions
-  { key: 'transactions', label: 'Transactions' },
-  { key: 'payments', label: 'Payments' },
-  { key: 'invoices', label: 'Invoices' },
-  
-  // Customer Management
+/** Groups in the order the page lists them, with English names (`backupReset.group_<key>`). */
+export const COLLECTION_GROUPS: { key: CollectionGroup; label: string }[] = [
+  { key: 'stock', label: 'Products & stock' },
+  { key: 'sales', label: 'Sales' },
   { key: 'customers', label: 'Customers' },
-  { key: 'addresses', label: 'Customer Addresses' },
-  { key: 'customerOTPs', label: 'Customer OTPs' },
-  
-  // Discounts & Promotions
-  { key: 'discounts', label: 'Discounts' },
-  { key: 'savedCarts', label: 'Saved Carts' },
-  
-  // Loyalty Program
-  { key: 'loyaltyConfigs', label: 'Loyalty Program Config' },
-  { key: 'loyaltyTransactions', label: 'Loyalty Transactions' },
-  
-  // Tax & Compliance
-  { key: 'taxRules', label: 'Tax Rules' },
-  
-  // Organizational
-  { key: 'branches', label: 'Branches' },
-  { key: 'expenses', label: 'Expenses' },
-  
-  // Cash Management
-  { key: 'cashDrawerSessions', label: 'Cash Drawer Sessions' },
-  
-  // Staff & Operations
-  { key: 'attendance', label: 'Attendance Records' },
-  
-  // Bookings & Services
-  { key: 'bookings', label: 'Bookings' },
-  
-  // Audit & Compliance
-  { key: 'auditLogs', label: 'Audit Logs' },
+  { key: 'promos', label: 'Discounts & carts' },
+  { key: 'loyalty', label: 'Loyalty' },
+  { key: 'store', label: 'Store setup' },
+  { key: 'staff', label: 'Staff & bookings' },
+  { key: 'records', label: 'Records' },
 ];
 
-export function formatCollectionName(collectionKey: string): string {
-  return collectionKey.replace(/([A-Z])/g, ' $1').trim();
+/** Must match COLLECTION_MODELS in app/api/tenants/[slug]/reset-collections/route.ts. */
+export const BACKUP_RESET_COLLECTIONS: CollectionOption[] = [
+  { key: 'products', label: 'Products', group: 'stock' },
+  { key: 'productBundles', label: 'Product Bundles', group: 'stock' },
+  { key: 'categories', label: 'Categories', group: 'stock' },
+  { key: 'stockMovements', label: 'Stock Movements', group: 'stock' },
+
+  { key: 'transactions', label: 'Transactions', group: 'sales' },
+  { key: 'payments', label: 'Payments', group: 'sales' },
+  { key: 'invoices', label: 'Invoices', group: 'sales' },
+  { key: 'cashDrawerSessions', label: 'Cash Drawer Sessions', group: 'sales' },
+  { key: 'expenses', label: 'Expenses', group: 'sales' },
+
+  { key: 'customers', label: 'Customers', group: 'customers' },
+  { key: 'addresses', label: 'Customer Addresses', group: 'customers' },
+  { key: 'customerOTPs', label: 'Customer OTPs', group: 'customers' },
+
+  { key: 'discounts', label: 'Discounts', group: 'promos' },
+  { key: 'savedCarts', label: 'Saved Carts', group: 'promos' },
+
+  { key: 'loyaltyConfigs', label: 'Loyalty Program Config', group: 'loyalty' },
+  { key: 'loyaltyTransactions', label: 'Loyalty Transactions', group: 'loyalty' },
+
+  { key: 'taxRules', label: 'Tax Rules', group: 'store' },
+  { key: 'branches', label: 'Branches', group: 'store' },
+
+  { key: 'attendance', label: 'Attendance Records', group: 'staff' },
+  { key: 'bookings', label: 'Bookings', group: 'staff' },
+
+  { key: 'auditLogs', label: 'Audit Logs', group: 'records', backupOnly: true },
+];
+
+/** Keys that may be cleared: everything except backup-only collections. */
+export function clearableKeys(keys: string[]): string[] {
+  return keys.filter((key) => !BACKUP_RESET_COLLECTIONS.find((col) => col.key === key)?.backupOnly);
 }
 
-export function validateJsonFile(fileContent: string): { valid: boolean; error?: string; data?: any } { // eslint-disable-line @typescript-eslint/no-explicit-any
-  try {
-    const data = JSON.parse(fileContent);
-    if (!data.collections) {
-      return { valid: false, error: 'Invalid backup file. Missing collections data.' };
-    }
-    return { valid: true, data };
-  } catch (e) {
-    return { valid: false, error: 'Invalid backup file format. Please select a valid JSON backup file.' };
-  }
-}
-
+/** File size in KB with two decimals. */
 export function formatFileSize(bytes: number): string {
   return (bytes / 1024).toFixed(2);
-}
-
-export function generateBackupFilename(tenant: string): string {
-  return `backup-${tenant}-${new Date().toISOString().split('T')[0]}.json`;
-}
-
-export function hasSelectedCollections(selected: string[]): boolean {
-  return selected.length > 0;
-}
-
-export function buildResetConfirmMessage(dict: any, count: number, collections: string[]): string { // eslint-disable-line @typescript-eslint/no-explicit-any
-  return (
-    dict?.common?.resetCollectionsConfirm
-      ?.replace('{count}', count.toString())
-      ?.replace('{collections}', collections.join(', ')) ||
-    `Are you sure you want to reset ${count} collection(s)?\n\n` +
-    `Selected: ${collections.join(', ')}\n\n` +
-    `This action cannot be undone!`
-  );
-}
-
-export function buildClearExistingConfirmMessage(dict: any): string { // eslint-disable-line @typescript-eslint/no-explicit-any
-  return (
-    dict?.common?.clearExistingDataConfirm ||
-    'Are you sure you want to clear existing data before restoring?\n\n' +
-    'This will delete all current data in the collections being restored!'
-  );
-}
-
-export function canCreateBackup(selected: string[]): boolean {
-  return selected.length > 0;
-}
-
-export function canRestore(file: File | null): boolean {
-  return file !== null;
-}
-
-export function canReset(selected: string[], resetting: boolean): boolean {
-  return selected.length > 0 && !resetting;
-}
-
-export function formatResultsMessage(collection: string, result: { restored?: number; deleted?: number; cleared?: number }): string {
-  const formatted = formatCollectionName(collection);
-
-  if (result.restored !== undefined) {
-    let msg = `${formatted}: ${result.restored} record(s) restored`;
-    if (result.cleared && result.cleared > 0) {
-      msg += `, ${result.cleared} cleared`;
-    }
-    return msg;
-  }
-
-  if (result.deleted !== undefined) {
-    return `${formatted}: ${result.deleted} record(s) deleted`;
-  }
-
-  return formatted;
 }

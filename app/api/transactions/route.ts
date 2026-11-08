@@ -282,13 +282,8 @@ export async function POST(request: NextRequest) {
     // Check subscription transaction limits. The monthly count comes from the
     // subscription's usage counter; counting the month's transactions is only
     // the fallback when the counter hasn't been seeded for this month.
-    const countTransactionsThisMonth = () => Transaction.countDocuments({
-      tenantId,
-      createdAt: {
-        $gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
-        $lt: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1)
-      }
-    });
+    // Counted in the store's calendar month (its time zone), like the cached counter.
+    const countTransactionsThisMonth = () => SubscriptionService.countTransactionsThisMonth(tenantId.toString());
     const currentTransactionCount =
       (await SubscriptionService.getMonthlyTransactionCount(tenantId.toString())) ??
       (await countTransactionsThisMonth());
@@ -689,11 +684,12 @@ export async function POST(request: NextRequest) {
 
     // Resolve the registered device/terminal (if any) and snapshot its identity onto the
     // transaction, so receipts remain accurate even if the device is later renamed/deactivated.
-    let deviceSnapshot: { terminalId: string; deviceSerialNumber: string } | undefined;
+    // Only a found device (this tenant's, active) is linked; an unknown, inactive or foreign id is dropped.
+    let deviceSnapshot: { id: string; terminalId: string; deviceSerialNumber: string } | undefined;
     if (deviceId && mongoose.Types.ObjectId.isValid(deviceId)) {
       const device = await Device.findOne({ _id: deviceId, tenantId, isActive: true }).lean();
       if (device) {
-        deviceSnapshot = { terminalId: device.terminalId, deviceSerialNumber: device.serialNumber };
+        deviceSnapshot = { id: String(device._id), terminalId: device.terminalId, deviceSerialNumber: device.serialNumber };
       }
     }
 
@@ -861,7 +857,7 @@ export async function POST(request: NextRequest) {
         status: 'completed' as const,
         customerId: customerId || undefined,
         userId: user.userId,
-        deviceId: deviceId && mongoose.Types.ObjectId.isValid(deviceId) ? deviceId : undefined,
+        deviceId: deviceSnapshot?.id,
         terminalId: deviceSnapshot?.terminalId,
         deviceSerialNumber: deviceSnapshot?.deviceSerialNumber,
         notes,

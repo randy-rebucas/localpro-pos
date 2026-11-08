@@ -25,10 +25,23 @@ import LoyaltyConfig from '@/models/LoyaltyConfig';
 import LoyaltyTransaction from '@/models/LoyaltyTransaction';
 import TaxRule from '@/models/TaxRule';
 import CustomerOTP from '@/models/CustomerOTP';
+import User from '@/models/User';
+import Device from '@/models/Device';
+import Table from '@/models/Table';
 import mongoose from 'mongoose';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
 import { runWithOptionalMongoTransaction, sessionOpts } from '@/lib/mongo-session';
+import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
+import {
+  MAX_RESTORE_BYTES, checkRestoreSize, filterByReferences, ownId, unresolvedReferences,
+} from '@/lib/restore-references';
+
+/** Backups, resets and restores are heavy and destructive: a few per minute per user is plenty. */
+function rateLimited(request: NextRequest, kind: string, userId: string) {
+  const { allowed } = checkRateLimit(`write:collections-${kind}:${userId}:${getClientIp(request)}`, 5, 60_000);
+  return allowed ? null : NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
+}
 
 // Map collection names to their models
 const COLLECTION_MODELS: Record<string, any> = { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -66,6 +79,18 @@ const COLLECTION_MODELS: Record<string, any> = { // eslint-disable-line @typescr
   auditLogs: AuditLog,
 };
 
+/**
+ * Collections that can be backed up but never cleared or restored: clearing the audit
+ * trail would hide what happened, and restoring it would let a file add made-up entries.
+ */
+const BACKUP_ONLY = new Set(['auditLogs']);
+
+/** Models a restored record may point at besides the file itself, looked up in this store only. */
+const REFERENCE_MODELS: any[] = [ // eslint-disable-line @typescript-eslint/no-explicit-any
+  ...Object.entries(COLLECTION_MODELS).filter(([k]) => !BACKUP_ONLY.has(k)).map(([, m]) => m),
+  User, Device, Table,
+];
+
 // Backup endpoint - GET
 export async function GET(
   request: NextRequest,
@@ -74,6 +99,8 @@ export async function GET(
   try {
     await connectDB();
     const user = await requireAuth(request);
+    const limited = rateLimited(request, 'backup', user.userId);
+    if (limited) return limited;
     const { slug } = await params;
     const t = await getValidationTranslatorFromRequest(request);
     
@@ -179,6 +206,8 @@ export async function POST(
   try {
     await connectDB();
     const user = await requireAuth(request);
+    const limited = rateLimited(request, 'reset', user.userId);
+    if (limited) return limited;
     const { slug } = await params;
     
     const tenant = await Tenant.findOne({ slug, isActive: true });
@@ -215,9 +244,9 @@ export async function POST(
       );
     }
 
-    // Validate collection names
+    // Validate collection names; backup-only ones (audit logs) can never be cleared.
     const invalidCollections = collections.filter(
-      (col: string) => !COLLECTION_MODELS[col]
+      (col: string) => !COLLECTION_MODELS[col] || BACKUP_ONLY.has(col)
     );
     if (invalidCollections.length > 0) {
       return NextResponse.json(
@@ -283,6 +312,8 @@ export async function PUT(
   try {
     await connectDB();
     const user = await requireAuth(request);
+    const limited = rateLimited(request, 'restore', user.userId);
+    if (limited) return limited;
     const { slug } = await params;
     
     const tenant = await Tenant.findOne({ slug, isActive: true });
@@ -309,70 +340,125 @@ export async function PUT(
       );
     }
 
-    const body = await request.json();
-    const { backupData, clearExisting = false } = body;
+    const tooLarge = () => NextResponse.json(
+      { success: false, code: 'too_large', error: t('validation.backupTooLarge', 'The backup file is too large to restore (25 MB at most).') },
+      { status: 413 }
+    );
+    const declared = Number(request.headers.get('content-length') || 0);
+    if (declared > MAX_RESTORE_BYTES) return tooLarge();
+    const raw = await request.text();
+    if (Buffer.byteLength(raw, 'utf8') > MAX_RESTORE_BYTES) return tooLarge();
 
-    if (!backupData || !backupData.collections) {
+    let body: { backupData?: { collections?: unknown }; clearExisting?: unknown };
+    try {
+      body = JSON.parse(raw);
+    } catch {
+      return NextResponse.json(
+        { success: false, error: t('validation.invalidBackupDataFormat', 'Invalid backup data format') },
+        { status: 400 }
+      );
+    }
+    const backupData = body?.backupData;
+    const clearExisting = body?.clearExisting === true;
+
+    if (!backupData || !backupData.collections || typeof backupData.collections !== 'object' || Array.isArray(backupData.collections)) {
       return NextResponse.json(
         { success: false, error: t('validation.invalidBackupDataFormat', 'Invalid backup data format') },
         { status: 400 }
       );
     }
 
+    // Only collections this route restores; audit logs and unknown names are left out and reported.
+    const incoming: Record<string, unknown[]> = {};
+    const ignored: string[] = [];
+    for (const [name, docs] of Object.entries(backupData.collections as Record<string, unknown>)) {
+      if (!COLLECTION_MODELS[name] || BACKUP_ONLY.has(name)) { ignored.push(name); continue; }
+      incoming[name] = Array.isArray(docs) ? docs.filter((d) => d && typeof d === 'object' && !Array.isArray(d)) : [];
+    }
+
+    if (checkRestoreSize(incoming)) {
+      return NextResponse.json(
+        {
+          success: false,
+          code: 'too_many_records',
+          error: t('validation.backupTooManyRecords', 'The backup file has too many records to restore at once (50,000 in all, 25,000 per collection).'),
+        },
+        { status: 413 }
+      );
+    }
+
     // Atomic: a partial failure (bad document, duplicate key, etc.) must not
     // leave collections cleared-but-not-restored, or one collection restored
     // while a later one silently fails. `ordered: true` inside the session so
-    // a single bad document aborts that collection's insert instead of
-    // leaving an inconsistent partial set (transactions require ordered writes).
+    // a single bad document aborts the insert (transactions require ordered writes).
     const results = await runWithOptionalMongoTransaction(async (session) => {
-      const r: Record<string, { restored: number; cleared: number }> = {};
+      const r: Record<string, { restored: number; cleared: number; skipped: number; badReference: number }> = {};
 
-      for (const [collectionName, documents] of Object.entries(backupData.collections)) {
-        if (!COLLECTION_MODELS[collectionName]) {
-          continue; // Skip invalid collections
-        }
-
-        const Model = COLLECTION_MODELS[collectionName];
-        let cleared = 0;
-
-        // Clear existing data if requested
+      // 1. Clear first, so the checks below see the store as it will be.
+      for (const name of Object.keys(incoming)) {
+        r[name] = { restored: 0, cleared: 0, skipped: 0, badReference: 0 };
         if (clearExisting) {
-          const deleteResult = await Model.deleteMany({ tenantId: tenant._id }, sessionOpts(session));
-          cleared = deleteResult.deletedCount || 0;
+          const deleteResult = await COLLECTION_MODELS[name].deleteMany({ tenantId: tenant._id }, sessionOpts(session));
+          r[name].cleared = deleteResult.deletedCount || 0;
         }
+      }
 
-        // Restore documents
-        if (Array.isArray(documents) && documents.length > 0) {
-          // Replace tenantId with current tenant's ID and convert _id strings to ObjectIds
-          const documentsToInsert = documents.map((doc: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-            const newDoc = { ...doc };
-            // Remove _id to let MongoDB create new ones (or keep if you want to preserve IDs)
-            delete newDoc._id;
-            // Ensure tenantId is set correctly
-            newDoc.tenantId = tenant._id;
-            // Convert any ObjectId strings to ObjectIds
-            Object.keys(newDoc).forEach(key => {
-              if (typeof newDoc[key] === 'string' && mongoose.Types.ObjectId.isValid(newDoc[key]) && key.endsWith('Id')) {
-                newDoc[key] = new mongoose.Types.ObjectId(newDoc[key]);
-              }
-            });
-            // Handle nested ObjectIds in arrays (like items.product in transactions)
-            if (newDoc.items && Array.isArray(newDoc.items)) {
-              newDoc.items = newDoc.items.map((item: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-                if (item.product && typeof item.product === 'string' && mongoose.Types.ObjectId.isValid(item.product)) {
-                  item.product = new mongoose.Types.ObjectId(item.product);
-                }
-                return item;
-              });
+      // 2. Records keep their original _id so references between collections
+      // (product -> category, sale -> product, bundle -> product) still resolve.
+      // A record whose _id is already taken (still in this store, or in another
+      // one) is skipped, so restoring twice adds nothing.
+      const fresh: Record<string, unknown[]> = {};
+      for (const [name, docs] of Object.entries(incoming)) {
+        const ids = docs.map(ownId).filter((id): id is string => !!id);
+        const taken = new Set<string>(
+          ids.length
+            ? (await COLLECTION_MODELS[name].find({ _id: { $in: ids } }, { _id: 1 }, sessionOpts(session)).lean())
+                .map((d: { _id: mongoose.Types.ObjectId }) => d._id.toString())
+            : []
+        );
+        fresh[name] = docs.filter((doc) => { const id = ownId(doc); return !(id && taken.has(id)); });
+        r[name].skipped = docs.length - fresh[name].length;
+      }
+
+      // 3. Every id a record points at must be in the file or already in THIS store;
+      // otherwise the record is skipped (it could point at another store's data).
+      const lookup = unresolvedReferences(fresh);
+      const existing = new Set<string>();
+      if (lookup.length) {
+        for (const Model of REFERENCE_MODELS) {
+          const found = await Model.find({ _id: { $in: lookup }, tenantId: tenant._id }, { _id: 1 }, sessionOpts(session)).lean();
+          for (const d of found as { _id: mongoose.Types.ObjectId }[]) existing.add(d._id.toString());
+        }
+      }
+      const { kept, badReference } = filterByReferences(fresh, existing);
+
+      // 4. Insert, stamped with this store.
+      for (const [name, docs] of Object.entries(kept)) {
+        r[name].badReference = badReference[name] || 0;
+        const documentsToInsert = docs.map((doc: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+          const newDoc = { ...doc };
+          if (ownId(newDoc)) newDoc._id = new mongoose.Types.ObjectId(newDoc._id);
+          else delete newDoc._id;
+          newDoc.tenantId = tenant._id;
+          Object.keys(newDoc).forEach((key) => {
+            if (typeof newDoc[key] === 'string' && mongoose.Types.ObjectId.isValid(newDoc[key]) && key.endsWith('Id')) {
+              newDoc[key] = new mongoose.Types.ObjectId(newDoc[key]);
             }
-            return newDoc;
           });
-
-          await Model.insertMany(documentsToInsert, { ordered: true, ...sessionOpts(session) });
-          r[collectionName] = { restored: documentsToInsert.length, cleared };
-        } else {
-          r[collectionName] = { restored: 0, cleared };
+          if (Array.isArray(newDoc.items)) {
+            newDoc.items = newDoc.items.map((item: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+              if (item && typeof item.product === 'string' && mongoose.Types.ObjectId.isValid(item.product)) {
+                return { ...item, product: new mongoose.Types.ObjectId(item.product) };
+              }
+              return item;
+            });
+          }
+          return newDoc;
+        });
+        if (documentsToInsert.length > 0) {
+          await COLLECTION_MODELS[name].insertMany(documentsToInsert, { ordered: true, ...sessionOpts(session) });
         }
+        r[name].restored = documentsToInsert.length;
       }
 
       return r;
@@ -386,7 +472,8 @@ export async function PUT(
       entityType: 'collections',
       entityId: 'restore',
       changes: {
-        collections: Object.keys(backupData.collections),
+        collections: Object.keys(incoming),
+        ignored,
         results: results,
         clearExisting,
       },
@@ -395,8 +482,9 @@ export async function PUT(
     return NextResponse.json({
       success: true,
       data: {
-        message: `Successfully restored ${Object.keys(backupData.collections).length} collection(s)`,
+        message: `Successfully restored ${Object.keys(incoming).length} collection(s)`,
         results,
+        ignored,
       },
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any

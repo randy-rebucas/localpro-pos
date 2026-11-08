@@ -1,20 +1,55 @@
 /**
  * Hardware Status Checker
- * Checks the status and availability of all hardware devices
+ * Checks the status and availability of all hardware devices in this browser.
  */
 
 import { hardwareService } from './index';
 import { getLastDetectionResults } from './device-detector';
-import { receiptPrinterService } from './receipt-printer'; // eslint-disable-line @typescript-eslint/no-unused-vars
-import { barcodeScannerService } from './barcode-scanner'; // eslint-disable-line @typescript-eslint/no-unused-vars
-import { qrReaderService } from './qr-reader'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { cashDrawerService } from './cash-drawer';
+
+/**
+ * Why a device has its status, as a stable code the UI can translate.
+ * `message` stays as the English wording for logs and untranslated callers.
+ */
+export type DeviceStatusCode =
+  | 'printerNotConfigured'
+  | 'webUsbUnsupported'
+  | 'usbReady'
+  | 'usbReadyProfile'
+  | 'usbOsDriver'
+  | 'usbDetected'
+  | 'usbConfigured'
+  | 'serialUnsupported'
+  | 'serialConfigured'
+  | 'networkNoIp'
+  | 'networkReachable'
+  | 'networkTimeout'
+  | 'networkUnreachable'
+  | 'browserPrint'
+  | 'printerError'
+  | 'scannerOff'
+  | 'scannerOn'
+  | 'qrOff'
+  | 'cameraApiMissing'
+  | 'qrOn'
+  | 'drawerOff'
+  | 'drawerNeedsPrinter'
+  | 'drawerViaPrinter'
+  | 'drawerDirectMissing'
+  | 'webSerialUnsupported'
+  | 'drawerDirectActive'
+  | 'drawerDirectPending'
+  | 'touchDetected'
+  | 'touchNotDetected';
 
 export interface DeviceStatus {
   name: string;
   type: 'printer' | 'barcode-scanner' | 'qr-reader' | 'cash-drawer' | 'touchscreen';
   status: 'connected' | 'disconnected' | 'error' | 'not-configured' | 'available';
+  code: DeviceStatusCode;
   message?: string;
+  /** Extra detail to show as-is, such as a detected printer's label or profile, or an IP address. */
+  detail?: string;
   lastChecked?: Date;
 }
 
@@ -24,6 +59,8 @@ export interface HardwareStatus {
   lastCheck: Date;
 }
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 class HardwareStatusChecker {
   private statusCache: HardwareStatus | null = null;
   private cacheTimeout = 5000; // Cache for 5 seconds
@@ -31,41 +68,28 @@ class HardwareStatusChecker {
 
   async checkAllDevices(): Promise<HardwareStatus> {
     const now = Date.now();
-    
+
     // Return cached status if still valid
     if (this.statusCache && (now - this.lastCheckTime) < this.cacheTimeout) {
       return this.statusCache;
     }
 
-    const devices: DeviceStatus[] = [];
     const config = hardwareService.getConfig();
+    const devices: DeviceStatus[] = [
+      await this.checkPrinter(config.printer),
+      this.checkBarcodeScanner(config.barcodeScanner),
+      this.checkQRReader(config.qrReader),
+      this.checkCashDrawer(config.cashDrawer, config.printer),
+      this.checkTouchscreen(),
+    ];
 
-    // Check Receipt Printer
-    const printerStatus = await this.checkPrinter(config.printer);
-    devices.push(printerStatus);
-
-    // Check Barcode Scanner
-    const scannerStatus = this.checkBarcodeScanner(config.barcodeScanner);
-    devices.push(scannerStatus);
-
-    // Check QR Reader
-    const qrStatus = this.checkQRReader(config.qrReader);
-    devices.push(qrStatus);
-
-    // Check Cash Drawer
-    const drawerStatus = this.checkCashDrawer(config.cashDrawer, config.printer);
-    devices.push(drawerStatus);
-
-    // Check Touchscreen
-    const touchscreenStatus = this.checkTouchscreen(config.touchscreen);
-    devices.push(touchscreenStatus);
-
-    // Determine overall status
-    const connectedCount = devices.filter(d => d.status === 'connected' || d.status === 'available').length;
-    const overallStatus = connectedCount === devices.length 
-      ? 'all-connected' 
-      : connectedCount > 0 
-        ? 'partial' 
+    // The touchscreen is detection only, so a desktop without one does not count against the setup.
+    const counted = devices.filter((d) => d.type !== 'touchscreen');
+    const connectedCount = counted.filter(d => d.status === 'connected' || d.status === 'available').length;
+    const overallStatus = connectedCount === counted.length
+      ? 'all-connected'
+      : connectedCount > 0
+        ? 'partial'
         : 'none';
 
     this.statusCache = {
@@ -78,26 +102,17 @@ class HardwareStatusChecker {
     return this.statusCache;
   }
 
-  private async checkPrinter(printerConfig: any): Promise<DeviceStatus> { // eslint-disable-line @typescript-eslint/no-explicit-any
+  private async checkPrinter(printerConfig: any): Promise<DeviceStatus> {
+    const base = { name: 'Receipt Printer', type: 'printer' as const };
     if (!printerConfig) {
-      return {
-        name: 'Receipt Printer',
-        type: 'printer',
-        status: 'not-configured',
-        message: 'No printer configured',
-      };
+      return { ...base, status: 'not-configured', code: 'printerNotConfigured', message: 'No printer configured' };
     }
 
     try {
       switch (printerConfig.type) {
-        case 'usb':
+        case 'usb': {
           if (!('usb' in navigator)) {
-            return {
-              name: 'USB Printer',
-              type: 'printer',
-              status: 'error',
-              message: 'WebUSB not supported in this browser',
-            };
+            return { ...base, name: 'USB Printer', status: 'error', code: 'webUsbUnsupported', message: 'WebUSB not supported in this browser' };
           }
 
           const detection = getLastDetectionResults() ?? hardwareService.getLastPrinterDetection();
@@ -105,326 +120,163 @@ class HardwareStatusChecker {
           const readyUsb = usbDetected.find((d) => d.probeStatus === 'ready');
           if (readyUsb) {
             return {
+              ...base,
               name: readyUsb.label || 'USB Printer',
-              type: 'printer',
               status: 'connected',
+              code: readyUsb.matchedProfileName ? 'usbReadyProfile' : 'usbReady',
               message: readyUsb.matchedProfileName
                 ? `Ready — ${readyUsb.matchedProfileName}`
                 : 'Ready for direct USB printing',
+              detail: readyUsb.matchedProfileName || readyUsb.label,
             };
           }
           const blockedUsb = usbDetected.find((d) => d.probeStatus === 'os_driver_claimed');
           if (blockedUsb) {
             return {
+              ...base,
               name: blockedUsb.label || 'USB Printer',
-              type: 'printer',
               status: 'error',
+              code: 'usbOsDriver',
               message: 'Use Browser Print — OS driver is using this printer',
+              detail: blockedUsb.label,
             };
           }
           if (usbDetected.length > 0) {
             const first = usbDetected[0];
             return {
+              ...base,
               name: first.label || 'USB Printer',
-              type: 'printer',
               status: first.probeStatus === 'error' ? 'error' : 'available',
+              code: 'usbDetected',
               message: first.probeMessage || 'USB printer detected — run Scan on Hardware Settings',
+              detail: first.label,
             };
           }
 
           return {
+            ...base,
             name: 'USB Printer',
-            type: 'printer',
             status: 'available',
+            code: 'usbConfigured',
             message: 'USB printer configured — use Detect Devices to verify connection',
           };
+        }
 
         case 'serial':
-          // Check if Serial API is available
           if (!('serial' in navigator)) {
-            return {
-              name: 'Serial Printer',
-              type: 'printer',
-              status: 'error',
-              message: 'Serial API not supported in this browser',
-            };
+            return { ...base, name: 'Serial Printer', status: 'error', code: 'serialUnsupported', message: 'Serial API not supported in this browser' };
           }
-          return {
-            name: 'Serial Printer',
-            type: 'printer',
-            status: 'available',
-            message: 'Serial printer configured (requires connection test)',
-          };
+          return { ...base, name: 'Serial Printer', status: 'available', code: 'serialConfigured', message: 'Serial printer configured (requires connection test)' };
 
-        case 'network':
+        case 'network': {
           if (!printerConfig.ipAddress) {
-            return {
-              name: 'Network Printer',
-              type: 'printer',
-              status: 'not-configured',
-              message: 'IP address not configured',
-            };
+            return { ...base, name: 'Network Printer', status: 'not-configured', code: 'networkNoIp', message: 'IP address not configured' };
           }
-          // Try to ping the printer
-          const networkStatus = await this.checkNetworkPrinter(printerConfig.ipAddress, printerConfig.portNumber || 9100);
+          const port = printerConfig.portNumber || 9100;
+          const networkStatus = await this.checkNetworkPrinter(printerConfig.ipAddress, port);
           return {
+            ...base,
             name: `Network Printer (${printerConfig.ipAddress})`,
-            type: 'printer',
             status: networkStatus.connected ? 'connected' : 'disconnected',
+            code: networkStatus.code,
             message: networkStatus.message,
+            detail: `${printerConfig.ipAddress}:${port}`,
           };
+        }
 
         case 'browser':
         default:
-          return {
-            name: 'Browser Print',
-            type: 'printer',
-            status: 'available',
-            message: 'Browser print dialog available',
-          };
+          return { ...base, name: 'Browser Print', status: 'available', code: 'browserPrint', message: 'Browser print dialog available' };
       }
-    } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      return {
-        name: 'Receipt Printer',
-        type: 'printer',
-        status: 'error',
-        message: error.message || 'Unknown error',
-      };
+    } catch (error: any) {
+      return { ...base, status: 'error', code: 'printerError', message: error.message || 'Unknown error' };
     }
   }
 
-  private async checkNetworkPrinter(ip: string, port: number): Promise<{ connected: boolean; message: string }> {
+  private async checkNetworkPrinter(
+    ip: string,
+    port: number
+  ): Promise<{ connected: boolean; code: DeviceStatusCode; message: string }> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2000);
     try {
-      // Try to connect to printer port (with timeout)
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2000);
-
-      try {
-        // In `no-cors` mode, fetch resolves successfully (with an opaque,
-        // unreadable response) as long as the host actually accepted the
-        // connection — CORS only blocks reading the response body, not the
-        // connection itself. So a resolved promise here is a genuine signal
-        // the host is reachable; a rejected one means it genuinely isn't
-        // (refused/unreachable/timed out) — don't paper over that as success.
-        const response = await fetch(`http://${ip}:${port}`, { // eslint-disable-line @typescript-eslint/no-unused-vars
-          method: 'GET',
-          signal: controller.signal,
-          mode: 'no-cors',
-        } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
-        clearTimeout(timeoutId);
-        return { connected: true, message: 'Printer reachable' };
-      } catch (error) {
-        clearTimeout(timeoutId);
-        if (controller.signal.aborted) {
-          return { connected: false, message: 'Printer connection timed out' };
-        }
-        return { connected: false, message: 'Printer unreachable — check IP/port and that it\'s powered on' };
+      // In `no-cors` mode, fetch resolves (with an opaque response) as long as the host
+      // accepted the connection, so a resolved promise means the host is reachable and a
+      // rejected one means it is not (refused, unreachable or timed out).
+      await fetch(`http://${ip}:${port}`, { method: 'GET', signal: controller.signal, mode: 'no-cors' });
+      return { connected: true, code: 'networkReachable', message: 'Printer reachable' };
+    } catch {
+      if (controller.signal.aborted) {
+        return { connected: false, code: 'networkTimeout', message: 'Printer connection timed out' };
       }
-    } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      return { connected: false, message: error.message || 'Cannot reach printer' };
+      return { connected: false, code: 'networkUnreachable', message: 'Printer unreachable — check IP/port and that it\'s powered on' };
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
 
-  private checkBarcodeScanner(scannerConfig: any): DeviceStatus { // eslint-disable-line @typescript-eslint/no-explicit-any
+  private checkBarcodeScanner(scannerConfig: any): DeviceStatus {
+    const base = { name: 'Barcode Scanner', type: 'barcode-scanner' as const };
     if (!scannerConfig || !scannerConfig.enabled) {
-      return {
-        name: 'Barcode Scanner',
-        type: 'barcode-scanner',
-        status: 'not-configured',
-        message: 'Barcode scanner not enabled',
-      };
+      return { ...base, status: 'not-configured', code: 'scannerOff', message: 'Barcode scanner not enabled' };
     }
-
-    // Barcode scanners work as keyboard input, so this only confirms the
-    // setting is on — it's not a real connectivity check for a physical
-    // device, since any keyboard-emulating scanner is invisible to the OS.
-    return {
-      name: 'Barcode Scanner',
-      type: 'barcode-scanner',
-      status: 'available',
-      message: 'Configured (keyboard input mode — scan a barcode to verify)',
-    };
+    // Scanners work as keyboard input, so this only confirms the setting is on; a
+    // keyboard-emulating scanner is invisible to the browser.
+    return { ...base, status: 'available', code: 'scannerOn', message: 'Configured (keyboard input mode — scan a barcode to verify)' };
   }
 
-  private checkQRReader(qrConfig: any): DeviceStatus { // eslint-disable-line @typescript-eslint/no-explicit-any
+  private checkQRReader(qrConfig: any): DeviceStatus {
+    const base = { name: 'QR Code Reader', type: 'qr-reader' as const };
     if (!qrConfig || !qrConfig.enabled) {
-      return {
-        name: 'QR Code Reader',
-        type: 'qr-reader',
-        status: 'not-configured',
-        message: 'QR code reader not enabled',
-      };
+      return { ...base, status: 'not-configured', code: 'qrOff', message: 'QR code reader not enabled' };
     }
-
-    // Check if camera access is available
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      return {
-        name: 'QR Code Reader',
-        type: 'qr-reader',
-        status: 'error',
-        message: 'Camera API not available',
-      };
+      return { ...base, status: 'error', code: 'cameraApiMissing', message: 'Camera API not available' };
     }
-
-    // This only confirms the browser exposes a camera API — it does not
-    // verify a camera exists or that permission has been granted.
-    return {
-      name: 'QR Code Reader',
-      type: 'qr-reader',
-      status: 'available',
-      message: 'Configured (camera not verified until scanning starts)',
-    };
+    // Only confirms the browser exposes a camera API, not that a camera exists or is permitted.
+    return { ...base, status: 'available', code: 'qrOn', message: 'Configured (camera not verified until scanning starts)' };
   }
 
-  private checkCashDrawer(drawerConfig: any, printerConfig: any): DeviceStatus { // eslint-disable-line @typescript-eslint/no-explicit-any
+  private checkCashDrawer(drawerConfig: any, printerConfig: any): DeviceStatus {
+    const base = { name: 'Cash Drawer', type: 'cash-drawer' as const };
     if (!drawerConfig || !drawerConfig.enabled) {
-      return {
-        name: 'Cash Drawer',
-        type: 'cash-drawer',
-        status: 'not-configured',
-        message: 'Cash drawer not enabled',
-      };
+      return { ...base, status: 'not-configured', code: 'drawerOff', message: 'Cash drawer not enabled' };
     }
 
     if (drawerConfig.connectedToPrinter) {
-      // Cash drawer status depends on printer status
       if (!printerConfig) {
-        return {
-          name: 'Cash Drawer',
-          type: 'cash-drawer',
-          status: 'error',
-          message: 'Cash drawer requires printer configuration',
-        };
+        return { ...base, status: 'error', code: 'drawerNeedsPrinter', message: 'Cash drawer requires printer configuration' };
       }
-      // Status mirrors the printer's own status rather than being verified
-      // independently — the drawer only actually opens via the printer's
-      // pulse command, so "available" here means "will attempt via printer."
-      return {
-        name: 'Cash Drawer',
-        type: 'cash-drawer',
-        status: 'available',
-        message: 'Configured (opens via printer — not independently verified)',
-      };
+      // The drawer only opens through the printer's pulse command, so "available" means
+      // "will attempt via the printer", not an independent check.
+      return { ...base, status: 'available', code: 'drawerViaPrinter', message: 'Configured (opens via printer — not independently verified)' };
     }
 
-    // Direct (non-printer) cash drawer connection
     if (!drawerConfig.direct) {
-      return {
-        name: 'Cash Drawer',
-        type: 'cash-drawer',
-        status: 'not-configured',
-        message: 'Direct cash drawer connection not configured',
-      };
+      return { ...base, status: 'not-configured', code: 'drawerDirectMissing', message: 'Direct cash drawer connection not configured' };
     }
-
     if (drawerConfig.direct.type === 'usb' && !('usb' in navigator)) {
-      return {
-        name: 'Cash Drawer',
-        type: 'cash-drawer',
-        status: 'error',
-        message: 'WebUSB not supported in this browser',
-      };
+      return { ...base, status: 'error', code: 'webUsbUnsupported', message: 'WebUSB not supported in this browser' };
     }
-
     if (drawerConfig.direct.type === 'serial' && !('serial' in navigator)) {
-      return {
-        name: 'Cash Drawer',
-        type: 'cash-drawer',
-        status: 'error',
-        message: 'Web Serial not supported in this browser',
-      };
+      return { ...base, status: 'error', code: 'webSerialUnsupported', message: 'Web Serial not supported in this browser' };
     }
 
+    const connected = cashDrawerService.isConnected();
     return {
-      name: 'Cash Drawer',
-      type: 'cash-drawer',
-      status: cashDrawerService.isConnected() ? 'connected' : 'available',
-      message: cashDrawerService.isConnected()
-        ? 'Direct connection active'
-        : 'Direct connection configured — will pair on next use',
+      ...base,
+      status: connected ? 'connected' : 'available',
+      code: connected ? 'drawerDirectActive' : 'drawerDirectPending',
+      message: connected ? 'Direct connection active' : 'Direct connection configured — will pair on next use',
     };
   }
 
-  private checkTouchscreen(touchscreenConfig: any): DeviceStatus { // eslint-disable-line @typescript-eslint/no-explicit-any
-    const hasTouch = hardwareService.isTouchscreen();
-    
-    if (!touchscreenConfig || !touchscreenConfig.enabled) {
-      return {
-        name: 'Touchscreen Display',
-        type: 'touchscreen',
-        status: hasTouch ? 'available' : 'not-configured',
-        message: hasTouch 
-          ? 'Touchscreen detected but optimizations disabled' 
-          : 'No touchscreen detected',
-      };
-    }
-
-    return {
-      name: 'Touchscreen Display',
-      type: 'touchscreen',
-      status: hasTouch ? 'connected' : 'disconnected',
-      message: hasTouch 
-        ? 'Touchscreen detected and optimized' 
-        : 'Touchscreen optimizations enabled but no touchscreen detected',
-    };
-  }
-
-  async testDevice(deviceType: string): Promise<{ success: boolean; message: string }> {
-    const config = hardwareService.getConfig();
-
-    switch (deviceType) {
-      case 'printer':
-        if (!config.printer) {
-          return { success: false, message: 'No printer configured' };
-        }
-        try {
-          const testReceipt = {
-            storeName: 'Test Store',
-            receiptNumber: 'TEST-001',
-            date: new Date().toLocaleString(),
-            items: [{ name: 'Test Item', quantity: 1, price: 10.00, subtotal: 10.00 }],
-            subtotal: 10.00,
-            total: 10.00,
-            paymentMethod: 'cash',
-            cashReceived: 20.00,
-            change: 10.00,
-            footer: 'Hardware Status Test',
-          };
-          const success = await hardwareService.printReceipt(testReceipt, { allowDevicePicker: true });
-          return { 
-            success, 
-            message: success 
-              ? 'Test receipt sent successfully' 
-              : 'Failed to send test receipt' 
-          };
-        } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-          return { success: false, message: error.message || 'Print test failed' };
-        }
-
-      case 'cash-drawer':
-        // Cash drawer test requires user gesture for USB permission.
-        // Only report status based on whether the printer is already connected.
-        try {
-          const drawerEnabled = hardwareService.getConfig().cashDrawer?.enabled;
-          if (!drawerEnabled) {
-            return { success: false, message: 'Cash drawer not enabled in settings' };
-          }
-          return { success: true, message: 'Cash drawer configured (opens on cash payment)' };
-        } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-          return { success: false, message: error.message || 'Cash drawer check failed' };
-        }
-
-      case 'barcode-scanner':
-        // Can't really test without actual scan
-        return { success: true, message: 'Scan a barcode to test' };
-
-      case 'qr-reader':
-        // Can't test without camera access
-        return { success: true, message: 'Open QR scanner to test' };
-
-      default:
-        return { success: false, message: 'Unknown device type' };
-    }
+  private checkTouchscreen(): DeviceStatus {
+    // Detection only: no register feature reads a touchscreen setting.
+    const base = { name: 'Touchscreen Display', type: 'touchscreen' as const };
+    return hardwareService.isTouchscreen()
+      ? { ...base, status: 'available', code: 'touchDetected', message: 'Touch input detected' }
+      : { ...base, status: 'not-configured', code: 'touchNotDetected', message: 'No touch input detected' };
   }
 
   clearCache(): void {
@@ -434,4 +286,3 @@ class HardwareStatusChecker {
 }
 
 export const hardwareStatusChecker = new HardwareStatusChecker();
-

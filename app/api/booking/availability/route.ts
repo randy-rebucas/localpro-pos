@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
-import Booking from '@/models/Booking';
 import Product from '@/models/Product';
 import Tenant from '@/models/Tenant';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
-import { getClosedHolidayForDate } from '@/lib/holidays';
+import { buildSlots } from '@/lib/booking-slots';
 
 /**
  * GET /api/booking/availability?tenantId={{tenantId}}&serviceId={{serviceId}}&date={{date}}
@@ -56,78 +55,26 @@ export async function GET(request: NextRequest) {
     }
 
     const staffId = searchParams.get('staffId');
-    const duration = parseInt(searchParams.get('duration') || '60', 10);
-    const slotInterval = parseInt(searchParams.get('slotInterval') || '30', 10);
-    const startHour = parseInt(searchParams.get('startHour') || '9', 10);
-    const endHour = parseInt(searchParams.get('endHour') || '17', 10);
-
-    // Get the selected date boundaries
-    const selectedDate = new Date(dateParam);
-    selectedDate.setHours(0, 0, 0, 0);
-    const endDate = new Date(selectedDate);
-    endDate.setHours(23, 59, 59, 999);
-
-    // Fetch existing bookings for this date
-    const query: Record<string, any> = { // eslint-disable-line @typescript-eslint/no-explicit-any
+    const { slots, dayStart, duration, slotInterval, closedHoliday, closedByHours } = await buildSlots({
       tenantId: tenant._id,
-      startTime: { $gte: selectedDate, $lte: endDate },
-      status: { $in: ['pending', 'confirmed'] },
-    };
-
-    if (staffId) {
-      query.staffId = staffId;
-    }
-
-    const existingBookings = await Booking.find(query).lean();
-
-    // Days the tenant has marked the business closed (Admin → Holidays) have no
-    // available slots — mirrors the same check enforced at booking creation/reschedule time.
-    const closedHoliday = getClosedHolidayForDate(tenant.settings?.holidays, selectedDate);
-
-    // Generate time slots
-    const slots: Array<{ time: string; available: boolean }> = [];
-    const slotStart = new Date(selectedDate);
-    slotStart.setHours(startHour, 0, 0, 0);
-
-    const dayEnd = new Date(selectedDate);
-    dayEnd.setHours(endHour, 0, 0, 0);
-
-    let currentSlot = new Date(slotStart);
-
-    while (currentSlot < dayEnd) {
-      const slotEnd = new Date(currentSlot.getTime() + duration * 60000);
-
-      // Check for conflicts with existing bookings
-      const hasConflict = existingBookings.some((booking) => {
-        const bookingStart = new Date(booking.startTime);
-        const bookingEnd = new Date(booking.endTime);
-        return (
-          (currentSlot >= bookingStart && currentSlot < bookingEnd) ||
-          (slotEnd > bookingStart && slotEnd <= bookingEnd) ||
-          (currentSlot <= bookingStart && slotEnd >= bookingEnd)
-        );
-      });
-
-      // Don't show past slots for today
-      const isPast = currentSlot < new Date();
-
-      slots.push({
-        time: currentSlot.toISOString(),
-        available: !hasConflict && !isPast && !closedHoliday,
-      });
-
-      currentSlot = new Date(currentSlot.getTime() + slotInterval * 60000);
-    }
+      settings: tenant.settings,
+      dateParam,
+      staffId,
+      searchParams,
+      hidePast: true,
+    });
 
     return NextResponse.json({
       success: true,
       data: {
         service: { _id: service._id, name: service.name, price: service.price },
-        date: selectedDate.toISOString(),
+        date: dayStart.toISOString(),
         slots,
         duration,
         slotInterval,
         closedHoliday: closedHoliday ? { name: closedHoliday.name } : null,
+        // True when Admin → Business Hours has the store shut that day.
+        closed: closedByHours,
       },
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any

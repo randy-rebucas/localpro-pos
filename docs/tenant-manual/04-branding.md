@@ -72,6 +72,10 @@ For `custom` theme, you can inject CSS:
 
 Enter in the **Custom CSS** field or define individual **CSS Variables**.
 
+Custom CSS applies to your store pages, not to the admin pages (`/admin/...`). A rule that hides or breaks something can therefore always be removed from **Admin → Advanced Branding**.
+
+Fonts: a Google font URL must be an `https://fonts.googleapis.com/...` link, and a custom font file must be served over `https`.
+
 ### Border Radius
 
 Controls the roundness of UI elements:
