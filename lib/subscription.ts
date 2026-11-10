@@ -86,6 +86,11 @@ export class SubscriptionService {
    * The returned object is shared — treat it as read-only.
    */
   static async getSubscriptionStatus(tenantId: string): Promise<SubscriptionStatus | null> {
+    // Super-admin tokens carry tenantId '' (they share the auth-token cookie, so they
+    // reach tenant pages too) — no tenant means no subscription, not a CastError.
+    if (!tenantId) {
+      return null;
+    }
     try {
       return await cacheWrap(CacheKeys.subscriptionStatus(String(tenantId)), TTL.DEFAULT, () =>
         this.loadSubscriptionStatus(tenantId)

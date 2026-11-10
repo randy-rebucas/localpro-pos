@@ -184,6 +184,43 @@ Best regards,
 Billing Team`,
     variables: ['companyName', 'invoiceNumber', 'amount'],
   },
+  email_billing_date_changed: {
+    id: 'email_billing_date_changed',
+    name: 'Billing Date Changed (Email)',
+    type: 'email',
+    category: 'billing',
+    subject: 'Billing Date Updated for {{companyName}}',
+    body: `Hello,
+
+The billing date for your {{companyName}} subscription has been changed.
+
+Previous billing date: {{previousDate}}
+New billing date: {{nextBillingDate}}
+
+Your following payments will be due on this new schedule. No charge has been made for this change.
+
+If you did not expect this change, please contact support.
+
+Best regards,
+Billing Team`,
+    variables: ['companyName', 'previousDate', 'nextBillingDate'],
+  },
+  email_grace_period_extended: {
+    id: 'email_grace_period_extended',
+    name: 'Payment Deadline Extended (Email)',
+    type: 'email',
+    category: 'billing',
+    subject: 'Payment Deadline Extended for {{companyName}}',
+    body: `Hello,
+
+The deadline to settle the overdue payment for {{companyName}} (originally due {{dueDate}}) has been extended to {{gracePeriodEndDate}}.
+
+If the payment is still unpaid, your account will be deactivated on {{deactivationDate}}. Late charges still apply 15 days after the original due date.
+
+Best regards,
+Billing Team`,
+    variables: ['companyName', 'dueDate', 'gracePeriodEndDate', 'deactivationDate'],
+  },
 };
 
 /**

@@ -110,6 +110,29 @@ Each plan is stored with these fields:
 | `nextBillingDate` | Next payment due date |
 | `lastBillingDate` | Most recent payment date |
 
+### Adjusting the Billing Date
+
+Platform super-admins can move a store's next billing date from **Super Admin → Subscriptions → Bill date**. Use it, for example, to line billing up with the customer's payroll date.
+
+- Only **active** or **paused** subscriptions can be adjusted. A trial bills on its trial end date, so use **+Trial** for trials instead.
+- The new date must be in the future and no more than 2 years ahead.
+- A subscription with an **overdue payment** can't be adjusted. Record the payment or extend the grace period (below) instead, so the deactivation schedule isn't silently reset.
+- Nothing is charged or prorated. Later cycles continue from the new date.
+- If the new date is outside the current invoice window, a fresh invoice is issued 3 days before it.
+- Each change is written to the billing history as a `manual_adjustment` event, with the old date, the new date and the reason. It is also recorded in the audit log.
+- The store is emailed with the old and new dates (template `email_billing_date_changed`) unless **Email the store** is unticked. The email goes to the store's settings email and is skipped if the store has turned off email notifications.
+
+### Extending the Grace Period
+
+When a payment is overdue, the store has a 7-day grace period after the due date and is deactivated 3 days after that. A super-admin can push that deadline back from **Super Admin → Subscriptions → +Grace**. The link shows only for active subscriptions that are overdue and not yet deactivated.
+
+- A **reason is required**. The new end date must be later than the current one, in the future, and no more than 60 days ahead.
+- Deactivation moves to 3 days after the new grace end, and the final-notice reminder moves with it.
+- **Fees are not moved.** The late fee (15 days) and reactivation fee (30 days) still count from the original due date.
+- The account stays marked overdue until the payment is recorded.
+- The change is logged as a `manual_adjustment` billing event and in the audit log. The store is emailed the new deadline and deactivation date (template `email_grace_period_extended`), unless the box is unticked.
+- An account that has already been deactivated can't be extended. Record the payment to reactivate it.
+
 ## Usage Tracking
 
 The system tracks usage against plan limits:

@@ -19,9 +19,23 @@ interface Subscription {
   pauseReason?: string;
   pauseEndsAt?: string;
   gracePeriodEndDate?: string;
+  paymentOverdue?: boolean;
+  deactivatedAt?: string;
 }
 
-type ActionType = 'assign-plan' | 'extend-trial' | 'cancel' | 'activate' | 'suspend' | 'pause' | 'resume' | 'record-payment';
+type ActionType = 'assign-plan' | 'extend-trial' | 'cancel' | 'activate' | 'suspend' | 'pause' | 'resume' | 'record-payment' | 'adjust-billing-date' | 'extend-grace';
+
+const ACTION_TITLE: Partial<Record<ActionType, string>> = {
+  'adjust-billing-date': 'Adjust billing date',
+  'extend-grace': 'Extend grace period',
+};
+
+// Mirrors DEACTIVATION_BUFFER_DAYS in lib/automations/subscription-billing.ts
+const DEACTIVATION_BUFFER_DAYS = 3;
+
+// yyyy-mm-dd in local time, for <input type="date">
+const toDateInput = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 const STATUS_BADGE: Record<string, string> = {
   active: 'bg-green-100 text-green-800 border-green-200',
@@ -54,6 +68,7 @@ export default function SubscriptionsPage() {
   const [actionAmount, setActionAmount] = useState('');
   const [actionGraceDays, setActionGraceDays] = useState('');
   const [actionTxId, setActionTxId] = useState('');
+  const [actionNotify, setActionNotify] = useState(true);
   const [actionSaving, setActionSaving] = useState(false);
 
   const fetchAll = useCallback(async () => {
@@ -85,9 +100,19 @@ export default function SubscriptionsPage() {
     setActionAmount('');
     setActionGraceDays('');
     setActionTxId('');
-    const d = new Date();
-    d.setMonth(d.getMonth() + 1);
-    setActionBillingDate(d.toISOString().slice(0, 10));
+    setActionNotify(true);
+    if (action === 'extend-grace') {
+      // Default: one week past the current grace end (or from today if that's passed)
+      const base = sub.gracePeriodEndDate && new Date(sub.gracePeriodEndDate) > new Date() ? new Date(sub.gracePeriodEndDate) : new Date();
+      base.setDate(base.getDate() + 7);
+      setActionBillingDate(toDateInput(base));
+    } else if (action === 'adjust-billing-date' && sub.nextBillingDate) {
+      setActionBillingDate(toDateInput(new Date(sub.nextBillingDate)));
+    } else {
+      const d = new Date();
+      d.setMonth(d.getMonth() + 1);
+      setActionBillingDate(toDateInput(d));
+    }
   };
 
   const executeAction = async () => {
@@ -105,6 +130,8 @@ export default function SubscriptionsPage() {
     if (action === 'pause') { body.pauseReason = actionReason; body.pauseDays = actionDays ? parseInt(actionDays) : undefined; }
     if (action === 'record-payment') { body.amount = parseFloat(actionAmount); body.notes = actionReason; body.transactionId = actionTxId; }
     if (action === 'activate' && sub.status === 'cancelled') body.reactivationReason = actionReason;
+    if (action === 'adjust-billing-date') { body.nextBillingDate = actionBillingDate; body.reason = actionReason; body.notifyTenant = actionNotify; }
+    if (action === 'extend-grace') { body.gracePeriodEndDate = actionBillingDate; body.reason = actionReason; body.notifyTenant = actionNotify; }
 
     try {
       const res = await fetch(`/api/super-admin/subscriptions/${tenantSlug}`, {
@@ -200,6 +227,7 @@ export default function SubscriptionsPage() {
                       {sub.status === 'trial' ? <><span className="text-gray-400">Trial ends </span>{fmt(sub.trialEndDate)}</> :
                        sub.status === 'paused' && sub.pauseEndsAt ? <><span className="text-gray-400">Resumes </span>{fmt(sub.pauseEndsAt)}</> :
                        sub.status === 'suspended' && sub.gracePeriodEndDate ? <><span className="text-orange-400">Grace ends </span>{fmt(sub.gracePeriodEndDate)}</> :
+                       sub.paymentOverdue && sub.gracePeriodEndDate ? <><span className="text-red-500">Overdue · grace ends </span>{fmt(sub.gracePeriodEndDate)}</> :
                        fmt(sub.nextBillingDate)}
                     </td>
                     <td className="px-4 py-3">
@@ -207,6 +235,8 @@ export default function SubscriptionsPage() {
                         <button onClick={() => openAction(sub, 'assign-plan')} className="text-xs text-brand hover:underline font-medium">Plan</button>
                         <button onClick={() => openAction(sub, 'extend-trial')} className="text-xs text-yellow-600 hover:underline">+Trial</button>
                         <button onClick={() => openAction(sub, 'record-payment')} className="text-xs text-green-600 hover:underline">Payment</button>
+                        {['active', 'paused'].includes(sub.status) && !sub.paymentOverdue && <button onClick={() => openAction(sub, 'adjust-billing-date')} className="text-xs text-gray-700 hover:underline">Bill date</button>}
+                        {sub.status === 'active' && sub.paymentOverdue && !sub.deactivatedAt && <button onClick={() => openAction(sub, 'extend-grace')} className="text-xs text-red-600 hover:underline">+Grace</button>}
                         {sub.status !== 'active' && <button onClick={() => openAction(sub, 'activate')} className="text-xs text-green-700 hover:underline">Activate</button>}
                         {sub.status === 'paused' && <button onClick={() => openAction(sub, 'resume')} className="text-xs text-blue-600 hover:underline">Resume</button>}
                         {!['paused'].includes(sub.status) && <button onClick={() => openAction(sub, 'pause')} className="text-xs text-blue-500 hover:underline">Pause</button>}
@@ -227,7 +257,7 @@ export default function SubscriptionsPage() {
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white w-full max-w-sm">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-              <h2 className="font-semibold text-gray-900 capitalize">{actionModal.action.replace(/-/g, ' ')}</h2>
+              <h2 className="font-semibold text-gray-900 capitalize">{ACTION_TITLE[actionModal.action] || actionModal.action.replace(/-/g, ' ')}</h2>
               <button onClick={() => setActionModal(null)} aria-label="Close" className="text-gray-400 hover:text-gray-600"><svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg></button>
             </div>
             <div className="p-6 space-y-4">
@@ -316,6 +346,60 @@ export default function SubscriptionsPage() {
                 </>
               )}
 
+              {actionModal.action === 'adjust-billing-date' && (
+                <>
+                  <p className="text-sm text-gray-500">Current: <span className="font-medium text-gray-800">{fmt(actionModal.sub.nextBillingDate)}</span></p>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">New Billing Date *</label>
+                    <input type="date" value={actionBillingDate} onChange={e => setActionBillingDate(e.target.value)}
+                      min={toDateInput(new Date(Date.now() + 86_400_000))}
+                      className="w-full border border-gray-200 px-3 py-2 text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Reason</label>
+                    <input value={actionReason} onChange={e => setActionReason(e.target.value)}
+                      placeholder="e.g. Align with customer's payroll date"
+                      className="w-full border border-gray-200 px-3 py-2 text-sm" />
+                  </div>
+                  <p className="text-xs text-gray-400">Future cycles continue from the new date. No charge is made or prorated.</p>
+                </>
+              )}
+
+              {actionModal.action === 'extend-grace' && (
+                <>
+                  <p className="text-sm text-gray-500">
+                    Due: <span className="font-medium text-gray-800">{fmt(actionModal.sub.nextBillingDate)}</span>
+                    {' · '}Grace ends: <span className="font-medium text-gray-800">{fmt(actionModal.sub.gracePeriodEndDate)}</span>
+                  </p>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">New Grace Period End *</label>
+                    <input type="date" value={actionBillingDate} onChange={e => setActionBillingDate(e.target.value)}
+                      min={toDateInput(new Date(Date.now() + 86_400_000))}
+                      max={toDateInput(new Date(Date.now() + 60 * 86_400_000))}
+                      className="w-full border border-gray-200 px-3 py-2 text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Reason *</label>
+                    <input value={actionReason} onChange={e => setActionReason(e.target.value)}
+                      placeholder="e.g. Customer promised payment on the 20th"
+                      className="w-full border border-gray-200 px-3 py-2 text-sm" />
+                  </div>
+                  {actionBillingDate && (
+                    <p className="text-xs text-gray-500">
+                      Deactivates on {fmt(new Date(new Date(actionBillingDate).getTime() + DEACTIVATION_BUFFER_DAYS * 86_400_000).toISOString())} if still unpaid.
+                      Late fee (day 15) and reactivation fee (day 30) still count from the original due date.
+                    </p>
+                  )}
+                </>
+              )}
+
+              {(actionModal.action === 'adjust-billing-date' || actionModal.action === 'extend-grace') && (
+                <label className="flex items-center gap-2 text-sm text-gray-700">
+                  <input type="checkbox" className="checkbox-win8" checked={actionNotify} onChange={e => setActionNotify(e.target.checked)} />
+                  Email the store about this change
+                </label>
+              )}
+
               {actionModal.action === 'activate' && actionModal.sub.status === 'cancelled' && (
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Reactivation Reason *</label>
@@ -337,6 +421,8 @@ export default function SubscriptionsPage() {
                   actionSaving ||
                   (actionModal.action === 'assign-plan' && !actionPlanId) ||
                   (actionModal.action === 'record-payment' && !actionAmount) ||
+                  (actionModal.action === 'adjust-billing-date' && !actionBillingDate) ||
+                  (actionModal.action === 'extend-grace' && (!actionBillingDate || !actionReason.trim())) ||
                   (actionModal.action === 'activate' && actionModal.sub.status === 'cancelled' && !actionReason.trim())
                 }
                 className="px-4 py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover disabled:opacity-50 transition-colors"

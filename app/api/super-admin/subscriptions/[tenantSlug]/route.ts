@@ -9,6 +9,8 @@ import SuperAdminAction from '@/models/SuperAdminAction';
 import { requireRole } from '@/lib/auth';
 import { createAuditLog } from '@/lib/audit';
 import { handleApiError } from '@/lib/error-handler';
+import { logger } from '@/lib/logger';
+import { notifyTenant, DEACTIVATION_BUFFER_DAYS } from '@/lib/automations/subscription-billing';
 
 async function resolveTenant(slug: string) {
   return Tenant.findOne({ slug }).select('_id slug name').lean() as Promise<{ _id: unknown; slug: string; name: string } | null>;
@@ -82,6 +84,46 @@ async function validateAction(action: string, body: Record<string, unknown>, sub
       if (!body.amount || Number(body.amount) <= 0) return { error: 'amount must be a positive number', status: 400 };
       return null;
     }
+    case 'adjust-billing-date': {
+      if (!body.nextBillingDate) return { error: 'nextBillingDate is required', status: 400 };
+      const date = new Date(body.nextBillingDate as string);
+      if (isNaN(date.getTime())) return { error: 'Invalid nextBillingDate', status: 400 };
+      // Trials bill on trialEndDate (use extend-trial); cancelled/suspended accounts
+      // aren't on a billing cycle until reactivated.
+      if (!['active', 'paused'].includes(subscription.status)) {
+        return { error: `Billing date can only be adjusted on active or paused subscriptions (this one is ${subscription.status})`, status: 400 };
+      }
+      // Moving the due date of an overdue cycle would silently reset its grace period,
+      // late fee and deactivation clock — settle it via record-payment first.
+      if (subscription.paymentOverdue) {
+        return { error: 'Payment is overdue — record the payment or extend the grace period instead of adjusting the billing date', status: 400 };
+      }
+      // A past date would be flagged overdue by the next billing run.
+      if (date.getTime() <= Date.now()) return { error: 'nextBillingDate must be in the future', status: 400 };
+      if (date.getTime() > Date.now() + 2 * 366 * 86_400_000) {
+        return { error: 'nextBillingDate cannot be more than 2 years ahead', status: 400 };
+      }
+      return null;
+    }
+    case 'extend-grace': {
+      // Only an overdue account still counting down to deactivation has a grace
+      // period to extend; once deactivated it needs record-payment / activate.
+      if (subscription.status !== 'active' || !subscription.paymentOverdue || subscription.deactivatedAt) {
+        return { error: 'Grace period can only be extended on an active subscription with an overdue payment that has not been deactivated', status: 400 };
+      }
+      if (!(body.reason as string | undefined)?.trim()) return { error: 'reason is required to extend a grace period', status: 400 };
+      if (!body.gracePeriodEndDate) return { error: 'gracePeriodEndDate is required', status: 400 };
+      const date = new Date(body.gracePeriodEndDate as string);
+      if (isNaN(date.getTime())) return { error: 'Invalid gracePeriodEndDate', status: 400 };
+      if (date.getTime() <= Date.now()) return { error: 'gracePeriodEndDate must be in the future', status: 400 };
+      if (subscription.gracePeriodEndDate && date.getTime() <= subscription.gracePeriodEndDate.getTime()) {
+        return { error: 'gracePeriodEndDate must be later than the current grace period end', status: 400 };
+      }
+      if (date.getTime() > Date.now() + MAX_GRACE_EXTENSION_DAYS * 86_400_000) {
+        return { error: `gracePeriodEndDate cannot be more than ${MAX_GRACE_EXTENSION_DAYS} days ahead`, status: 400 };
+      }
+      return null;
+    }
     case 'cancel':
     case 'suspend':
     case 'pause':
@@ -92,7 +134,11 @@ async function validateAction(action: string, body: Record<string, unknown>, sub
   }
 }
 
-interface AuditPlan { changes: Record<string, unknown> }
+const MAX_GRACE_EXTENSION_DAYS = 60;
+const DAY_MS = 86_400_000;
+
+type TenantNotice = { template: Parameters<typeof notifyTenant>[2]; variables: Record<string, string | number> };
+interface AuditPlan { changes: Record<string, unknown>; notice?: TenantNotice }
 
 // Applies the mutation for `action` against `subscription` (and, for a few actions, the
 // tenant's isActive flag + a BillingEvent) inside the caller's transaction session. Returns
@@ -338,6 +384,64 @@ async function applyAction(
       }
       return { changes: { amount: payAmount, transactionId: payTxId, outstandingBalance: subscription.outstandingBalance, fullyPaid } };
     }
+    case 'adjust-billing-date': {
+      const previous = subscription.nextBillingDate;
+      const next = new Date(body.nextBillingDate as string);
+      const reason = (body.reason as string | undefined)?.trim() || undefined;
+      subscription.nextBillingDate = next;
+      // The invoice job dedupes on lastInvoiceGeneratedAt within 3 days of the due
+      // date, so moving the date out of that window issues a fresh invoice for it.
+      await subscription.save({ session });
+      await BillingEvent.create([{
+        tenantId,
+        subscriptionId: subscription._id,
+        type: 'manual_adjustment',
+        amount: 0,
+        currency: 'PHP',
+        description: `Billing date changed from ${previous ? previous.toDateString() : 'unset'} to ${next.toDateString()} by super-admin${reason ? `: ${reason}` : ''}`,
+        notes: reason,
+        recordedBy: adminUserId,
+        metadata: { field: 'nextBillingDate', from: previous ?? null, to: next },
+      }], { session });
+      return {
+        changes: { nextBillingDate: { from: previous ?? null, to: next }, reason },
+        notice: {
+          template: 'email_billing_date_changed',
+          variables: { previousDate: previous ? previous.toDateString() : 'not set', nextBillingDate: next.toDateString() },
+        },
+      };
+    }
+    case 'extend-grace': {
+      const previous = subscription.gracePeriodEndDate;
+      const next = new Date(body.gracePeriodEndDate as string);
+      const reason = (body.reason as string).trim();
+      subscription.gracePeriodEndDate = next;
+      // Deactivation and the final-notice reminder key off gracePeriodEndDate, so this
+      // pushes both back. Late/reactivation fees key off nextBillingDate and are unchanged.
+      await subscription.save({ session });
+      await BillingEvent.create([{
+        tenantId,
+        subscriptionId: subscription._id,
+        type: 'manual_adjustment',
+        amount: 0,
+        currency: 'PHP',
+        description: `Grace period extended from ${previous ? previous.toDateString() : 'unset'} to ${next.toDateString()} by super-admin: ${reason}`,
+        notes: reason,
+        recordedBy: adminUserId,
+        metadata: { field: 'gracePeriodEndDate', from: previous ?? null, to: next },
+      }], { session });
+      return {
+        changes: { gracePeriodEndDate: { from: previous ?? null, to: next }, reason },
+        notice: {
+          template: 'email_grace_period_extended',
+          variables: {
+            dueDate: subscription.nextBillingDate ? subscription.nextBillingDate.toDateString() : 'your last billing date',
+            gracePeriodEndDate: next.toDateString(),
+            deactivationDate: new Date(next.getTime() + DEACTIVATION_BUFFER_DAYS * DAY_MS).toDateString(),
+          },
+        },
+      };
+    }
     default:
       // Unreachable — validateAction already rejected unknown actions.
       throw new Error(`Unknown action: ${action}`);
@@ -433,6 +537,15 @@ export async function PUT(
       ipAddress: ip,
       userAgent: request.headers.get('user-agent') || '',
     });
+
+    // Best-effort, after commit: a mail failure must not report the saved change as failed.
+    if (auditPlan.notice && body.notifyTenant !== false) {
+      try {
+        await notifyTenant(tenantId, tenant.name, auditPlan.notice.template, auditPlan.notice.variables);
+      } catch (mailError) {
+        logger.error(`Failed to email tenant ${tenantSlug} about subscription.${action}:`, mailError);
+      }
+    }
 
     const updated = await Subscription.findById(subscription._id)
       .populate('planId', 'name tier price')

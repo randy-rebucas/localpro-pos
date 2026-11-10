@@ -24,7 +24,7 @@ import { logger } from '@/lib/logger';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const GRACE_PERIOD_DAYS = 7;
-const DEACTIVATION_BUFFER_DAYS = 3; // deactivate 3 days after grace period ends (10 days total past due)
+export const DEACTIVATION_BUFFER_DAYS = 3; // deactivate 3 days after grace period ends (10 days total past due)
 const LATE_FEE_DAYS = 15;
 const LATE_FEE_PERCENT = 0.10;
 const REACTIVATION_FEE_DAYS = 30;
@@ -50,10 +50,16 @@ interface BillingOptions {
   tenantId?: string;
 }
 
-async function notifyTenant(
+export async function notifyTenant(
   tenantId: string,
   companyName: string,
-  templateKey: 'email_invoice_generated' | 'email_payment_reminder' | 'email_payment_overdue_final_notice' | 'email_account_deactivated',
+  templateKey:
+    | 'email_invoice_generated'
+    | 'email_payment_reminder'
+    | 'email_payment_overdue_final_notice'
+    | 'email_account_deactivated'
+    | 'email_billing_date_changed'
+    | 'email_grace_period_extended',
   variables: Record<string, string | number>
 ): Promise<void> {
   const settings = await getTenantSettingsById(tenantId);

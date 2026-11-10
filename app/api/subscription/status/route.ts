@@ -9,6 +9,11 @@ export async function GET(request: NextRequest) {
     const user = await requireAuth(request);
     const tenantId = user.tenantId;
 
+    // Super-admin sessions have no tenant (tenantId '') — nothing to report
+    if (!tenantId) {
+      return NextResponse.json({ success: true, data: null });
+    }
+
     const subscriptionStatus = await SubscriptionService.getSubscriptionStatus(tenantId.toString());
 
     return NextResponse.json({
