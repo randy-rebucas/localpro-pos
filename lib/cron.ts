@@ -39,6 +39,7 @@ import {
   generateSalesSummaryExport,
   generateDailyZReadings,
 } from './automations';
+import { BACKUP_CRON, isBackupCloudConfigured } from './automations/database-backups';
 import { logger } from '@/lib/logger';
 
 let cronJobs: cron.ScheduledTask[] = [];
@@ -286,11 +287,13 @@ export function initializeCronJobs() {
   });
 
   // 17. Database Backups - Daily at 2 AM
-  const backupJob = cron.schedule('0 2 * * *', async () => {
+  const backupJob = cron.schedule(BACKUP_CRON, async () => {
     logger.info('💾 Running database backup automation...');
     try {
-      const result = await createDatabaseBackup();
+      // Upload off-site whenever S3 is configured; a failed upload keeps the local file.
+      const result = await createDatabaseBackup({ uploadToCloud: isBackupCloudConfigured() });
       logger.info('✅ Database backup:' + result.message);
+      if (result.errors?.length) logger.error('❌ Database backup: ' + result.errors.join('; '));
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       logger.error('❌ Database backup error:' + error.message);
     }

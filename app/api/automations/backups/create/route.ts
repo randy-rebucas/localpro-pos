@@ -10,12 +10,13 @@ import { logger } from '@/lib/logger';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}));
-    const { tenantId, backupPath, uploadToCloud, secret } = body;
+    // The backup folder is fixed on the server; callers cannot choose where files are written.
+    const { tenantId, uploadToCloud, secret } = body;
 
     const authError = verifyCronAuth(request, secret ?? null);
     if (authError) return authError;
 
-    const result = await createDatabaseBackup({ tenantId, backupPath, uploadToCloud });
+    const result = await createDatabaseBackup({ tenantId, uploadToCloud });
     return NextResponse.json(result);
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     logger.error('Database backup error', error);

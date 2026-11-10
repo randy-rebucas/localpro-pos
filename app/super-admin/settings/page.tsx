@@ -1,6 +1,10 @@
 'use client';
 
 import { useState } from 'react';
+import { Activity, Database } from 'lucide-react';
+import {
+  ICON, KEY, KEY_PRIMARY, LedStat, SaPage, Slip, Strip, TABLE, TBODY, TD, TD_RIGHT, TH, TH_RIGHT, THEAD, TR,
+} from '@/components/super-admin/ui';
 
 interface CollectionStat {
   name: string;
@@ -66,132 +70,127 @@ export default function SettingsPage() {
   };
 
   return (
-      <div className="p-6 w-full space-y-8">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
-          <p className="text-sm text-gray-500 mt-1">Database health and seed data management</p>
+    <SaPage
+      tagNo="13"
+      tag="Back office"
+      title="Settings"
+      subtitle="Database health and seed data management."
+    >
+      {/* DB Health */}
+      <Slip
+        className="mt-8"
+        title="Database health"
+        action={
+          <button type="button" onClick={checkHealth} disabled={healthLoading} className={KEY_PRIMARY}>
+            <Activity className={ICON} strokeWidth={1.75} aria-hidden />
+            {healthLoading ? 'Checking…' : 'Check health'}
+          </button>
+        }
+        tear
+      >
+        <div className="px-4 py-4 sm:px-5">
+          <p className="text-sm text-ink/70">Check the MongoDB connection and collection stats.</p>
+
+          {healthError && (
+            <div className="mt-4">
+              <Strip tone="error">{healthError}</Strip>
+            </div>
+          )}
+
+          {!health && !healthError && (
+            <p className="mt-4 font-receipt text-sm text-ink/50">Press Check health to run diagnostics.</p>
+          )}
         </div>
 
-        {/* DB Health */}
-        <section className="bg-white border border-gray-200">
-          <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-            <div>
-              <h2 className="text-base font-bold text-gray-900">Database Health</h2>
-              <p className="text-sm text-gray-500">Check MongoDB connection and collection stats</p>
-            </div>
-            <button
-              onClick={checkHealth}
-              disabled={healthLoading}
-              className="px-4 py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover disabled:opacity-50 transition-colors"
-            >
-              {healthLoading ? 'Checking...' : 'Check Health'}
-            </button>
-          </div>
-
-          <div className="p-6">
-            {healthError && (
-              <div className="mb-4 p-3 bg-red-50 border border-red-300 text-red-800 text-sm">{healthError}</div>
-            )}
-
-            {health ? (
-              <div>
-                <div className="flex items-center gap-6 mb-4">
-                  <div className="flex items-center gap-2">
-                    <span className={`inline-block w-2.5 h-2.5 rounded-full ${health.status === 'ok' ? 'bg-green-500' : 'bg-red-500'}`} />
-                    <span className={`text-sm font-semibold ${health.status === 'ok' ? 'text-green-700' : 'text-red-700'}`}>
-                      {health.status === 'ok' ? 'Connected' : 'Error'}
-                    </span>
-                  </div>
-                  <div className="text-sm text-gray-500">
-                    Latency: <span className="font-medium text-gray-700">{health.latencyMs} ms</span>
-                  </div>
-                  <div className="text-sm text-gray-500">
-                    Collections: <span className="font-medium text-gray-700">{health.totalCollections}</span>
-                  </div>
-                </div>
-
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200 text-sm">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Collection</th>
-                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Documents</th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-100">
-                      {health.collections.map(col => (
-                        <tr key={col.name} className="hover:bg-gray-50">
-                          <td className="px-4 py-2.5 font-mono text-gray-700">{col.name}</td>
-                          <td className="px-4 py-2.5 text-right text-gray-600">
-                            {col.count === -1 ? 'N/A' : col.count.toLocaleString()}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            ) : (
-              <p className="text-sm text-gray-400 italic">Click &quot;Check Health&quot; to run diagnostics.</p>
-            )}
-          </div>
-        </section>
-
-        {/* Seed Data */}
-        <section className="bg-white border border-gray-200">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h2 className="text-base font-bold text-gray-900">Seed Data</h2>
-            <p className="text-sm text-gray-500">Upsert default platform data</p>
-          </div>
-
-          <div className="p-6">
-            <div className="flex flex-wrap gap-3 mb-6">
-              <div className="border border-gray-200 p-4 flex flex-col gap-2 min-w-48">
-                <p className="text-sm font-semibold text-gray-900">Subscription Plans</p>
-                <p className="text-xs text-gray-500">Upsert Starter, Pro, Business, Enterprise plans</p>
-                <button
-                  onClick={() => runSeed('plans')}
-                  disabled={seedLoading !== null}
-                  className="mt-auto px-3 py-1.5 bg-gray-900 text-white text-sm font-medium hover:bg-gray-700 disabled:opacity-50 transition-colors"
-                >
-                  {seedLoading === 'plans' ? 'Seeding...' : 'Seed Plans'}
-                </button>
-              </div>
-
-              <div className="border border-gray-200 p-4 flex flex-col gap-2 min-w-48">
-                <p className="text-sm font-semibold text-gray-900">Seed All</p>
-                <p className="text-xs text-gray-500">Runs all seed operations in sequence</p>
-                <button
-                  onClick={() => runSeed('all')}
-                  disabled={seedLoading !== null}
-                  className="mt-auto px-3 py-1.5 bg-brand text-white text-sm font-medium hover:bg-brand-hover disabled:opacity-50 transition-colors"
-                >
-                  {seedLoading === 'all' ? 'Seeding...' : 'Seed All'}
-                </button>
-              </div>
+        {health && (
+          <>
+            <div className="grid gap-3 bg-ink px-4 py-4 sm:grid-cols-3 sm:px-5">
+              <LedStat
+                label="Connection"
+                value={health.status === 'ok' ? 'OK' : 'ERR'}
+                note={health.status === 'ok' ? 'Connected' : 'Error'}
+                tone={health.status === 'ok' ? 'default' : 'alert'}
+              />
+              <LedStat label="Latency" value={health.latencyMs} note="Milliseconds" />
+              <LedStat label="Collections" value={health.totalCollections} />
             </div>
 
-            {/* Seed results log */}
-            {seedResults.length > 0 && (
-              <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Recent Operations</p>
-                <div className="space-y-2">
-                  {seedResults.map((r, i) => (
-                    <div key={i} className={`p-3 border text-sm ${r.error ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`}>
-                      {r.error ? (
-                        <p className="text-red-800"><span className="font-medium">Error [{r.target}]:</span> {r.error}</p>
-                      ) : (
-                        <p className="text-green-800">
-                          <span className="font-medium">Seeded [{r.target}]:</span> {r.seeded.join(', ')}
-                        </p>
-                      )}
-                    </div>
+            <div className="overflow-x-auto" role="region" aria-label="Collections" tabIndex={0}>
+              <table className={TABLE}>
+                <thead className={THEAD}>
+                  <tr>
+                    <th scope="col" className={TH}>Collection</th>
+                    <th scope="col" className={TH_RIGHT}>Documents</th>
+                  </tr>
+                </thead>
+                <tbody className={TBODY}>
+                  {health.collections.map(col => (
+                    <tr key={col.name} className={TR}>
+                      <td className={`${TD} text-ink/80`}>{col.name}</td>
+                      <td className={TD_RIGHT}>{col.count === -1 ? 'N/A' : col.count.toLocaleString()}</td>
+                    </tr>
                   ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </Slip>
+
+      {/* Seed Data */}
+      <Slip className="mt-10" title="Seed data" tear>
+        <div className="px-4 py-4 sm:px-5">
+          <p className="text-sm text-ink/70">Upsert default platform data.</p>
+
+          <ol className="mt-4 divide-y divide-dashed divide-ink/20 border-y border-dashed border-ink/30">
+            <li className="flex flex-wrap items-center justify-between gap-3 py-4">
+              <div className="flex min-w-0 items-start gap-3">
+                <span className="w-6 font-receipt text-xs text-ink/50">01</span>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold">Subscription plans</p>
+                  <p className="mt-0.5 text-sm text-ink/60">Upsert Starter, Pro, Business, Enterprise plans</p>
                 </div>
               </div>
-            )}
-          </div>
-        </section>
-      </div>
+              <button type="button" onClick={() => runSeed('plans')} disabled={seedLoading !== null} className={KEY}>
+                {seedLoading === 'plans' ? 'Seeding…' : 'Seed plans'}
+              </button>
+            </li>
+            <li className="flex flex-wrap items-center justify-between gap-3 py-4">
+              <div className="flex min-w-0 items-start gap-3">
+                <span className="w-6 font-receipt text-xs text-ink/50">02</span>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold">Seed all</p>
+                  <p className="mt-0.5 text-sm text-ink/60">Runs all seed operations in sequence</p>
+                </div>
+              </div>
+              <button type="button" onClick={() => runSeed('all')} disabled={seedLoading !== null} className={KEY_PRIMARY}>
+                {seedLoading === 'all' ? 'Seeding…' : 'Seed all'}
+              </button>
+            </li>
+          </ol>
+
+          {/* Seed results log */}
+          {seedResults.length > 0 && (
+            <div className="mt-6">
+              <p className="flex items-center gap-2 font-receipt text-xs font-medium uppercase tracking-[0.14em] text-ink/60">
+                <Database className="h-4 w-4" strokeWidth={1.75} aria-hidden />
+                Recent operations
+              </p>
+              <div className="mt-2 space-y-2">
+                {seedResults.map((r, i) => (
+                  <Strip key={i} tone={r.error ? 'error' : 'ok'}>
+                    {r.error ? (
+                      <><span className="font-semibold">Error [{r.target}]:</span> {r.error}</>
+                    ) : (
+                      <><span className="font-semibold">Seeded [{r.target}]:</span> {r.seeded.join(', ')}</>
+                    )}
+                  </Strip>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </Slip>
+    </SaPage>
   );
 }

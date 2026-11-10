@@ -1,7 +1,12 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { Search, UserCheck, UserCog, UserX, Users } from 'lucide-react';
 import { showToast } from '@/lib/toast';
+import {
+  DARK_FIELD, DARK_KEY, DARK_KEY_PRIMARY, DARK_LABEL, Empty, ICON, IconKey, KEY, KEY_DANGER, KEY_PRIMARY,
+  LABEL, Printing, SaPage, SELECT, Sheet, Slip, Strip, TABLE, TBODY, TD, TD_TEXT, TH, THEAD, TR, Tag, type TagTone,
+} from '@/components/super-admin/ui';
 
 interface AppUser {
   _id: string;
@@ -21,12 +26,12 @@ interface Pagination {
   pages: number;
 }
 
-const ROLE_BADGE: Record<string, string> = {
-  owner: 'bg-purple-100 text-purple-800 border-purple-200',
-  admin: 'bg-brand-soft text-brand-navy border-teal-200',
-  manager: 'bg-indigo-100 text-indigo-800 border-indigo-200',
-  cashier: 'bg-gray-100 text-gray-700 border-gray-200',
-  viewer: 'bg-gray-50 text-gray-500 border-gray-200',
+const ROLE_TONE: Record<string, TagTone> = {
+  owner: 'info',
+  admin: 'info',
+  manager: 'muted',
+  cashier: 'muted',
+  viewer: 'muted',
 };
 
 const ROLES = ['owner', 'admin', 'manager', 'cashier', 'viewer'];
@@ -133,206 +138,212 @@ export default function UsersPage() {
 
   const formatDate = (d?: string) => d ? new Date(d).toLocaleDateString() : '—';
 
+  const statusTag = (user: AppUser) => <Tag tone={user.isActive ? 'ok' : 'bad'}>{user.isActive ? 'Active' : 'Inactive'}</Tag>;
+  const roleTag = (user: AppUser) => <Tag tone={ROLE_TONE[user.role] || 'muted'}>{user.role}</Tag>;
+
+  const rowKeys = (user: AppUser) => (
+    <div className="flex flex-wrap gap-2">
+      <IconKey icon={UserCog} label={`Change role for ${user.name || user.email}`} onClick={() => openAction(user, 'change-role')} />
+      {user.isActive ? (
+        <IconKey icon={UserX} tone="danger" label={`Deactivate ${user.name || user.email}`} onClick={() => openAction(user, 'deactivate')} />
+      ) : (
+        <IconKey icon={UserCheck} label={`Activate ${user.name || user.email}`} onClick={() => openAction(user, 'activate')} />
+      )}
+    </div>
+  );
+
+  const ACTION_TITLE: Record<string, string> = { deactivate: 'Deactivate user', activate: 'Activate user', 'change-role': 'Change role' };
+
   return (
-    <>
-      <div className="p-6 w-full">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">Users</h1>
-          <p className="text-sm text-gray-500 mt-1">View and manage all tenant staff accounts</p>
+    <SaPage
+      tagNo="03"
+      tag="Staff roster"
+      title="Users"
+      subtitle="Every staff account across all tenants. Switch an account off or change its role."
+    >
+      {message && (
+        <div className="mt-6">
+          <Strip tone={message.type === 'success' ? 'ok' : 'error'}>{message.text}</Strip>
         </div>
+      )}
 
-        {message && (
-          <div className={`mb-4 p-3 border text-sm ${message.type === 'success' ? 'bg-green-50 border-green-300 text-green-800' : 'bg-red-50 border-red-300 text-red-800'}`}>
-            {message.text}
-          </div>
-        )}
-
-        {/* Filters */}
-        <form onSubmit={handleFilter} className="bg-white border border-gray-200 border-b-0 px-4 py-3 flex flex-wrap gap-3">
+      {/* Filters */}
+      <form onSubmit={handleFilter} aria-label="Filters" className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
+        <div>
+          <label htmlFor="user-search" className={DARK_LABEL}>Search</label>
           <input
+            id="user-search"
             type="text"
-            placeholder="Search name or email..."
+            placeholder="Name or email…"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-brand bg-white w-52"
+            className={`${DARK_FIELD} placeholder:text-ink/40`}
           />
+        </div>
+        <div>
+          <label htmlFor="user-tenant" className={DARK_LABEL}>Tenant slug</label>
           <input
+            id="user-tenant"
             type="text"
-            placeholder="Tenant slug"
+            placeholder="my-store"
             value={tenantSlug}
             onChange={e => setTenantSlug(e.target.value)}
-            className="px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-brand bg-white w-36"
+            className={`${DARK_FIELD} placeholder:text-ink/40`}
           />
-          <select
-            value={roleFilter}
-            onChange={e => setRoleFilter(e.target.value)}
-            className="px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-brand bg-white"
-          >
+        </div>
+        <div>
+          <label htmlFor="user-role" className={DARK_LABEL}>Role</label>
+          <select id="user-role" value={roleFilter} onChange={e => setRoleFilter(e.target.value)} className={DARK_FIELD}>
             <option value="">All roles</option>
-            {ROLES.map(r => <option key={r} value={r} className="capitalize">{r}</option>)}
+            {ROLES.map(r => <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
           </select>
-          <button type="submit" className="px-4 py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover">
+        </div>
+        <div className="flex items-end gap-2 sm:col-span-2 lg:col-span-1">
+          <button type="submit" className={DARK_KEY_PRIMARY}>
+            <Search className={ICON} strokeWidth={1.75} aria-hidden />
             Search
           </button>
           <button
             type="button"
             onClick={() => { setSearch(''); setTenantSlug(''); setRoleFilter(''); setPage(1); }}
-            className="px-3 py-2 border border-gray-300 text-sm text-gray-600 hover:bg-gray-50 bg-white"
+            className={DARK_KEY}
           >
             Clear
           </button>
-        </form>
-
-        <div className="bg-white border border-gray-200">
-          {loading ? (
-            <div className="p-12 text-center">
-              <div className="inline-block animate-spin h-6 w-6 border-2 border-brand border-t-transparent rounded-full" />
-              <p className="mt-3 text-gray-500 text-sm">Loading users...</p>
-            </div>
-          ) : error ? (
-            <div className="p-12 text-center">
-              <p className="text-red-600 text-sm font-medium">{error}</p>
-              <button
-                onClick={fetchUsers}
-                className="mt-4 px-4 py-2 bg-brand text-white text-sm hover:bg-brand-hover"
-              >
-                Retry
-              </button>
-            </div>
-          ) : users.length === 0 ? (
-            <div className="p-12 text-center text-gray-500 text-sm">No users found.</div>
-          ) : (
-            <>
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      {['Name', 'Email', 'Role', 'Tenant', 'Last Login', 'Status', 'Actions'].map(h => (
-                        <th key={h} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {users.map(user => (
-                      <tr key={user._id} className="hover:bg-gray-50">
-                        <td className="px-4 py-4 text-sm font-medium text-gray-900">{user.name}</td>
-                        <td className="px-4 py-4 text-sm text-gray-500">{user.email}</td>
-                        <td className="px-4 py-4">
-                          <span className={`px-2 py-0.5 text-xs font-medium border capitalize ${ROLE_BADGE[user.role] || 'bg-gray-100 text-gray-600 border-gray-200'}`}>
-                            {user.role}
-                          </span>
-                        </td>
-                        <td className="px-4 py-4">
-                          {user.tenantId ? (
-                            <div>
-                              <p className="text-sm font-medium text-gray-900">{user.tenantId.name}</p>
-                              <p className="text-xs text-gray-400 font-mono">{user.tenantId.slug}</p>
-                            </div>
-                          ) : <span className="text-xs text-gray-400">—</span>}
-                        </td>
-                        <td className="px-4 py-4 text-sm text-gray-500">{formatDate(user.lastLogin)}</td>
-                        <td className="px-4 py-4">
-                          <span className={`px-2 py-0.5 text-xs font-semibold border ${user.isActive ? 'bg-green-100 text-green-800 border-green-200' : 'bg-red-100 text-red-800 border-red-200'}`}>
-                            {user.isActive ? 'Active' : 'Inactive'}
-                          </span>
-                        </td>
-                        <td className="px-4 py-4 text-sm">
-                          <div className="flex gap-3">
-                            {user.isActive ? (
-                              <button onClick={() => openAction(user, 'deactivate')} className="text-red-600 hover:text-red-800 font-medium">
-                                Deactivate
-                              </button>
-                            ) : (
-                              <button onClick={() => openAction(user, 'activate')} className="text-green-600 hover:text-green-800 font-medium">
-                                Activate
-                              </button>
-                            )}
-                            <button onClick={() => openAction(user, 'change-role')} className="text-brand hover:text-brand-navy font-medium">
-                              Role
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Pagination */}
-              <div className="px-4 py-3 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-3">
-                <p className="text-xs text-gray-500">
-                  {pagination.total.toLocaleString()} users — page {pagination.page} of {pagination.pages}
-                </p>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setPage(p => Math.max(1, p - 1))}
-                    disabled={page <= 1}
-                    className="px-3 py-1.5 border border-gray-300 text-sm text-gray-600 hover:bg-gray-50 bg-white disabled:opacity-40"
-                  >
-                    ← Prev
-                  </button>
-                  <button
-                    onClick={() => setPage(p => Math.min(pagination.pages, p + 1))}
-                    disabled={page >= pagination.pages}
-                    className="px-3 py-1.5 border border-gray-300 text-sm text-gray-600 hover:bg-gray-50 bg-white disabled:opacity-40"
-                  >
-                    Next →
-                  </button>
-                </div>
-              </div>
-            </>
-          )}
         </div>
-      </div>
+      </form>
 
-      {/* Action Modal */}
-      {actionModal && (
-        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white border border-gray-200 shadow-xl w-full max-w-sm p-6">
-            <h2 className="text-lg font-bold text-gray-900 mb-1 capitalize">
-              {actionModal.action.replace('-', ' ')}
-            </h2>
-            <p className="text-sm text-gray-500 mb-4">
-              User: <span className="font-medium text-gray-700">{actionModal.user.name}</span>
-            </p>
+      <Slip
+        className="mt-6"
+        title={loading || error ? 'Users' : `${pagination.total.toLocaleString()} user${pagination.total === 1 ? '' : 's'}`}
+        tear
+      >
+        {loading ? (
+          <Printing label="Loading users…" />
+        ) : error ? (
+          <div className="px-4 py-10 text-center sm:px-5">
+            <div className="mx-auto max-w-md text-left">
+              <Strip tone="error">{error}</Strip>
+            </div>
+            <button type="button" onClick={fetchUsers} className={`${KEY_PRIMARY} mx-auto mt-4`}>
+              Retry
+            </button>
+          </div>
+        ) : users.length === 0 ? (
+          <Empty icon={<Users className="h-8 w-8" strokeWidth={1.75} aria-hidden />}>No users found.</Empty>
+        ) : (
+          <>
+            {/* Below xl: one printed entry per user */}
+            <ul className={`${TBODY} xl:hidden`}>
+              {users.map(user => (
+                <li key={user._id} className="px-4 py-4 sm:px-5">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-medium text-ink">{user.name}</p>
+                      <p className="mt-0.5 break-all font-receipt text-xs text-ink/60">{user.email}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {roleTag(user)}
+                      {statusTag(user)}
+                    </div>
+                  </div>
+                  <p className="mt-2 font-receipt text-xs text-ink/60">
+                    {user.tenantId ? `${user.tenantId.name} · ${user.tenantId.slug}` : 'No tenant'} · Last login {formatDate(user.lastLogin)}
+                  </p>
+                  <div className="mt-3">{rowKeys(user)}</div>
+                </li>
+              ))}
+            </ul>
 
-            {actionModal.action === 'change-role' && (
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1">New Role</label>
-                <select
-                  value={newRole}
-                  onChange={e => setNewRole(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-brand bg-white"
-                >
-                  {ROLES.map(r => <option key={r} value={r} className="capitalize">{r}</option>)}
-                </select>
-              </div>
-            )}
+            {/* From xl: the full table */}
+            <div className="hidden overflow-x-auto xl:block" role="region" aria-label="Users" tabIndex={0}>
+              <table className={TABLE}>
+                <thead className={THEAD}>
+                  <tr>
+                    {['Name', 'Email', 'Role', 'Tenant', 'Last login', 'Status', 'Actions'].map(h => (
+                      <th key={h} scope="col" className={TH}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className={TBODY}>
+                  {users.map(user => (
+                    <tr key={user._id} className={TR}>
+                      <td className={`${TD_TEXT} font-medium`}>{user.name}</td>
+                      <td className={`${TD} text-ink/70`}>{user.email}</td>
+                      <td className={TD}>{roleTag(user)}</td>
+                      <td className={TD_TEXT}>
+                        {user.tenantId ? (
+                          <div>
+                            <p className="font-medium">{user.tenantId.name}</p>
+                            <p className="mt-0.5 font-receipt text-xs text-ink/60">{user.tenantId.slug}</p>
+                          </div>
+                        ) : <span className="font-receipt text-xs text-ink/40">—</span>}
+                      </td>
+                      <td className={`${TD} whitespace-nowrap text-ink/70`}>{formatDate(user.lastLogin)}</td>
+                      <td className={TD}>{statusTag(user)}</td>
+                      <td className="px-4 py-2.5">{rowKeys(user)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
-            {['deactivate', 'activate'].includes(actionModal.action) && (
-              <p className="text-sm text-gray-600 mb-4">
-                Are you sure you want to <strong>{actionModal.action}</strong> this user? They will {actionModal.action === 'deactivate' ? 'lose' : 'regain'} access immediately.
+            {/* Pagination */}
+            <nav aria-label="Pages" className="flex flex-col items-center justify-between gap-3 border-t border-dashed border-ink/30 px-4 py-2 sm:flex-row sm:px-5">
+              <p className="flex items-center gap-3 font-receipt text-xs text-ink/60">
+                Page
+                <span className="font-led text-2xl leading-none text-ink">{pagination.page}/{pagination.pages}</span>
               </p>
-            )}
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1} className={KEY}>
+                  Previous
+                </button>
+                <button type="button" onClick={() => setPage(p => Math.min(pagination.pages, p + 1))} disabled={page >= pagination.pages} className={KEY}>
+                  Next
+                </button>
+              </div>
+            </nav>
+          </>
+        )}
+      </Slip>
 
-            <div className="flex gap-3 justify-end">
+      {/* Action sheet */}
+      {actionModal && (
+        <Sheet
+          title={ACTION_TITLE[actionModal.action]}
+          subtitle={<>User: <span className="font-medium text-ink">{actionModal.user.name}</span></>}
+          onClose={() => setActionModal(null)}
+          closeLabel="Close"
+          footer={
+            <>
+              <button type="button" onClick={() => setActionModal(null)} className={KEY}>Cancel</button>
               <button
-                onClick={() => setActionModal(null)}
-                className="px-4 py-2 border border-gray-300 text-gray-700 text-sm hover:bg-gray-50 bg-white"
-              >
-                Cancel
-              </button>
-              <button
+                type="button"
                 onClick={executeAction}
                 disabled={saving}
-                className={`px-4 py-2 text-white text-sm font-semibold disabled:opacity-50 ${actionModal.action === 'deactivate' ? 'bg-red-600 hover:bg-red-700' : 'bg-brand hover:bg-brand-hover'}`}
+                className={actionModal.action === 'deactivate' ? KEY_DANGER : KEY_PRIMARY}
               >
-                {saving ? 'Saving...' : 'Confirm'}
+                {saving ? 'Saving…' : 'Confirm'}
               </button>
+            </>
+          }
+        >
+          {actionModal.action === 'change-role' && (
+            <div>
+              <label htmlFor="user-new-role" className={LABEL}>New role</label>
+              <select id="user-new-role" value={newRole} onChange={e => setNewRole(e.target.value)} className={`${SELECT} w-full`}>
+                {ROLES.map(r => <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
+              </select>
             </div>
-          </div>
-        </div>
+          )}
+
+          {['deactivate', 'activate'].includes(actionModal.action) && (
+            <p className="text-sm text-ink/80">
+              Are you sure you want to <strong>{actionModal.action}</strong> this user? They will {actionModal.action === 'deactivate' ? 'lose' : 'regain'} access immediately.
+            </p>
+          )}
+        </Sheet>
       )}
-    </>
+    </SaPage>
   );
 }

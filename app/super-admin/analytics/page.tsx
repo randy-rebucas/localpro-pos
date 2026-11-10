@@ -1,7 +1,10 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { ArrowDown, ArrowUp, Download, RefreshCw } from 'lucide-react';
 import { showToast } from '@/lib/toast';
+import { ReceiptRow } from '@/components/marketing/primitives';
+import { DARK_FIELD, DARK_KEY, DARK_LABEL, ICON, Printing, SaPage, Slip, Strip, TABLE, TBODY, TD_RIGHT, TD_TEXT, TH, TH_RIGHT, THEAD, TR } from '@/components/super-admin/ui';
 
 interface AnalyticsData {
   mrr: number;
@@ -16,45 +19,70 @@ interface AnalyticsData {
   dateRange: { start: string; end: string };
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  active: 'bg-green-500',
-  trial: 'bg-yellow-500',
-  cancelled: 'bg-red-500',
-  suspended: 'bg-orange-500',
-  inactive: 'bg-gray-400',
+const STATUS_BAR: Record<string, string> = {
+  active: 'bg-brand',
+  trial: 'bg-[#8fe3d0]',
+  cancelled: 'bg-stamp',
+  suspended: 'bg-stamp/60',
+  inactive: 'bg-ink/30',
 };
 
-const TIER_COLORS: Record<string, string> = {
-  starter: 'bg-gray-400',
-  pro: 'bg-brand-soft0',
-  business: 'bg-purple-500',
-  enterprise: 'bg-indigo-600',
+const TIER_BAR: Record<string, string> = {
+  starter: 'bg-ink/40',
+  pro: 'bg-brand',
+  business: 'bg-brand-navy',
+  enterprise: 'bg-ink',
 };
 
 function formatCurrency(v: number) {
   return '₱' + v.toLocaleString('en-PH', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 
+/** A receipt line with a flat bar under it, for a count out of a total. */
 function BarRow({ label, value, max, color }: { label: string; value: number; max: number; color: string }) {
   const pct = max > 0 ? Math.round((value / max) * 100) : 0;
   return (
-    <div className="flex items-center gap-3">
-      <span className="text-sm text-gray-600 w-24 shrink-0 capitalize">{label}</span>
-      <div className="flex-1 bg-gray-100 h-4 overflow-hidden">
-        <div className={`h-4 ${color} transition-all`} style={{ width: `${pct}%` }} />
+    <li className="font-receipt text-sm">
+      <ReceiptRow label={<span className="capitalize">{label}</span>} value={value.toLocaleString()} />
+      <div className="mt-1.5 h-2 bg-ink/10" aria-hidden>
+        <div className={`h-2 ${color}`} style={{ width: `${pct}%` }} />
       </div>
-      <span className="text-sm font-medium text-gray-700 w-8 text-right">{value}</span>
-    </div>
+    </li>
   );
 }
 
-function changeBadge(pct: number | null) {
+function ChangeTag({ pct }: { pct: number | null }) {
   if (pct === null) return null;
   const up = pct >= 0;
+  const Icon = up ? ArrowUp : ArrowDown;
   return (
-    <span className={`text-xs font-medium px-1.5 py-0.5 ${up ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-      {up ? '▲' : '▼'} {Math.abs(pct).toFixed(1)}%
+    <span className={`inline-flex items-center gap-1 font-receipt text-xs ${up ? 'text-[#8fe3d0]' : 'text-[#ff9a85]'}`}>
+      <Icon className="h-3 w-3" strokeWidth={1.75} aria-hidden />
+      <span className="sr-only">{up ? 'Up' : 'Down'}</span>
+      {Math.abs(pct).toFixed(1)}%
     </span>
+  );
+}
+
+/** A counter on the dark page. Peso amounts print in mono, since the LED face has no peso sign. */
+function Counter({ label, value, sub, change, led }: { label: string; value: string; sub: string; change: number | null; led: boolean }) {
+  return (
+    <div className="border border-white/10 bg-black/30 px-4 py-4">
+      <p className="font-receipt text-xs uppercase tracking-[0.14em] text-white/60">{label}</p>
+      <p
+        className={
+          led
+            ? 'mk-led-glow mt-2 font-led text-4xl leading-none text-[#7df0d6] sm:text-5xl'
+            : 'mt-2 font-receipt text-3xl font-semibold leading-none text-[#7df0d6] sm:text-4xl'
+        }
+      >
+        {value}
+      </p>
+      <p className="mt-2 flex flex-wrap items-center gap-2 font-receipt text-xs text-white/50">
+        <span>{sub}</span>
+        <ChangeTag pct={change} />
+      </p>
+    </div>
   );
 }
 
@@ -120,165 +148,140 @@ export default function AnalyticsPage() {
     ? Math.max(...data.tenantGrowth.map(g => g.count), 1)
     : 1;
 
+  const setPreset = (days: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() - days);
+    setRangeStart(d.toISOString().slice(0, 10));
+    setRangeEnd(new Date().toISOString().slice(0, 10));
+  };
+
   return (
-      <div className="space-y-5">
-        {/* Date range + actions */}
-        <div className="bg-white border border-gray-200 p-4 flex flex-wrap items-center gap-3">
-          <label className="text-xs font-medium text-gray-500">Date range:</label>
-          <input type="date" value={rangeStart} onChange={e => setRangeStart(e.target.value)}
-            className="border px-3 py-1.5 text-sm" />
-          <span className="text-gray-400 text-sm">to</span>
-          <input type="date" value={rangeEnd} onChange={e => setRangeEnd(e.target.value)}
-            className="border px-3 py-1.5 text-sm" />
-          {[
-            { label: '7d', days: 7 }, { label: '30d', days: 30 }, { label: '90d', days: 90 },
-          ].map(p => (
-            <button key={p.label} onClick={() => { const d = new Date(); d.setDate(d.getDate() - p.days); setRangeStart(d.toISOString().slice(0, 10)); setRangeEnd(new Date().toISOString().slice(0, 10)); }}
-              className="px-2.5 py-1 text-xs border text-gray-600 hover:bg-gray-50">
+    <SaPage
+      tagNo="09"
+      tag="Period reading"
+      title="Analytics"
+      subtitle="Revenue, subscribers and store activity across the platform for the dates you pick."
+      side={
+        <>
+          <button type="button" onClick={fetchAnalytics} className={DARK_KEY}>
+            <RefreshCw className={ICON} strokeWidth={1.75} aria-hidden />
+            Refresh
+          </button>
+          <button type="button" onClick={downloadCsv} disabled={csvLoading || loading} className={DARK_KEY}>
+            <Download className={ICON} strokeWidth={1.75} aria-hidden />
+            {csvLoading ? 'Exporting…' : 'CSV'}
+          </button>
+        </>
+      }
+    >
+      {/* Date range */}
+      <section aria-label="Date range" className="mt-8 flex flex-wrap items-end gap-3">
+        <div>
+          <label htmlFor="an-start" className={DARK_LABEL}>From</label>
+          <input id="an-start" type="date" value={rangeStart} onChange={e => setRangeStart(e.target.value)} className={DARK_FIELD} />
+        </div>
+        <div>
+          <label htmlFor="an-end" className={DARK_LABEL}>To</label>
+          <input id="an-end" type="date" value={rangeEnd} onChange={e => setRangeEnd(e.target.value)} className={DARK_FIELD} />
+        </div>
+        <div className="flex gap-2">
+          {[{ label: '7d', days: 7 }, { label: '30d', days: 30 }, { label: '90d', days: 90 }].map(p => (
+            <button key={p.label} type="button" onClick={() => setPreset(p.days)} className={DARK_KEY}>
               {p.label}
             </button>
           ))}
-          <div className="ml-auto flex gap-2">
-            <button onClick={fetchAnalytics} className="px-3 py-1.5 text-sm border text-gray-600 hover:bg-gray-50">Refresh</button>
-            <button onClick={downloadCsv} disabled={csvLoading || loading}
-              className="px-3 py-1.5 text-sm border text-gray-600 hover:bg-gray-50 disabled:opacity-50">
-              {csvLoading ? 'Exporting…' : '↓ CSV'}
-            </button>
-          </div>
         </div>
+      </section>
 
-        {error && (
-          <div className="p-3 bg-red-50 border border-red-300 text-red-800 text-sm">{error}</div>
-        )}
+      {error && (
+        <div className="mt-4">
+          <Strip tone="error">{error}</Strip>
+        </div>
+      )}
 
-        {loading ? (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {[...Array(4)].map((_, i) => (
-              <div key={i} className="bg-white border border-gray-200 p-5 animate-pulse">
-                <div className="h-4 bg-gray-200 w-28 mb-3" />
-                <div className="h-8 bg-gray-200 w-20" />
-              </div>
-            ))}
-          </div>
-        ) : data ? (
-          <>
-            {/* Top KPI cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              {[
-                { label: 'Monthly Recurring Revenue', value: formatCurrency(data.mrr), sub: 'active + trial subs', change: null },
-                { label: 'Revenue (Period)', value: formatCurrency(data.revenueLastMonth), sub: `prev: ${formatCurrency(data.revenuePrevPeriod)}`, change: data.revenueChangePct },
-                { label: 'Transactions (Period)', value: data.transactions.inRange.toLocaleString(), sub: `${data.transactions.total.toLocaleString()} all time`, change: data.transactions.rangeChangePct },
-                { label: 'Active Subscribers', value: totalSubscribers.toLocaleString(), sub: 'active + trial plans', change: null },
-              ].map(card => (
-                <div key={card.label} className="bg-white border border-gray-200 p-5">
-                  <p className="text-xs text-gray-500 leading-tight">{card.label}</p>
-                  <div className="flex items-end gap-2 mt-1">
-                    <p className="text-2xl font-bold text-gray-900">{card.value}</p>
-                    {changeBadge(card.change)}
-                  </div>
-                  <p className="text-xs text-gray-400 mt-0.5">{card.sub}</p>
-                </div>
-              ))}
-            </div>
+      {loading ? (
+        <div className="mt-6 border border-white/10 bg-black/30">
+          <Printing dark label="Reading the period…" />
+        </div>
+      ) : data ? (
+        <>
+          {/* Counters */}
+          <section aria-label="Totals" className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <Counter label="Monthly recurring revenue" value={formatCurrency(data.mrr)} sub="Active + trial subs" change={null} led={false} />
+            <Counter label="Revenue (period)" value={formatCurrency(data.revenueLastMonth)} sub={`Prev: ${formatCurrency(data.revenuePrevPeriod)}`} change={data.revenueChangePct} led={false} />
+            <Counter label="Transactions (period)" value={data.transactions.inRange.toLocaleString()} sub={`${data.transactions.total.toLocaleString()} all time`} change={data.transactions.rangeChangePct} led />
+            <Counter label="Active subscribers" value={totalSubscribers.toLocaleString()} sub="Active + trial plans" change={null} led />
+          </section>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-              {/* Plan distribution */}
-              <div className="bg-white border border-gray-200 p-5">
-                <h2 className="text-sm font-bold text-gray-900 mb-4">Plan Distribution</h2>
-                {data.planBreakdown.length === 0 ? (
-                  <p className="text-sm text-gray-400 italic">No active subscribers</p>
-                ) : (
-                  <div className="space-y-3">
-                    {data.planBreakdown.map(p => (
-                      <BarRow
-                        key={p.tier}
-                        label={p.name}
-                        value={p.count}
-                        max={maxPlanCount}
-                        color={TIER_COLORS[p.tier] || 'bg-brand-soft0'}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
+          <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <Slip title="Plan distribution" bodyClassName="px-4 py-4 sm:px-5">
+              {data.planBreakdown.length === 0 ? (
+                <p className="font-receipt text-sm text-ink/60">No active subscribers</p>
+              ) : (
+                <ul className="space-y-3">
+                  {data.planBreakdown.map(p => (
+                    <BarRow key={p.tier} label={p.name} value={p.count} max={maxPlanCount} color={TIER_BAR[p.tier] || 'bg-brand'} />
+                  ))}
+                </ul>
+              )}
+            </Slip>
 
-              {/* Subscription status */}
-              <div className="bg-white border border-gray-200 p-5">
-                <h2 className="text-sm font-bold text-gray-900 mb-4">Subscription Status</h2>
-                {data.statusBreakdown.length === 0 ? (
-                  <p className="text-sm text-gray-400 italic">No subscriptions</p>
-                ) : (
-                  <div className="space-y-3">
-                    {data.statusBreakdown.map(s => (
-                      <BarRow
-                        key={s.status}
-                        label={s.status}
-                        value={s.count}
-                        max={totalSubscribers}
-                        color={STATUS_COLORS[s.status] || 'bg-gray-400'}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
+            <Slip title="Subscription status" bodyClassName="px-4 py-4 sm:px-5">
+              {data.statusBreakdown.length === 0 ? (
+                <p className="font-receipt text-sm text-ink/60">No subscriptions</p>
+              ) : (
+                <ul className="space-y-3">
+                  {data.statusBreakdown.map(s => (
+                    <BarRow key={s.status} label={s.status} value={s.count} max={totalSubscribers} color={STATUS_BAR[s.status] || 'bg-ink/30'} />
+                  ))}
+                </ul>
+              )}
+            </Slip>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Tenant growth */}
-              <div className="bg-white border border-gray-200 p-5">
-                <h2 className="text-sm font-bold text-gray-900 mb-4">New Tenants (Last 12 Months)</h2>
-                {data.tenantGrowth.length === 0 ? (
-                  <p className="text-sm text-gray-400 italic">No tenant registrations in this period</p>
-                ) : (
-                  <div className="space-y-2">
-                    {data.tenantGrowth.map(g => (
-                      <BarRow
-                        key={g.month}
-                        label={g.month}
-                        value={g.count}
-                        max={maxGrowth}
-                        color="bg-brand-soft0"
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
+            <Slip title="New tenants · last 12 months" bodyClassName="px-4 py-4 sm:px-5">
+              {data.tenantGrowth.length === 0 ? (
+                <p className="font-receipt text-sm text-ink/60">No tenant registrations in this period</p>
+              ) : (
+                <ul className="space-y-2.5">
+                  {data.tenantGrowth.map(g => (
+                    <BarRow key={g.month} label={g.month} value={g.count} max={maxGrowth} color="bg-brand" />
+                  ))}
+                </ul>
+              )}
+            </Slip>
 
-              {/* Top tenants */}
-              <div className="bg-white border border-gray-200 p-5">
-                <h2 className="text-sm font-bold text-gray-900 mb-4">Top 10 Tenants by Transactions</h2>
-                {data.topTenants.length === 0 ? (
-                  <p className="text-sm text-gray-400 italic">No transaction data</p>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-gray-200">
-                          <th className="pb-2 text-left text-xs font-medium text-gray-500">Tenant</th>
-                          <th className="pb-2 text-right text-xs font-medium text-gray-500">Transactions</th>
-                          <th className="pb-2 text-right text-xs font-medium text-gray-500">Revenue</th>
+            <Slip title="Top 10 tenants by transactions">
+              {data.topTenants.length === 0 ? (
+                <p className="px-4 py-4 font-receipt text-sm text-ink/60 sm:px-5">No transaction data</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className={TABLE}>
+                    <thead className={THEAD}>
+                      <tr>
+                        <th scope="col" className={TH}>Tenant</th>
+                        <th scope="col" className={TH_RIGHT}>Transactions</th>
+                        <th scope="col" className={TH_RIGHT}>Revenue</th>
+                      </tr>
+                    </thead>
+                    <tbody className={TBODY}>
+                      {data.topTenants.map((t, i) => (
+                        <tr key={t.slug || i} className={TR}>
+                          <td className={TD_TEXT}>
+                            <p className="font-medium">{t.name}</p>
+                            <p className="mt-0.5 font-receipt text-xs text-ink/60">{t.slug}</p>
+                          </td>
+                          <td className={TD_RIGHT}>{t.txCount.toLocaleString()}</td>
+                          <td className={TD_RIGHT}>{formatCurrency(t.revenue)}</td>
                         </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100">
-                        {data.topTenants.map((t, i) => (
-                          <tr key={t.slug || i}>
-                            <td className="py-2">
-                              <p className="font-medium text-gray-900">{t.name}</p>
-                              <p className="text-xs text-gray-400 font-mono">{t.slug}</p>
-                            </td>
-                            <td className="py-2 text-right text-gray-700">{t.txCount.toLocaleString()}</td>
-                            <td className="py-2 text-right text-gray-700">{formatCurrency(t.revenue)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            </div>
-          </>
-        ) : null}
-      </div>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Slip>
+          </div>
+        </>
+      ) : null}
+    </SaPage>
   );
 }
-

@@ -13,6 +13,14 @@ export type BusinessType = 'retail' | 'restaurant' | 'laundry' | 'service' | 'ge
  */
 export const SIGNUP_CLOSED_BUSINESS_TYPES: readonly BusinessType[] = ['restaurant', 'laundry', 'service', 'pharmacy'];
 
+/** The only types offered to new tenants. Order is the order pickers show them in. */
+export const OFFERED_BUSINESS_TYPES: readonly BusinessType[] = ['retail', 'general'];
+
+/** Strict: true only for an offered type (case-insensitive). Unknown strings are rejected. */
+export function isBusinessTypeOffered(businessType: unknown): boolean {
+  return OFFERED_BUSINESS_TYPES.includes(String(businessType ?? '').toLowerCase() as BusinessType);
+}
+
 /** Case-insensitive, matching getBusinessTypeConfig. */
 export function isBusinessTypeOpenForSignup(businessType: unknown): boolean {
   const type = String(businessType ?? '').toLowerCase() as BusinessType;

@@ -1,7 +1,12 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
+import { Download, ScrollText, Search, X } from 'lucide-react';
 import { showToast } from '@/lib/toast';
+import {
+  DARK_FIELD, DARK_KEY, DARK_KEY_PRIMARY, DARK_LABEL, Empty, ICON, KEY_SM, PAGE_SIZE, Printing, SaPage, SaPager, Sheet, Slip, Tag,
+  TABLE, TBODY, TD, TD_TEXT, TH, THEAD, TR,
+} from '@/components/super-admin/ui';
 
 interface AuditLog {
   _id: string;
@@ -17,7 +22,7 @@ interface AuditLog {
 
 interface Pagination { page: number; limit: number; total: number; pages: number; }
 
-const PAGE_SIZES = [25, 50, 100, 200];
+const PAGE_SIZES = [PAGE_SIZE, 25, 50, 100];
 
 const PRESETS = [
   { label: 'Today', days: 0 },
@@ -35,7 +40,7 @@ function applyPreset(days: number) {
 
 export default function LogsPage() {
   const [logs, setLogs] = useState<AuditLog[]>([]);
-  const [pagination, setPagination] = useState<Pagination>({ page: 1, limit: 50, total: 0, pages: 0 });
+  const [pagination, setPagination] = useState<Pagination>({ page: 1, limit: PAGE_SIZE, total: 0, pages: 0 });
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [csvLoading, setCsvLoading] = useState(false);
@@ -46,7 +51,7 @@ export default function LogsPage() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(50);
+  const [limit, setLimit] = useState(PAGE_SIZE);
 
   const buildParams = useCallback((extra: Record<string, string> = {}) => {
     const p = new URLSearchParams();
@@ -104,143 +109,196 @@ export default function LogsPage() {
     return dt.toLocaleDateString() + ' ' + dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
   };
 
+  const hasChanges = (log: AuditLog) => !!log.changes && Object.keys(log.changes).length > 0;
+  const openLog = logs.find(l => l._id === expandedId) || null;
+
   return (
-      <div className="space-y-4">
-        {/* Filters */}
-        <div className="bg-white border border-gray-100 p-4 space-y-3">
-          <div className="flex flex-wrap gap-3">
-            <input type="text" placeholder="Tenant slug" value={tenantSlug} onChange={e => setTenantSlug(e.target.value)}
-              className="px-3 py-2 border border-gray-200 text-sm w-36" />
-            <input type="text" placeholder="Action (e.g. create)" value={action} onChange={e => setAction(e.target.value)}
-              className="px-3 py-2 border border-gray-200 text-sm w-44" />
-            <input type="text" placeholder="Entity type" value={entityType} onChange={e => setEntityType(e.target.value)}
-              className="px-3 py-2 border border-gray-200 text-sm w-36" />
-            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
-              className="px-3 py-2 border border-gray-200 text-sm" />
-            <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
-              className="px-3 py-2 border border-gray-200 text-sm" />
-            <select value={limit} onChange={e => { setLimit(Number(e.target.value)); setPage(1); }}
-              className="px-3 py-2 border border-gray-200 text-sm bg-white">
+    <SaPage
+      tagNo="10"
+      tag="Journal roll"
+      title="Audit logs"
+      subtitle="Every recorded change across all stores, newest first."
+      side={
+        <button type="button" onClick={downloadCsv} disabled={csvLoading || loading} className={DARK_KEY}>
+          <Download className={ICON} strokeWidth={1.75} aria-hidden />
+          {csvLoading ? 'Exporting…' : 'CSV'}
+        </button>
+      }
+    >
+      {/* Filters */}
+      <section aria-label="Filters" className="mt-8">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+          <div>
+            <label htmlFor="lg-tenant" className={DARK_LABEL}>Tenant slug</label>
+            <input id="lg-tenant" type="text" placeholder="store-slug" value={tenantSlug} onChange={e => setTenantSlug(e.target.value)} className={`${DARK_FIELD} placeholder:text-ink/40`} />
+          </div>
+          <div>
+            <label htmlFor="lg-action" className={DARK_LABEL}>Action</label>
+            <input id="lg-action" type="text" placeholder="e.g. create" value={action} onChange={e => setAction(e.target.value)} className={`${DARK_FIELD} placeholder:text-ink/40`} />
+          </div>
+          <div>
+            <label htmlFor="lg-entity" className={DARK_LABEL}>Entity type</label>
+            <input id="lg-entity" type="text" placeholder="e.g. product" value={entityType} onChange={e => setEntityType(e.target.value)} className={`${DARK_FIELD} placeholder:text-ink/40`} />
+          </div>
+          <div>
+            <label htmlFor="lg-start" className={DARK_LABEL}>From</label>
+            <input id="lg-start" type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className={DARK_FIELD} />
+          </div>
+          <div>
+            <label htmlFor="lg-end" className={DARK_LABEL}>To</label>
+            <input id="lg-end" type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className={DARK_FIELD} />
+          </div>
+          <div>
+            <label htmlFor="lg-limit" className={DARK_LABEL}>Per page</label>
+            <select id="lg-limit" value={limit} onChange={e => { setLimit(Number(e.target.value)); setPage(1); }} className={DARK_FIELD}>
               {PAGE_SIZES.map(s => <option key={s} value={s}>{s} / page</option>)}
             </select>
           </div>
-          <div className="flex flex-wrap gap-2 items-center">
-            {PRESETS.map(p => (
-              <button key={p.label} onClick={() => { const { start, end } = applyPreset(p.days); setStartDate(start); setEndDate(end); setPage(1); }}
-                className="px-3 py-1 text-xs border text-gray-600 hover:bg-gray-50">
-                {p.label}
-              </button>
-            ))}
-            <button onClick={clearFilters} className="px-3 py-1 text-xs border text-gray-400 hover:bg-gray-50">Clear</button>
-            <div className="ml-auto flex gap-2">
-              <button onClick={() => { setPage(1); fetchLogs(); }}
-                className="px-4 py-1.5 bg-brand-teal text-white text-sm font-medium hover:bg-brand-teal/90">
-                Search
-              </button>
-              <button onClick={downloadCsv} disabled={csvLoading || loading}
-                className="px-4 py-1.5 border text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50">
-                {csvLoading ? 'Exporting…' : '↓ CSV'}
-              </button>
-            </div>
-          </div>
-          {pagination.total > 0 && (
-            <p className="text-xs text-gray-400">{pagination.total.toLocaleString()} total records</p>
+        </div>
+
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {PRESETS.map(p => (
+            <button
+              key={p.label}
+              type="button"
+              onClick={() => { const { start, end } = applyPreset(p.days); setStartDate(start); setEndDate(end); setPage(1); }}
+              className={DARK_KEY}
+            >
+              {p.label}
+            </button>
+          ))}
+          <button type="button" onClick={clearFilters} className={DARK_KEY}>
+            <X className={ICON} strokeWidth={1.75} aria-hidden />
+            Clear
+          </button>
+          <button type="button" onClick={() => { setPage(1); fetchLogs(); }} className={`${DARK_KEY_PRIMARY} sm:ml-auto`}>
+            <Search className={ICON} strokeWidth={1.75} aria-hidden />
+            Search
+          </button>
+        </div>
+
+      </section>
+
+      {/* The journal */}
+      <Slip className="mt-6" title="Entries">
+        <div aria-busy={loading}>
+          {loading ? (
+            <Printing label="Loading…" />
+          ) : logs.length === 0 ? (
+            <Empty icon={<ScrollText className="h-8 w-8" strokeWidth={1.75} aria-hidden />}>No audit logs found.</Empty>
+          ) : (
+            <>
+              {/* Up to xl: one printed line per entry */}
+              <ul className="divide-y divide-dashed divide-ink/20 xl:hidden">
+                {logs.map(log => (
+                  <li key={log._id} className="px-4 py-3 sm:px-5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <Tag tone="info">{log.action}</Tag>
+                      <span className="font-receipt text-xs text-ink/60">{fmt(log.createdAt)}</span>
+                    </div>
+                    <p className="mt-1.5 text-sm font-medium">
+                      {log.tenantId ? log.tenantId.name : '—'}
+                      {log.tenantId && <span className="ml-2 font-receipt text-xs font-normal text-ink/60">{log.tenantId.slug}</span>}
+                    </p>
+                    <p className="mt-0.5 font-receipt text-xs text-ink/60">
+                      {[
+                        log.entityType + (log.entityId ? ` #${log.entityId.slice(-6)}` : ''),
+                        log.userId ? `${log.userId.name} <${log.userId.email}>` : null,
+                        log.ipAddress,
+                      ].filter(Boolean).join(' · ')}
+                    </p>
+                    {hasChanges(log) && (
+                      <button type="button" onClick={() => setExpandedId(log._id)} className={`${KEY_SM} mt-2`}>
+                        Changes
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+
+              {/* From xl: the full journal */}
+              <div className="hidden overflow-x-auto xl:block" role="region" aria-label="Audit log entries" tabIndex={0}>
+                <table className={TABLE}>
+                  <thead className={THEAD}>
+                    <tr>
+                      <th scope="col" className={TH}>Timestamp</th>
+                      <th scope="col" className={TH}>Tenant</th>
+                      <th scope="col" className={TH}>Action</th>
+                      <th scope="col" className={TH}>Entity</th>
+                      <th scope="col" className={TH}>User</th>
+                      <th scope="col" className={TH}>IP</th>
+                      <th scope="col" className={TH}><span className="sr-only">Changes</span></th>
+                    </tr>
+                  </thead>
+                  <tbody className={TBODY}>
+                    {logs.map(log => (
+                      <tr key={log._id} className={TR}>
+                        <td className={`${TD} whitespace-nowrap text-ink/70`}>{fmt(log.createdAt)}</td>
+                        <td className={TD_TEXT}>
+                          {log.tenantId ? (
+                            <>
+                              <p className="font-medium">{log.tenantId.name}</p>
+                              <p className="mt-0.5 font-receipt text-xs text-ink/60">{log.tenantId.slug}</p>
+                            </>
+                          ) : <span className="text-ink/40">—</span>}
+                        </td>
+                        <td className={TD}><Tag tone="info">{log.action}</Tag></td>
+                        <td className={`${TD} whitespace-nowrap`}>
+                          {log.entityType}
+                          {log.entityId && <span className="ml-1 text-ink/50">#{log.entityId.slice(-6)}</span>}
+                        </td>
+                        <td className={TD_TEXT}>
+                          {log.userId ? (
+                            <>
+                              <p className="font-medium">{log.userId.name}</p>
+                              <p className="mt-0.5 font-receipt text-xs text-ink/60">{log.userId.email}</p>
+                            </>
+                          ) : <span className="text-ink/40">—</span>}
+                        </td>
+                        <td className={`${TD} whitespace-nowrap text-ink/60`}>{log.ipAddress || '—'}</td>
+                        <td className="px-2 py-1.5 text-right">
+                          {hasChanges(log) && (
+                            <button type="button" onClick={() => setExpandedId(log._id)} className={`${KEY_SM} ml-auto`}>
+                              Changes
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </div>
 
-        {/* Table */}
-        {loading ? (
-          <div className="text-center py-12 text-gray-400">Loading…</div>
-        ) : logs.length === 0 ? (
-          <div className="text-center py-12 text-gray-400">No audit logs found.</div>
-        ) : (
-          <div className="overflow-x-auto border border-gray-100 bg-white">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wide">
-                <tr>
-                  {['Timestamp', 'Tenant', 'Action', 'Entity', 'User', 'IP', ''].map(h => (
-                    <th key={h} className="px-4 py-3 text-left font-medium">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {logs.map(log => (
-                  <React.Fragment key={log._id}>
-                    <tr className="hover:bg-gray-50/50 transition-colors">
-                      <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{fmt(log.createdAt)}</td>
-                      <td className="px-4 py-3">
-                        {log.tenantId ? (
-                          <>
-                            <p className="text-xs font-medium text-gray-900">{log.tenantId.name}</p>
-                            <p className="text-xs text-gray-400 font-mono">{log.tenantId.slug}</p>
-                          </>
-                        ) : <span className="text-xs text-gray-400">—</span>}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="text-xs font-mono bg-gray-100 px-1.5 py-0.5 text-gray-700">{log.action}</span>
-                      </td>
-                      <td className="px-4 py-3 text-xs text-gray-500">
-                        <span className="font-medium">{log.entityType}</span>
-                        {log.entityId && <span className="text-gray-400 ml-1 font-mono">#{log.entityId.slice(-6)}</span>}
-                      </td>
-                      <td className="px-4 py-3 text-xs text-gray-500">
-                        {log.userId ? (
-                          <>
-                            <p className="font-medium text-gray-700">{log.userId.name}</p>
-                            <p className="text-gray-400">{log.userId.email}</p>
-                          </>
-                        ) : <span className="text-gray-400">—</span>}
-                      </td>
-                      <td className="px-4 py-3 text-xs text-gray-400 font-mono">{log.ipAddress || '—'}</td>
-                      <td className="px-4 py-3">
-                        {log.changes && Object.keys(log.changes).length > 0 && (
-                          <button onClick={() => setExpandedId(expandedId === log._id ? null : log._id)}
-                            className="text-xs text-brand-teal hover:underline">
-                            {expandedId === log._id ? 'Hide' : 'Changes'}
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                    {expandedId === log._id && (
-                      <tr>
-                        <td colSpan={7} className="px-4 py-3 bg-gray-50">
-                          <div className="text-xs font-semibold text-gray-500 mb-1">Changes</div>
-                          <div className="bg-white border border-gray-100 p-3 overflow-x-auto max-h-60">
-                            <table className="text-xs w-full">
-                              <tbody>
-                                {Object.entries(log.changes!).map(([key, val]) => (
-                                  <tr key={key} className="border-b border-gray-50 last:border-0">
-                                    <td className="py-1 pr-4 font-mono font-medium text-gray-600 whitespace-nowrap align-top">{key}</td>
-                                    <td className="py-1 text-gray-700 font-mono break-all">
-                                      {typeof val === 'object' && val !== null
-                                        ? <pre className="whitespace-pre-wrap">{JSON.stringify(val, null, 2)}</pre>
-                                        : String(val)}
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </React.Fragment>
-                ))}
-              </tbody>
-            </table>
+        <SaPager page={page} totalPages={pagination.pages} onPageChange={setPage} total={pagination.total} limit={pagination.limit} noun="entries" />
+      </Slip>
 
-            {/* Pagination */}
-            <div className="border-t px-4 py-3 flex items-center justify-between text-sm text-gray-500">
-              <span>Page {pagination.page} of {pagination.pages}</span>
-              <div className="flex gap-2">
-                <button disabled={page <= 1} onClick={() => setPage(p => p - 1)}
-                  className="px-3 py-1 border disabled:opacity-40 hover:bg-gray-50">← Prev</button>
-                <button disabled={page >= pagination.pages} onClick={() => setPage(p => p + 1)}
-                  className="px-3 py-1 border disabled:opacity-40 hover:bg-gray-50">Next →</button>
+      {openLog && openLog.changes && (
+        <Sheet
+          title="Changes"
+          subtitle={<span className="font-receipt text-xs">{openLog.action} · {openLog.entityType}{openLog.entityId ? ` #${openLog.entityId.slice(-6)}` : ''} · {fmt(openLog.createdAt)}</span>}
+          onClose={() => setExpandedId(null)}
+          closeLabel="Close"
+          wide
+        >
+          <dl className="divide-y divide-dashed divide-ink/20">
+            {Object.entries(openLog.changes).map(([key, val]) => (
+              <div key={key} className="py-2.5">
+                <dt className="font-receipt text-xs font-medium uppercase tracking-[0.08em] text-ink/60">{key}</dt>
+                <dd className="mt-1 break-all font-receipt text-sm text-ink">
+                  {typeof val === 'object' && val !== null ? (
+                    <pre className="max-h-64 overflow-auto whitespace-pre-wrap border border-dashed border-ink/30 bg-paper p-3 text-xs leading-relaxed">
+                      {JSON.stringify(val, null, 2)}
+                    </pre>
+                  ) : String(val)}
+                </dd>
               </div>
-            </div>
-          </div>
-        )}
-      </div>
+            ))}
+          </dl>
+        </Sheet>
+      )}
+    </SaPage>
   );
 }

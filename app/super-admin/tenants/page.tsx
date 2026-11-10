@@ -1,7 +1,14 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { Suspense, useEffect, useState, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { Building2, LogIn, Pencil, Plus, Power, PowerOff, Search } from 'lucide-react';
 import { showToast } from '@/lib/toast';
+import { OFFERED_BUSINESS_TYPES, isBusinessTypeOffered } from '@/lib/business-types';
+import {
+  DARK_FIELD, DARK_KEY_PRIMARY, DARK_LABEL, Empty, HINT, ICON, INPUT, IconKey, KEY, KEY_PRIMARY,
+  LABEL, Printing, SaPage, SELECT, Sheet, Slip, Strip, TABLE, TBODY, TD, TD_TEXT, TEXTAREA, TH, THEAD, TR, Tag,
+} from '@/components/super-admin/ui';
 
 interface Tenant {
   _id: string;
@@ -30,18 +37,33 @@ const defaultForm: TenantFormData = {
   notes: '',
 };
 
-const ONBOARDING_BADGE: Record<string, string> = {
-  not_started: 'bg-gray-100 text-gray-500 border-gray-200',
-  in_progress: 'bg-yellow-50 text-yellow-700 border-yellow-200',
-  complete: 'bg-green-50 text-green-700 border-green-200',
+const ONBOARDING_TONE: Record<string, string> = {
+  not_started: 'border-ink/20 bg-ink/5 text-ink/70',
+  in_progress: 'border-[#b7791f]/40 bg-[#fdf3dc] text-[#8a5a12]',
+  complete: 'border-brand-hover/50 bg-brand-soft text-brand-hover',
 };
 
+const FORM_ID = 'tenant-form';
+
+// The dashboard links here with ?active=true or ?active=false to open on that status.
 export default function TenantsPage() {
+  return (
+    <Suspense>
+      <TenantsRoll />
+    </Suspense>
+  );
+}
+
+function TenantsRoll() {
+  const searchParams = useSearchParams();
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [pagination, setPagination] = useState<Pagination>({ page: 1, limit: 20, total: 0, pages: 0 });
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [activeFilter, setActiveFilter] = useState('');
+  const [activeFilter, setActiveFilter] = useState(() => {
+    const active = searchParams.get('active');
+    return active === 'true' || active === 'false' ? active : '';
+  });
   const [showModal, setShowModal] = useState(false);
   const [editingTenant, setEditingTenant] = useState<Tenant | null>(null);
   const [formData, setFormData] = useState<TenantFormData>(defaultForm);
@@ -143,220 +165,292 @@ export default function TenantsPage() {
     else showToast.error(data.error || 'Failed to update');
   };
 
-  return (
-    <>
-      <div className="space-y-4">
-        {/* Header */}
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex gap-3">
-            <input type="text" placeholder="Search by name or slug…" value={search} onChange={e => setSearch(e.target.value)}
-              className="px-3 py-2 border border-gray-200 text-sm w-56 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand" />
-            <select value={activeFilter} onChange={e => setActiveFilter(e.target.value)}
-              className="px-3 py-2 border border-gray-200 text-sm bg-white">
-              <option value="">All statuses</option>
-              <option value="true">Active only</option>
-              <option value="false">Inactive only</option>
-            </select>
-          </div>
-          <button onClick={openCreate} className="px-4 py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover transition-colors">
-            + New Tenant
-          </button>
-        </div>
+  const closeModal = () => setShowModal(false);
 
-        {/* Table */}
-        {loading ? (
-          <div className="text-center py-12">
-            <div className="inline-block animate-spin h-6 w-6 border-2 border-brand border-t-transparent rounded-full" />
-            <p className="mt-3 text-gray-400 text-sm">Loading tenants…</p>
+  const onboardingSelect = (t: Tenant, id: string) => (
+    <select
+      id={id}
+      aria-label={`Onboarding for ${t.name}`}
+      value={t.onboardingStatus || 'not_started'}
+      onChange={e => updateOnboarding(t, e.target.value)}
+      className={`min-h-[36px] cursor-pointer border px-2 py-1 font-receipt text-xs uppercase ${ONBOARDING_TONE[t.onboardingStatus || 'not_started']}`}
+    >
+      <option value="not_started">Not started</option>
+      <option value="in_progress">In progress</option>
+      <option value="complete">Complete</option>
+    </select>
+  );
+
+  const rowKeys = (t: Tenant) => (
+    <div className="flex flex-wrap gap-2">
+      <IconKey icon={Pencil} label={`Edit ${t.name}`} onClick={() => openEdit(t)} />
+      <IconKey
+        icon={LogIn}
+        label={impersonating === t.slug ? `Opening ${t.name}…` : `Open ${t.name} as its owner`}
+        onClick={() => impersonate(t)}
+        busy={impersonating === t.slug}
+      />
+      {t.isActive ? (
+        <IconKey icon={PowerOff} tone="danger" label={`Deactivate ${t.name}`} onClick={() => toggleActive(t)} />
+      ) : (
+        <IconKey icon={Power} label={`Activate ${t.name}`} onClick={() => toggleActive(t)} />
+      )}
+    </div>
+  );
+
+  const typeTag = (t: Tenant) =>
+    t.settings.businessType ? <Tag tone="info">{t.settings.businessType}</Tag> : <span className="font-receipt text-xs text-ink/40">—</span>;
+
+  const statusTag = (t: Tenant) => <Tag tone={t.isActive ? 'ok' : 'bad'}>{t.isActive ? 'Active' : 'Inactive'}</Tag>;
+
+  return (
+    <SaPage
+      tagNo="02"
+      tag="Store roll"
+      title="Tenants"
+      subtitle="Every store on the platform. Edit details, switch a store on or off, or open it as its owner."
+      side={
+        <button type="button" onClick={openCreate} className={DARK_KEY_PRIMARY}>
+          <Plus className={ICON} strokeWidth={1.75} aria-hidden />
+          New tenant
+        </button>
+      }
+    >
+      {/* Filters */}
+      <section aria-label="Filters" className="mt-8 grid gap-3 sm:grid-cols-[minmax(0,1fr)_14rem] lg:max-w-2xl">
+        <div>
+          <label htmlFor="tenant-search" className={DARK_LABEL}>Search</label>
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink/40" strokeWidth={1.75} aria-hidden />
+            <input
+              id="tenant-search"
+              type="text"
+              placeholder="Name or slug…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className={`${DARK_FIELD} pl-9 placeholder:text-ink/40`}
+            />
           </div>
+        </div>
+        <div>
+          <label htmlFor="tenant-status" className={DARK_LABEL}>Status</label>
+          <select id="tenant-status" value={activeFilter} onChange={e => setActiveFilter(e.target.value)} className={DARK_FIELD}>
+            <option value="">All statuses</option>
+            <option value="true">Active only</option>
+            <option value="false">Inactive only</option>
+          </select>
+        </div>
+      </section>
+
+      {/* The roll */}
+      <Slip
+        className="mt-6"
+        title={loading ? 'Tenants' : `${pagination.total.toLocaleString()} tenant${pagination.total === 1 ? '' : 's'}`}
+        tear
+      >
+        {loading ? (
+          <Printing label="Loading tenants…" />
         ) : tenants.length === 0 ? (
-          <div className="text-center py-12 text-gray-400">{search || activeFilter ? 'No tenants match your filters.' : 'No tenants yet.'}</div>
+          <Empty icon={<Building2 className="h-8 w-8" strokeWidth={1.75} aria-hidden />}>
+            {search || activeFilter ? 'No tenants match your filters.' : 'No tenants yet.'}
+          </Empty>
         ) : (
-          <div className="overflow-x-auto border border-gray-100 bg-white">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wide">
-                <tr>
-                  {['Name', 'Slug', 'Type', 'Onboarding', 'Status', 'Created', 'Actions'].map(h => (
-                    <th key={h} className="px-4 py-3 text-left font-medium">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {tenants.map(t => (
-                  <tr key={t._id} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="px-4 py-3">
-                      <p className="font-medium text-gray-900">{t.name}</p>
-                      {t.notes && <p className="text-xs text-gray-400 truncate max-w-[160px]" title={t.notes}>{t.notes}</p>}
-                    </td>
-                    <td className="px-4 py-3 font-mono text-xs text-gray-500">{t.slug}</td>
-                    <td className="px-4 py-3">
-                      {t.settings.businessType ? (
-                        <span className="px-2 py-0.5 text-xs bg-teal-50 text-teal-700 border border-teal-200 capitalize">{t.settings.businessType}</span>
-                      ) : <span className="text-gray-400 text-xs">—</span>}
-                    </td>
-                    <td className="px-4 py-3">
-                      <select
-                        value={t.onboardingStatus || 'not_started'}
-                        onChange={e => updateOnboarding(t, e.target.value)}
-                        className={`text-xs border px-2 py-0.5 cursor-pointer ${ONBOARDING_BADGE[t.onboardingStatus || 'not_started']}`}
-                      >
-                        <option value="not_started">Not Started</option>
-                        <option value="in_progress">In Progress</option>
-                        <option value="complete">Complete</option>
-                      </select>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`px-2 py-0.5 text-xs font-semibold border ${t.isActive ? 'bg-green-100 text-green-800 border-green-200' : 'bg-red-100 text-red-800 border-red-200'}`}>
-                        {t.isActive ? 'Active' : 'Inactive'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-gray-500">{new Date(t.createdAt).toLocaleDateString()}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex gap-2 flex-wrap">
-                        <button onClick={() => openEdit(t)} className="text-xs text-brand hover:underline">Edit</button>
-                        <button onClick={() => toggleActive(t)} className={`text-xs hover:underline ${t.isActive ? 'text-red-500' : 'text-green-600'}`}>
-                          {t.isActive ? 'Deactivate' : 'Activate'}
-                        </button>
-                        <button onClick={() => impersonate(t)} disabled={impersonating === t.slug}
-                          className="text-xs text-purple-600 hover:underline disabled:opacity-50">
-                          {impersonating === t.slug ? '…' : 'Impersonate'}
-                        </button>
-                      </div>
-                    </td>
+          <>
+            {/* Below xl: one printed entry per tenant */}
+            <ul className={`${TBODY} xl:hidden`}>
+              {tenants.map(t => (
+                <li key={t._id} className="px-4 py-4 sm:px-5">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-medium text-ink">{t.name}</p>
+                      <p className="mt-0.5 break-all font-receipt text-xs text-ink/60">
+                        {t.slug} · Created {new Date(t.createdAt).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {typeTag(t)}
+                      {statusTag(t)}
+                    </div>
+                  </div>
+                  {t.notes && <p className="mt-2 text-sm text-ink/60">{t.notes}</p>}
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <label htmlFor={`onb-m-${t._id}`} className="font-receipt text-xs uppercase tracking-[0.08em] text-ink/60">Onboarding</label>
+                    {onboardingSelect(t, `onb-m-${t._id}`)}
+                  </div>
+                  <div className="mt-3">{rowKeys(t)}</div>
+                </li>
+              ))}
+            </ul>
+
+            {/* From xl: the full table */}
+            <div className="hidden overflow-x-auto xl:block" role="region" aria-label="Tenants" tabIndex={0}>
+              <table className={TABLE}>
+                <thead className={THEAD}>
+                  <tr>
+                    {['Name', 'Slug', 'Type', 'Onboarding', 'Status', 'Created', 'Actions'].map(h => (
+                      <th key={h} scope="col" className={TH}>{h}</th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className={TBODY}>
+                  {tenants.map(t => (
+                    <tr key={t._id} className={TR}>
+                      <td className={`${TD_TEXT} min-w-[12rem]`}>
+                        <p className="font-medium">{t.name}</p>
+                        {t.notes && <p className="mt-0.5 max-w-[14rem] truncate text-xs text-ink/60" title={t.notes}>{t.notes}</p>}
+                      </td>
+                      <td className={`${TD} whitespace-nowrap text-ink/70`}>{t.slug}</td>
+                      <td className={TD}>{typeTag(t)}</td>
+                      <td className="px-4 py-2.5">{onboardingSelect(t, `onb-${t._id}`)}</td>
+                      <td className={TD}>{statusTag(t)}</td>
+                      <td className={`${TD} whitespace-nowrap text-ink/70`}>{new Date(t.createdAt).toLocaleDateString()}</td>
+                      <td className="px-4 py-2.5">{rowKeys(t)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
             {/* Pagination */}
             {pagination.pages > 1 && (
-              <div className="border-t border-gray-100 px-4 py-3 flex items-center justify-between text-sm text-gray-500">
-                <span>Showing {(pagination.page - 1) * pagination.limit + 1}–{Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total}</span>
+              <nav aria-label="Pages" className="flex flex-wrap items-center justify-between gap-3 border-t border-dashed border-ink/30 px-4 py-2 sm:px-5">
+                <span className="font-receipt text-xs text-ink/60">
+                  {(pagination.page - 1) * pagination.limit + 1}–{Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total}
+                </span>
                 <div className="flex gap-2">
-                  <button disabled={pagination.page === 1} onClick={() => setPagination(p => ({ ...p, page: p.page - 1 }))}
-                    className="px-3 py-1 border border-gray-200 disabled:opacity-40 hover:bg-gray-50">← Prev</button>
-                  <button disabled={pagination.page >= pagination.pages} onClick={() => setPagination(p => ({ ...p, page: p.page + 1 }))}
-                    className="px-3 py-1 border border-gray-200 disabled:opacity-40 hover:bg-gray-50">Next →</button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Create/Edit Modal */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            {provisioned ? (
-              <div className="p-6 space-y-4">
-                <h2 className="text-lg font-semibold text-gray-900 text-green-700">Tenant Created!</h2>
-                {provisioned.subscription && (
-                  <div className="bg-teal-50 border border-teal-200 p-4">
-                    <p className="text-sm font-medium text-teal-800">Subscription provisioned</p>
-                    <p className="text-xs text-teal-600 mt-1">Plan: {provisioned.subscription.planTier} · Trial: {provisioned.subscription.trialDays} days</p>
-                  </div>
-                )}
-                {provisioned.ownerUser && (
-                  <div className="bg-yellow-50 border border-yellow-200 p-4">
-                    <p className="text-sm font-medium text-yellow-800">Owner account created</p>
-                    <p className="text-xs text-yellow-700 mt-1">Email: {provisioned.ownerUser.email}</p>
-                    <p className="text-xs text-yellow-700 font-mono mt-1">Temp password: <strong>{provisioned.ownerUser.tempPassword}</strong></p>
-                    <p className="text-xs text-yellow-500 mt-1">Share this with the tenant and ask them to change it immediately.</p>
-                  </div>
-                )}
-                <button onClick={() => setShowModal(false)} className="w-full py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover transition-colors">Done</button>
-              </div>
-            ) : (
-              <form onSubmit={handleSave}>
-                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-                  <h2 className="font-semibold text-gray-900">{editingTenant ? 'Edit Tenant' : 'Create New Tenant'}</h2>
-                  <button type="button" onClick={() => setShowModal(false)} aria-label="Close" className="text-gray-400 hover:text-gray-600"><svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg></button>
-                </div>
-                <div className="p-6 space-y-4">
-                  {!editingTenant && (
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Slug *</label>
-                      <input required value={formData.slug} onChange={e => setFormData({ ...formData, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-') })}
-                        className="w-full border border-gray-200 px-3 py-2 text-sm" placeholder="my-store" />
-                      <p className="text-xs text-gray-400 mt-1">Lowercase letters, numbers, hyphens only</p>
-                    </div>
-                  )}
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Name *</label>
-                    <input required value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })}
-                      className="w-full border border-gray-200 px-3 py-2 text-sm" placeholder="My Store" />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Currency</label>
-                      <input value={formData.currency} maxLength={3} onChange={e => setFormData({ ...formData, currency: e.target.value.toUpperCase() })}
-                        className="w-full border border-gray-200 px-3 py-2 text-sm" placeholder="PHP" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Language</label>
-                      <select value={formData.language} onChange={e => setFormData({ ...formData, language: e.target.value })}
-                        className="w-full border border-gray-200 px-3 py-2 text-sm bg-white">
-                        <option value="en">English</option>
-                        <option value="es">Español</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Business Type</label>
-                    <select value={formData.businessType} onChange={e => setFormData({ ...formData, businessType: e.target.value })}
-                      className="w-full border border-gray-200 px-3 py-2 text-sm bg-white">
-                      {['general', 'retail', 'restaurant', 'laundry', 'service'].map(t => (
-                        <option key={t} value={t} className="capitalize">{t.charAt(0).toUpperCase() + t.slice(1)}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Contact Email</label>
-                    <input type="email" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })}
-                      className="w-full border border-gray-200 px-3 py-2 text-sm" placeholder="contact@store.com" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Internal Notes</label>
-                    <textarea value={formData.notes} onChange={e => setFormData({ ...formData, notes: e.target.value })} rows={2}
-                      className="w-full border border-gray-200 px-3 py-2 text-sm resize-none" placeholder="Internal notes about this tenant…" />
-                  </div>
-                  {!editingTenant && (
-                    <>
-                      <hr className="border-gray-100" />
-                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Auto-Provisioning</p>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-600 mb-1">Owner Email (creates account)</label>
-                        <input type="email" value={formData.ownerEmail} onChange={e => setFormData({ ...formData, ownerEmail: e.target.value })}
-                          className="w-full border border-gray-200 px-3 py-2 text-sm" placeholder="owner@store.com" />
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-xs font-medium text-gray-600 mb-1">Owner Name</label>
-                          <input value={formData.ownerName} onChange={e => setFormData({ ...formData, ownerName: e.target.value })}
-                            className="w-full border border-gray-200 px-3 py-2 text-sm" placeholder="Jane Doe" />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-medium text-gray-600 mb-1">Trial Days</label>
-                          <input type="number" min="1" max="365" value={formData.trialDays} onChange={e => setFormData({ ...formData, trialDays: e.target.value })}
-                            className="w-full border border-gray-200 px-3 py-2 text-sm" />
-                        </div>
-                      </div>
-                    </>
-                  )}
-                  {formError && <div className="bg-red-50 border border-red-200 text-red-700 text-sm p-3">{formError}</div>}
-                </div>
-                <div className="flex gap-3 px-6 py-4 border-t border-gray-100 justify-end">
-                  <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 border border-gray-200 text-sm hover:bg-gray-50">Cancel</button>
-                  <button type="submit" disabled={saving} className="px-4 py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover disabled:opacity-50 transition-colors">
-                    {saving ? 'Saving…' : editingTenant ? 'Save Changes' : 'Create Tenant'}
+                  <button type="button" disabled={pagination.page === 1} onClick={() => setPagination(p => ({ ...p, page: p.page - 1 }))} className={KEY}>
+                    Previous
+                  </button>
+                  <button type="button" disabled={pagination.page >= pagination.pages} onClick={() => setPagination(p => ({ ...p, page: p.page + 1 }))} className={KEY}>
+                    Next
                   </button>
                 </div>
-              </form>
+              </nav>
+            )}
+          </>
+        )}
+      </Slip>
+
+      {/* Create/Edit sheet */}
+      {showModal && (provisioned ? (
+        <Sheet
+          title="Tenant created"
+          onClose={closeModal}
+          closeLabel="Close"
+          footer={<button type="button" onClick={closeModal} className={KEY_PRIMARY}>Done</button>}
+        >
+          <div className="space-y-3">
+            {provisioned.subscription && (
+              <Strip tone="ok">
+                <p className="font-semibold">Subscription provisioned</p>
+                <p className="mt-1 text-ink/70">Plan: {provisioned.subscription.planTier} · Trial: {provisioned.subscription.trialDays} days</p>
+              </Strip>
+            )}
+            {provisioned.ownerUser && (
+              <div className="border border-dashed border-ink/40 bg-paper px-4 py-3 font-receipt text-sm">
+                <p className="font-semibold uppercase tracking-[0.08em]">Owner account created</p>
+                <p className="mt-2 break-all">Email: {provisioned.ownerUser.email}</p>
+                <p className="mt-1">Temp password: <strong className="select-all">{provisioned.ownerUser.tempPassword}</strong></p>
+                <p className="mt-2 text-xs text-ink/60">Share this with the tenant and ask them to change it immediately.</p>
+              </div>
             )}
           </div>
-        </div>
-      )}
-    </>
+        </Sheet>
+      ) : (
+        <Sheet
+          title={editingTenant ? 'Edit tenant' : 'New tenant'}
+          subtitle={editingTenant ? <span className="font-receipt">{editingTenant.slug}</span> : undefined}
+          onClose={closeModal}
+          closeLabel="Close"
+          footer={
+            <>
+              <button type="button" onClick={closeModal} className={KEY}>Cancel</button>
+              <button type="submit" form={FORM_ID} disabled={saving} className={KEY_PRIMARY}>
+                {saving ? 'Saving…' : editingTenant ? 'Save changes' : 'Create tenant'}
+              </button>
+            </>
+          }
+        >
+          <form id={FORM_ID} onSubmit={handleSave} className="space-y-4">
+            {!editingTenant && (
+              <div>
+                <label htmlFor="t-slug" className={LABEL}>Slug *</label>
+                <input id="t-slug" required value={formData.slug} onChange={e => setFormData({ ...formData, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-') })}
+                  className={INPUT} placeholder="my-store" />
+                <p className={HINT}>Lowercase letters, numbers, hyphens only</p>
+              </div>
+            )}
+            <div>
+              <label htmlFor="t-name" className={LABEL}>Name *</label>
+              <input id="t-name" required value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })}
+                className={INPUT} placeholder="My Store" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="t-currency" className={LABEL}>Currency</label>
+                <input id="t-currency" value={formData.currency} maxLength={3} onChange={e => setFormData({ ...formData, currency: e.target.value.toUpperCase() })}
+                  className={INPUT} placeholder="PHP" />
+              </div>
+              <div>
+                <label htmlFor="t-language" className={LABEL}>Language</label>
+                <select id="t-language" value={formData.language} onChange={e => setFormData({ ...formData, language: e.target.value })}
+                  className={`${SELECT} w-full`}>
+                  <option value="en">English</option>
+                  <option value="es">Español</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label htmlFor="t-type" className={LABEL}>Business type</label>
+              <select id="t-type" value={formData.businessType} onChange={e => setFormData({ ...formData, businessType: e.target.value })}
+                className={`${SELECT} w-full`}>
+                {OFFERED_BUSINESS_TYPES.map(t => (
+                  <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
+                ))}
+                {/* A tenant already on a closed type keeps it until someone picks an offered one. */}
+                {editingTenant && formData.businessType && !isBusinessTypeOffered(formData.businessType) && (
+                  <option value={formData.businessType}>
+                    {formData.businessType.charAt(0).toUpperCase() + formData.businessType.slice(1)} (no longer offered)
+                  </option>
+                )}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="t-email" className={LABEL}>Contact email</label>
+              <input id="t-email" type="email" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })}
+                className={INPUT} placeholder="contact@store.com" />
+            </div>
+            <div>
+              <label htmlFor="t-notes" className={LABEL}>Internal notes</label>
+              <textarea id="t-notes" value={formData.notes} onChange={e => setFormData({ ...formData, notes: e.target.value })} rows={2}
+                className={`${TEXTAREA} resize-none`} placeholder="Internal notes about this tenant…" />
+            </div>
+            {!editingTenant && (
+              <fieldset className="space-y-4 border-t border-dashed border-ink/30 pt-4">
+                <legend className="pr-2 font-receipt text-xs font-medium uppercase tracking-[0.14em] text-ink/70">Auto-provisioning</legend>
+                <div>
+                  <label htmlFor="t-owner-email" className={LABEL}>Owner email (creates account)</label>
+                  <input id="t-owner-email" type="email" value={formData.ownerEmail} onChange={e => setFormData({ ...formData, ownerEmail: e.target.value })}
+                    className={INPUT} placeholder="owner@store.com" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label htmlFor="t-owner-name" className={LABEL}>Owner name</label>
+                    <input id="t-owner-name" value={formData.ownerName} onChange={e => setFormData({ ...formData, ownerName: e.target.value })}
+                      className={INPUT} placeholder="Jane Doe" />
+                  </div>
+                  <div>
+                    <label htmlFor="t-trial" className={LABEL}>Trial days</label>
+                    <input id="t-trial" type="number" min="1" max="365" value={formData.trialDays} onChange={e => setFormData({ ...formData, trialDays: e.target.value })}
+                      className={INPUT} />
+                  </div>
+                </div>
+              </fieldset>
+            )}
+            {formError && <Strip tone="error">{formError}</Strip>}
+          </form>
+        </Sheet>
+      ))}
+    </SaPage>
   );
 }

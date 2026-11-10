@@ -4,6 +4,8 @@ import {
   SIGNUP_CLOSED_BUSINESS_TYPES,
   isBusinessTypeOpenForSignup,
   isBusinessTypeSelectable,
+  isBusinessTypeOffered,
+  OFFERED_BUSINESS_TYPES,
 } from '@/lib/business-types';
 
 describe('isBusinessTypeOpenForSignup', () => {
@@ -48,5 +50,19 @@ describe('isBusinessTypeSelectable', () => {
   it('offers only open types when nothing is saved', () => {
     expect(isBusinessTypeSelectable('restaurant', undefined)).toBe(false);
     expect(isBusinessTypeSelectable('retail', undefined)).toBe(true);
+  });
+});
+
+describe('isBusinessTypeOffered', () => {
+  it('offers only retail and general', () => {
+    expect([...OFFERED_BUSINESS_TYPES]).toEqual(['retail', 'general']);
+  });
+
+  it.each(['retail', 'general', 'RETAIL', 'General'])('accepts %s', (type) => {
+    expect(isBusinessTypeOffered(type)).toBe(true);
+  });
+
+  it.each(['restaurant', 'laundry', 'service', 'pharmacy', 'made-up', '', undefined, null, 42])('rejects %s', (type) => {
+    expect(isBusinessTypeOffered(type)).toBe(false);
   });
 });

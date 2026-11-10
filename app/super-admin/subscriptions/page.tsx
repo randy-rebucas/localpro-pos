@@ -1,7 +1,13 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { Ban, Banknote, CalendarCog, CalendarPlus, CircleX, ClipboardList, CreditCard, Hourglass, Pause, Play, Power } from 'lucide-react';
 import { showToast } from '@/lib/toast';
+import {
+  CHECKBOX, CHECK_ROW, DARK_FIELD, DARK_LABEL, Empty, HINT, INPUT, IconKey, KEY, KEY_DANGER, KEY_PRIMARY,
+  LABEL, LedReadout, LedStat, Printing, SaPage, SELECT, Sheet, Slip, TABLE, TBODY, TD, TD_TEXT, TEXTAREA, TH, THEAD, TR,
+  Tag, statusTone, type TagTone,
+} from '@/components/super-admin/ui';
 
 interface Plan { _id: string; name: string; tier: string; }
 
@@ -37,21 +43,18 @@ const DEACTIVATION_BUFFER_DAYS = 3;
 const toDateInput = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
-const STATUS_BADGE: Record<string, string> = {
-  active: 'bg-green-100 text-green-800 border-green-200',
-  trial: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-  cancelled: 'bg-red-100 text-red-800 border-red-200',
-  suspended: 'bg-orange-100 text-orange-800 border-orange-200',
-  inactive: 'bg-gray-100 text-gray-600 border-gray-200',
-  paused: 'bg-blue-100 text-blue-700 border-blue-200',
+/** Plan tiers as boxed codes; the plan name carries the meaning. */
+const TIER_TONE: Record<string, TagTone> = {
+  starter: 'muted',
+  pro: 'ok',
+  business: 'info',
+  enterprise: 'info',
 };
 
-const TIER_BADGE: Record<string, string> = {
-  starter: 'bg-gray-100 text-gray-700 border-gray-200',
-  pro: 'bg-teal-50 text-teal-800 border-teal-200',
-  business: 'bg-purple-100 text-purple-800 border-purple-200',
-  enterprise: 'bg-indigo-100 text-indigo-800 border-indigo-200',
-};
+/** Subscription states that statusTone doesn't place the way this page needs. */
+const subTone = (status: string): TagTone => (status === 'paused' ? 'info' : status === 'trial' ? 'warn' : statusTone(status));
+
+const FIELD_ID = 'sub-action';
 
 export default function SubscriptionsPage() {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
@@ -159,280 +162,322 @@ export default function SubscriptionsPage() {
 
   const fmt = (d?: string) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }) : '—';
 
-  return (
+  const keyDate = (sub: Subscription) =>
+    sub.status === 'trial' ? <><span className="text-ink/50">Trial ends </span>{fmt(sub.trialEndDate)}</> :
+    sub.status === 'paused' && sub.pauseEndsAt ? <><span className="text-ink/50">Resumes </span>{fmt(sub.pauseEndsAt)}</> :
+    sub.status === 'suspended' && sub.gracePeriodEndDate ? <><span className="text-[#8a5a12]">Grace ends </span>{fmt(sub.gracePeriodEndDate)}</> :
+    sub.paymentOverdue && sub.gracePeriodEndDate ? <><span className="text-stamp">Overdue · grace ends </span>{fmt(sub.gracePeriodEndDate)}</> :
+    fmt(sub.nextBillingDate);
+
+  const planTag = (sub: Subscription) =>
+    sub.planId ? <Tag tone={TIER_TONE[sub.planId.tier] || 'muted'}>{sub.planId.name}</Tag> : <span className="font-receipt text-xs text-ink/50">No plan</span>;
+
+  const statusBlock = (sub: Subscription) => (
     <>
-      <div className="space-y-4">
-        {/* Filters */}
-        <div className="bg-white border border-gray-100 p-4 flex flex-col sm:flex-row gap-3">
+      <Tag tone={subTone(sub.status)}>{sub.status}</Tag>
+      {sub.cancellationReason && <div className="mt-1 max-w-[160px] truncate text-xs text-ink/60" title={sub.cancellationReason}>{sub.cancellationReason}</div>}
+      {sub.pauseReason && <div className="mt-1 max-w-[160px] truncate text-xs text-brand-navy" title={sub.pauseReason}>{sub.pauseReason}</div>}
+    </>
+  );
+
+  const actionKeys = (sub: Subscription) => {
+    const who = sub.tenantId?.name || 'this store';
+    return (
+      <div className="flex flex-wrap gap-1.5">
+        <IconKey icon={ClipboardList} label={`Assign a plan to ${who}`} onClick={() => openAction(sub, 'assign-plan')} />
+        <IconKey icon={CalendarPlus} label={`Extend the trial for ${who}`} onClick={() => openAction(sub, 'extend-trial')} />
+        <IconKey icon={Banknote} label={`Record a payment for ${who}`} onClick={() => openAction(sub, 'record-payment')} />
+        {['active', 'paused'].includes(sub.status) && !sub.paymentOverdue && (
+          <IconKey icon={CalendarCog} label={`Change the billing date for ${who}`} onClick={() => openAction(sub, 'adjust-billing-date')} />
+        )}
+        {sub.status === 'active' && sub.paymentOverdue && !sub.deactivatedAt && (
+          <IconKey icon={Hourglass} label={`Extend the grace period for ${who}`} onClick={() => openAction(sub, 'extend-grace')} />
+        )}
+        {sub.status !== 'active' && <IconKey icon={Power} label={`Activate ${who}`} onClick={() => openAction(sub, 'activate')} />}
+        {sub.status === 'paused' && <IconKey icon={Play} label={`Resume ${who}`} onClick={() => openAction(sub, 'resume')} />}
+        {!['paused'].includes(sub.status) && <IconKey icon={Pause} label={`Pause ${who}`} onClick={() => openAction(sub, 'pause')} />}
+        {sub.status !== 'suspended' && <IconKey icon={Ban} tone="danger" label={`Suspend ${who}`} onClick={() => openAction(sub, 'suspend')} />}
+        {sub.status !== 'cancelled' && <IconKey icon={CircleX} tone="danger" label={`Cancel the subscription for ${who}`} onClick={() => openAction(sub, 'cancel')} />}
+      </div>
+    );
+  };
+
+  const confirmDisabled = !!actionModal && (
+    actionSaving ||
+    (actionModal.action === 'assign-plan' && !actionPlanId) ||
+    (actionModal.action === 'record-payment' && !actionAmount) ||
+    (actionModal.action === 'adjust-billing-date' && !actionBillingDate) ||
+    (actionModal.action === 'extend-grace' && (!actionBillingDate || !actionReason.trim())) ||
+    (actionModal.action === 'activate' && actionModal.sub.status === 'cancelled' && !actionReason.trim())
+  );
+
+  const counts = {
+    active: subscriptions.filter(s => s.status === 'active').length,
+    trial: subscriptions.filter(s => s.status === 'trial').length,
+    overdue: subscriptions.filter(s => s.paymentOverdue).length,
+  };
+
+  return (
+    <SaPage
+      tagNo="05"
+      tag="Standing orders"
+      title="Subscriptions"
+      subtitle="Every store's plan, where its bill stands, and the keys to change it."
+      side={!loading && <LedReadout value={subscriptions.length} label="Listed" />}
+    >
+      {/* Filters */}
+      <section aria-label="Filters" className="mt-8 grid gap-3 sm:grid-cols-[minmax(0,16rem)_minmax(0,12rem)]">
+        <div>
+          <label htmlFor="sub-search" className={DARK_LABEL}>Tenant slug</label>
           <input
+            id="sub-search"
             type="text"
             placeholder="Filter by tenant slug…"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="px-3 py-2 border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand w-full sm:w-56"
+            className={`${DARK_FIELD} placeholder:text-ink/40`}
           />
-          <select
-            value={statusFilter}
-            onChange={e => setStatusFilter(e.target.value)}
-            className="px-3 py-2 border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand bg-white"
-          >
+        </div>
+        <div>
+          <label htmlFor="sub-status" className={DARK_LABEL}>Status</label>
+          <select id="sub-status" value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className={DARK_FIELD}>
             <option value="">All statuses</option>
             {['active', 'trial', 'paused', 'suspended', 'cancelled', 'inactive'].map(s => (
               <option key={s} value={s} className="capitalize">{s}</option>
             ))}
           </select>
         </div>
+      </section>
 
-        {/* Table */}
-        {loading ? (
-          <div className="text-center py-12">
-            <div className="inline-block animate-spin h-6 w-6 border-2 border-brand border-t-transparent rounded-full" />
-            <p className="mt-3 text-gray-400 text-sm">Loading subscriptions…</p>
-          </div>
-        ) : subscriptions.length === 0 ? (
-          <div className="text-center py-12 text-gray-400">No subscriptions found.</div>
-        ) : (
-          <div className="overflow-x-auto border border-gray-100 bg-white">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wide">
-                <tr>
-                  {['Tenant', 'Plan', 'Status', 'Billing', 'Key Date', 'Actions'].map(h => (
-                    <th key={h} className="px-4 py-3 text-left font-medium">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
+      {!loading && subscriptions.length > 0 && (
+        <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <LedStat label="Active (listed)" value={counts.active} />
+          <LedStat label="On trial (listed)" value={counts.trial} />
+          <LedStat label="Payment overdue (listed)" value={counts.overdue} tone={counts.overdue > 0 ? 'alert' : 'default'} />
+        </div>
+      )}
+
+      <Slip title="Subscription roll" className="mt-6">
+        <div aria-busy={loading}>
+          {loading ? (
+            <Printing label="Loading subscriptions…" />
+          ) : subscriptions.length === 0 ? (
+            <Empty icon={<CreditCard className="h-8 w-8" strokeWidth={1.75} aria-hidden />}>No subscriptions found.</Empty>
+          ) : (
+            <>
+              {/* Below xl: one printed block per store */}
+              <ul className="divide-y divide-dashed divide-ink/20 xl:hidden">
                 {subscriptions.map(sub => (
-                  <tr key={sub._id} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="px-4 py-3">
-                      <p className="font-medium text-gray-900">{sub.tenantId?.name || '—'}</p>
-                      <p className="text-xs text-gray-400 font-mono">{sub.tenantId?.slug || '—'}</p>
-                    </td>
-                    <td className="px-4 py-3">
-                      {sub.planId ? (
-                        <span className={`px-2 py-0.5 text-xs font-medium border capitalize ${TIER_BADGE[sub.planId.tier] || 'bg-gray-100 text-gray-700 border-gray-200'}`}>
-                          {sub.planId.name}
-                        </span>
-                      ) : <span className="text-xs text-gray-400 italic">No plan</span>}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`px-2 py-0.5 text-xs font-semibold border capitalize ${STATUS_BADGE[sub.status] || 'bg-gray-100 text-gray-600 border-gray-200'}`}>
-                        {sub.status}
-                      </span>
-                      {sub.cancellationReason && <div className="text-xs text-gray-400 mt-0.5 truncate max-w-[120px]" title={sub.cancellationReason}>{sub.cancellationReason}</div>}
-                      {sub.pauseReason && <div className="text-xs text-blue-400 mt-0.5 truncate max-w-[120px]" title={sub.pauseReason}>{sub.pauseReason}</div>}
-                    </td>
-                    <td className="px-4 py-3 text-gray-500 capitalize">{sub.billingCycle}</td>
-                    <td className="px-4 py-3 text-gray-500 text-xs">
-                      {sub.status === 'trial' ? <><span className="text-gray-400">Trial ends </span>{fmt(sub.trialEndDate)}</> :
-                       sub.status === 'paused' && sub.pauseEndsAt ? <><span className="text-gray-400">Resumes </span>{fmt(sub.pauseEndsAt)}</> :
-                       sub.status === 'suspended' && sub.gracePeriodEndDate ? <><span className="text-orange-400">Grace ends </span>{fmt(sub.gracePeriodEndDate)}</> :
-                       sub.paymentOverdue && sub.gracePeriodEndDate ? <><span className="text-red-500">Overdue · grace ends </span>{fmt(sub.gracePeriodEndDate)}</> :
-                       fmt(sub.nextBillingDate)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-1.5">
-                        <button onClick={() => openAction(sub, 'assign-plan')} className="text-xs text-brand hover:underline font-medium">Plan</button>
-                        <button onClick={() => openAction(sub, 'extend-trial')} className="text-xs text-yellow-600 hover:underline">+Trial</button>
-                        <button onClick={() => openAction(sub, 'record-payment')} className="text-xs text-green-600 hover:underline">Payment</button>
-                        {['active', 'paused'].includes(sub.status) && !sub.paymentOverdue && <button onClick={() => openAction(sub, 'adjust-billing-date')} className="text-xs text-gray-700 hover:underline">Bill date</button>}
-                        {sub.status === 'active' && sub.paymentOverdue && !sub.deactivatedAt && <button onClick={() => openAction(sub, 'extend-grace')} className="text-xs text-red-600 hover:underline">+Grace</button>}
-                        {sub.status !== 'active' && <button onClick={() => openAction(sub, 'activate')} className="text-xs text-green-700 hover:underline">Activate</button>}
-                        {sub.status === 'paused' && <button onClick={() => openAction(sub, 'resume')} className="text-xs text-blue-600 hover:underline">Resume</button>}
-                        {!['paused'].includes(sub.status) && <button onClick={() => openAction(sub, 'pause')} className="text-xs text-blue-500 hover:underline">Pause</button>}
-                        {sub.status !== 'suspended' && <button onClick={() => openAction(sub, 'suspend')} className="text-xs text-orange-600 hover:underline">Suspend</button>}
-                        {sub.status !== 'cancelled' && <button onClick={() => openAction(sub, 'cancel')} className="text-xs text-red-500 hover:underline">Cancel</button>}
+                  <li key={sub._id} className="px-4 py-4 sm:px-5">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="font-medium">{sub.tenantId?.name || '—'}</p>
+                        <p className="font-receipt text-xs text-ink/60">{sub.tenantId?.slug || '—'}</p>
                       </div>
-                    </td>
-                  </tr>
+                      <div className="text-right">{statusBlock(sub)}</div>
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 font-receipt text-xs text-ink/70">
+                      {planTag(sub)}
+                      <span className="capitalize">{sub.billingCycle}</span>
+                      <span>{keyDate(sub)}</span>
+                    </div>
+                    <div className="mt-3">{actionKeys(sub)}</div>
+                  </li>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+              </ul>
 
-      {/* Action Modal */}
+              {/* From xl: the full roll */}
+              <div className="hidden overflow-x-auto xl:block" role="region" aria-label="Subscriptions" tabIndex={0}>
+                <table className={TABLE}>
+                  <thead className={THEAD}>
+                    <tr>
+                      {['Tenant', 'Plan', 'Status', 'Billing', 'Key date', 'Actions'].map(h => (
+                        <th key={h} scope="col" className={TH}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className={TBODY}>
+                    {subscriptions.map(sub => (
+                      <tr key={sub._id} className={TR}>
+                        <td className={TD_TEXT}>
+                          <p className="font-medium">{sub.tenantId?.name || '—'}</p>
+                          <p className="font-receipt text-xs text-ink/60">{sub.tenantId?.slug || '—'}</p>
+                        </td>
+                        <td className={TD}>{planTag(sub)}</td>
+                        <td className={TD}>{statusBlock(sub)}</td>
+                        <td className={`${TD} capitalize text-ink/70`}>{sub.billingCycle}</td>
+                        <td className={`${TD} whitespace-nowrap text-xs text-ink/70`}>{keyDate(sub)}</td>
+                        <td className="px-4 py-2.5">{actionKeys(sub)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
+      </Slip>
+
+      {/* Action sheet */}
       {actionModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white w-full max-w-sm">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-              <h2 className="font-semibold text-gray-900 capitalize">{ACTION_TITLE[actionModal.action] || actionModal.action.replace(/-/g, ' ')}</h2>
-              <button onClick={() => setActionModal(null)} aria-label="Close" className="text-gray-400 hover:text-gray-600"><svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg></button>
-            </div>
-            <div className="p-6 space-y-4">
-              <p className="text-sm text-gray-500">Tenant: <span className="font-medium text-gray-800">{actionModal.sub.tenantId?.name}</span></p>
-
-              {actionModal.action === 'assign-plan' && (
-                <>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Plan</label>
-                    <select value={actionPlanId} onChange={e => setActionPlanId(e.target.value)}
-                      className="w-full border border-gray-200 px-3 py-2 text-sm">
-                      <option value="">— choose —</option>
-                      {plans.map(p => <option key={p._id} value={p._id}>{p.name} ({p.tier})</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Next Billing Date</label>
-                    <input type="date" value={actionBillingDate} onChange={e => setActionBillingDate(e.target.value)}
-                      className="w-full border border-gray-200 px-3 py-2 text-sm" />
-                  </div>
-                </>
-              )}
-
-              {actionModal.action === 'extend-trial' && (
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Extend by (days)</label>
-                  <input type="number" min="1" max="365" value={actionDays} onChange={e => setActionDays(e.target.value)}
-                    className="w-full border border-gray-200 px-3 py-2 text-sm" />
-                </div>
-              )}
-
-              {actionModal.action === 'cancel' && (
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Cancellation Reason</label>
-                  <textarea value={actionReason} onChange={e => setActionReason(e.target.value)} rows={3}
-                    placeholder="Optional reason for cancellation…"
-                    className="w-full border border-gray-200 px-3 py-2 text-sm resize-none" />
-                </div>
-              )}
-
-              {actionModal.action === 'suspend' && (
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Grace Period (days, optional)</label>
-                  <input type="number" min="0" max="90" value={actionGraceDays} onChange={e => setActionGraceDays(e.target.value)}
-                    placeholder="0 = no grace period"
-                    className="w-full border border-gray-200 px-3 py-2 text-sm" />
-                </div>
-              )}
-
-              {actionModal.action === 'pause' && (
-                <>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Pause Reason</label>
-                    <input value={actionReason} onChange={e => setActionReason(e.target.value)}
-                      placeholder="e.g. Customer requested break"
-                      className="w-full border border-gray-200 px-3 py-2 text-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Auto-resume after (days, optional)</label>
-                    <input type="number" min="1" value={actionDays} onChange={e => setActionDays(e.target.value)}
-                      className="w-full border border-gray-200 px-3 py-2 text-sm" />
-                  </div>
-                </>
-              )}
-
-              {actionModal.action === 'record-payment' && (
-                <>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Amount (₱) *</label>
-                    <input type="number" min="0" step="0.01" value={actionAmount} onChange={e => setActionAmount(e.target.value)}
-                      placeholder="0.00"
-                      className="w-full border border-gray-200 px-3 py-2 text-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Transaction ID</label>
-                    <input value={actionTxId} onChange={e => setActionTxId(e.target.value)}
-                      placeholder="Optional"
-                      className="w-full border border-gray-200 px-3 py-2 text-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Notes</label>
-                    <input value={actionReason} onChange={e => setActionReason(e.target.value)}
-                      placeholder="Optional notes"
-                      className="w-full border border-gray-200 px-3 py-2 text-sm" />
-                  </div>
-                </>
-              )}
-
-              {actionModal.action === 'adjust-billing-date' && (
-                <>
-                  <p className="text-sm text-gray-500">Current: <span className="font-medium text-gray-800">{fmt(actionModal.sub.nextBillingDate)}</span></p>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">New Billing Date *</label>
-                    <input type="date" value={actionBillingDate} onChange={e => setActionBillingDate(e.target.value)}
-                      min={toDateInput(new Date(Date.now() + 86_400_000))}
-                      className="w-full border border-gray-200 px-3 py-2 text-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Reason</label>
-                    <input value={actionReason} onChange={e => setActionReason(e.target.value)}
-                      placeholder="e.g. Align with customer's payroll date"
-                      className="w-full border border-gray-200 px-3 py-2 text-sm" />
-                  </div>
-                  <p className="text-xs text-gray-400">Future cycles continue from the new date. No charge is made or prorated.</p>
-                </>
-              )}
-
-              {actionModal.action === 'extend-grace' && (
-                <>
-                  <p className="text-sm text-gray-500">
-                    Due: <span className="font-medium text-gray-800">{fmt(actionModal.sub.nextBillingDate)}</span>
-                    {' · '}Grace ends: <span className="font-medium text-gray-800">{fmt(actionModal.sub.gracePeriodEndDate)}</span>
-                  </p>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">New Grace Period End *</label>
-                    <input type="date" value={actionBillingDate} onChange={e => setActionBillingDate(e.target.value)}
-                      min={toDateInput(new Date(Date.now() + 86_400_000))}
-                      max={toDateInput(new Date(Date.now() + 60 * 86_400_000))}
-                      className="w-full border border-gray-200 px-3 py-2 text-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Reason *</label>
-                    <input value={actionReason} onChange={e => setActionReason(e.target.value)}
-                      placeholder="e.g. Customer promised payment on the 20th"
-                      className="w-full border border-gray-200 px-3 py-2 text-sm" />
-                  </div>
-                  {actionBillingDate && (
-                    <p className="text-xs text-gray-500">
-                      Deactivates on {fmt(new Date(new Date(actionBillingDate).getTime() + DEACTIVATION_BUFFER_DAYS * 86_400_000).toISOString())} if still unpaid.
-                      Late fee (day 15) and reactivation fee (day 30) still count from the original due date.
-                    </p>
-                  )}
-                </>
-              )}
-
-              {(actionModal.action === 'adjust-billing-date' || actionModal.action === 'extend-grace') && (
-                <label className="flex items-center gap-2 text-sm text-gray-700">
-                  <input type="checkbox" className="checkbox-win8" checked={actionNotify} onChange={e => setActionNotify(e.target.checked)} />
-                  Email the store about this change
-                </label>
-              )}
-
-              {actionModal.action === 'activate' && actionModal.sub.status === 'cancelled' && (
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Reactivation Reason *</label>
-                  <textarea value={actionReason} onChange={e => setActionReason(e.target.value)} rows={3}
-                    placeholder="Why is this cancelled subscription being reactivated?"
-                    className="w-full border border-gray-200 px-3 py-2 text-sm resize-none" />
-                </div>
-              )}
-
-              {['activate', 'resume'].includes(actionModal.action) && actionModal.sub.status !== 'cancelled' && (
-                <p className="text-sm text-gray-600">Confirm to <strong>{actionModal.action}</strong> this subscription?</p>
-              )}
-            </div>
-            <div className="flex gap-3 px-6 py-4 border-t border-gray-100 justify-end">
-              <button onClick={() => setActionModal(null)} className="px-4 py-2 border border-gray-200 text-sm hover:bg-gray-50">Cancel</button>
+        <Sheet
+          title={ACTION_TITLE[actionModal.action] || actionModal.action.replace(/-/g, ' ')}
+          subtitle={<>Tenant: <span className="font-medium text-ink">{actionModal.sub.tenantId?.name}</span></>}
+          onClose={() => setActionModal(null)}
+          closeLabel="Close"
+          footer={
+            <>
+              <button type="button" onClick={() => setActionModal(null)} className={KEY}>Cancel</button>
               <button
+                type="button"
                 onClick={executeAction}
-                disabled={
-                  actionSaving ||
-                  (actionModal.action === 'assign-plan' && !actionPlanId) ||
-                  (actionModal.action === 'record-payment' && !actionAmount) ||
-                  (actionModal.action === 'adjust-billing-date' && !actionBillingDate) ||
-                  (actionModal.action === 'extend-grace' && (!actionBillingDate || !actionReason.trim())) ||
-                  (actionModal.action === 'activate' && actionModal.sub.status === 'cancelled' && !actionReason.trim())
-                }
-                className="px-4 py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover disabled:opacity-50 transition-colors"
+                disabled={confirmDisabled}
+                className={actionModal.action === 'cancel' || actionModal.action === 'suspend' ? KEY_DANGER : KEY_PRIMARY}
               >
                 {actionSaving ? 'Saving…' : 'Confirm'}
               </button>
-            </div>
+            </>
+          }
+        >
+          <div className="space-y-4">
+            {actionModal.action === 'assign-plan' && (
+              <>
+                <div>
+                  <label htmlFor={`${FIELD_ID}-plan`} className={LABEL}>Plan</label>
+                  <select id={`${FIELD_ID}-plan`} value={actionPlanId} onChange={e => setActionPlanId(e.target.value)} className={`${SELECT} w-full`}>
+                    <option value="">— choose —</option>
+                    {plans.map(p => <option key={p._id} value={p._id}>{p.name} ({p.tier})</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor={`${FIELD_ID}-date`} className={LABEL}>Next billing date</label>
+                  <input id={`${FIELD_ID}-date`} type="date" value={actionBillingDate} onChange={e => setActionBillingDate(e.target.value)} className={INPUT} />
+                </div>
+              </>
+            )}
+
+            {actionModal.action === 'extend-trial' && (
+              <div>
+                <label htmlFor={`${FIELD_ID}-days`} className={LABEL}>Extend by (days)</label>
+                <input id={`${FIELD_ID}-days`} type="number" min="1" max="365" value={actionDays} onChange={e => setActionDays(e.target.value)} className={INPUT} />
+              </div>
+            )}
+
+            {actionModal.action === 'cancel' && (
+              <div>
+                <label htmlFor={`${FIELD_ID}-reason`} className={LABEL}>Cancellation reason</label>
+                <textarea id={`${FIELD_ID}-reason`} value={actionReason} onChange={e => setActionReason(e.target.value)} rows={3}
+                  placeholder="Optional reason for cancellation…"
+                  className={`${TEXTAREA} resize-none`} />
+              </div>
+            )}
+
+            {actionModal.action === 'suspend' && (
+              <div>
+                <label htmlFor={`${FIELD_ID}-grace`} className={LABEL}>Grace period (days, optional)</label>
+                <input id={`${FIELD_ID}-grace`} type="number" min="0" max="90" value={actionGraceDays} onChange={e => setActionGraceDays(e.target.value)}
+                  placeholder="0 = no grace period" className={INPUT} />
+              </div>
+            )}
+
+            {actionModal.action === 'pause' && (
+              <>
+                <div>
+                  <label htmlFor={`${FIELD_ID}-reason`} className={LABEL}>Pause reason</label>
+                  <input id={`${FIELD_ID}-reason`} value={actionReason} onChange={e => setActionReason(e.target.value)}
+                    placeholder="e.g. Customer requested break" className={INPUT} />
+                </div>
+                <div>
+                  <label htmlFor={`${FIELD_ID}-days`} className={LABEL}>Auto-resume after (days, optional)</label>
+                  <input id={`${FIELD_ID}-days`} type="number" min="1" value={actionDays} onChange={e => setActionDays(e.target.value)} className={INPUT} />
+                </div>
+              </>
+            )}
+
+            {actionModal.action === 'record-payment' && (
+              <>
+                <div>
+                  <label htmlFor={`${FIELD_ID}-amount`} className={LABEL}>Amount (₱) *</label>
+                  <input id={`${FIELD_ID}-amount`} type="number" min="0" step="0.01" value={actionAmount} onChange={e => setActionAmount(e.target.value)}
+                    placeholder="0.00" className={`${INPUT} font-receipt`} />
+                </div>
+                <div>
+                  <label htmlFor={`${FIELD_ID}-tx`} className={LABEL}>Transaction ID</label>
+                  <input id={`${FIELD_ID}-tx`} value={actionTxId} onChange={e => setActionTxId(e.target.value)} placeholder="Optional" className={INPUT} />
+                </div>
+                <div>
+                  <label htmlFor={`${FIELD_ID}-notes`} className={LABEL}>Notes</label>
+                  <input id={`${FIELD_ID}-notes`} value={actionReason} onChange={e => setActionReason(e.target.value)} placeholder="Optional notes" className={INPUT} />
+                </div>
+              </>
+            )}
+
+            {actionModal.action === 'adjust-billing-date' && (
+              <>
+                <p className="font-receipt text-sm text-ink/70">Current: <span className="font-semibold text-ink">{fmt(actionModal.sub.nextBillingDate)}</span></p>
+                <div>
+                  <label htmlFor={`${FIELD_ID}-date`} className={LABEL}>New billing date *</label>
+                  <input id={`${FIELD_ID}-date`} type="date" value={actionBillingDate} onChange={e => setActionBillingDate(e.target.value)}
+                    min={toDateInput(new Date(Date.now() + 86_400_000))} className={INPUT} />
+                </div>
+                <div>
+                  <label htmlFor={`${FIELD_ID}-reason`} className={LABEL}>Reason</label>
+                  <input id={`${FIELD_ID}-reason`} value={actionReason} onChange={e => setActionReason(e.target.value)}
+                    placeholder="e.g. Align with customer's payroll date" className={INPUT} />
+                </div>
+                <p className={HINT}>Future cycles continue from the new date. No charge is made or prorated.</p>
+              </>
+            )}
+
+            {actionModal.action === 'extend-grace' && (
+              <>
+                <p className="font-receipt text-sm text-ink/70">
+                  Due: <span className="font-semibold text-ink">{fmt(actionModal.sub.nextBillingDate)}</span>
+                  {' · '}Grace ends: <span className="font-semibold text-ink">{fmt(actionModal.sub.gracePeriodEndDate)}</span>
+                </p>
+                <div>
+                  <label htmlFor={`${FIELD_ID}-date`} className={LABEL}>New grace period end *</label>
+                  <input id={`${FIELD_ID}-date`} type="date" value={actionBillingDate} onChange={e => setActionBillingDate(e.target.value)}
+                    min={toDateInput(new Date(Date.now() + 86_400_000))}
+                    max={toDateInput(new Date(Date.now() + 60 * 86_400_000))}
+                    className={INPUT} />
+                </div>
+                <div>
+                  <label htmlFor={`${FIELD_ID}-reason`} className={LABEL}>Reason *</label>
+                  <input id={`${FIELD_ID}-reason`} value={actionReason} onChange={e => setActionReason(e.target.value)}
+                    placeholder="e.g. Customer promised payment on the 20th" className={INPUT} />
+                </div>
+                {actionBillingDate && (
+                  <p className={HINT}>
+                    Deactivates on {fmt(new Date(new Date(actionBillingDate).getTime() + DEACTIVATION_BUFFER_DAYS * 86_400_000).toISOString())} if still unpaid.
+                    Late fee (day 15) and reactivation fee (day 30) still count from the original due date.
+                  </p>
+                )}
+              </>
+            )}
+
+            {(actionModal.action === 'adjust-billing-date' || actionModal.action === 'extend-grace') && (
+              <label className={CHECK_ROW}>
+                <input type="checkbox" className={CHECKBOX} checked={actionNotify} onChange={e => setActionNotify(e.target.checked)} />
+                Email the store about this change
+              </label>
+            )}
+
+            {actionModal.action === 'activate' && actionModal.sub.status === 'cancelled' && (
+              <div>
+                <label htmlFor={`${FIELD_ID}-reason`} className={LABEL}>Reactivation reason *</label>
+                <textarea id={`${FIELD_ID}-reason`} value={actionReason} onChange={e => setActionReason(e.target.value)} rows={3}
+                  placeholder="Why is this cancelled subscription being reactivated?"
+                  className={`${TEXTAREA} resize-none`} />
+              </div>
+            )}
+
+            {['activate', 'resume'].includes(actionModal.action) && actionModal.sub.status !== 'cancelled' && (
+              <p className="text-sm text-ink/80">Confirm to <strong>{actionModal.action}</strong> this subscription?</p>
+            )}
           </div>
-        </div>
+        </Sheet>
       )}
-    </>
+    </SaPage>
   );
 }

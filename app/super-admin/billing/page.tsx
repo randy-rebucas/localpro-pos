@@ -1,7 +1,12 @@
 'use client';
 
 import { useState, useCallback } from 'react';
+import { ExternalLink, Plus, Receipt, Search } from 'lucide-react';
 import { showToast } from '@/lib/toast';
+import {
+  DARK_FIELD, DARK_KEY, DARK_KEY_PRIMARY, DARK_LABEL, Empty, INPUT, KEY, KEY_PRIMARY, LABEL, LINK, LedReadout, Printing,
+  SaPage, SaPager, SELECT, Sheet, Slip, TABLE, TBODY, TD, TD_RIGHT, TD_TEXT, TEXTAREA, TH, TH_RIGHT, THEAD, TR, Tag, type TagTone,
+} from '@/components/super-admin/ui';
 
 interface BillingEvent {
   _id: string;
@@ -22,14 +27,16 @@ const EVENT_TYPES = [
   'credit_applied', 'manual_adjustment', 'invoice_created',
 ];
 
-const TYPE_BADGE: Record<string, string> = {
-  payment_received: 'bg-green-100 text-green-800 border-green-200',
-  payment_failed: 'bg-red-100 text-red-800 border-red-200',
-  refund_issued: 'bg-orange-100 text-orange-800 border-orange-200',
-  credit_applied: 'bg-blue-100 text-blue-800 border-blue-200',
-  manual_adjustment: 'bg-purple-100 text-purple-800 border-purple-200',
-  invoice_created: 'bg-gray-100 text-gray-700 border-gray-200',
+const TYPE_TONE: Record<string, TagTone> = {
+  payment_received: 'ok',
+  payment_failed: 'bad',
+  refund_issued: 'warn',
+  credit_applied: 'info',
+  manual_adjustment: 'info',
+  invoice_created: 'muted',
 };
+
+const FORM_ID = 'billing-event';
 
 export default function BillingPage() {
   const [tenantSlug, setTenantSlug] = useState('');
@@ -126,192 +133,188 @@ export default function BillingPage() {
   const fmt = (d: string) =>
     new Date(d).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
+  const typeTag = (type: string) => <Tag tone={TYPE_TONE[type] || 'muted'}>{type.replace(/_/g, ' ')}</Tag>;
+  const amount = (ev: BillingEvent) => `${ev.currency} ${ev.amount.toLocaleString()}`;
+  const invoiceLink = (ev: BillingEvent) =>
+    ev.invoiceUrl ? (
+      <a href={ev.invoiceUrl} target="_blank" rel="noopener noreferrer" className={LINK}>
+        View
+        <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+      </a>
+    ) : (
+      <span className="font-receipt text-xs text-ink/40">—</span>
+    );
+
   return (
-    <>
-      <div className="space-y-4">
-        <form onSubmit={handleSearch} className="bg-white border border-gray-100 p-4 flex flex-wrap gap-3 items-end">
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Tenant Slug</label>
-            <input
-              type="text"
-              value={tenantSlug}
-              onChange={(e) => setTenantSlug(e.target.value)}
-              placeholder="my-store"
-              className="px-3 py-2 border border-gray-200 text-sm w-56 focus:ring-2 focus:ring-brand-teal/30"
-            />
-          </div>
-          <button type="submit" className="px-4 py-2 bg-brand-teal text-white text-sm font-medium hover:bg-brand-teal/90">
-            Search
+    <SaPage
+      tagNo="08"
+      tag="Till roll"
+      title="Billing"
+      subtitle="Look up a store by slug to read its billing history, or record a payment, refund or adjustment by hand."
+      side={searchedSlug && !loading && !notFound ? <LedReadout value={pagination.total} label="Events" /> : undefined}
+    >
+      <form onSubmit={handleSearch} aria-label="Find a tenant" className="mt-8 flex flex-wrap items-end gap-3">
+        <div className="w-full sm:w-64">
+          <label htmlFor="billing-slug" className={DARK_LABEL}>Tenant slug</label>
+          <input
+            id="billing-slug"
+            type="text"
+            value={tenantSlug}
+            onChange={(e) => setTenantSlug(e.target.value)}
+            placeholder="my-store"
+            className={`${DARK_FIELD} placeholder:text-ink/40`}
+          />
+        </div>
+        <button type="submit" className={DARK_KEY_PRIMARY}>
+          <Search className="h-4 w-4" strokeWidth={1.75} aria-hidden />
+          Search
+        </button>
+        {searchedSlug && (
+          <button type="button" onClick={openRecordForm} className={`${DARK_KEY} sm:ml-auto`}>
+            <Plus className="h-4 w-4" strokeWidth={1.75} aria-hidden />
+            Record billing event
           </button>
-          {searchedSlug && (
-            <button
-              type="button"
-              onClick={openRecordForm}
-              className="ml-auto px-4 py-2 border text-sm text-gray-600 hover:bg-gray-50"
-            >
-              + Record Billing Event
-            </button>
-          )}
-        </form>
-
-        {!searchedSlug ? (
-          <div className="text-center py-12 text-gray-400">Search a tenant by slug to view their billing history.</div>
-        ) : loading ? (
-          <div className="text-center py-12 text-gray-400">Loading…</div>
-        ) : notFound ? (
-          <div className="text-center py-12 text-gray-400">Tenant or subscription not found.</div>
-        ) : events.length === 0 ? (
-          <div className="text-center py-12 text-gray-400">No billing events found for this tenant.</div>
-        ) : (
-          <div className="overflow-x-auto border border-gray-100 bg-white">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wide">
-                <tr>
-                  {['Date', 'Type', 'Amount', 'Description', 'Transaction ID', 'Invoice'].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left font-medium">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {events.map((ev) => (
-                  <tr key={ev._id} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{fmt(ev.createdAt)}</td>
-                    <td className="px-4 py-3">
-                      <span className={`px-2 py-0.5 text-xs font-medium border capitalize ${TYPE_BADGE[ev.type] || 'bg-gray-100 text-gray-600 border-gray-200'}`}>
-                        {ev.type.replace(/_/g, ' ')}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-gray-900 font-medium">
-                      {ev.currency} {ev.amount.toLocaleString()}
-                    </td>
-                    <td className="px-4 py-3 text-gray-600 text-xs max-w-[240px] truncate" title={ev.description}>
-                      {ev.description || '—'}
-                    </td>
-                    <td className="px-4 py-3 text-gray-400 font-mono text-xs">{ev.transactionId || '—'}</td>
-                    <td className="px-4 py-3">
-                      {ev.invoiceUrl ? (
-                        <a href={ev.invoiceUrl} target="_blank" rel="noopener noreferrer" className="text-brand-teal hover:underline text-xs">
-                          View
-                        </a>
-                      ) : (
-                        <span className="text-gray-400 text-xs">—</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-
-            {pagination.pages > 1 && (
-              <div className="border-t px-4 py-3 flex items-center justify-between text-sm text-gray-500">
-                <span>Page {pagination.page} of {pagination.pages}</span>
-                <div className="flex gap-2">
-                  <button
-                    disabled={pagination.page <= 1}
-                    onClick={() => fetchEvents(searchedSlug, pagination.page - 1, pagination.limit)}
-                    className="px-3 py-1 border disabled:opacity-40 hover:bg-gray-50"
-                  >
-                    ← Prev
-                  </button>
-                  <button
-                    disabled={pagination.page >= pagination.pages}
-                    onClick={() => fetchEvents(searchedSlug, pagination.page + 1, pagination.limit)}
-                    className="px-3 py-1 border disabled:opacity-40 hover:bg-gray-50"
-                  >
-                    Next →
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
         )}
-      </div>
+      </form>
+
+      <Slip
+        title={searchedSlug ? <>Billing history · <span className="text-ink">{searchedSlug}</span></> : 'Billing history'}
+        tear
+        className="mt-6"
+      >
+        <div aria-busy={loading}>
+          {!searchedSlug ? (
+            <Empty icon={<Receipt className="h-8 w-8" strokeWidth={1.75} aria-hidden />}>Search a tenant by slug to view their billing history.</Empty>
+          ) : loading ? (
+            <Printing label="Loading…" />
+          ) : notFound ? (
+            <Empty>Tenant or subscription not found.</Empty>
+          ) : events.length === 0 ? (
+            <Empty>No billing events found for this tenant.</Empty>
+          ) : (
+            <>
+              {/* Below lg: one printed line per event */}
+              <ul className="divide-y divide-dashed divide-ink/20 lg:hidden">
+                {events.map((ev) => (
+                  <li key={ev._id} className="px-4 py-3 sm:px-5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      {typeTag(ev.type)}
+                      <span className="font-receipt text-sm font-semibold">{amount(ev)}</span>
+                    </div>
+                    {ev.description && <p className="mt-1.5 text-sm">{ev.description}</p>}
+                    <div className="mt-1 flex flex-wrap items-center gap-x-3 font-receipt text-xs text-ink/60">
+                      <span>{fmt(ev.createdAt)}</span>
+                      {ev.transactionId && <span>TX {ev.transactionId}</span>}
+                      {ev.invoiceUrl && invoiceLink(ev)}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+
+              {/* From lg: the full roll */}
+              <div className="hidden overflow-x-auto lg:block" role="region" aria-label="Billing events" tabIndex={0}>
+                <table className={TABLE}>
+                  <thead className={THEAD}>
+                    <tr>
+                      <th scope="col" className={TH}>Date</th>
+                      <th scope="col" className={TH}>Type</th>
+                      <th scope="col" className={TH_RIGHT}>Amount</th>
+                      <th scope="col" className={TH}>Description</th>
+                      <th scope="col" className={TH}>Transaction ID</th>
+                      <th scope="col" className={TH}>Invoice</th>
+                    </tr>
+                  </thead>
+                  <tbody className={TBODY}>
+                    {events.map((ev) => (
+                      <tr key={ev._id} className={TR}>
+                        <td className={`${TD} whitespace-nowrap text-xs text-ink/70`}>{fmt(ev.createdAt)}</td>
+                        <td className={TD}>{typeTag(ev.type)}</td>
+                        <td className={`${TD_RIGHT} font-semibold`}>{amount(ev)}</td>
+                        <td className={`${TD_TEXT} max-w-[240px] truncate text-ink/70`} title={ev.description}>{ev.description || '—'}</td>
+                        <td className={`${TD} text-xs text-ink/60`}>{ev.transactionId || '—'}</td>
+                        <td className={TD}>{invoiceLink(ev)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <SaPager
+                page={pagination.page}
+                totalPages={pagination.pages}
+                onPageChange={(page) => fetchEvents(searchedSlug, page, pagination.limit)}
+              />
+            </>
+          )}
+        </div>
+      </Slip>
 
       {showForm && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white w-full max-w-md">
-            <div className="flex items-center justify-between px-6 py-4 border-b">
-              <h2 className="font-semibold text-gray-900">Record Billing Event</h2>
-              <button onClick={() => setShowForm(false)} aria-label="Close" className="text-gray-400 hover:text-gray-600"><svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg></button>
+        <Sheet
+          title="Record billing event"
+          subtitle={<>Tenant: <span className="font-receipt font-medium text-ink">{searchedSlug}</span></>}
+          onClose={() => setShowForm(false)}
+          closeLabel="Close"
+          footer={
+            <>
+              <button type="button" onClick={() => setShowForm(false)} className={KEY}>Cancel</button>
+              <button type="submit" form={FORM_ID} disabled={saving || !formAmount} className={KEY_PRIMARY}>
+                {saving ? 'Saving…' : 'Record event'}
+              </button>
+            </>
+          }
+        >
+          <form id={FORM_ID} onSubmit={submitEvent} className="space-y-4">
+            <div>
+              <label htmlFor={`${FORM_ID}-type`} className={LABEL}>Type *</label>
+              <select
+                id={`${FORM_ID}-type`}
+                value={formType}
+                onChange={(e) => setFormType(e.target.value)}
+                className={`${SELECT} w-full capitalize`}
+              >
+                {EVENT_TYPES.map((t) => (
+                  <option key={t} value={t} className="capitalize">{t.replace(/_/g, ' ')}</option>
+                ))}
+              </select>
             </div>
-            <form onSubmit={submitEvent}>
-              <div className="p-6 space-y-4">
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Type *</label>
-                  <select
-                    value={formType}
-                    onChange={(e) => setFormType(e.target.value)}
-                    className="w-full border px-3 py-2 text-sm bg-white capitalize"
-                  >
-                    {EVENT_TYPES.map((t) => (
-                      <option key={t} value={t} className="capitalize">{t.replace(/_/g, ' ')}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Amount (₱) *</label>
-                  <input
-                    type="number" min="0" step="0.01" required
-                    value={formAmount}
-                    onChange={(e) => setFormAmount(e.target.value)}
-                    className="w-full border px-3 py-2 text-sm"
-                    placeholder="0.00"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Description</label>
-                  <input
-                    value={formDescription}
-                    onChange={(e) => setFormDescription(e.target.value)}
-                    className="w-full border px-3 py-2 text-sm"
-                    placeholder="Optional"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Transaction ID</label>
-                  <input
-                    value={formTxId}
-                    onChange={(e) => setFormTxId(e.target.value)}
-                    className="w-full border px-3 py-2 text-sm"
-                    placeholder="Optional"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Invoice URL</label>
-                  <input
-                    value={formInvoiceUrl}
-                    onChange={(e) => setFormInvoiceUrl(e.target.value)}
-                    className="w-full border px-3 py-2 text-sm"
-                    placeholder="Optional"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Notes</label>
-                  <textarea
-                    value={formNotes}
-                    onChange={(e) => setFormNotes(e.target.value)}
-                    rows={2}
-                    className="w-full border px-3 py-2 text-sm resize-none"
-                    placeholder="Optional"
-                  />
-                </div>
-              </div>
-              <div className="flex gap-3 px-6 py-4 border-t justify-end">
-                <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 border text-sm hover:bg-gray-50">
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving || !formAmount}
-                  className="px-4 py-2 bg-brand-teal text-white text-sm font-medium hover:bg-brand-teal/90 disabled:opacity-50"
-                >
-                  {saving ? 'Saving…' : 'Record Event'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+            <div>
+              <label htmlFor={`${FORM_ID}-amount`} className={LABEL}>Amount (₱) *</label>
+              <input
+                id={`${FORM_ID}-amount`}
+                type="number" min="0" step="0.01" required
+                value={formAmount}
+                onChange={(e) => setFormAmount(e.target.value)}
+                className={`${INPUT} font-receipt`}
+                placeholder="0.00"
+              />
+            </div>
+            <div>
+              <label htmlFor={`${FORM_ID}-desc`} className={LABEL}>Description</label>
+              <input id={`${FORM_ID}-desc`} value={formDescription} onChange={(e) => setFormDescription(e.target.value)} className={INPUT} placeholder="Optional" />
+            </div>
+            <div>
+              <label htmlFor={`${FORM_ID}-tx`} className={LABEL}>Transaction ID</label>
+              <input id={`${FORM_ID}-tx`} value={formTxId} onChange={(e) => setFormTxId(e.target.value)} className={INPUT} placeholder="Optional" />
+            </div>
+            <div>
+              <label htmlFor={`${FORM_ID}-invoice`} className={LABEL}>Invoice URL</label>
+              <input id={`${FORM_ID}-invoice`} value={formInvoiceUrl} onChange={(e) => setFormInvoiceUrl(e.target.value)} className={INPUT} placeholder="Optional" />
+            </div>
+            <div>
+              <label htmlFor={`${FORM_ID}-notes`} className={LABEL}>Notes</label>
+              <textarea
+                id={`${FORM_ID}-notes`}
+                value={formNotes}
+                onChange={(e) => setFormNotes(e.target.value)}
+                rows={2}
+                className={`${TEXTAREA} resize-none`}
+                placeholder="Optional"
+              />
+            </div>
+          </form>
+        </Sheet>
       )}
-    </>
+    </SaPage>
   );
 }

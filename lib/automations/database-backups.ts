@@ -14,9 +14,32 @@ const _importFs = () => import('fs/promises');
 /* turbopackIgnore: true */
 const _importPath = () => import('path');
 
+/** When the built-in scheduler (lib/cron.ts) runs a full backup. */
+export const BACKUP_CRON = '0 2 * * *';
+export const BACKUP_CRON_LABEL = 'Daily, 2:00 AM UTC';
+/** How many backup files are kept; older ones are deleted after each backup. */
+export const BACKUP_RETENTION = 7;
+/** Most documents saved per collection in a full backup, to bound memory use. */
+export const BACKUP_COLLECTION_LIMIT = 10000;
+
+/** True when the S3 settings that uploadBackupToS3 needs are all present. */
+export function isBackupCloudConfigured(): boolean {
+  return Boolean(process.env.BACKUP_S3_BUCKET && process.env.BACKUP_S3_ACCESS_KEY_ID && process.env.BACKUP_S3_SECRET_ACCESS_KEY);
+}
+
+/** What the scheduled backup does on this server, for the super-admin backups page. */
+export function getBackupSchedule() {
+  return {
+    schedulerEnabled: process.env.ENABLE_CRON_JOBS === 'true',
+    frequency: BACKUP_CRON_LABEL,
+    retention: BACKUP_RETENTION,
+    collectionLimit: BACKUP_COLLECTION_LIMIT,
+    cloudConfigured: isBackupCloudConfigured(),
+  };
+}
+
 export interface DatabaseBackupOptions {
   tenantId?: string; // If specified, backup only this tenant's data
-  backupPath?: string; // Local backup path
   uploadToCloud?: boolean; // Upload to cloud storage (S3-compatible)
 }
 
@@ -40,7 +63,7 @@ export async function createDatabaseBackup(
     const fs = await _importFs();
     const path = await _importPath();
 
-    const backupDir = options.backupPath || path.join(/*turbopackIgnore: true*/ process.cwd(), 'backups');
+    const backupDir = path.join(/*turbopackIgnore: true*/ process.cwd(), 'backups');
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const backupFileName = `backup-${timestamp}.json`;
     const backupFilePath = path.join(backupDir, backupFileName);
@@ -80,7 +103,7 @@ export async function createDatabaseBackup(
         }
       } else {
         const collection = db.collection(collectionName);
-        const documents = await collection.find({}).limit(10000).toArray(); // Limit to prevent memory issues
+        const documents = await collection.find({}).limit(BACKUP_COLLECTION_LIMIT).toArray(); // Limit to prevent memory issues
         if (documents.length > 0) {
           backupData[collectionName] = documents;
         }
@@ -90,7 +113,7 @@ export async function createDatabaseBackup(
     // Write backup to file
     await fs.writeFile(backupFilePath, JSON.stringify(backupData, null, 2), 'utf-8');
 
-    // Rotate old backups (keep last 7)
+    // Rotate old backups
     try {
       const files = await fs.readdir(backupDir);
       const oldBackups = files
@@ -98,9 +121,8 @@ export async function createDatabaseBackup(
         .sort()
         .reverse();
 
-      // Keep only last 7 backups
-      if (oldBackups.length > 7) {
-        for (const file of oldBackups.slice(7)) {
+      if (oldBackups.length > BACKUP_RETENTION) {
+        for (const file of oldBackups.slice(BACKUP_RETENTION)) {
           await fs.unlink(path.join(backupDir, file)).catch(() => {
             // Ignore errors
           });

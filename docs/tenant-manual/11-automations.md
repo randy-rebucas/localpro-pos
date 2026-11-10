@@ -121,9 +121,11 @@
 - Format: PDF or Excel attachment
 
 **Database Backups:**
-- Schedule: Daily (configurable time)
-- Storage: Local + S3 (if configured)
-- Retention: How many backups to keep
+- Schedule: Daily at 2:00 AM UTC (`BACKUP_CRON` in `lib/automations/database-backups.ts`), when `ENABLE_CRON_JOBS=true`
+- Storage: Local `backups/` folder, plus S3 when `BACKUP_S3_BUCKET`, `BACKUP_S3_ACCESS_KEY_ID` and `BACKUP_S3_SECRET_ACCESS_KEY` are set. A failed upload keeps the local file and is logged.
+- Retention: The last 7 files (`BACKUP_RETENTION`); older ones are deleted after each backup
+- Size cap: Up to 10,000 documents per collection (`BACKUP_COLLECTION_LIMIT`)
+- The super-admin Backups page shows these values as they are on the running server
 
 ## Automation API Endpoints
 

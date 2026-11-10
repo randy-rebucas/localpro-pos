@@ -1,6 +1,6 @@
 ---
 name: 1pos-public-design
-description: The 1pos public website design language (thermal receipts, POS hardware, dot-matrix numerals, torn paper, flat square corners). Use this skill whenever building, restyling or polishing any public-facing 1pos page or section, such as /stores, /signup, /privacy, a pricing, about or contact page, landing pages, the marketing header or footer, or home page sections, even if the user only says "make it match the homepage", "use our design", "make this page look good" or "not AI generated". Do not use it for the tenant app under app/[tenant]/ or the super-admin panel, which have their own styling.
+description: The 1pos public website design language (thermal receipts, POS hardware, dot-matrix numerals, torn paper, flat square corners). Use this skill whenever building, restyling or polishing any public-facing 1pos page or section, such as /stores, /signup, /privacy, a pricing, about or contact page, landing pages, the marketing header or footer, or home page sections, even if the user only says "make it match the homepage", "use our design", "make this page look good" or "not AI generated". Also used by the super-admin panel (app/super-admin/, kit in components/super-admin/ui.tsx). Do not use it for the tenant app under app/[tenant]/, which has its own styling.
 ---
 
 # 1pos public design

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireRole } from '@/lib/auth';
-import { createDatabaseBackup } from '@/lib/automations/database-backups';
+import { createDatabaseBackup, getBackupSchedule } from '@/lib/automations/database-backups';
 import { logger } from '@/lib/logger';
 import path from 'path';
 
@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
       // backups dir may not exist yet
     }
 
-    return NextResponse.json({ success: true, data: files });
+    return NextResponse.json({ success: true, data: files, schedule: getBackupSchedule() });
   } catch (error: unknown) {
     if (error instanceof Error && (error.message === 'Unauthorized' || error.message.includes('Forbidden'))) {
       return NextResponse.json({ success: false, error: error.message }, { status: error.message === 'Unauthorized' ? 401 : 403 });

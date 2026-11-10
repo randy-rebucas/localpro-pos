@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
     const startDate = searchParams.get('startDate') || '';
     const endDate = searchParams.get('endDate') || '';
     const page = Math.max(1, parseInt(searchParams.get('page') || '1'));
-    const limit = Math.min(200, Math.max(1, parseInt(searchParams.get('limit') || '50')));
+    const limit = Math.min(200, Math.max(1, parseInt(searchParams.get('limit') || '10')));
 
     const query: Record<string, unknown> = {};
     if (action) query.action = { $regex: escapeRegex(action), $options: 'i' };

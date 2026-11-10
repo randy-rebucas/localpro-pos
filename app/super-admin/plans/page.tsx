@@ -1,6 +1,30 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { AlertTriangle, Check, ClipboardList, Pencil, Plus, Trash2 } from 'lucide-react';
+import { ReceiptRow } from '@/components/marketing/primitives';
+import {
+  CHECKBOX,
+  CHECK_ROW,
+  DARK_KEY_PRIMARY,
+  Empty,
+  ICON,
+  INPUT,
+  KEY,
+  KEY_PRIMARY,
+  KEY_SM,
+  KEY_SM_DANGER,
+  LABEL,
+  Printing,
+  SELECT,
+  SaPage,
+  Sheet,
+  Strip,
+  Tag,
+  peso,
+} from '@/components/super-admin/ui';
+
+const SECTION = 'mb-3 font-receipt text-xs font-medium uppercase tracking-[0.14em] text-ink/70';
 
 interface PlanFeatures {
   maxUsers: number;
@@ -206,267 +230,327 @@ export default function PlansPage() {
 
   const formatLimit = (v: number) => v === -1 ? '∞' : v.toLocaleString();
 
+  const priceLabel = (plan: Plan) =>
+    plan.price.monthly === 0 ? 'Free' : peso(plan.price.monthly, plan.price.currency || 'PHP');
+
   return (
-    <>
-      <div className="space-y-4">
-        <div className="flex justify-end">
-          <button onClick={openCreate} className="px-4 py-2 bg-brand-teal text-white text-sm font-medium hover:bg-brand-teal/90">
-            + New Plan
-          </button>
-        </div>
-
-        {message && (
-          <div className={`p-3 border text-sm ${message.type === 'success' ? 'bg-green-50 border-green-300 text-green-800' : 'bg-red-50 border-red-300 text-red-800'}`}>
-            {message.text}
-          </div>
-        )}
-
-        <div className="bg-white border border-gray-200">
-          {loading ? (
-            <div className="p-12 text-center">
-              <div className="inline-block animate-spin h-6 w-6 border-2 border-brand border-t-transparent rounded-full" />
-              <p className="mt-3 text-gray-500 text-sm">Loading plans...</p>
-            </div>
-          ) : plans.length === 0 ? (
-            <div className="p-12 text-center text-gray-500 text-sm">
-              No plans found. Use Settings → Seed Plans to create defaults.
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    {['Name', 'Tier', 'Monthly Price', 'Yearly Disc.', 'Subscribers', 'Max Users', 'Active', 'Actions'].map(h => (
-                      <th key={h} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {plans.map(plan => (
-                    <tr key={plan._id} className="hover:bg-gray-50">
-                      <td className="px-4 py-4">
-                        <p className="text-sm font-medium text-gray-900">{plan.name}</p>
-                        {plan.description && <p className="text-xs text-gray-400 mt-0.5">{plan.description}</p>}
-                      </td>
-                      <td className="px-4 py-4">
-                        <span className="px-2 py-0.5 text-xs font-medium bg-brand-soft text-brand-navy border border-teal-200 capitalize">
-                          {plan.tier}
-                        </span>
-                      </td>
-                      <td className="px-4 py-4 text-sm font-medium text-gray-900">
-                        {plan.price.monthly === 0 ? 'Free' : `${plan.price.currency} ${plan.price.monthly.toLocaleString()}`}
-                      </td>
-                      <td className="px-4 py-4 text-sm text-gray-500">
-                        {plan.yearlyDiscount ? <span className="text-green-600 font-medium">{plan.yearlyDiscount}% off</span> : '—'}
-                      </td>
-                      <td className="px-4 py-4 text-sm text-gray-700 font-medium">
-                        {plan.subscriberCount ?? 0}
-                        {!plan.availableToNewTenants && <span className="ml-1 text-xs text-orange-500" title="Not available to new tenants">⚠</span>}
-                      </td>
-                      <td className="px-4 py-4 text-sm text-gray-500">{formatLimit(plan.features.maxUsers)}</td>
-                      <td className="px-4 py-4">
-                        <span className={`px-2 py-0.5 text-xs font-semibold border ${plan.isActive ? 'bg-green-100 text-green-800 border-green-200' : 'bg-gray-100 text-gray-500 border-gray-200'}`}>
-                          {plan.isActive ? 'Yes' : 'No'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-4 text-sm">
-                        <div className="flex gap-3">
-                          <button onClick={() => openEdit(plan)} className="text-brand hover:text-brand-navy font-medium">
-                            Edit
-                          </button>
-                          <button onClick={() => handleDelete(plan)} className="text-red-600 hover:text-red-800 font-medium">
-                            Delete
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Create / Edit Modal */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white border border-gray-200 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-5">
-                {editingPlan ? 'Edit Plan' : 'Create Plan'}
-              </h2>
-              <form onSubmit={handleSave} className="space-y-5">
-                {/* Basic info */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Name <span className="text-red-500">*</span></label>
-                    <input
-                      type="text" required
-                      value={formData.name}
-                      onChange={e => setFormData(f => ({ ...f, name: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-brand bg-white"
-                      placeholder="Pro"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Tier <span className="text-red-500">*</span></label>
-                    <select
-                      value={formData.tier}
-                      onChange={e => setFormData(f => ({ ...f, tier: e.target.value }))}
-                      disabled={!!editingPlan}
-                      className="w-full px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-brand bg-white disabled:bg-gray-50"
-                    >
-                      {TIER_ORDER.map(t => <option key={t} value={t}>{t}</option>)}
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                  <input
-                    type="text"
-                    value={formData.description}
-                    onChange={e => setFormData(f => ({ ...f, description: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-brand bg-white"
-                    placeholder="Short description"
-                  />
-                </div>
-
-                {/* Pricing */}
-                <div>
-                  <p className="text-sm font-semibold text-gray-700 mb-2">Pricing</p>
-                  <div className="grid grid-cols-3 gap-3">
-                    <div>
-                      <label className="block text-xs text-gray-500 mb-1">Monthly Price</label>
-                      <input
-                        type="number" min="0"
-                        value={formData.price.monthly}
-                        onChange={e => setFormData(f => ({ ...f, price: { ...f.price, monthly: Number(e.target.value) } }))}
-                        className="w-full px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-brand bg-white"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-gray-500 mb-1">Setup Fee</label>
-                      <input
-                        type="number" min="0"
-                        value={formData.price.setupFee}
-                        onChange={e => setFormData(f => ({ ...f, price: { ...f.price, setupFee: Number(e.target.value) } }))}
-                        className="w-full px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-brand bg-white"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-gray-500 mb-1">Currency</label>
-                      <input
-                        type="text" maxLength={3}
-                        value={formData.price.currency}
-                        onChange={e => setFormData(f => ({ ...f, price: { ...f.price, currency: e.target.value.toUpperCase() } }))}
-                        className="w-full px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-brand bg-white"
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3 mt-3">
-                    <div>
-                      <label className="block text-xs text-gray-500 mb-1">Yearly Discount (%)</label>
-                      <input
-                        type="number" min="0" max="100"
-                        value={formData.yearlyDiscount}
-                        onChange={e => setFormData(f => ({ ...f, yearlyDiscount: Number(e.target.value) }))}
-                        className="w-full px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-brand bg-white"
-                        placeholder="0"
-                      />
-                    </div>
-                    <div className="flex items-end pb-2 gap-4">
-                      <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                        <input type="checkbox" checked={formData.availableToNewTenants}
-                          onChange={e => setFormData(f => ({ ...f, availableToNewTenants: e.target.checked }))}
-                          className="checkbox-win8" />
-                        Available to new tenants
-                      </label>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Limits */}
-                <div>
-                  <p className="text-sm font-semibold text-gray-700 mb-2">Limits <span className="text-xs text-gray-400 font-normal">(-1 = unlimited)</span></p>
-                  <div className="grid grid-cols-2 gap-3">
-                    {(['maxUsers', 'maxBranches', 'maxProducts', 'maxTransactions'] as const).map(key => (
-                      <div key={key}>
-                        <label className="block text-xs text-gray-500 mb-1 capitalize">{key.replace('max', 'Max ')}</label>
-                        <input
-                          type="number" min="-1"
-                          value={formData.features[key] as number}
-                          onChange={e => setFeature(key, parseInt(e.target.value))}
-                          className="w-full px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-brand bg-white"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Features */}
-                <div>
-                  <p className="text-sm font-semibold text-gray-700 mb-2">Features</p>
-                  <div className="grid grid-cols-2 gap-y-2 gap-x-4">
-                    {BOOL_FEATURES.map(({ key, label }) => (
-                      <label key={key} className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={formData.features[key] as boolean}
-                          onChange={e => setFeature(key, e.target.checked)}
-                          className="checkbox-win8"
-                        />
-                        {label}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
-                {/* BIR Compliance */}
-                <div>
-                  <p className="text-sm font-semibold text-gray-700 mb-2">BIR Compliance</p>
-                  <div className="grid grid-cols-2 gap-y-2 gap-x-4">
-                    {BIR_FIELDS.map(({ key, label }) => (
-                      <label key={key} className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={formData.birCompliance[key]}
-                          onChange={e => setBir(key, e.target.checked)}
-                          className="checkbox-win8"
-                        />
-                        {label}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Active */}
-                <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={formData.isActive}
-                    onChange={e => setFormData(f => ({ ...f, isActive: e.target.checked }))}
-                    className="checkbox-win8"
-                  />
-                  Plan is active (visible to tenants)
-                </label>
-
-                {formError && <div className="bg-red-50 border border-red-300 text-red-800 text-sm p-3">{formError}</div>}
-
-                <div className="flex gap-3 justify-end pt-2">
-                  <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 border border-gray-300 text-gray-700 text-sm hover:bg-gray-50 bg-white">
-                    Cancel
-                  </button>
-                  <button type="submit" disabled={saving} className="px-4 py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover disabled:opacity-50">
-                    {saving ? 'Saving...' : editingPlan ? 'Save Changes' : 'Create Plan'}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
+    <SaPage
+      tagNo="06"
+      tag="Price list"
+      title="Plans"
+      subtitle="The tiers tenants subscribe to, with what each one includes."
+      side={
+        <button type="button" onClick={openCreate} className={DARK_KEY_PRIMARY}>
+          <Plus className={ICON} strokeWidth={1.75} aria-hidden />
+          New plan
+        </button>
+      }
+    >
+      {message && (
+        <div className="mt-6 max-w-2xl">
+          <Strip tone={message.type === 'success' ? 'ok' : 'error'}>{message.text}</Strip>
         </div>
       )}
-    </>
+
+      <section className="mt-8" aria-busy={loading}>
+        {loading ? (
+          <div className="bg-paper-white text-ink">
+            <Printing label="Loading plans…" />
+          </div>
+        ) : plans.length === 0 ? (
+          <div className="bg-paper-white text-ink">
+            <Empty icon={<ClipboardList className="h-8 w-8" strokeWidth={1.75} aria-hidden />}>
+              No plans found. Use Settings, then Seed Plans, to create the defaults.
+            </Empty>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 items-start gap-6 md:grid-cols-2 xl:grid-cols-4">
+            {plans.map((plan, i) => {
+              const included = BOOL_FEATURES.filter(f => plan.features[f.key]);
+              const bir = BIR_FIELDS.filter(f => plan.birCompliance?.[f.key]);
+              const currency = plan.price.currency || 'PHP';
+              return (
+                <article key={plan._id}>
+                  <div className="bg-paper-white text-ink">
+                    <header className="border-b border-dashed border-ink/30 px-5 pb-4 pt-5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-receipt text-xs text-ink/50">{String(i + 1).padStart(2, '0')}</span>
+                        <div className="flex flex-wrap justify-end gap-1">
+                          <Tag tone="info">{plan.tier}</Tag>
+                          <Tag tone={plan.isActive ? 'ok' : 'muted'}>{plan.isActive ? 'Active' : 'Inactive'}</Tag>
+                        </div>
+                      </div>
+                      <h2 className="mt-2 text-4xl">{plan.name}</h2>
+                      {plan.description && <p className="mt-1 text-sm text-ink/65">{plan.description}</p>}
+                      <p className="mt-3 font-receipt text-2xl font-semibold">
+                        {priceLabel(plan)}
+                        {plan.price.monthly !== 0 && <span className="text-sm font-normal text-ink/60"> / month</span>}
+                      </p>
+                    </header>
+
+                    <div className="space-y-1.5 px-5 py-4 font-receipt text-sm">
+                      <ReceiptRow label="Setup fee" value={plan.price.setupFee ? peso(plan.price.setupFee, currency) : '—'} />
+                      <ReceiptRow label="Yearly discount" value={plan.yearlyDiscount ? `${plan.yearlyDiscount}% off` : '—'} />
+                      <ReceiptRow
+                        label="Subscribers"
+                        value={
+                          <span className="inline-flex items-center gap-1">
+                            {plan.subscriberCount ?? 0}
+                            {!plan.availableToNewTenants && (
+                              <span title="Not available to new tenants" className="inline-flex text-stamp">
+                                <AlertTriangle className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+                                <span className="sr-only">Not available to new tenants</span>
+                              </span>
+                            )}
+                          </span>
+                        }
+                      />
+                      <ReceiptRow label="New tenants" value={plan.availableToNewTenants ? 'Open' : 'Closed'} />
+                    </div>
+
+                    <div className="space-y-1.5 border-t border-dashed border-ink/30 px-5 py-4 font-receipt text-sm">
+                      <p className="mb-1 text-xs uppercase tracking-[0.14em] text-ink/60">Limits</p>
+                      <ReceiptRow label="Users" value={formatLimit(plan.features.maxUsers)} />
+                      <ReceiptRow label="Branches" value={formatLimit(plan.features.maxBranches)} />
+                      <ReceiptRow label="Products" value={formatLimit(plan.features.maxProducts)} />
+                      <ReceiptRow label="Transactions" value={formatLimit(plan.features.maxTransactions)} />
+                    </div>
+
+                    <div className="border-t border-dashed border-ink/30 px-5 py-4">
+                      <p className="mb-2 font-receipt text-xs uppercase tracking-[0.14em] text-ink/60">Includes · {included.length}</p>
+                      {included.length === 0 ? (
+                        <p className="font-receipt text-sm text-ink/50">No extra features</p>
+                      ) : (
+                        <ul className="space-y-1 text-sm">
+                          {included.map(f => (
+                            <li key={f.key} className="flex items-center gap-2">
+                              <Check className="h-3.5 w-3.5 shrink-0 text-brand-hover" strokeWidth={1.75} aria-hidden />
+                              {f.label}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      {bir.length > 0 && (
+                        <>
+                          <p className="mb-2 mt-4 font-receipt text-xs uppercase tracking-[0.14em] text-ink/60">BIR · {bir.length}</p>
+                          <ul className="space-y-1 text-sm">
+                            {bir.map(f => (
+                              <li key={f.key} className="flex items-center gap-2">
+                                <Check className="h-3.5 w-3.5 shrink-0 text-brand-hover" strokeWidth={1.75} aria-hidden />
+                                {f.label}
+                              </li>
+                            ))}
+                          </ul>
+                        </>
+                      )}
+                    </div>
+
+                    <div className="flex gap-2 border-t border-dashed border-ink/30 px-5 py-3">
+                      <button type="button" onClick={() => openEdit(plan)} className={`${KEY_SM} flex-1`}>
+                        <Pencil className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+                        Edit
+                      </button>
+                      <button type="button" onClick={() => handleDelete(plan)} className={`${KEY_SM_DANGER} flex-1`}>
+                        <Trash2 className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                  <div className="mk-tear-b h-3 bg-paper-white" aria-hidden />
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      {/* Create / Edit sheet */}
+      {showModal && (
+        <Sheet
+          title={editingPlan ? 'Edit plan' : 'Create plan'}
+          onClose={() => setShowModal(false)}
+          closeLabel="Close"
+          wide
+          footer={
+            <>
+              <button type="button" onClick={() => setShowModal(false)} className={KEY}>
+                Cancel
+              </button>
+              <button type="submit" form="plan-form" disabled={saving} className={KEY_PRIMARY}>
+                {saving ? 'Saving…' : editingPlan ? 'Save changes' : 'Create plan'}
+              </button>
+            </>
+          }
+        >
+          <form id="plan-form" onSubmit={handleSave} className="space-y-6">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label htmlFor="plan-name" className={LABEL}>Name <span className="text-stamp">*</span></label>
+                <input
+                  id="plan-name"
+                  type="text" required
+                  value={formData.name}
+                  onChange={e => setFormData(f => ({ ...f, name: e.target.value }))}
+                  className={INPUT}
+                  placeholder="Pro"
+                />
+              </div>
+              <div>
+                <label htmlFor="plan-tier" className={LABEL}>Tier <span className="text-stamp">*</span></label>
+                <select
+                  id="plan-tier"
+                  value={formData.tier}
+                  onChange={e => setFormData(f => ({ ...f, tier: e.target.value }))}
+                  disabled={!!editingPlan}
+                  className={`${SELECT} w-full capitalize disabled:bg-ink/5 disabled:text-ink/50`}
+                >
+                  {TIER_ORDER.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="plan-desc" className={LABEL}>Description</label>
+              <input
+                id="plan-desc"
+                type="text"
+                value={formData.description}
+                onChange={e => setFormData(f => ({ ...f, description: e.target.value }))}
+                className={INPUT}
+                placeholder="Short description"
+              />
+            </div>
+
+            <fieldset className="border-t border-dashed border-ink/30 pt-4">
+              <legend className={SECTION}>Pricing</legend>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div>
+                  <label htmlFor="plan-monthly" className={LABEL}>Monthly price</label>
+                  <input
+                    id="plan-monthly"
+                    type="number" min="0"
+                    value={formData.price.monthly}
+                    onChange={e => setFormData(f => ({ ...f, price: { ...f.price, monthly: Number(e.target.value) } }))}
+                    className={`${INPUT} font-receipt`}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="plan-setup" className={LABEL}>Setup fee</label>
+                  <input
+                    id="plan-setup"
+                    type="number" min="0"
+                    value={formData.price.setupFee}
+                    onChange={e => setFormData(f => ({ ...f, price: { ...f.price, setupFee: Number(e.target.value) } }))}
+                    className={`${INPUT} font-receipt`}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="plan-currency" className={LABEL}>Currency</label>
+                  <input
+                    id="plan-currency"
+                    type="text" maxLength={3}
+                    value={formData.price.currency}
+                    onChange={e => setFormData(f => ({ ...f, price: { ...f.price, currency: e.target.value.toUpperCase() } }))}
+                    className={`${INPUT} font-receipt`}
+                  />
+                </div>
+              </div>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="plan-yearly" className={LABEL}>Yearly discount (%)</label>
+                  <input
+                    id="plan-yearly"
+                    type="number" min="0" max="100"
+                    value={formData.yearlyDiscount}
+                    onChange={e => setFormData(f => ({ ...f, yearlyDiscount: Number(e.target.value) }))}
+                    className={`${INPUT} font-receipt`}
+                    placeholder="0"
+                  />
+                </div>
+                <div className="flex items-end">
+                  <label className={CHECK_ROW}>
+                    <input
+                      type="checkbox"
+                      checked={formData.availableToNewTenants}
+                      onChange={e => setFormData(f => ({ ...f, availableToNewTenants: e.target.checked }))}
+                      className={CHECKBOX}
+                    />
+                    Available to new tenants
+                  </label>
+                </div>
+              </div>
+            </fieldset>
+
+            <fieldset className="border-t border-dashed border-ink/30 pt-4">
+              <legend className={SECTION}>
+                Limits <span className="normal-case tracking-normal text-ink/50">(-1 = unlimited)</span>
+              </legend>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {(['maxUsers', 'maxBranches', 'maxProducts', 'maxTransactions'] as const).map(key => (
+                  <div key={key}>
+                    <label htmlFor={`plan-${key}`} className={LABEL}>{key.replace('max', 'Max ')}</label>
+                    <input
+                      id={`plan-${key}`}
+                      type="number" min="-1"
+                      value={formData.features[key] as number}
+                      onChange={e => setFeature(key, parseInt(e.target.value))}
+                      className={`${INPUT} font-receipt`}
+                    />
+                  </div>
+                ))}
+              </div>
+            </fieldset>
+
+            <fieldset className="border-t border-dashed border-ink/30 pt-4">
+              <legend className={SECTION}>Features</legend>
+              <div className="grid gap-x-4 sm:grid-cols-2">
+                {BOOL_FEATURES.map(({ key, label }) => (
+                  <label key={key} className={CHECK_ROW}>
+                    <input
+                      type="checkbox"
+                      checked={formData.features[key] as boolean}
+                      onChange={e => setFeature(key, e.target.checked)}
+                      className={CHECKBOX}
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+
+            <fieldset className="border-t border-dashed border-ink/30 pt-4">
+              <legend className={SECTION}>BIR compliance</legend>
+              <div className="grid gap-x-4 sm:grid-cols-2">
+                {BIR_FIELDS.map(({ key, label }) => (
+                  <label key={key} className={CHECK_ROW}>
+                    <input
+                      type="checkbox"
+                      checked={formData.birCompliance[key]}
+                      onChange={e => setBir(key, e.target.checked)}
+                      className={CHECKBOX}
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+
+            <div className="border-t border-dashed border-ink/30 pt-4">
+              <label className={CHECK_ROW}>
+                <input
+                  type="checkbox"
+                  checked={formData.isActive}
+                  onChange={e => setFormData(f => ({ ...f, isActive: e.target.checked }))}
+                  className={CHECKBOX}
+                />
+                Plan is active (visible to tenants)
+              </label>
+            </div>
+
+            {formError && <Strip tone="error">{formError}</Strip>}
+          </form>
+        </Sheet>
+      )}
+    </SaPage>
   );
 }
