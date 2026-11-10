@@ -6,6 +6,11 @@ import Tenant from '@/models/Tenant';
 import { cacheDel, CacheKeys } from '@/lib/cache';
 import { logger } from '@/lib/logger';
 
+// Tenant pages are ISR-cached. Without a revalidate window a notFound() rendered
+// while a tenant was inactive (e.g. suspended for non-payment) stays cached on
+// the CDN forever, so the store keeps 404ing after it is reactivated.
+export const revalidate = 60;
+
 export async function generateStaticParams() {
   // For static generation, you can return common tenants
   // In production, you might want to fetch from database
